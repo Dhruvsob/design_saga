@@ -1,0 +1,121 @@
+{
+  "theme_archetype": "Archetype 5: Jewel & Luxury (Tech Precision Variant). The domain is high-end architecture and interior design in Ahmedabad. It requires a 'Billion-dollar startup' aesthetic. We will use a Dark Premium theme with gold/beige accents, blending cinematic lighting with Apple-like minimal clarity.",
+  "color_palette": {
+    "background_dark": "#0A0A0A",
+    "surface_dark": "#121212",
+    "surface_elevated": "#1A1A1A",
+    "primary": "#D4AF37",
+    "primary_hover": "#C5A059",
+    "accent_subtle": "rgba(212, 175, 55, 0.1)",
+    "text_primary": "#FAFAFA",
+    "text_secondary": "#A3A3A3",
+    "border": "#262626",
+    "border_gold": "rgba(212, 175, 55, 0.2)",
+    "background_light": "#F9F9F9",
+    "surface_light": "#FFFFFF",
+    "text_primary_light": "#111111",
+    "text_secondary_light": "#555555",
+    "border_light": "#E5E5E5"
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Outfit, sans-serif",
+      "body": "Manrope, sans-serif"
+    },
+    "scale": {
+      "h1": "text-5xl sm:text-6xl tracking-tighter font-light",
+      "h2": "text-4xl sm:text-5xl tracking-tight font-light",
+      "h3": "text-2xl sm:text-3xl tracking-tight font-medium",
+      "overline": "text-xs tracking-[0.2em] uppercase font-bold text-[#D4AF37]",
+      "body": "text-base leading-relaxed text-[#A3A3A3]"
+    },
+    "rules": [
+      "No generic 'Inter' or 'Roboto' for headings. Use Outfit for a premium, geometric Apple-like feel.",
+      "Headlines must use tracking-tight or tracking-tighter.",
+      "Never use text-7xl or above for Hero headings; fluid clamp to 6xl max.",
+      "Avoid centering text by default; left-align for modern editorial feel."
+    ]
+  },
+  "spacing_and_layout": {
+    "generous_spacing": "Use 2-3x typical spacing. Sections should have py-24 or py-32.",
+    "bento_grid": "Use Mode A (Tetris Grid) for Portfolio: mix col-span-8 and col-span-4 to create asymmetry and visual tension.",
+    "dashboard_grid": "Use Mode B (Control Room Grid) for Admin/User Dashboard with gap-6 and cardless flat surfaces.",
+    "borders": "Containers with borders MUST have padding (p-8) to prevent text collision."
+  },
+  "surface_strategies": {
+    "cards": "Flat background (bg-[#121212]), 1px subtle border (border-[#262626]), no heavy dropshadows in dark mode.",
+    "glassmorphism": "For Sticky Nav/Header: bg-black/60 with backdrop-blur-xl and a delicate 1px border-b border-white/10.",
+    "hero_overlay": "Gradient overlay from black/80 via black/40 to transparent. Never use flat blanket overlays that kill image quality.",
+    "buttons": "Primary CTA: bg-[#D4AF37] text-black font-medium. Hover: bg-[#C5A059] transition-colors duration-300."
+  },
+  "motion_and_interaction": {
+    "libraries": ["framer-motion", "lucide-react", "clsx", "tailwind-merge"],
+    "defaults": {
+      "hover": "Subtle scale up (scale-105) for images, opacity shifts for text.",
+      "page_load": "Staggered fade-up (y: 20, opacity: 0 -> 1) using framer-motion.",
+      "focus": "focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#0A0A0A]"
+    }
+  },
+  "component_strategies": {
+    "landing_page": "Custom HTML/Tailwind. Asymmetrical hero with floating gold accents. Use the generated abstract 3D bg for sections.",
+    "portfolio_gallery": "Bento grid with hover-reveal details. Images must have max-h-[80vh] on mobile.",
+    "ai_designer_tool": "Split screen or interactive slider (before/after). Use the provided AI Redesign graphic.",
+    "lead_generation": "Shadcn UI forms, heavily customized with Dark/Gold theme. Flat inputs, 1px gold-tinted borders on focus.",
+    "dashboard": "Shadcn UI components. Cardless or minimal cards. Dense data hierarchy. Sidebar navigation."
+  },
+  "image_urls": {
+    "hero_backgrounds": [
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/aa397f10-49d6-4ef9-9370-96849a8cc7fd/images/a59df56d1486f48787a37772794c2a3e6b9918eb506e95c900507fb19e6cfe75.png",
+        "category": "hero",
+        "description": "Abstract high-end 3D geometric composition for hero section background"
+      }
+    ],
+    "ai_feature": [
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/aa397f10-49d6-4ef9-9370-96849a8cc7fd/images/579613eaf927f57bf7d0931be3c866db18db57fc25428afa5f5ffb681482cee7.png",
+        "category": "feature",
+        "description": "Wireframe to photorealistic modern living room transition for AI tool showcase"
+      }
+    ],
+    "portfolio_projects": [
+      {
+        "url": "https://images.unsplash.com/photo-1765766601592-ac2936aa87e0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwzfHxsdXh1cnklMjBkYXJrJTIwbW9kZXJuJTIwbGl2aW5nJTIwcm9vbSUyMGludGVyaW9yJTIwYXJjaGl0ZWN0dXJlfGVufDB8fHx8MTc3NDQ3MjU5M3ww&ixlib=rb-4.1.0&q=85",
+        "category": "living_room",
+        "description": "Dark modern living room with marble"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1760072513393-b9d81f65dd7e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwxfHxwcmVtaXVtJTIwbWluaW1hbGlzdCUyMGJlZHJvb20lMjBpbnRlcmlvciUyMG1vZGVybnxlbnwwfHx8fDE3NzQ0NzI1OTR8MA&ixlib=rb-4.1.0&q=85",
+        "category": "bedroom",
+        "description": "Premium minimalist dark bedroom"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1765766601532-90e9b96320c8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBkYXJrJTIwa2l0Y2hlbiUyMGludGVyaW9yfGVufDB8fHx8MTc3NDQ3MjU5NXww&ixlib=rb-4.1.0&q=85",
+        "category": "kitchen",
+        "description": "Modern dark kitchen with wood accents"
+      },
+      {
+        "url": "https://images.pexels.com/photos/4064835/pexels-photo-4064835.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "office",
+        "description": "Minimalist home office with black chairs"
+      }
+    ],
+    "people": [
+      {
+        "url": "https://images.pexels.com/photos/5582872/pexels-photo-5582872.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "designer_profile",
+        "description": "Modern architect portrait for marketplace"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Read this file completely before scaffolding the frontend.",
+    "Use 'Outfit' for headings and 'Manrope' for body fonts. Add them via Google Fonts.",
+    "Use pure HTML/Tailwind for Landing/Marketing sections. Use customized Shadcn for Dashboards/Forms.",
+    "All interactive elements MUST include a 'data-testid' attribute (e.g., data-testid='book-consultation-btn').",
+    "Ensure dark mode is the default, with a toggle for light mode. Configure Tailwind config appropriately.",
+    "For icons, use 'lucide-react'.",
+    "Use framer-motion for smooth entrance animations and hover transitions.",
+    "Do NOT use placeholder images. Use only the URLs provided in the image_urls section."
+  ]
+}
