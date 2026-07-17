@@ -2,6 +2,27 @@
 
 **Original problem statement:** Build a SaaS-grade platform for architecture/interior design firms covering CRM, projects, tasks, files, client portal, billing, AI assistant, dashboards. MVP "lite" version covering all modules. Roles: Admin + Employee. Auth: Emergent Google. Integrations: PDF gen, AI (Claude), SendGrid email, Stripe payments. Visual: modern bold + distinctive (delivered as Swiss/editorial with Klein Blue #002FA7 accent + Cabinet Grotesk + IBM Plex Sans).
 
+**Latest expansion (Feb 17, 2026 — session 2):** **Attendance + Accounting modules.**
+
+Attendance (`/app/backend/routes/attendance.py`, `/app/frontend/src/pages/Attendance.jsx`):
+- Daily **check-in / check-out** with client IP capture (`x-forwarded-for` aware) — creates/updates one attendance doc per (employee_id, date). Auto-derives half-day when worked <4h.
+- **Leave workflow**: apply → HR approve/reject → on approval, back-fills attendance as `leave` for every date in range.
+- Configurable **leave rules** (allowances per type, working days per week, week-off days) with sensible defaults (12 casual, 12 sick, 18 earned, …).
+- **Monthly sheet** (HR-only) returns per-employee `counts{present,absent,half_day,leave,holiday,week_off}` + `worked_hours` — payroll-ready.
+- Endpoints: `/api/attendance/check-in`, `/check-out`, `/me/today`, `/me/summary`, `/monthly`, `/override`, `/leave-rules`, `/meta`; `/api/leaves` CRUD + `/action` + `/balance/{eid}`.
+- Frontend tabs: My Attendance · My Leaves · Monthly Sheet (Admin) · Pending Leaves (Admin).
+
+Accounting (`/app/backend/routes/accounting.py`, `/app/frontend/src/pages/Accounting.jsx`):
+- **True double-entry**: every financial event lands in `journal_entries` as balanced lines. Wrappers `POST /accounting/income` and `/expense` auto-build the journal so users don't think in DR/CR.
+- **Chart of Accounts**: 36-account default (Assets/Liabilities/Income/Expense/Equity) seeded on first read; unlimited custom accounts.
+- **Ledgers** derived at read-time (never denormalized): `/ledger/account/{id}`, `/client/{id}`, `/project/{id}`, `/vendor/{id}` — running balance, DR/CR totals.
+- **Reports**: `/reports/pl` (period + project filter), `/reports/trial-balance` (Trial DR always == CR).
+- **Finance Dashboard**: Cash/Bank per account, month P&L, outstanding, overdue, today's collections, upcoming payments (30d), recent transactions.
+- **Payment milestones** per project (fixed amount or % of budget); paying via `/accounting/income` with `milestone_id` marks it paid.
+- Vendor master (`/vendors`) — future POs/inventory wire-up-ready.
+
+Testing: **36/36 pytest cases pass** (`/app/backend/tests/test_attendance_accounting.py`), Trial Balance DR=CR verified live in the browser, all previous modules (Auth, Projects, Employees, Tasks, Quotations, RBAC) unaffected.
+
 **Latest expansion (Feb 17, 2026):** **Task Management upgrade + Phase-1 backend refactor.** Backend split into modular `core/` (db, helpers, deps, rbac), `models/`, and `routes/` packages while `server.py` continues to serve all other modules (zero breaking changes). Tasks module rebuilt from scratch:
 - **Dual workflows**: Employee tasks (2D/3D/BOQ/site visit/estimation/…) and Agency/Vendor tasks (carpenter/painter/electrician/marble/lighting/…) share one collection but filter independently.
 - **Excel-style table** view alongside Kanban with inline editing, bulk update, CSV export, and multi-column filters (project/area/category/priority/status/search).
