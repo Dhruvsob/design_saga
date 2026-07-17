@@ -17,10 +17,10 @@ const STATUS_COLORS = {
 };
 
 const TABS = [
-  { id: "overview",   label: "Overview",   Icon: Buildings },
-  { id: "followups",  label: "Follow-ups", Icon: Bell },
-  { id: "timeline",   label: "Timeline",   Icon: ClockCounterClockwise },
-  { id: "refs",       label: "References", Icon: LinkSimple },
+  { id: "overview",   label: "Overview",   Icon: Buildings, testid: "tab-overview" },
+  { id: "followups",  label: "Follow-ups", Icon: Bell, testid: "tab-followups" },
+  { id: "timeline",   label: "Timeline",   Icon: ClockCounterClockwise, testid: "tab-timeline" },
+  { id: "refs",       label: "References", Icon: LinkSimple, testid: "tab-references" },
 ];
 
 export default function TaskDetail() {
@@ -55,7 +55,7 @@ export default function TaskDetail() {
 
   return (
     <div className="space-y-6" data-testid="task-detail-page">
-      <button onClick={() => navigate("/tasks")} className="text-xs font-mono text-[#5C5C5C] flex items-center gap-1 hover:text-[#002FA7]" data-testid="back-btn">
+      <button onClick={() => navigate("/tasks")} className="text-xs font-mono text-[#5C5C5C] flex items-center gap-1 hover:text-[#002FA7]" data-testid="task-detail-back">
         <ArrowLeft size={12} /> BACK TO TASKS
       </button>
 
@@ -76,10 +76,10 @@ export default function TaskDetail() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[#E5E5E5]">
-        {TABS.map(({ id: tid, label, Icon }) => (
+        {TABS.map(({ id: tid, label, Icon, testid }) => (
           <button
             key={tid} onClick={() => setTab(tid)}
-            data-testid={`tab-${tid}`}
+            data-testid={testid}
             className={`px-4 py-2.5 text-sm border-b-2 -mb-px flex items-center gap-2 transition ${tab === tid
               ? "border-[#002FA7] text-[#002FA7] font-semibold"
               : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}

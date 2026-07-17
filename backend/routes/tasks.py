@@ -153,11 +153,10 @@ async def get_task(task_id: str, request: Request,
     t = await db.tasks.find_one({"id": task_id}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    t.setdefault("follow_ups", [])
-    t.setdefault("timeline", [])
-    t.setdefault("attachments", [])
-    t.setdefault("reference_links", [])
-    t.setdefault("assignees", [])
+    # Normalize list-shaped fields to [] so the frontend can use .length safely.
+    for k in ("follow_ups", "timeline", "attachments", "reference_links", "assignees"):
+        if not t.get(k):
+            t[k] = []
     return t
 
 
@@ -184,10 +183,10 @@ async def create_task(payload: TaskIn, request: Request,
             doc["project_name"] = p.get("name")
 
     _sync_status_from_detail(doc)
-    doc.setdefault("follow_ups", [])
-    doc.setdefault("attachments", [])
-    doc.setdefault("reference_links", [])
-    doc.setdefault("assignees", [])
+    # Ensure list-shaped fields are [] not None so the frontend can rely on .length
+    for k in ("follow_ups", "attachments", "reference_links", "assignees"):
+        if not doc.get(k):
+            doc[k] = []
     # Future-compat placeholders (never break schema when procurement/PO come online)
     doc.setdefault("procurement_link", None)
     doc.setdefault("po_id", None)
@@ -290,8 +289,15 @@ async def update_task_status(task_id: str, payload: TaskStatusUpdate, request: R
         raise HTTPException(status_code=400, detail=f"Invalid lane: {lane}")
 
     merged = dict(existing)
-    if detail: merged["status_detail"] = detail
-    if lane: merged["status"] = lane
+    if lane:
+        # Explicit lane change (typical Kanban drag): move the lane AND set a
+        # sensible status_detail so the auto-sync below does not undo it.
+        merged["status"] = lane
+        # Overwrite status_detail only if not simultaneously specified by caller.
+        if not detail:
+            merged["status_detail"] = LANE_TO_DEFAULT_STATUS.get(lane)
+    if detail:
+        merged["status_detail"] = detail
     _sync_status_from_detail(merged)
 
     updates = {
