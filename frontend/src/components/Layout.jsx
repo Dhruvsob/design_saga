@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   SquaresFour, UsersThree, Briefcase, Kanban, Receipt, UserCircle,
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
+  IdentificationCard,
 } from "@phosphor-icons/react";
 import AIWidget from "./AIWidget";
 import { useEffect, useState } from "react";
@@ -15,7 +16,8 @@ const NAV = [
   { to: "/clients",     label: "Clients",      section: "05", perm: "clients.read",   Icon: UserCircle },
   { to: "/invoices",    label: "Invoices",     section: "06", perm: "invoices.read",  Icon: Receipt },
   { to: "/quotations",  label: "Quotations",   section: "07", perm: "quotations.read", Icon: FilesIcon },
-  { to: "/admin/rbac",  label: "Team & Roles", section: "08", perm: "users.read",     Icon: ShieldCheck, admin: true },
+  { to: "/employees",   label: "Employees",    section: "08", perm: "employees.read", Icon: IdentificationCard },
+  { to: "/admin/rbac",  label: "Team & Roles", section: "09", perm: "users.read",     Icon: ShieldCheck, admin: true },
 ];
 
 const fmtClock = (d) =>

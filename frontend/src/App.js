@@ -14,6 +14,8 @@ import Invoices from "./pages/Invoices";
 import QuotationsAdv from "./pages/QuotationsAdv";
 import QuotationBuilder from "./pages/QuotationBuilder";
 import RBACAdmin from "./pages/RBACAdmin";
+import Employees from "./pages/Employees";
+import EmployeeDetail from "./pages/EmployeeDetail";
 import ClientPortal from "./pages/ClientPortal";
 import Layout from "./components/Layout";
 
@@ -57,6 +59,8 @@ function AppRouter() {
       <Route path="/invoices" element={<ProtectedShell><Invoices docType="invoice" /></ProtectedShell>} />
       <Route path="/quotations" element={<ProtectedShell><QuotationsAdv /></ProtectedShell>} />
       <Route path="/quotations/:id" element={<ProtectedShell requirePerm="quotations.read"><QuotationBuilder /></ProtectedShell>} />
+      <Route path="/employees" element={<ProtectedShell requirePerm="employees.read"><Employees /></ProtectedShell>} />
+      <Route path="/employees/:id" element={<ProtectedShell requirePerm="employees.read"><EmployeeDetail /></ProtectedShell>} />
       <Route path="/admin/rbac" element={<ProtectedShell requirePerm="users.read"><RBACAdmin /></ProtectedShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -107,6 +107,7 @@ ROLE_PERMISSIONS = {
     "Director": [
         "leads.*", "projects.*", "tasks.*", "clients.*",
         "files.*", "invoices.*", "quotations.*",
+        "employees.*",
         "users.read", "users.update",
         "dashboard.read", "ai.use", "rbac.read",
     ],
@@ -115,6 +116,7 @@ ROLE_PERMISSIONS = {
         "clients.read", "clients.create", "clients.update",
         "files.*", "invoices.read",
         "quotations.read", "quotations.create", "quotations.update",
+        "employees.read",
         "users.read", "dashboard.read", "ai.use",
     ],
     "Designer": [
@@ -123,15 +125,18 @@ ROLE_PERMISSIONS = {
         "files.*",
         "quotations.read", "quotations.create", "quotations.update",
         "clients.read", "leads.read",
+        "employees.read",
         "dashboard.read", "ai.use",
     ],
     "Accountant": [
         "invoices.*", "quotations.*",
         "clients.read", "projects.read", "leads.read",
         "files.read", "dashboard.read", "ai.use",
+        "employees.read",
     ],
     "HR": [
         "users.read", "users.update",
+        "employees.*",
         "dashboard.read", "ai.use",
     ],
     "Employee": [
@@ -2432,6 +2437,397 @@ async def adv_seed(request: Request, session_token: Optional[str] = Cookie(defau
 @api.get("/")
 async def root():
     return {"service": "Design Saga API", "status": "ok"}
+
+
+# ============================================================
+# MODULE 2 — Employee Management
+# HR records (separate from `users` which is auth). Optional 1:1 link
+# via `user_id`. Includes salary math, warnings, rewards, documents.
+# ============================================================
+EMPLOYMENT_TYPES = ["full_time", "part_time", "contract", "intern"]
+EMPLOYMENT_STATUSES = ["active", "probation", "notice", "terminated"]
+DEPARTMENTS_DEFAULT = [
+    "Design", "Site Execution", "Sales & CRM", "Finance",
+    "HR", "Operations", "Leadership",
+]
+
+
+class SalaryStructure(BaseModel):
+    basic: float = 0
+    hra: float = 0
+    conveyance: float = 0
+    medical: float = 0
+    other_allowances: float = 0
+    pf_employee: float = 0
+    esi_employee: float = 0
+    professional_tax: float = 0
+    tds: float = 0
+
+
+class BankInfo(BaseModel):
+    account_holder: Optional[str] = ""
+    account_number: Optional[str] = ""
+    ifsc: Optional[str] = ""
+    bank_name: Optional[str] = ""
+    upi: Optional[str] = ""
+
+
+class EmergencyContact(BaseModel):
+    name: Optional[str] = ""
+    phone: Optional[str] = ""
+    relation: Optional[str] = ""
+
+
+class EmployeeIn(BaseModel):
+    first_name: str
+    last_name: Optional[str] = ""
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    photo: Optional[str] = ""
+    dob: Optional[str] = ""
+    gender: Optional[str] = ""
+    blood_group: Optional[str] = ""
+    aadhaar: Optional[str] = ""
+    pan: Optional[str] = ""
+    address: Optional[str] = ""
+    city: Optional[str] = ""
+    state: Optional[str] = ""
+    pincode: Optional[str] = ""
+    emergency_contact: Optional[EmergencyContact] = None
+    department: Optional[str] = "Design"
+    designation: Optional[str] = ""
+    employment_type: Optional[str] = "full_time"
+    employment_status: Optional[str] = "active"
+    joining_date: Optional[str] = None
+    probation_end_date: Optional[str] = None
+    notice_period_days: Optional[int] = 30
+    shift_start: Optional[str] = "09:00"
+    shift_end: Optional[str] = "18:00"
+    weekly_hours: Optional[int] = 45
+    reporting_to: Optional[str] = None
+    user_id: Optional[str] = None
+    salary: Optional[SalaryStructure] = None
+    bank: Optional[BankInfo] = None
+
+
+class EmployeeUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    photo: Optional[str] = None
+    dob: Optional[str] = None
+    gender: Optional[str] = None
+    blood_group: Optional[str] = None
+    aadhaar: Optional[str] = None
+    pan: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    emergency_contact: Optional[EmergencyContact] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    employment_type: Optional[str] = None
+    employment_status: Optional[str] = None
+    joining_date: Optional[str] = None
+    probation_end_date: Optional[str] = None
+    notice_period_days: Optional[int] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    weekly_hours: Optional[int] = None
+    reporting_to: Optional[str] = None
+    user_id: Optional[str] = None
+    salary: Optional[SalaryStructure] = None
+    bank: Optional[BankInfo] = None
+    current_kpi_score: Optional[float] = None
+
+
+class DocumentIn(BaseModel):
+    label: str
+    url: str
+
+
+class WarningIn(BaseModel):
+    reason: str
+    note: Optional[str] = ""
+
+
+class RewardIn(BaseModel):
+    title: str
+    note: Optional[str] = ""
+
+
+def _compute_salary(s: dict) -> dict:
+    """Recompute derived salary fields on top of the input structure."""
+    s = dict(s or {})
+    gross = sum(float(s.get(k, 0) or 0) for k in
+                ("basic", "hra", "conveyance", "medical", "other_allowances"))
+    ded = sum(float(s.get(k, 0) or 0) for k in
+              ("pf_employee", "esi_employee", "professional_tax", "tds"))
+    s["gross_monthly"] = round(gross, 2)
+    s["total_deductions"] = round(ded, 2)
+    s["net_monthly"] = round(gross - ded, 2)
+    s["ctc_annual"] = round(gross * 12, 2)
+    return s
+
+
+async def _next_employee_id() -> str:
+    year = now_utc().year
+    count = await db.employees.count_documents({"employee_id": {"$regex": f"^EMP-{year}-"}})
+    return f"EMP-{year}-{count + 1:04d}"
+
+
+@api.get("/employees")
+async def list_employees(request: Request,
+                         department: Optional[str] = None,
+                         status: Optional[str] = None,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.read")
+    q = {}
+    if department:
+        q["department"] = department
+    if status:
+        q["employment_status"] = status
+    rows = await db.employees.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return rows
+
+
+@api.get("/employees/meta")
+async def employee_meta(request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.read")
+    seen = set()
+    async for e in db.employees.find({}, {"_id": 0, "department": 1}):
+        if e.get("department"):
+            seen.add(e["department"])
+    departments = sorted(set(DEPARTMENTS_DEFAULT) | seen)
+    return {
+        "departments": departments,
+        "employment_types": EMPLOYMENT_TYPES,
+        "employment_statuses": EMPLOYMENT_STATUSES,
+    }
+
+
+@api.get("/employees/{eid}")
+async def get_employee(eid: str, request: Request,
+                       session_token: Optional[str] = Cookie(default=None),
+                       authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.read")
+    doc = await db.employees.find_one({"id": eid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return doc
+
+
+@api.post("/employees")
+async def create_employee(payload: EmployeeIn, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.create")
+    data = payload.model_dump()
+    if data.get("employment_type") not in EMPLOYMENT_TYPES:
+        data["employment_type"] = "full_time"
+    if data.get("employment_status") not in EMPLOYMENT_STATUSES:
+        data["employment_status"] = "active"
+    data["salary"] = _compute_salary(data.get("salary") or {})
+    data["bank"] = data.get("bank") or {}
+    data["emergency_contact"] = data.get("emergency_contact") or {}
+    data["documents"] = []
+    data["performance"] = {
+        "current_kpi_score": 0,
+        "last_review_at": None,
+        "warnings": [],
+        "rewards": [],
+    }
+    data["id"] = new_id("emp_")
+    data["employee_id"] = await _next_employee_id()
+    data["created_at"] = iso(now_utc())
+    data["created_by"] = user["user_id"]
+    await db.employees.insert_one(dict(data))
+    return await db.employees.find_one({"id": data["id"]}, {"_id": 0})
+
+
+@api.put("/employees/{eid}")
+async def update_employee(eid: str, payload: EmployeeUpdate, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    doc = await db.employees.find_one({"id": eid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    patch = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if "salary" in patch:
+        patch["salary"] = _compute_salary(patch["salary"])
+    if "current_kpi_score" in patch:
+        perf = dict(doc.get("performance") or {})
+        perf["current_kpi_score"] = patch.pop("current_kpi_score")
+        patch["performance"] = perf
+    if "employment_type" in patch and patch["employment_type"] not in EMPLOYMENT_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid employment_type")
+    if "employment_status" in patch and patch["employment_status"] not in EMPLOYMENT_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid employment_status")
+    patch["updated_at"] = iso(now_utc())
+    patch["updated_by"] = user["user_id"]
+    await db.employees.update_one({"id": eid}, {"$set": patch})
+    return await db.employees.find_one({"id": eid}, {"_id": 0})
+
+
+@api.delete("/employees/{eid}")
+async def delete_employee(eid: str, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.delete")
+    res = await db.employees.delete_one({"id": eid})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return {"ok": True}
+
+
+@api.post("/employees/{eid}/documents")
+async def add_employee_doc(eid: str, payload: DocumentIn, request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    entry = {"id": new_id("edoc_"), "label": payload.label, "url": payload.url,
+             "uploaded_at": iso(now_utc()), "uploaded_by": user.get("name")}
+    res = await db.employees.update_one(
+        {"id": eid},
+        {"$push": {"documents": entry}, "$set": {"updated_at": iso(now_utc())}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return entry
+
+
+@api.delete("/employees/{eid}/documents/{doc_id}")
+async def remove_employee_doc(eid: str, doc_id: str, request: Request,
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    await db.employees.update_one(
+        {"id": eid},
+        {"$pull": {"documents": {"id": doc_id}}, "$set": {"updated_at": iso(now_utc())}},
+    )
+    return {"ok": True}
+
+
+@api.post("/employees/{eid}/warnings")
+async def add_warning(eid: str, payload: WarningIn, request: Request,
+                      session_token: Optional[str] = Cookie(default=None),
+                      authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    entry = {"id": new_id("warn_"), "reason": payload.reason, "note": payload.note,
+             "at": iso(now_utc()), "by": user.get("name")}
+    res = await db.employees.update_one(
+        {"id": eid},
+        {"$push": {"performance.warnings": entry}, "$set": {"updated_at": iso(now_utc())}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return entry
+
+
+@api.post("/employees/{eid}/rewards")
+async def add_reward(eid: str, payload: RewardIn, request: Request,
+                     session_token: Optional[str] = Cookie(default=None),
+                     authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    entry = {"id": new_id("rwd_"), "title": payload.title, "note": payload.note,
+             "at": iso(now_utc()), "by": user.get("name")}
+    res = await db.employees.update_one(
+        {"id": eid},
+        {"$push": {"performance.rewards": entry}, "$set": {"updated_at": iso(now_utc())}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return entry
+
+
+@api.post("/employees/seed")
+async def seed_employees(request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    samples = [
+        ("Ananya", "Sharma", "Design", "Senior Interior Designer",
+         {"basic": 45000, "hra": 18000, "conveyance": 3200, "medical": 1250, "other_allowances": 5500,
+          "pf_employee": 3600, "esi_employee": 0, "professional_tax": 200, "tds": 4200}),
+        ("Rohit", "Kulkarni", "Design", "Architect",
+         {"basic": 55000, "hra": 22000, "conveyance": 3200, "medical": 1250, "other_allowances": 7500,
+          "pf_employee": 3600, "esi_employee": 0, "professional_tax": 200, "tds": 6800}),
+        ("Meera", "Iyer", "Sales & CRM", "Business Development Manager",
+         {"basic": 38000, "hra": 15200, "conveyance": 3200, "medical": 1250, "other_allowances": 4500,
+          "pf_employee": 3600, "esi_employee": 0, "professional_tax": 200, "tds": 3100}),
+        ("Vikram", "Patel", "Site Execution", "Site Supervisor",
+         {"basic": 28000, "hra": 11200, "conveyance": 3200, "medical": 1250, "other_allowances": 3500,
+          "pf_employee": 3200, "esi_employee": 460, "professional_tax": 200, "tds": 0}),
+        ("Priyanka", "Rao", "Finance", "Accountant",
+         {"basic": 40000, "hra": 16000, "conveyance": 3200, "medical": 1250, "other_allowances": 4000,
+          "pf_employee": 3600, "esi_employee": 0, "professional_tax": 200, "tds": 3400}),
+        ("Nitin", "Verma", "HR", "HR Executive",
+         {"basic": 30000, "hra": 12000, "conveyance": 3200, "medical": 1250, "other_allowances": 3000,
+          "pf_employee": 3600, "esi_employee": 0, "professional_tax": 200, "tds": 1200}),
+    ]
+    created = []
+    for fn, ln, dept, desig, salary in samples:
+        eid = new_id("emp_")
+        emp_no = await _next_employee_id()
+        doc = {
+            "id": eid,
+            "employee_id": emp_no,
+            "first_name": fn, "last_name": ln,
+            "email": f"{fn.lower()}.{ln.lower()}@designsaga.co",
+            "phone": f"+91 9{80000000 + len(created) * 111111:08d}",
+            "photo": "",
+            "dob": "", "gender": "", "blood_group": "",
+            "aadhaar": "", "pan": "",
+            "address": "Mumbai, MH", "city": "Mumbai",
+            "state": "Maharashtra", "pincode": "400001",
+            "emergency_contact": {"name": "", "phone": "", "relation": ""},
+            "department": dept, "designation": desig,
+            "employment_type": "full_time", "employment_status": "active",
+            "joining_date": (now_utc() - timedelta(days=180 + len(created) * 30)).date().isoformat(),
+            "probation_end_date": None, "notice_period_days": 30,
+            "shift_start": "09:30", "shift_end": "18:30",
+            "weekly_hours": 45, "reporting_to": None, "user_id": None,
+            "salary": _compute_salary(salary),
+            "bank": {"account_holder": f"{fn} {ln}",
+                     "account_number": "", "ifsc": "", "bank_name": "", "upi": ""},
+            "documents": [],
+            "performance": {"current_kpi_score": 70 + len(created) * 4,
+                            "last_review_at": None, "warnings": [], "rewards": []},
+            "created_at": iso(now_utc()),
+            "created_by": user["user_id"],
+        }
+        await db.employees.insert_one(dict(doc))
+        created.append(emp_no)
+    return {"ok": True, "created": created}
+
 
 
 # ============================================================
