@@ -13,17 +13,29 @@ import Clients from "./pages/Clients";
 import Invoices from "./pages/Invoices";
 import QuotationsAdv from "./pages/QuotationsAdv";
 import QuotationBuilder from "./pages/QuotationBuilder";
+import RBACAdmin from "./pages/RBACAdmin";
 import ClientPortal from "./pages/ClientPortal";
 import Layout from "./components/Layout";
 
-function ProtectedShell({ children }) {
-  const { user, loading } = useAuth();
+function ProtectedShell({ children, requirePerm }) {
+  const { user, loading, hasPerm } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
     if (!loading && !user) navigate("/", { replace: true });
   }, [user, loading, navigate]);
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (!user) return null;
+  if (requirePerm && !hasPerm(requirePerm)) {
+    return (
+      <Layout>
+        <div className="max-w-lg mx-auto text-center py-24" data-testid="access-denied">
+          <div className="overline mb-3">403 · ACCESS RESTRICTED</div>
+          <h1 className="font-display font-bold tracking-tighter text-4xl mb-3">Not for your eyes.</h1>
+          <p className="text-[#5C5C5C]">Your role doesn&apos;t include the <code className="font-mono text-[#002FA7]">{requirePerm}</code> permission. Ask an Admin.</p>
+        </div>
+      </Layout>
+    );
+  }
   return <Layout>{children}</Layout>;
 }
 
@@ -44,7 +56,8 @@ function AppRouter() {
       <Route path="/clients" element={<ProtectedShell><Clients /></ProtectedShell>} />
       <Route path="/invoices" element={<ProtectedShell><Invoices docType="invoice" /></ProtectedShell>} />
       <Route path="/quotations" element={<ProtectedShell><QuotationsAdv /></ProtectedShell>} />
-      <Route path="/quotations/:id" element={<ProtectedShell><QuotationBuilder /></ProtectedShell>} />
+      <Route path="/quotations/:id" element={<ProtectedShell requirePerm="quotations.read"><QuotationBuilder /></ProtectedShell>} />
+      <Route path="/admin/rbac" element={<ProtectedShell requirePerm="users.read"><RBACAdmin /></ProtectedShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

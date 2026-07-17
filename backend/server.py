@@ -93,6 +93,123 @@ async def require_user(request: Request, session_token: Optional[str] = Cookie(d
 
 
 # ============================================================
+# RBAC – Roles, Permissions, Guards
+# ============================================================
+ROLES = ["Admin", "Director", "ProjectManager", "Designer",
+         "Accountant", "HR", "Employee", "Client"]
+
+# Permission grammar: "resource.action" — supports wildcards.
+#   "*.*"           → grants everything
+#   "leads.*"       → grants every action on leads
+#   "leads.delete"  → grants only that exact action
+ROLE_PERMISSIONS = {
+    "Admin": ["*.*"],
+    "Director": [
+        "leads.*", "projects.*", "tasks.*", "clients.*",
+        "files.*", "invoices.*", "quotations.*",
+        "users.read", "users.update",
+        "dashboard.read", "ai.use", "rbac.read",
+    ],
+    "ProjectManager": [
+        "leads.*", "projects.*", "tasks.*",
+        "clients.read", "clients.create", "clients.update",
+        "files.*", "invoices.read",
+        "quotations.read", "quotations.create", "quotations.update",
+        "users.read", "dashboard.read", "ai.use",
+    ],
+    "Designer": [
+        "projects.read", "projects.update",
+        "tasks.read", "tasks.create", "tasks.update",
+        "files.*",
+        "quotations.read", "quotations.create", "quotations.update",
+        "clients.read", "leads.read",
+        "dashboard.read", "ai.use",
+    ],
+    "Accountant": [
+        "invoices.*", "quotations.*",
+        "clients.read", "projects.read", "leads.read",
+        "files.read", "dashboard.read", "ai.use",
+    ],
+    "HR": [
+        "users.read", "users.update",
+        "dashboard.read", "ai.use",
+    ],
+    "Employee": [
+        "projects.read", "tasks.read", "tasks.update",
+        "clients.read", "leads.read",
+        "files.read", "files.create",
+        "dashboard.read", "ai.use",
+    ],
+    "Client": [],  # Studio panel access denied; portal is a separate token-based flow.
+}
+
+# Legacy → new-casing mapping (safe forward migration for existing docs).
+_LEGACY_ROLE_MAP = {
+    "admin": "Admin",
+    "employee": "Employee",
+    "manager": "ProjectManager",
+    "designer": "Designer",
+    "accountant": "Accountant",
+    "hr": "HR",
+    "director": "Director",
+    "owner": "Director",
+    "client": "Client",
+}
+
+
+def _normalize_role(role: Optional[str]) -> str:
+    if not role:
+        return "Employee"
+    if role in ROLES:
+        return role
+    return _LEGACY_ROLE_MAP.get(role.lower(), "Employee")
+
+
+def _expand_permissions(role: str) -> List[str]:
+    """Return the explicit list of grants for a role (wildcards preserved)."""
+    return list(ROLE_PERMISSIONS.get(_normalize_role(role), []))
+
+
+def has_permission(user: dict, perm: str) -> bool:
+    """True if `user` has the `resource.action` permission."""
+    if not user:
+        return False
+    role = _normalize_role(user.get("role"))
+    grants = ROLE_PERMISSIONS.get(role, [])
+    if not grants:
+        return False
+    if "*.*" in grants:
+        return True
+    if perm in grants:
+        return True
+    resource = perm.split(".", 1)[0] if "." in perm else perm
+    return f"{resource}.*" in grants
+
+
+def require_permission(perm: str):
+    """FastAPI dependency factory — raises 403 if user lacks perm."""
+    async def _dep(request: Request,
+                   session_token: Optional[str] = Cookie(default=None),
+                   authorization: Optional[str] = Header(default=None)):
+        user = await require_user(request, session_token, authorization)
+        if not has_permission(user, perm):
+            raise HTTPException(status_code=403,
+                                detail=f"Missing permission: {perm}")
+        return user
+    return _dep
+
+
+def _user_with_perms(user: dict) -> dict:
+    """Attach normalised role + expanded permissions for wire output."""
+    if not user:
+        return user
+    out = dict(user)
+    out["role"] = _normalize_role(user.get("role"))
+    out["permissions"] = _expand_permissions(out["role"])
+    return out
+
+
+# ============================================================
 # Models
 # ============================================================
 PIPELINE_STAGES = ["New", "Qualified", "Proposal", "Negotiation", "Won", "Lost"]
@@ -235,7 +352,7 @@ async def create_session(request: Request, response: Response):
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_count = await db.users.count_documents({})
-        role = "admin" if user_count == 0 else "employee"
+        role = "Admin" if user_count == 0 else "Employee"
         user = {
             "user_id": user_id,
             "email": email,
@@ -268,7 +385,7 @@ async def create_session(request: Request, response: Response):
     )
 
     user_out = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {"user": user_out, "session_token": session_token}
+    return {"user": _user_with_perms(user_out), "session_token": session_token}
 
 
 @api.get("/auth/me")
@@ -278,7 +395,7 @@ async def auth_me(user=None, request: Request = None,
     user = await get_current_user(request, session_token, authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
+    return _user_with_perms(user)
 
 
 @api.post("/auth/logout")
@@ -287,6 +404,82 @@ async def logout(response: Response, session_token: Optional[str] = Cookie(defau
         await db.user_sessions.delete_many({"session_token": session_token})
     response.delete_cookie("session_token", path="/")
     return {"ok": True}
+
+
+# ============================================================
+# RBAC endpoints
+# ============================================================
+class RoleAssignIn(BaseModel):
+    role: str
+
+
+@api.get("/rbac/roles")
+async def rbac_roles(request: Request,
+                     session_token: Optional[str] = Cookie(default=None),
+                     authorization: Optional[str] = Header(default=None)):
+    """Any authenticated user may read the role catalogue (for their own UI)."""
+    await require_user(request, session_token, authorization)
+    return {
+        "roles": [
+            {"name": r, "permissions": ROLE_PERMISSIONS.get(r, [])}
+            for r in ROLES
+        ]
+    }
+
+
+@api.get("/rbac/users")
+async def rbac_users(request: Request,
+                     session_token: Optional[str] = Cookie(default=None),
+                     authorization: Optional[str] = Header(default=None)):
+    """Admin or HR can list users."""
+    user = await require_user(request, session_token, authorization)
+    if not (has_permission(user, "users.read") or has_permission(user, "rbac.read")):
+        raise HTTPException(status_code=403, detail="Missing permission: users.read")
+    users = await db.users.find({}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return [
+        {
+            "user_id": u.get("user_id"),
+            "email": u.get("email"),
+            "name": u.get("name"),
+            "picture": u.get("picture"),
+            "role": _normalize_role(u.get("role")),
+            "created_at": u.get("created_at"),
+            "last_login": u.get("last_login"),
+        }
+        for u in users
+    ]
+
+
+@api.patch("/rbac/users/{user_id}/role")
+async def rbac_assign_role(user_id: str, payload: RoleAssignIn, request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None)):
+    """Admin-only. Assign a role from the ROLES catalogue."""
+    actor = await require_user(request, session_token, authorization)
+    if not has_permission(actor, "rbac.manage") and not has_permission(actor, "*.*"):
+        raise HTTPException(status_code=403, detail="Only Admin can change roles")
+    new_role = _normalize_role(payload.role)
+    if new_role not in ROLES:
+        raise HTTPException(status_code=400, detail=f"Unknown role: {payload.role}")
+    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Guard: never allow the last admin to demote themselves.
+    if _normalize_role(target.get("role")) == "Admin" and new_role != "Admin":
+        admin_count = 0
+        async for u in db.users.find({}, {"_id": 0, "role": 1}):
+            if _normalize_role(u.get("role")) == "Admin":
+                admin_count += 1
+        if admin_count <= 1:
+            raise HTTPException(status_code=400,
+                                detail="Cannot demote the last Admin")
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"role": new_role, "role_updated_at": iso(now_utc()),
+                  "role_updated_by": actor.get("user_id")}}
+    )
+    updated = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return _user_with_perms(updated)
 
 
 # ============================================================
@@ -407,7 +600,9 @@ async def update_lead_stage(lead_id: str, payload: LeadStageUpdate, request: Req
 async def delete_lead(lead_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "leads.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: leads.delete")
     await db.leads.delete_one({"id": lead_id})
     return {"ok": True}
 
@@ -534,7 +729,9 @@ async def update_project_stage(project_id: str, payload: ProjectStageUpdate, req
 async def delete_project(project_id: str, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "projects.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: projects.delete")
     await db.projects.delete_one({"id": project_id})
     return {"ok": True}
 
@@ -706,7 +903,9 @@ async def update_invoice_status(invoice_id: str, payload: InvoiceStatusUpdate, r
 async def delete_invoice(invoice_id: str, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "invoices.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: invoices.delete")
     await db.invoices.delete_one({"id": invoice_id})
     return {"ok": True}
 
@@ -988,6 +1187,8 @@ async def ai_history(session_id: str, request: Request,
 async def seed_demo(request: Request, session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
 
     # Clients
     clients_seed = [
@@ -1554,7 +1755,9 @@ async def adv_update(qid: str, payload: QuotationUpdate, request: Request,
 @api.delete("/quotations-adv/{qid}")
 async def adv_delete(qid: str, request: Request, session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "quotations.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: quotations.delete")
     await db.quotations_adv.delete_one({"id": qid})
     return {"ok": True}
 
