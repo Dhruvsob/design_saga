@@ -10,6 +10,8 @@ import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Tasks from "./pages/Tasks";
 import TaskDetail from "./pages/TaskDetail";
+import Attendance from "./pages/Attendance";
+import Accounting from "./pages/Accounting";
 import Clients from "./pages/Clients";
 import Invoices from "./pages/Invoices";
 import QuotationsAdv from "./pages/QuotationsAdv";
@@ -63,6 +65,8 @@ function AppRouter() {
       <Route path="/quotations/:id" element={<ProtectedShell requirePerm="quotations.read"><QuotationBuilder /></ProtectedShell>} />
       <Route path="/employees" element={<ProtectedShell requirePerm="employees.read"><Employees /></ProtectedShell>} />
       <Route path="/employees/:id" element={<ProtectedShell requirePerm="employees.read"><EmployeeDetail /></ProtectedShell>} />
+      <Route path="/attendance" element={<ProtectedShell><Attendance /></ProtectedShell>} />
+      <Route path="/accounting" element={<ProtectedShell><Accounting /></ProtectedShell>} />
       <Route path="/admin/rbac" element={<ProtectedShell requirePerm="users.read"><RBACAdmin /></ProtectedShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
