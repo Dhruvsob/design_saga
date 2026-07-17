@@ -834,55 +834,8 @@ async def delete_project(project_id: str, request: Request,
 # ============================================================
 # Tasks
 # ============================================================
-@api.get("/tasks")
-async def list_tasks(request: Request, project_id: Optional[str] = None,
-                     session_token: Optional[str] = Cookie(default=None),
-                     authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    q = {}
-    if project_id:
-        q["project_id"] = project_id
-    rows = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return rows
-
-
-@api.post("/tasks")
-async def create_task(payload: TaskIn, request: Request,
-                      session_token: Optional[str] = Cookie(default=None),
-                      authorization: Optional[str] = Header(default=None)):
-    user = await require_user(request, session_token, authorization)
-    doc = payload.model_dump()
-    doc["id"] = new_id("tsk_")
-    doc["created_at"] = iso(now_utc())
-    doc["created_by"] = user["user_id"]
-    if not doc.get("assignee_name"):
-        doc["assignee_name"] = user["name"]
-    if doc.get("project_id"):
-        p = await db.projects.find_one({"id": doc["project_id"]}, {"_id": 0})
-        if p:
-            doc["project_name"] = p.get("name")
-    await db.tasks.insert_one(dict(doc))
-    return await db.tasks.find_one({"id": doc["id"]}, {"_id": 0})
-
-
-@api.patch("/tasks/{task_id}/status")
-async def update_task_status(task_id: str, payload: TaskStatusUpdate, request: Request,
-                              session_token: Optional[str] = Cookie(default=None),
-                              authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    if payload.status not in TASK_STATUSES:
-        raise HTTPException(status_code=400, detail="Invalid status")
-    await db.tasks.update_one({"id": task_id}, {"$set": {"status": payload.status, "updated_at": iso(now_utc())}})
-    return await db.tasks.find_one({"id": task_id}, {"_id": 0})
-
-
-@api.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, request: Request,
-                      session_token: Optional[str] = Cookie(default=None),
-                      authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    await db.tasks.delete_one({"id": task_id})
-    return {"ok": True}
+# Tasks module routes are now provided by routes/tasks.py (extended: employee/vendor,
+# follow-ups, timeline audit, bulk update, project-scoped areas/categories, reminders).
 
 
 # ============================================================
@@ -2923,6 +2876,10 @@ async def seed_employees(request: Request,
 # ============================================================
 # Register router & middleware
 # ============================================================
+# Include modular routers (Phase-1 refactor: Tasks module extracted)
+from routes.tasks import router as tasks_router  # noqa: E402
+api.include_router(tasks_router)
+
 app.include_router(api)
 
 app.add_middleware(

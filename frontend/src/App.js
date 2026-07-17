@@ -9,6 +9,7 @@ import Leads from "./pages/Leads";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Tasks from "./pages/Tasks";
+import TaskDetail from "./pages/TaskDetail";
 import Clients from "./pages/Clients";
 import Invoices from "./pages/Invoices";
 import QuotationsAdv from "./pages/QuotationsAdv";
@@ -55,6 +56,7 @@ function AppRouter() {
       <Route path="/projects" element={<ProtectedShell><Projects /></ProtectedShell>} />
       <Route path="/projects/:id" element={<ProtectedShell><ProjectDetail /></ProtectedShell>} />
       <Route path="/tasks" element={<ProtectedShell><Tasks /></ProtectedShell>} />
+      <Route path="/tasks/:id" element={<ProtectedShell><TaskDetail /></ProtectedShell>} />
       <Route path="/clients" element={<ProtectedShell><Clients /></ProtectedShell>} />
       <Route path="/invoices" element={<ProtectedShell><Invoices docType="invoice" /></ProtectedShell>} />
       <Route path="/quotations" element={<ProtectedShell><QuotationsAdv /></ProtectedShell>} />
