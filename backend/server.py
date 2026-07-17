@@ -223,6 +223,43 @@ PROJECT_STAGES = [
     "Review", "Signoff", "Procurement", "Execution", "Handover"
 ]
 TASK_STATUSES = ["todo", "in_progress", "review", "done"]
+
+# ----- Extended task model (backward compatible) -----
+TASK_TYPES = ["employee", "vendor"]
+TASK_STATUS_DETAIL = [
+    "Pending", "Selection Required", "Reference Required", "Vendor Required",
+    "Quotation Requested", "Quotation Received", "Ordered",
+    "Work Started", "In Progress", "On Hold",
+    "Inspection Pending", "Completed", "Cancelled",
+]
+TASK_PRIORITIES_EXT = ["low", "medium", "high", "urgent", "critical"]
+STATUS_TO_LANE = {
+    "Pending": "todo", "Selection Required": "todo", "Reference Required": "todo",
+    "Vendor Required": "todo", "Quotation Requested": "todo",
+    "Quotation Received": "in_progress", "Ordered": "in_progress",
+    "Work Started": "in_progress", "In Progress": "in_progress",
+    "On Hold": "review", "Inspection Pending": "review",
+    "Completed": "done", "Cancelled": "done",
+}
+LANE_TO_DEFAULT_STATUS = {"todo": "Pending", "in_progress": "In Progress",
+                          "review": "Inspection Pending", "done": "Completed"}
+TASK_AREAS = [
+    "Entrance", "Foyer", "Living Room", "Drawing Room", "Dining Room", "Kitchen",
+    "Utility", "Store Room", "Pooja Room", "Parents Bedroom", "Master Bedroom",
+    "Kids Bedroom", "Guest Bedroom", "Children's Bedroom", "Walk-in Closet",
+    "Master Bathroom", "Common Bathroom", "Powder Room", "Balcony", "Terrace",
+    "Home Office", "Study Room", "Family Lounge", "Staircase", "Lift Lobby",
+    "Basement", "Parking", "Garden", "Outdoor Area",
+]
+TASK_CATEGORIES = [
+    "Furniture", "Lighting", "Decor", "Wall Feature", "Flooring", "Ceiling",
+    "Painting", "Wallpaper", "Curtains", "Blinds", "Hardware", "Doors", "Windows",
+    "Wardrobe", "TV Unit", "Kitchen", "Vanity", "Bathroom Accessories",
+    "Electrical", "Plumbing", "HVAC", "False Ceiling", "Marble", "Granite",
+    "Tiles", "Glass", "Mirror", "Metal Work", "Fabrication", "Landscape",
+    "Civil Work", "Automation", "Accessories", "Others",
+]
+REMINDER_FREQUENCIES = ["one_time", "daily", "weekly", "monthly", "custom"]
 INVOICE_STATUSES = ["draft", "sent", "paid", "overdue"]
 
 
@@ -266,19 +303,72 @@ class ProjectStageUpdate(BaseModel):
     stage: str
 
 
+class VendorContact(BaseModel):
+    vendor_name: Optional[str] = ""
+    contact_person: Optional[str] = ""
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    whatsapp: Optional[str] = ""
+    company_name: Optional[str] = ""
+
+
+class FollowUpIn(BaseModel):
+    follow_up_date: Optional[str] = None
+    reminder_date: Optional[str] = None
+    reminder_time: Optional[str] = None
+    reminder_frequency: Optional[str] = "one_time"
+    assigned_employee: Optional[str] = None
+    notes: Optional[str] = ""
+    next_follow_up_date: Optional[str] = None
+
+
 class TaskIn(BaseModel):
     title: str
     description: Optional[str] = None
     project_id: Optional[str] = None
     assignee_id: Optional[str] = None
     assignee_name: Optional[str] = None
-    priority: Optional[Literal["low", "medium", "high"]] = "medium"
+    priority: Optional[str] = "medium"
     status: Optional[str] = "todo"
     due_date: Optional[str] = None
+    # Extended (all optional, backward compatible):
+    task_type: Optional[str] = "employee"       # employee | vendor
+    area: Optional[str] = None
+    category: Optional[str] = None
+    item_description: Optional[str] = None
+    quantity: Optional[float] = None
+    status_detail: Optional[str] = None
+    remarks: Optional[str] = None
+    vendor_contact: Optional[VendorContact] = None
+    reference_links: Optional[List[str]] = None
+    attachments: Optional[List[dict]] = None    # [{label, url, type}]
+    assignees: Optional[List[str]] = None       # multi-assign (employee ids)
+
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    project_id: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
+    task_type: Optional[str] = None
+    area: Optional[str] = None
+    category: Optional[str] = None
+    item_description: Optional[str] = None
+    quantity: Optional[float] = None
+    status_detail: Optional[str] = None
+    remarks: Optional[str] = None
+    vendor_contact: Optional[VendorContact] = None
+    reference_links: Optional[List[str]] = None
+    attachments: Optional[List[dict]] = None
+    assignees: Optional[List[str]] = None
+    follow_up: Optional[FollowUpIn] = None
 
 
 class TaskStatusUpdate(BaseModel):
-    status: str
+    status: Optional[str] = None
+    status_detail: Optional[str] = None
 
 
 class InvoiceItem(BaseModel):
