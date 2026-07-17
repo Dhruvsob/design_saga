@@ -2,7 +2,18 @@
 
 **Original problem statement:** Build a SaaS-grade platform for architecture/interior design firms covering CRM, projects, tasks, files, client portal, billing, AI assistant, dashboards. MVP "lite" version covering all modules. Roles: Admin + Employee. Auth: Emergent Google. Integrations: PDF gen, AI (Claude), SendGrid email, Stripe payments. Visual: modern bold + distinctive (delivered as Swiss/editorial with Klein Blue #002FA7 accent + Cabinet Grotesk + IBM Plex Sans).
 
-**Latest expansion (Apr 29, 2026):** Quotation module upgraded to **enterprise-grade** with full BOQ engine, room-wise cost mapping, materials brand-tier system, payment plan builder, timeline, smart terms, version control, internal+client approval, change orders, convert-to-project, cost-vs-actual tracking, AI quotation auditor, and 10-section premium PDF.
+**Latest expansion (Feb 17, 2026):** **Task Management upgrade + Phase-1 backend refactor.** Backend split into modular `core/` (db, helpers, deps, rbac), `models/`, and `routes/` packages while `server.py` continues to serve all other modules (zero breaking changes). Tasks module rebuilt from scratch:
+- **Dual workflows**: Employee tasks (2D/3D/BOQ/site visit/estimation/…) and Agency/Vendor tasks (carpenter/painter/electrician/marble/lighting/…) share one collection but filter independently.
+- **Excel-style table** view alongside Kanban with inline editing, bulk update, CSV export, and multi-column filters (project/area/category/priority/status/search).
+- **13 granular statuses** (`Pending`, `Selection Required`, `Vendor Required`, `Quotation Requested`, `Ordered`, `Work Started`, `On Hold`, `Inspection Pending`, etc.) that auto-map to 4 Kanban lanes.
+- **Unlimited follow-ups** per task with reminder date/time, notes, next-follow-up, assigned employee — reminder-based endpoint feeds the dashboard.
+- **Timeline audit** (`timeline[]`) auto-writes on every material change and is never deleted.
+- **Custom Areas / Categories per project** (project-scoped `custom_areas`, `custom_categories`) merged with defaults.
+- **Future-compat placeholders** (`procurement_link`, `po_id`, `inventory_id`, `vendor_payment_status`) baked into every task doc so procurement/PO/inventory modules can integrate later without a migration.
+- Frontend: `/tasks` upgraded with Employee ⟷ Vendor tabs, Kanban ⟷ Table toggle, bulk-select bar, CSV export, new task form with vendor-contact block; new `/tasks/:id` detail page with **Overview · Follow-ups · Timeline · References** tabs.
+- Backend regression suite (`/app/backend/tests/test_tasks_module.py`) — **20/20 pass**.
+
+**Latest expansion (Apr 29, 2026):** Quotation module upgraded to **enterprise-grade**...
 
 ## User personas
 - **Studio Admin** – owns finances, sees full P&L, signs off proposals, sends invoices.
@@ -43,7 +54,12 @@
 - Existing modules untouched.
 
 ## Backlog (P0 → P2)
-- **P0**
+- **P0 – Modules 3-5 (HR & Finance core)**
+  - Attendance system (check-in/out, IP capture, leave rules)
+  - Payroll engine (salary slip PDF, bank transfer sheet, run history)
+  - Accounting core (COA, cash/bank book, journal, ledgers, P&L)
+  - Expense management (office + site, approval workflow)
+- **P0 (carry over)**
   - Stripe payment links on milestones (test key already in pod env)
   - SendGrid email notifications (quote sent, payment due) — needs API key
   - File upload (S3/local) — currently only URL link metadata
