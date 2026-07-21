@@ -2,6 +2,33 @@
 
 **Original problem statement:** Build a SaaS-grade platform for architecture/interior design firms covering CRM, projects, tasks, files, client portal, billing, AI assistant, dashboards. MVP "lite" version covering all modules. Roles: Admin + Employee. Auth: Emergent Google. Integrations: PDF gen, AI (Claude), SendGrid email, Stripe payments. Visual: modern bold + distinctive (delivered as Swiss/editorial with Klein Blue #002FA7 accent + Cabinet Grotesk + IBM Plex Sans).
 
+**Continuation contract:** Treat the ERP as an established product (~70% complete). No rebuilds; every iteration is a versioned enhancement. User-approved Phase-2 order:
+  1. **Vendor / Agency Management + Vendor Ledger  ✅ v2.1  (Jul 21, 2026)**
+  2. Payment Reminder Center (global bell)
+  3. Attendance Policies (office hours, grace mins, weekly off, holidays)
+  4. Salary Slip PDF (fpdf2, logo-ready)
+  5. Multi-tenant schema-ready (org_id) — no enforcement yet
+  6. Accounting improvements (advanced ledgers, filters, exports, cash flow)
+  7. ERP intelligence (AI-driven suggestions after 1-6 land)
+
+Multi-tenant note: every new schema from v2.1 onward carries an optional `org_id` field so a future tenant switch is a filter change, not a migration.
+
+**Latest expansion (Jul 21, 2026 — v2.1): Vendor / Agency Management + Vendor Ledger.**
+
+New backend module `routes/vendors.py` + `models/vendor.py` — extends (does not replace) the existing `db.vendors_acc` collection.
+
+- **Vendor master (extended)**: agency_type (`vendor|agency|contractor|sub_contractor|supplier|consultant|freelancer|other`), contact_person, GSTIN, PAN, TDS applicability + rate, full banking block (bank/account/IFSC/branch/UPI), category, city/state/pincode, tags, notes, aggregate rating, `documents[]` (with kind + expires_on), `active` soft-delete, `org_id` ready.
+- **Vendor bills** (`db.vendor_bills`): items + tax + tds, server-computed subtotal/tax_amount/tds_amount/total, status auto-transitions received → partially_paid → paid, overdue when due_date passes. Hard delete only when unpaid; otherwise soft-cancel to preserve audit.
+- **Vendor payments** (`db.vendor_payments`): posts a balanced journal entry (DR Accounts Payable · CR Cash/Bank) with `source="vendor_payment"`, links `bill_ids[]` + `bill_splits{}`, FIFO settles open bills when none specified, tracks `unallocated` for on-account advance. Reversal endpoint deletes the JE and refreshes bill statuses.
+- **Vendor ledger**: `GET /api/vendors/{id}/ledger` — chronological bills+payments with running balance. Reconciles to `total_billed − total_paid`.
+- **Performance score (0-100)**: weighted composite = completion 30 · on-time 25 · rating 35 · payment reliability 10. Per-project ratings averaged into `vendor.rating` and `rating_count`.
+- **Endpoints**: `/api/vendors` (GET filtered list w/ outstanding rollup, POST, PATCH, DELETE), `/api/vendors/{id}` (detail), `/api/vendors/meta`, `/api/vendors/{id}/documents` (POST/DELETE), `/api/vendors/{id}/rate` + `/ratings`, `/api/vendor-bills` (POST/GET/PATCH/DELETE + `/{id}`), `/api/vendor-payments` (POST/GET/DELETE), `/api/vendors/{id}/ledger`, `/api/vendors/{id}/performance`.
+- **RBAC (new `vendors.*`)**: Admin/Director/Accountant → full; ProjectManager → create/update but not bills/payments (needs `finance.create`); Designer/Employee → read-only (for task assignment); HR → none; Client → none.
+- **Frontend**: new sidebar entry `06 · Vendors` (HardHat icon). List page `/vendors` (KPI strip: count / contractors / suppliers / outstanding · search + agency_type filter · 3-section create form for identity/compliance/banking · clickable rows). Detail page `/vendors/:id` with 7 tabs (Overview · Ledger · Bills · Payments · Projects · Documents · Performance). Overview embeds a 4-dimension rating slider. Bills tab has an inline builder with dynamic line items and live client-side total that matches the server. Payments tab lists open bills as checkboxes for multi-bill settlement.
+- **Testing**: `backend/tests/test_vendors_module.py` — 22/22 pytest pass. Curl smoke test: create → 58500 bill (18% GST, 1% TDS) → 30000 partial pay → ledger outstanding 28500 → performance 59.9. Testing agent verified all frontend flows + RBAC 403s for Designer/Employee/HR. Zero regressions on existing modules.
+
+**Super-admin (v2.0 · Jul 21, 2026):** `designsaga10@gmail.com` protected via `SUPER_ADMIN_EMAILS` env var — auto-elevated on every Google sign-in, cannot be demoted through the RBAC endpoint.
+
 **Latest expansion (Feb 21, 2026):** **Phase-1 completion sweep — Site Visit Attendance + Payroll → Accounting + RBAC Finance Gate.**
 
 - **Site-visit attendance**: check-in now supports `attendance_type=office|site_visit`; site visits land as `pending_approval` and require HR approval via `POST /api/attendance/{id}/approve`. New HR-only tab `Site Approvals` on `/attendance` with 1-click Approve / Reject.

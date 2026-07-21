@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -18,6 +18,7 @@ const INR = (n) =>
 
 export default function Vendors() {
   const { hasPerm } = useAuth();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ agency_types: [] });
   const [q, setQ] = useState("");
@@ -220,14 +221,19 @@ export default function Vendors() {
               </tr>
             )}
             {rows.map((v) => (
-              <tr key={v.id} className="border-b border-[#F0F0F0] hover:bg-[#FAFAFA]" data-testid={`vendor-row-${v.id}`}>
+              <tr
+                key={v.id}
+                className="border-b border-[#F0F0F0] hover:bg-[#FAFAFA] cursor-pointer"
+                onClick={() => navigate(`/vendors/${v.id}`)}
+                data-testid={`vendor-row-${v.id}`}
+              >
                 <Td>
-                  <Link to={`/vendors/${v.id}`} className="font-semibold hover:text-[#002FA7]">
+                  <div className="font-semibold group-hover:text-[#002FA7]">
                     <div className="flex items-center gap-2">
                       <Buildings size={14} className="text-[#5C5C5C]" />
                       {v.name}
                     </div>
-                  </Link>
+                  </div>
                   {v.company && <div className="text-xs text-[#9A9A9A]">{v.company}</div>}
                 </Td>
                 <Td><TypePill type={v.agency_type} /></Td>

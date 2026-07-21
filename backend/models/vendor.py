@@ -8,7 +8,7 @@ seeded data (`db.vendors_acc`).
 All new schemas ship with an optional `org_id` — the app is single-org today
 but every new document is written multi-tenant ready.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
@@ -76,10 +76,10 @@ class VendorPaymentIn(BaseModel):
 class VendorRatingIn(BaseModel):
     project_id: Optional[str] = None
     task_id: Optional[str] = None
-    quality: Optional[float] = None            # 0-5
-    timeliness: Optional[float] = None         # 0-5
-    cost: Optional[float] = None               # 0-5  (value for money)
-    communication: Optional[float] = None      # 0-5
+    quality: Optional[float] = Field(default=None, ge=0, le=5)
+    timeliness: Optional[float] = Field(default=None, ge=0, le=5)
+    cost: Optional[float] = Field(default=None, ge=0, le=5)
+    communication: Optional[float] = Field(default=None, ge=0, le=5)
     comment: Optional[str] = None
 
 
