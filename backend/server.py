@@ -34,6 +34,18 @@ db = client[db_name]
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 EMERGENT_AUTH_BASE = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
+# Super-admins: emails in this set are ALWAYS elevated to role="Admin" on every
+# sign-in and can never be demoted (RBAC endpoint also blocks demotion below).
+SUPER_ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("SUPER_ADMIN_EMAILS", "designsaga10@gmail.com").split(",")
+    if e.strip()
+}
+
+
+def _is_super_admin(email: Optional[str]) -> bool:
+    return bool(email) and email.strip().lower() in SUPER_ADMIN_EMAILS
+
 app = FastAPI(title="Design Saga API")
 api = APIRouter(prefix="/api")
 
@@ -439,15 +451,17 @@ async def create_session(request: Request, response: Response):
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": name, "picture": picture, "last_login": iso(now_utc())}},
-        )
+        update_set = {"name": name, "picture": picture, "last_login": iso(now_utc())}
+        # Super-admin guarantee: force-elevate to Admin on every sign-in
+        if _is_super_admin(email) and _normalize_role(existing.get("role")) != "Admin":
+            update_set["role"] = "Admin"
+        await db.users.update_one({"user_id": user_id}, {"$set": update_set})
         user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_count = await db.users.count_documents({})
-        role = "Admin" if user_count == 0 else "Employee"
+        # Super-admin whitelist OR first-ever user → Admin. Otherwise Employee.
+        role = "Admin" if (_is_super_admin(email) or user_count == 0) else "Employee"
         user = {
             "user_id": user_id,
             "email": email,
@@ -559,6 +573,10 @@ async def rbac_assign_role(user_id: str, payload: RoleAssignIn, request: Request
     target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    # Guard: super-admin emails can never be demoted.
+    if _is_super_admin(target.get("email")) and new_role != "Admin":
+        raise HTTPException(status_code=400,
+                            detail="This account is a protected super-admin and cannot be demoted.")
     # Guard: never allow the last admin to demote themselves.
     if _normalize_role(target.get("role")) == "Admin" and new_role != "Admin":
         admin_count = 0
