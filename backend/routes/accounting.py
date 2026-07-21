@@ -22,7 +22,7 @@ from core.deps import require_user
 from core.rbac import has_permission
 from models.accounting import (
     AccountIn, JournalIn, IncomeIn, ExpenseIn,
-    MilestoneIn, MilestoneUpdate, VendorIn,
+    MilestoneIn, MilestoneUpdate,
     ACCOUNT_TYPES, DEFAULT_COA, PAYMENT_METHODS,
 )
 
@@ -645,29 +645,11 @@ async def delete_milestone(ms_id: str, request: Request,
 
 
 # ==================================================
-# Vendors master (accounting-specific)
+# Vendors master — moved to routes/vendors.py (Phase-2 enterprise vendor mgmt)
+# The `db.vendors_acc` collection continues to be the source of truth so
+# existing journal entries with `vendor_id` and the vendor_ledger endpoint
+# above keep working unchanged.
 # ==================================================
-@router.get("/vendors")
-async def list_vendors(request: Request,
-                       session_token: Optional[str] = Cookie(default=None),
-                       authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    rows = await db.vendors_acc.find({}, {"_id": 0}).sort("name", 1).to_list(500)
-    return rows
-
-
-@router.post("/vendors")
-async def create_vendor(payload: VendorIn, request: Request,
-                        session_token: Optional[str] = Cookie(default=None),
-                        authorization: Optional[str] = Header(default=None)):
-    user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "invoices.create"):
-        raise HTTPException(status_code=403, detail="Missing permission")
-    doc = payload.model_dump()
-    doc["id"] = new_id("vnd_")
-    doc["created_at"] = iso_now()
-    await db.vendors_acc.insert_one(dict(doc))
-    return await db.vendors_acc.find_one({"id": doc["id"]}, {"_id": 0})
 
 
 # ==================================================

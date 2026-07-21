@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   SquaresFour, UsersThree, Briefcase, Kanban, Receipt, UserCircle,
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
-  IdentificationCard, Clock, Bank,
+  IdentificationCard, Clock, Bank, HardHat,
 } from "@phosphor-icons/react";
 import AIWidget from "./AIWidget";
 import { useEffect, useState } from "react";
@@ -14,12 +14,13 @@ const NAV = [
   { to: "/projects",    label: "Projects",     section: "03", perm: "projects.read",  Icon: Briefcase },
   { to: "/tasks",       label: "Tasks",        section: "04", perm: "tasks.read",     Icon: Kanban },
   { to: "/clients",     label: "Clients",      section: "05", perm: "clients.read",   Icon: UserCircle },
-  { to: "/invoices",    label: "Invoices",     section: "06", perm: "invoices.read",  Icon: Receipt },
-  { to: "/quotations",  label: "Quotations",   section: "07", perm: "quotations.read", Icon: FilesIcon },
-  { to: "/employees",   label: "Employees",    section: "08", perm: "employees.read", Icon: IdentificationCard },
-  { to: "/attendance",  label: "Attendance",   section: "09", perm: "dashboard.read", Icon: Clock },
-  { to: "/accounting",  label: "Accounting",   section: "10", perm: "finance.read",   Icon: Bank },
-  { to: "/admin/rbac",  label: "Team & Roles", section: "11", perm: "users.read",     Icon: ShieldCheck, admin: true },
+  { to: "/vendors",     label: "Vendors",      section: "06", perm: "vendors.read",   Icon: HardHat },
+  { to: "/invoices",    label: "Invoices",     section: "07", perm: "invoices.read",  Icon: Receipt },
+  { to: "/quotations",  label: "Quotations",   section: "08", perm: "quotations.read", Icon: FilesIcon },
+  { to: "/employees",   label: "Employees",    section: "09", perm: "employees.read", Icon: IdentificationCard },
+  { to: "/attendance",  label: "Attendance",   section: "10", perm: "dashboard.read", Icon: Clock },
+  { to: "/accounting",  label: "Accounting",   section: "11", perm: "finance.read",   Icon: Bank },
+  { to: "/admin/rbac",  label: "Team & Roles", section: "12", perm: "users.read",     Icon: ShieldCheck, admin: true },
 ];
 
 const fmtClock = (d) =>

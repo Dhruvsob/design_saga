@@ -15,6 +15,7 @@ ROLE_PERMISSIONS = {
         "files.*", "invoices.*", "quotations.*",
         "employees.*",
         "finance.*", "payroll.*",
+        "vendors.*",                          # full vendor management + finance
         "users.read", "users.update",
         "dashboard.read", "ai.use", "rbac.read",
     ],
@@ -24,6 +25,7 @@ ROLE_PERMISSIONS = {
         "files.*", "invoices.read",
         "quotations.read", "quotations.create", "quotations.update",
         "employees.read",
+        "vendors.read", "vendors.create", "vendors.update",   # assign vendors, no bills/payments
         "users.read", "dashboard.read", "ai.use",
     ],
     "Designer": [
@@ -33,6 +35,7 @@ ROLE_PERMISSIONS = {
         "quotations.read", "quotations.create", "quotations.update",
         "clients.read", "leads.read",
         "employees.read",
+        "vendors.read",                       # read-only for task assignment
         "dashboard.read", "ai.use",
     ],
     "Accountant": [
@@ -41,6 +44,7 @@ ROLE_PERMISSIONS = {
         "files.read", "dashboard.read", "ai.use",
         "employees.read",
         "finance.*", "payroll.*",
+        "vendors.*",                          # bills, payments, ledger
     ],
     "HR": [
         "users.read", "users.update",
@@ -52,6 +56,7 @@ ROLE_PERMISSIONS = {
         "projects.read", "tasks.read", "tasks.update",
         "clients.read", "leads.read",
         "files.read", "files.create",
+        "vendors.read",                       # read-only lookup for tasks
         "dashboard.read", "ai.use",
     ],
     "Client": [],

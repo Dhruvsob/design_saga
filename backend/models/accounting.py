@@ -113,10 +113,34 @@ class MilestoneUpdate(BaseModel):
 
 
 class VendorIn(BaseModel):
+    # Identity
     name: str
     company: Optional[str] = None
+    agency_type: Optional[str] = None         # agency|vendor|contractor|sub_contractor|supplier|consultant|other
+    contact_person: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    gstin: Optional[str] = None
     address: Optional[str] = None
-    category: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    # Compliance
+    gstin: Optional[str] = None
+    pan: Optional[str] = None
+    tds_applicable: Optional[bool] = False
+    tds_rate: Optional[float] = 0.0
+    # Banking
+    bank_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    bank_branch: Optional[str] = None
+    upi_id: Optional[str] = None
+    # Categorisation & taxonomy
+    category: Optional[str] = None            # e.g. Carpenter, Electrician, Marble, Lighting…
+    tags: Optional[List[str]] = None
+    # Meta
+    rating: Optional[float] = 0.0             # aggregate 0-5
+    active: Optional[bool] = True
+    notes: Optional[str] = None
+    # Multi-tenant ready (not enforced yet — see PRD)
+    org_id: Optional[str] = None

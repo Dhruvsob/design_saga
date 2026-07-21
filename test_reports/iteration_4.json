@@ -1,0 +1,28 @@
+{
+  "summary": "End-to-end test of the new Phase-2 Vendor / Agency Management + Vendor Ledger module. Backend: 22/22 pytest cases PASS in /app/backend/tests/test_vendors_module.py — meta (8 agency_types, 6 bill_statuses), CRUD (create with extended fields → id vnd_*, active, documents=[]; list with outstanding rollup; q= search; agency_type filter; detail with summary total_billed/total_paid/outstanding/open_bills/task_count/project_count + bills/payments/tasks/projects arrays; PATCH partial update; PATCH invalid agency_type → 400; soft-delete sets active=false + deleted_at, still findable in DB), documents attach + remove (verified via detail GET), ratings (composite = avg of 4 dims; multiple ratings correctly averaged 4.0 + 5.0 = 4.5 on vendor.rating), bills (create computes subtotal 50000/tax 9000/tds 500/total 58500/outstanding 58500/status=received; PATCH re-computes; invalid status→400; delete unpaid=hard-delete, delete paid=soft-cancel), payments (creates balanced 2-line JE DR Accounts Payable / CR bank, source='vendor_payment'; bill status flips to partially_paid then paid; FIFO across open bills works; bill_splits sums + unallocated = amount), ledger (running balance == outstanding; entries chronological), performance (score 0-100 with 30/25/35/10 weights). RBAC verified: Designer read=200/create=403/bills=403/payments=403; Employee read=200/create=403; HR read=403; Accountant full 200 on vendors+bills+payments. Frontend: /vendors page renders (hero 'Every hand that builds. In one place.', KPI strip 12 vendors/5 contractors/3 suppliers/₹1,05,950 outstanding, search + type filter). Sidebar '06 Vendors' nav present. 'New vendor' opens 3-section form; save creates vendor and refreshes list. Clicking vendor name navigates to /vendors/vnd_*. All 7 tabs render (overview/ledger/bills/payments/projects/documents/performance). Overview shows 4 rating sliders + submit-rating-btn (submission increments rating count and refetches page). Bills tab: new-bill-btn opens inline form with bf-date + line item description input + save-bill-btn. Payments tab: new-payment-btn opens form with pf-amount + pf-bank (4 bank/cash options from /api/accounts) + save-payment-btn. Ledger tab renders rows (2 rows for seed ACME vendor). Documents tab has add-doc-btn. Performance tab shows Overall performance gauge (59.9/100) + Task Execution + Client-facing Ratings + Payment Reliability cards.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_vendors_module.py",
+    "/app/test_reports/pytest/vendors_module.xml"
+  ],
+  "action_items": [
+    "(Nit) Vendor list row is not clickable — only the vendor name link and the 'Open' button navigate. Consider making the whole row clickable for better UX (currently working through the name link or Open button).",
+    "(Legacy hygiene, out-of-scope for this iter) /app/backend/tests/test_attendance_accounting.py uses hardcoded stale URL and token 'test_session_admin_001' which no longer exist — TestBackwardCompat class 404s. Not a regression of any endpoint; simply update the token to `stable_testtok_do_not_delete` and remove the hardcoded URL fallback."
+  ],
+  "critical_code_review_comments": [
+    "routes/vendors.py:_refresh_bill_status handles due-date parsing with a broad try/except — fine.",
+    "vendor list rollup does an async find per vendor (N+1). Fine at current scale but consider a single $group aggregation over vendor_bills once vendor count grows.",
+    "vendor_payments create builds journal_entry inline (duplicates the logic already in routes/accounting._post_journal). Not a bug — comment even calls it out — but a future refactor to expose _post_journal at module level would remove drift risk between the two write paths.",
+    "delete_vendor_bill: hard-delete of an unpaid bill is silent — no audit trail. Consider always soft-cancel with a 'deleted' status for full auditability (minor).",
+    "GET /vendors performs outstanding rollup even when the caller only needs a lightweight picker — a `slim=true` query flag would help downstream lookup dropdowns.",
+    "vendor rating endpoint accepts any 0-5 floats but does not enforce range (a rating of 99 would go through and skew averages). Add pydantic ge=0, le=5 constraints."
+  ],
+  "updated_files": ["/app/backend/tests/test_vendors_module.py", "/app/test_reports/iteration_4.json"],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "100% (all vendor list + detail flows + testids verified)"},
+  "test_credentials": "Bearer stable_testtok_do_not_delete (cookie session_token=same). Additional per-role test users (Designer/Employee/HR/Accountant) are auto-seeded by the test fixture.",
+  "seed_data_creation": "Test suite creates TEST_ prefixed vendors, bills, payments, ratings, documents; per-role users with TEST_ email prefixes. Not cleaned up (audit trail). Volumes small.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Vendor module is fully green. Re-run backend: `cd /app/backend && python -m pytest tests/test_vendors_module.py -o addopts='' -v`. Vendor payments always route through routes/vendors.create_vendor_payment which writes a balanced journal_entry with source='vendor_payment'. If adding vendor-related invoicing later, keep going through vendor_bills → vendor_payments for consistency. The vendors_acc collection is backward compatible with the old accounting.vendor_ledger endpoint."
+}
