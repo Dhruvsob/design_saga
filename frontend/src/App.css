@@ -1,0 +1,5 @@
+/* App-level overrides intentionally minimal — design system lives in index.css */
+.App {
+  min-height: 100vh;
+  background: #FFFFFF;
+}

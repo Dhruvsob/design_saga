@@ -1,0 +1,126 @@
+{
+  "theme": "Light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "color_palette": {
+    "background": "#FFFFFF",
+    "surface": "#FDFDFD",
+    "surface_hover": "#F5F5F5",
+    "border": "#E5E5E5",
+    "text_primary": "#0A0A0A",
+    "text_secondary": "#5C5C5C",
+    "primary": "#002FA7",
+    "primary_hover": "#001F70",
+    "destructive": "#FF2A00",
+    "success": "#1D633E"
+  },
+  "typography": {
+    "font_imports": [
+      "@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@900,800,700,500,400,300&display=swap');",
+      "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');"
+    ],
+    "headings": {
+      "family": "'Cabinet Grotesk', sans-serif",
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight font-bold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h4": "text-lg sm:text-xl tracking-tight font-medium"
+    },
+    "body": {
+      "family": "'IBM Plex Sans', sans-serif",
+      "base": "text-base leading-relaxed text-[#0A0A0A]"
+    },
+    "mono": {
+      "family": "'IBM Plex Mono', monospace",
+      "overline": "text-xs tracking-[0.2em] uppercase font-semibold text-[#5C5C5C]"
+    }
+  },
+  "layout_and_spacing": {
+    "strategy": "The 'Control Room' Grid",
+    "spacing_scale": "p-4, p-6, p-8, p-12",
+    "container_padding": "p-8",
+    "border_radius": "rounded-none",
+    "borders": "1px solid #E5E5E5",
+    "shadows": {
+      "default": "none",
+      "hover": "0 8px 30px rgba(0, 0, 0, 0.08)"
+    }
+  },
+  "component_rules": {
+    "cards": "Flat background, 1px solid border (#E5E5E5), no shadow. On hover: slight lift (-translate-y-1) and subtle shadow. Use pure #FFFFFF for card background.",
+    "buttons": "Rectangular (rounded-none). Primary buttons use #002FA7 background with #FFFFFF text. Sharp edges. Hover state: #001F70.",
+    "inputs": "Shadcn components heavily customized: rounded-none, border-gray-200, focus:border-[#002FA7] focus:ring-1 focus:ring-[#002FA7].",
+    "kanban_board": "Columns separated by 1px right border. Cards have strict geometric lines. No soft floating cards.",
+    "tables": "Minimalist, crisp headers. Border-bottom on rows, no vertical borders inside table cells. Use IBM Plex Mono for numeric data."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1771450092348-3185c8fb889a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBtaW5pbWFsaXN0JTIwYXJjaGl0ZWN0dXJlJTIwaW50ZXJpb3J8ZW58MHx8fHwxNzc2NDM1MDg3fDA&ixlib=rb-4.1.0&q=85",
+        "category": "hero",
+        "description": "Used for the split-screen Google Login page on the right side. Modern minimalist curved balconies."
+      },
+      {
+        "url": "https://images.pexels.com/photos/4458203/pexels-photo-4458203.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "background",
+        "description": "Architectural blueprint abstract. Use as a subtle background (low opacity) in the Client Portal header or AI Chat widget."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1758557839522-7d6150265d39?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYWJzdHJhY3QlMjBzY3VscHR1cmV8ZW58MHx8fHwxNzc2NDM1MDk2fDA&ixlib=rb-4.1.0&q=85",
+        "category": "avatar_placeholder",
+        "description": "Minimalist abstract sculpture. Can be used as a placeholder image for the AI assistant avatar or default project cover."
+      }
+    ],
+    "icons": {
+      "library": "phosphor-icons/react",
+      "installation": "yarn add @phosphor-icons/react",
+      "style": "Duotone or Regular weight, stark and clear."
+    }
+  },
+  "pages": {
+    "login": {
+      "layout": "50/50 split screen. Left side stark white with login form vertically centered. Right side image full height.",
+      "components": ["Shadcn Button (Google Auth)"]
+    },
+    "dashboard": {
+      "layout": "Control Room Grid (grid-cols-4). Dense data.",
+      "components": ["KPI Cards", "Recharts (Funnel & Heatmap)", "Alerts Panel"]
+    },
+    "crm_leads": {
+      "layout": "Horizontal scroll Kanban. Full height columns.",
+      "components": ["Shadcn Sheet (Lead Details)", "Draggable Kanban Cards"]
+    },
+    "projects": {
+      "layout": "List view. Detail page features a horizontal scroll/stepper for Stage Progress Tracker.",
+      "components": ["Tabs (Milestones, Tasks, Files, Invoices)", "Progress Bar"]
+    },
+    "invoices": {
+      "layout": "Strict black-and-white grid layout imitating a printed PDF. Clean tabular data.",
+      "components": ["Live PDF Preview panel", "Shadcn Badge (Draft/Sent/Paid/Overdue)"]
+    },
+    "client_portal": {
+      "layout": "Single clean column, shareable link style. Minimal navigation. Heavy focus on typography.",
+      "components": ["Progress Bar", "Simple Chat UI"]
+    },
+    "ai_assistant": {
+      "layout": "Floating chat widget in bottom right.",
+      "components": ["Chat bubble", "Message list", "Input area"]
+    }
+  },
+  "interactions": {
+    "hover_states": "Crisp transitions. bg color shifts and border color darkens. Lift cards using -translate-y-1.",
+    "focus_states": "High contrast 2px solid ring (#002FA7) with 2px offset.",
+    "animations": "Subtle, fast. 200ms ease. No bouncy effects."
+  },
+  "accessibility": {
+    "contrast": "Strict APCA compliance. Black text on white/gray. White text on primary blue.",
+    "testing": "All interactive elements must have data-testid. E.g., data-testid='login-google-btn'."
+  },
+  "instructions_to_main_agent": [
+    "Install the @phosphor-icons/react library for icons.",
+    "Install recharts for the dashboard charts (Funnel, Heatmap).",
+    "Apply global styles in index.css: set font families and border radius variables to 0.",
+    "Shadcn components MUST be customized to use rounded-none and 1px borders.",
+    "Create the Client Portal as a separate layout without the main dashboard sidebar.",
+    "Use the provided image URLs exactly. Do not use generic placeholders."
+  ]
+}
