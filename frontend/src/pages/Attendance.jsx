@@ -26,15 +26,19 @@ export default function Attendance() {
   });
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ leave_type: "casual", from_date: "", to_date: "", reason: "" });
+  const [siteVisit, setSiteVisit] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [siteForm, setSiteForm] = useState({ project_id: "", site_location: "", reason: "", expected_time: "" });
 
   const loadMe = async () => {
-    const [t, s, l, m] = await Promise.all([
+    const [t, s, l, m, p] = await Promise.all([
       api.get("/attendance/me/today"),
       api.get(`/attendance/me/summary?year=${ym.y}&month=${ym.m}`),
       api.get("/leaves?mine=true"),
       api.get("/attendance/meta"),
+      api.get("/projects"),
     ]);
-    setToday(t.data); setSummary(s.data); setLeaves(l.data); setMeta(m.data);
+    setToday(t.data); setSummary(s.data); setLeaves(l.data); setMeta(m.data); setProjects(p.data);
   };
   const loadMonthly = async () => {
     const { data } = await api.get(`/attendance/monthly?year=${ym.y}&month=${ym.m}`);
@@ -43,7 +47,12 @@ export default function Attendance() {
   useEffect(() => { loadMe(); if (isHR && tab === "monthly") loadMonthly(); }, [ym, tab]);
 
   const checkIn = async () => {
-    await api.post("/attendance/check-in", { location: "Office" });
+    const payload = siteVisit
+      ? { attendance_type: "site_visit", ...siteForm }
+      : { location: "Office" };
+    await api.post("/attendance/check-in", payload);
+    setSiteVisit(false);
+    setSiteForm({ project_id: "", site_location: "", reason: "", expected_time: "" });
     loadMe();
   };
   const checkOut = async () => {
@@ -61,15 +70,27 @@ export default function Attendance() {
   };
 
   const [pendingLeaves, setPendingLeaves] = useState([]);
+  const [pendingSite, setPendingSite] = useState([]);
   const loadPendingLeaves = async () => {
     const { data } = await api.get("/leaves?status=pending");
     setPendingLeaves(data);
   };
-  useEffect(() => { if (isHR && tab === "leaves-admin") loadPendingLeaves(); }, [tab, isHR]);
+  const loadPendingSite = async () => {
+    const { data } = await api.get("/attendance/pending-approvals");
+    setPendingSite(data);
+  };
+  useEffect(() => {
+    if (isHR && tab === "leaves-admin") loadPendingLeaves();
+    if (isHR && tab === "site-approvals") loadPendingSite();
+  }, [tab, isHR]);
 
   const actLeave = async (id, action) => {
     await api.post(`/leaves/${id}/action`, { action });
     loadPendingLeaves();
+  };
+  const actSite = async (id, action) => {
+    await api.post(`/attendance/${id}/approve`, { action });
+    loadPendingSite();
   };
 
   const rec = today?.record;
@@ -90,6 +111,7 @@ export default function Attendance() {
         <TabBtn id="leaves" tab={tab} setTab={setTab} label="My Leaves" />
         {isHR && <TabBtn id="monthly" tab={tab} setTab={setTab} label="Monthly Sheet" />}
         {isHR && <TabBtn id="leaves-admin" tab={tab} setTab={setTab} label="Pending Leaves" />}
+        {isHR && <TabBtn id="site-approvals" tab={tab} setTab={setTab} label="Site Approvals" />}
       </div>
 
       {tab === "me" && (
@@ -97,10 +119,43 @@ export default function Attendance() {
           <div className="lg:col-span-2 space-y-6">
             <div className="card-flat">
               <div className="overline mb-3">TODAY · {new Date().toDateString()}</div>
+
+              {!checkedIn && (
+                <div className="mb-3 flex items-center gap-2">
+                  <button type="button" onClick={() => setSiteVisit(false)}
+                    className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider border ${!siteVisit
+                      ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C]"}`}
+                    data-testid="type-office">Office</button>
+                  <button type="button" onClick={() => setSiteVisit(true)}
+                    className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider border ${siteVisit
+                      ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C]"}`}
+                    data-testid="type-site">Site Visit</button>
+                </div>
+              )}
+
+              {!checkedIn && siteVisit && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3" data-testid="site-visit-form">
+                  <select className="input-flat" value={siteForm.project_id}
+                    onChange={(e) => setSiteForm({ ...siteForm, project_id: e.target.value })}>
+                    <option value="">Project…</option>
+                    {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <input className="input-flat" placeholder="Site location / address" value={siteForm.site_location}
+                    onChange={(e) => setSiteForm({ ...siteForm, site_location: e.target.value })} data-testid="site-location" />
+                  <input type="time" className="input-flat" placeholder="Expected time" value={siteForm.expected_time}
+                    onChange={(e) => setSiteForm({ ...siteForm, expected_time: e.target.value })} />
+                  <input className="input-flat" placeholder="Reason / purpose" value={siteForm.reason}
+                    onChange={(e) => setSiteForm({ ...siteForm, reason: e.target.value })} data-testid="site-reason" />
+                  <div className="md:col-span-2 text-[11px] text-[#F0A93A] font-mono flex items-center gap-1">
+                    <Warning size={12} /> Site check-ins require HR / Admin approval before counting as present.
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-4">
                 {!checkedIn && (
                   <button onClick={checkIn} className="btn-primary" data-testid="check-in-btn">
-                    <SignIn size={16} /> Check in
+                    <SignIn size={16} /> Check in {siteVisit ? "at site" : ""}
                   </button>
                 )}
                 {checkedIn && !checkedOut && (
@@ -116,6 +171,11 @@ export default function Attendance() {
                     IN · {rec.check_in?.slice(11, 16)}
                     {checkedOut && <> · OUT · {rec.check_out?.slice(11, 16)} · {rec.worked_hours}h</>}
                     · IP {rec.check_in_ip}
+                    {rec.attendance_type === "site_visit" && (
+                      <> · <span className="text-[#8A6DFF] font-semibold">SITE</span>
+                         {rec.approval_status === "pending" && <span className="text-[#F0A93A]"> · PENDING APPROVAL</span>}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -263,6 +323,32 @@ export default function Attendance() {
                 <CheckCircle size={14} /> Approve
               </button>
               <button onClick={() => actLeave(l.id, "reject")} className="btn-ghost text-[#B4001C]" data-testid={`reject-${l.id}`}>
+                <X size={14} /> Reject
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === "site-approvals" && isHR && (
+        <div className="space-y-3" data-testid="site-approvals-tab">
+          <div className="overline">PENDING SITE VISITS · {pendingSite.length}</div>
+          {pendingSite.length === 0 && <div className="text-center text-[#9A9A9A] py-12">All clear.</div>}
+          {pendingSite.map((r) => (
+            <div key={r.id} className="card-flat flex flex-wrap items-center gap-4" data-testid={`site-req-${r.id}`}>
+              <div className="flex-1 min-w-[240px]">
+                <div className="font-semibold">{r.employee_name}</div>
+                <div className="text-xs font-mono text-[#5C5C5C]">
+                  {r.date} · {r.check_in?.slice(11,16)} · IP {r.check_in_ip}
+                </div>
+                <div className="text-xs text-[#5C5C5C] mt-1">
+                  {r.site_location && <>📍 {r.site_location} · </>}
+                  {r.site_reason && <>&ldquo;{r.site_reason}&rdquo;</>}
+                </div>
+              </div>
+              <button onClick={() => actSite(r.id, "approve")} className="btn-primary bg-[#1D633E]" data-testid={`site-approve-${r.id}`}>
+                <CheckCircle size={14} /> Approve
+              </button>
+              <button onClick={() => actSite(r.id, "reject")} className="btn-ghost text-[#B4001C]" data-testid={`site-reject-${r.id}`}>
                 <X size={14} /> Reject
               </button>
             </div>

@@ -66,7 +66,7 @@ function AppRouter() {
       <Route path="/employees" element={<ProtectedShell requirePerm="employees.read"><Employees /></ProtectedShell>} />
       <Route path="/employees/:id" element={<ProtectedShell requirePerm="employees.read"><EmployeeDetail /></ProtectedShell>} />
       <Route path="/attendance" element={<ProtectedShell><Attendance /></ProtectedShell>} />
-      <Route path="/accounting" element={<ProtectedShell><Accounting /></ProtectedShell>} />
+      <Route path="/accounting" element={<ProtectedShell requirePerm="finance.read"><Accounting /></ProtectedShell>} />
       <Route path="/admin/rbac" element={<ProtectedShell requirePerm="users.read"><RBACAdmin /></ProtectedShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

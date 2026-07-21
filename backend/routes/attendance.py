@@ -14,7 +14,7 @@ from core.deps import require_user
 from core.rbac import has_permission
 from models.attendance import (
     CheckInIn, CheckOutIn, AttendanceOverrideIn,
-    LeaveRequestIn, LeaveActionIn, LeaveRuleIn,
+    LeaveRequestIn, LeaveActionIn, LeaveRuleIn, ApproveAttendanceIn,
     ATTENDANCE_STATUSES, LEAVE_TYPES, LEAVE_STATUSES, DEFAULT_LEAVE_ALLOWANCE,
 )
 
@@ -95,7 +95,14 @@ async def check_in(payload: CheckInIn, request: Request,
         "check_in_ip": _client_ip(request),
         "check_in_location": payload.location or "",
         "check_in_notes": payload.notes or "",
-        "status": "present",
+        "attendance_type": payload.attendance_type or "office",
+        "project_id": payload.project_id,
+        "site_location": payload.site_location,
+        "expected_time": payload.expected_time,
+        "site_reason": payload.reason,
+        # Site visits require approval; office check-in is auto-approved
+        "status": "present" if (payload.attendance_type or "office") == "office" else "pending_approval",
+        "approval_status": "auto" if (payload.attendance_type or "office") == "office" else "pending",
     }
     if existing:
         await db.attendance.update_one({"id": existing["id"]}, {"$set": doc})
@@ -415,4 +422,54 @@ async def attendance_meta(request: Request,
         "leave_types": LEAVE_TYPES,
         "leave_statuses": LEAVE_STATUSES,
         "default_allowance": DEFAULT_LEAVE_ALLOWANCE,
+        "attendance_types": ["office", "site_visit"],
     }
+
+
+# ==================================================
+# Site-visit approvals (HR / Director / Admin)
+# ==================================================
+@router.get("/attendance/pending-approvals")
+async def pending_approvals(request: Request,
+                            session_token: Optional[str] = Cookie(default=None),
+                            authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission")
+    rows = await db.attendance.find(
+        {"approval_status": "pending"}, {"_id": 0},
+    ).sort("check_in", -1).to_list(500)
+    return rows
+
+
+@router.post("/attendance/{att_id}/approve")
+async def approve_attendance(att_id: str, payload: ApproveAttendanceIn, request: Request,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission")
+    row = await db.attendance.find_one({"id": att_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    if row.get("approval_status") != "pending":
+        raise HTTPException(status_code=400, detail=f"Already {row.get('approval_status')}")
+
+    if payload.action == "approve":
+        new_status = "present"
+        approval_status = "approved"
+    elif payload.action == "reject":
+        new_status = "absent"
+        approval_status = "rejected"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action")
+
+    await db.attendance.update_one({"id": att_id}, {"$set": {
+        "status": new_status,
+        "approval_status": approval_status,
+        "approved_by": user["user_id"],
+        "approved_by_name": user.get("name"),
+        "approved_at": iso_now(),
+        "approval_remarks": payload.remarks or "",
+    }})
+    return await db.attendance.find_one({"id": att_id}, {"_id": 0})

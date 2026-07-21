@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 
-ATTENDANCE_STATUSES = ["present", "absent", "half_day", "leave", "holiday", "week_off"]
+ATTENDANCE_STATUSES = ["present", "absent", "half_day", "leave", "holiday", "week_off", "pending_approval"]
 LEAVE_TYPES = ["casual", "sick", "earned", "unpaid", "comp_off", "maternity", "paternity"]
 LEAVE_STATUSES = ["pending", "approved", "rejected", "cancelled"]
 
@@ -23,11 +23,22 @@ class CheckInIn(BaseModel):
     employee_id: Optional[str] = None       # falls back to current user's employee mapping
     location: Optional[str] = ""
     notes: Optional[str] = ""
+    # Site-visit fields (all optional — office check-in remains default)
+    attendance_type: Optional[str] = "office"   # office | site_visit
+    project_id: Optional[str] = None
+    site_location: Optional[str] = None
+    expected_time: Optional[str] = None
+    reason: Optional[str] = None
 
 
 class CheckOutIn(BaseModel):
     employee_id: Optional[str] = None
     notes: Optional[str] = ""
+
+
+class ApproveAttendanceIn(BaseModel):
+    action: str                              # approve | reject
+    remarks: Optional[str] = ""
 
 
 class AttendanceOverrideIn(BaseModel):

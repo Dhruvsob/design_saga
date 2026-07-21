@@ -14,6 +14,7 @@ ROLE_PERMISSIONS = {
         "leads.*", "projects.*", "tasks.*", "clients.*",
         "files.*", "invoices.*", "quotations.*",
         "employees.*",
+        "finance.*", "payroll.*",
         "users.read", "users.update",
         "dashboard.read", "ai.use", "rbac.read",
     ],
@@ -39,10 +40,12 @@ ROLE_PERMISSIONS = {
         "clients.read", "projects.read", "leads.read",
         "files.read", "dashboard.read", "ai.use",
         "employees.read",
+        "finance.*", "payroll.*",
     ],
     "HR": [
         "users.read", "users.update",
         "employees.*",
+        "payroll.read", "payroll.create",     # limited — cannot see full accounting
         "dashboard.read", "ai.use",
     ],
     "Employee": [

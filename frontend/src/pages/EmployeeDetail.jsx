@@ -339,7 +339,8 @@ export default function EmployeeDetail() {
       )}
 
       {tab === "Salary & Bank" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" data-testid="emp-tab-salary">
+        <div className="space-y-6" data-testid="emp-tab-salary">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card title="EARNINGS (MONTHLY)" testid="salary-earnings">
             {["basic", "hra", "conveyance", "medical", "other_allowances"].map((k) => (
               <Row key={k} label={k.replace("_", " ").toUpperCase()}>
@@ -386,6 +387,11 @@ export default function EmployeeDetail() {
               <input disabled={!canEdit} className="input-flat font-mono" value={emp.bank?.upi || ""} onChange={(e) => patchBank("upi", e.target.value)} />
             </Row>
           </Card>
+          </div>
+
+          {hasPerm("payroll.create") && (
+            <PaySalaryBlock employeeId={emp.id} netMonthly={s.net_monthly} />
+          )}
         </div>
       )}
 
@@ -505,3 +511,121 @@ function Row({ label, children }) {
     </label>
   );
 }
+
+function PaySalaryBlock({ employeeId, netMonthly }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [preview, setPreview] = useState(null);
+  const [banks, setBanks] = useState([]);
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [extras, setExtras] = useState({ bonus: 0, incentives: 0, overtime: 0, advances_recovered: 0, other_deductions: 0 });
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = useCallback(async () => {
+    setMsg("");
+    try {
+      const qs = new URLSearchParams({ year, month, ...extras }).toString();
+      const [{ data: p }, { data: accs }] = await Promise.all([
+        api.get(`/employees/${employeeId}/salary/preview?${qs}`),
+        api.get("/accounts?type=asset"),
+      ]);
+      setPreview(p);
+      const cash = (accs || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
+      setBanks(cash);
+      if (!bankAccountId && cash.length) setBankAccountId(cash[0].id);
+    } catch (e) {
+      setMsg(e?.response?.data?.detail || "Failed to load preview (need finance.read)");
+    }
+  }, [employeeId, year, month, extras]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const pay = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const { data } = await api.post(`/employees/${employeeId}/pay-salary`, {
+        year, month, paid_from_account_id: bankAccountId,
+        ...extras, notes,
+      });
+      setMsg(`✓ Paid ₹${data.run.net.toLocaleString("en-IN")} · JE ${data.journal.id}`);
+      load();
+    } catch (e) {
+      setMsg(e?.response?.data?.detail || "Payment failed");
+    } finally { setBusy(false); }
+  };
+
+  const b = preview?.breakdown;
+  const paid = preview?.already_paid;
+
+  return (
+    <div className="card-flat" data-testid="pay-salary-block">
+      <div className="overline mb-4">RUN PAYROLL · posts to Accounting automatically</div>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+        <label className="text-xs">
+          <div className="overline mb-1">Year</div>
+          <input type="number" className="input-flat w-full" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+        </label>
+        <label className="text-xs">
+          <div className="overline mb-1">Month</div>
+          <select className="input-flat w-full" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+            {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, i) => <option key={m} value={i+1}>{m}</option>)}
+          </select>
+        </label>
+        {["bonus","incentives","overtime","advances_recovered","other_deductions"].map((k) => (
+          <label key={k} className="text-xs">
+            <div className="overline mb-1">{k.replace(/_/g, " ")}</div>
+            <input type="number" className="input-flat w-full text-right font-mono" value={extras[k]} onChange={(e) => setExtras({ ...extras, [k]: Number(e.target.value) || 0 })} data-testid={`extra-${k}`} />
+          </label>
+        ))}
+      </div>
+
+      {b && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+          <StatBox label="Gross" value={fmt(b.gross)} />
+          <StatBox label="Deductions" value={fmt(b.deductions_total)} tint="#B4001C" />
+          <StatBox label="Additions" value={fmt(b.additions)} tint="#1D633E" />
+          <StatBox label="Net payable" value={fmt(b.net)} tint="#002FA7" big />
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs flex-1 min-w-[220px]">
+          <div className="overline mb-1">Pay from</div>
+          <select className="input-flat w-full" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} data-testid="pay-from">
+            {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </label>
+        <label className="text-xs flex-1 min-w-[220px]">
+          <div className="overline mb-1">Notes</div>
+          <input className="input-flat w-full" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+        <button
+          onClick={pay}
+          disabled={busy || !bankAccountId || !b || !!paid}
+          className="btn-primary disabled:opacity-40"
+          data-testid="pay-salary-btn">
+          {paid ? "Already paid" : busy ? "Processing…" : `Pay ${fmt(b?.net || netMonthly)}`}
+        </button>
+      </div>
+      {msg && <div className="mt-3 text-sm text-[#002FA7]" data-testid="pay-msg">{msg}</div>}
+      {paid && (
+        <div className="mt-2 text-xs text-[#5C5C5C] font-mono" data-testid="paid-badge">
+          PAID ON {paid.paid_at?.slice(0, 10)} · NET {fmt(paid.net)} · Run {paid.id}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatBox({ label, value, tint = "#0A0A0A", big }) {
+  return (
+    <div className="border border-[#E5E5E5] p-3">
+      <div className="overline">{label}</div>
+      <div className={`font-mono font-bold ${big ? "text-2xl" : "text-lg"}`} style={{ color: tint }}>{value}</div>
+    </div>
+  );
+}
+

@@ -2,6 +2,13 @@
 
 **Original problem statement:** Build a SaaS-grade platform for architecture/interior design firms covering CRM, projects, tasks, files, client portal, billing, AI assistant, dashboards. MVP "lite" version covering all modules. Roles: Admin + Employee. Auth: Emergent Google. Integrations: PDF gen, AI (Claude), SendGrid email, Stripe payments. Visual: modern bold + distinctive (delivered as Swiss/editorial with Klein Blue #002FA7 accent + Cabinet Grotesk + IBM Plex Sans).
 
+**Latest expansion (Feb 21, 2026):** **Phase-1 completion sweep — Site Visit Attendance + Payroll → Accounting + RBAC Finance Gate.**
+
+- **Site-visit attendance**: check-in now supports `attendance_type=office|site_visit`; site visits land as `pending_approval` and require HR approval via `POST /api/attendance/{id}/approve`. New HR-only tab `Site Approvals` on `/attendance` with 1-click Approve / Reject.
+- **Payroll engine (HR → Accounting loop closed)**: `GET /api/employees/{eid}/salary/preview` computes gross → deductions → additions → net from the stored salary structure + optional bonus / overtime / advance recovery. `POST /api/employees/{eid}/pay-salary` posts a balanced JE (DR Employee Salary · CR Cash/Bank) and stores an idempotent `payroll_runs` doc so the same month can't be paid twice. New "Run Payroll" block appears on the Employee → Salary & Bank tab (visible only to roles with `payroll.create`).
+- **RBAC finance gate**: introduced `finance.*` and `payroll.*` permission families. `/api/accounting/*` and `/api/accounts` are router-gated by `finance.read` (Admin/Director/Accountant only — HR blocked, Designer/PM/Employee blocked). `/accounting` frontend route is guarded by `requirePerm="finance.read"` so the menu item hides itself for non-finance roles. Verified live: Designer session 403s on 4/4 finance endpoints, 200s on tasks/projects/dashboard.
+- Existing modules preserved (Auth, Projects, Tasks, Employees, Quotations, Leads, Attendance, Accounting). Verified via curl smoke tests. Testing agent NOT run this iteration by user request to conserve AI credits — extensive curl coverage instead.
+
 **Latest expansion (Feb 17, 2026 — session 2):** **Attendance + Accounting modules.**
 
 Attendance (`/app/backend/routes/attendance.py`, `/app/frontend/src/pages/Attendance.jsx`):

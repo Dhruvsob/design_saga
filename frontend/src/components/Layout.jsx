@@ -18,7 +18,7 @@ const NAV = [
   { to: "/quotations",  label: "Quotations",   section: "07", perm: "quotations.read", Icon: FilesIcon },
   { to: "/employees",   label: "Employees",    section: "08", perm: "employees.read", Icon: IdentificationCard },
   { to: "/attendance",  label: "Attendance",   section: "09", perm: "dashboard.read", Icon: Clock },
-  { to: "/accounting",  label: "Accounting",   section: "10", perm: "dashboard.read", Icon: Bank },
+  { to: "/accounting",  label: "Accounting",   section: "10", perm: "finance.read",   Icon: Bank },
   { to: "/admin/rbac",  label: "Team & Roles", section: "11", perm: "users.read",     Icon: ShieldCheck, admin: true },
 ];
 

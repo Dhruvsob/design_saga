@@ -2880,9 +2880,11 @@ async def seed_employees(request: Request,
 from routes.tasks import router as tasks_router  # noqa: E402
 from routes.attendance import router as attendance_router  # noqa: E402
 from routes.accounting import router as accounting_router  # noqa: E402
+from routes.payroll import router as payroll_router  # noqa: E402
 api.include_router(tasks_router)
 api.include_router(attendance_router)
 api.include_router(accounting_router)
+api.include_router(payroll_router)
 
 app.include_router(api)
 

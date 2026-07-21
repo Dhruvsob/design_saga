@@ -12,9 +12,9 @@ Core primitives:
 Feeds the Finance Dashboard, Client/Project/Vendor ledgers, P&L, Trial Balance,
 GST/TDS aggregations.
 """
-from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Depends
 from typing import Optional
-from datetime import date as _date
+from datetime import date as _date, timedelta
 
 from core.db import db
 from core.helpers import now_utc, iso_now, new_id
@@ -26,7 +26,20 @@ from models.accounting import (
     ACCOUNT_TYPES, DEFAULT_COA, PAYMENT_METHODS,
 )
 
-router = APIRouter()
+
+# Router-level RBAC — every accounting route requires finance.read.
+async def _require_finance_read(
+    request: Request,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+    return user
+
+
+router = APIRouter(dependencies=[Depends(_require_finance_read)])
 
 
 # ==================================================
@@ -55,7 +68,9 @@ async def list_accounts(request: Request,
                         type: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     await _seed_coa_if_empty()
     q = {"active": True}
     if type: q["type"] = type
@@ -488,7 +503,9 @@ async def trial_balance(request: Request, as_of: Optional[str] = None,
 async def finance_dashboard(request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     today = now_utc().date().isoformat()
     month_start = f"{now_utc().year}-{now_utc().month:02d}-01"
 
@@ -537,7 +554,7 @@ async def finance_dashboard(request: Request,
                        if (m.get("due_date") or "") < today), 2)
 
     # Upcoming payments (next 30 days)
-    horizon = (now_utc().date() + __import__("datetime").timedelta(days=30)).isoformat()
+    horizon = (now_utc().date() + timedelta(days=30)).isoformat()
     upcoming = [m for m in ms if today <= (m.get("due_date") or "") <= horizon]
 
     # Recent transactions
