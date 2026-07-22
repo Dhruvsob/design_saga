@@ -478,8 +478,21 @@ async def delete_vendor_bill(bill_id: str, request: Request,
     if paid > 0:
         await db.vendor_bills.update_one({"id": bill_id}, {"$set": {"status": "cancelled",
                                                                     "cancelled_at": iso_now()}})
+        # Propagate to commission row (guards received rows internally).
+        await _compute_commission_for_bill(bill_id)
         return {"ok": True, "cancelled": True}
+    # Hard delete path — also clean any linked commission rows.
     await db.vendor_bills.delete_one({"id": bill_id})
+    # Pending / invoiced commission for a hard-deleted bill: drop.
+    await db.vendor_commissions.delete_many({
+        "bill_id": bill_id,
+        "status": {"$in": ["pending", "invoiced"]},
+    })
+    # Already-received commission: mark cancelled (leave amount for audit).
+    await db.vendor_commissions.update_many(
+        {"bill_id": bill_id, "status": "received"},
+        {"$set": {"bill_deleted": True, "updated_at": iso_now()}},
+    )
     return {"ok": True, "deleted": True}
 
 
@@ -818,14 +831,24 @@ async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
     base = _bill_purchase_base(bill)
     amount = _calc_commission_amount(cfg, base)
 
-    # Bill cancelled → cancel commission
+    # Bill cancelled → cancel commission (but never overwrite already-booked income).
     if bill.get("status") == "cancelled":
         if existing:
-            await db.vendor_commissions.update_one(
-                {"id": existing["id"]}, {"$set": {"status": "cancelled",
-                                                   "amount": 0.0,
-                                                   "updated_at": iso_now()}}
-            )
+            if existing.get("status") == "received":
+                # Income already recognised; flag for accountant reconciliation but
+                # leave the row + amount untouched so P&L history isn't rewritten.
+                await db.vendor_commissions.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {"bill_cancelled_after_receipt": True,
+                              "updated_at": iso_now()}},
+                )
+            else:
+                await db.vendor_commissions.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {"status": "cancelled",
+                              "amount": 0.0,
+                              "updated_at": iso_now()}},
+                )
         return None
 
     # No commission earned → drop existing pending row (never delete received rows)
