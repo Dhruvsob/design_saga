@@ -3,7 +3,6 @@ import api from "../lib/api";
 
 const AuthContext = createContext(null);
 
-/** Check "resource.action" against a permissions array supporting wildcards. */
 function checkPerm(permissions, perm) {
   if (!permissions || !permissions.length) return false;
   if (permissions.includes("*.*")) return true;
@@ -28,8 +27,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // AuthCallback will exchange the session_id first.
     if (typeof window !== "undefined" && window.location.hash?.includes("session_id=")) {
       setLoading(false);
       return;
@@ -43,13 +40,21 @@ export function AuthProvider({ children }) {
     window.location.href = "/";
   };
 
-  const hasPerm = useCallback(
-    (perm) => checkPerm(user?.permissions, perm),
-    [user]
-  );
+  const loginWithPassword = async (identifier, password) => {
+    const { data } = await api.post("/auth/login-password", { identifier, password });
+    setUser(data.user);
+    return data.user;
+  };
+
+  const hasPerm = useCallback((perm) => checkPerm(user?.permissions, perm), [user]);
+  const isPending = user?.approval_status === "pending";
+  const isRejected = user?.approval_status === "rejected" || user?.is_active === false;
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, logout, refresh: checkAuth, hasPerm }}>
+    <AuthContext.Provider
+      value={{ user, setUser, loading, logout, refresh: checkAuth, hasPerm,
+               loginWithPassword, isPending, isRejected }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -181,6 +181,22 @@ async def create_task(payload: TaskIn, request: Request,
         p = await db.projects.find_one({"id": doc["project_id"]}, {"_id": 0})
         if p:
             doc["project_name"] = p.get("name")
+    # If a vendor_id is provided, backfill vendor_contact from the master
+    # so existing readers (list filters, ledger match) keep working.
+    if doc.get("vendor_id"):
+        v = await db.vendors_acc.find_one({"id": doc["vendor_id"]}, {"_id": 0})
+        if v:
+            doc["vendor_name"] = v.get("name")
+            existing_vc = doc.get("vendor_contact") or {}
+            doc["vendor_contact"] = {
+                "vendor_name": v.get("name") or existing_vc.get("vendor_name") or "",
+                "contact_person": v.get("contact_person") or existing_vc.get("contact_person") or "",
+                "phone": v.get("phone") or existing_vc.get("phone") or "",
+                "email": v.get("email") or existing_vc.get("email") or "",
+                "whatsapp": existing_vc.get("whatsapp") or "",
+                "company_name": v.get("company") or existing_vc.get("company_name") or "",
+                "address": v.get("address") or existing_vc.get("address") or "",
+            }
 
     _sync_status_from_detail(doc)
     # Ensure list-shaped fields are [] not None so the frontend can rely on .length

@@ -25,13 +25,41 @@ import ClientPortal from "./pages/ClientPortal";
 import Layout from "./components/Layout";
 
 function ProtectedShell({ children, requirePerm }) {
-  const { user, loading, hasPerm } = useAuth();
+  const { user, loading, hasPerm, isPending, isRejected, logout } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
     if (!loading && !user) navigate("/", { replace: true });
   }, [user, loading, navigate]);
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (!user) return null;
+
+  // Pending / rejected: block ERP access entirely.
+  if (isPending || isRejected) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white px-6">
+        <div className="max-w-lg text-center" data-testid="pending-approval-screen">
+          <div className="overline mb-4">
+            {isRejected ? "ACCOUNT DEACTIVATED" : "AWAITING ADMIN APPROVAL"}
+          </div>
+          <h1 className="font-display font-bold tracking-tighter text-5xl mb-4">
+            {isRejected ? "Not on the roster." : "You're on the list."}
+          </h1>
+          <p className="text-[#5C5C5C] mb-6">
+            {isRejected
+              ? "Your account has been deactivated by an administrator. Please contact your studio owner to restore access."
+              : "Your account is awaiting Admin approval. You'll get access as soon as it's granted."}
+          </p>
+          <div className="text-xs font-mono uppercase tracking-wider text-[#9A9A9A] mb-6">
+            Signed in as <span className="text-[#0A0A0A]">{user.email}</span>
+          </div>
+          <button onClick={logout} className="btn-primary" data-testid="pending-signout-btn">
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (requirePerm && !hasPerm(requirePerm)) {
     return (
       <Layout>
@@ -78,8 +106,10 @@ function AppRouter() {
 }
 
 function PublicRoot() {
-  const { user, loading } = useAuth();
+  const { user, loading, isPending, isRejected } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
+  // Pending/rejected users land in ProtectedShell to see the notice consistently.
+  if (user && (isPending || isRejected)) return <Navigate to="/dashboard" replace />;
   if (user) return <Navigate to="/dashboard" replace />;
   return <Login />;
 }

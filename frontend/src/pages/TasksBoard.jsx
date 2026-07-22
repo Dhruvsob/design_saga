@@ -40,6 +40,7 @@ export default function TasksBoard() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [meta, setMeta] = useState(null);
   const [view, setView] = useState("kanban");   // kanban | table
   const [taskType, setTaskType] = useState("all");  // all | employee | vendor
@@ -52,14 +53,16 @@ export default function TasksBoard() {
   const [dragOver, setDragOver] = useState(null);
 
   const loadAll = async () => {
-    const [t, p, m] = await Promise.all([
+    const [t, p, m, v] = await Promise.all([
       api.get("/tasks"),
       api.get("/projects"),
       api.get("/tasks/meta"),
+      api.get("/vendors").catch(() => ({ data: [] })),
     ]);
     setTasks(t.data);
     setProjects(p.data);
     setMeta(m.data);
+    setVendors(v.data);
   };
   useEffect(() => { loadAll(); }, []);
 
@@ -238,7 +241,7 @@ export default function TasksBoard() {
       {showForm && (
         <TaskForm
           form={form} setForm={setForm} onSubmit={submit}
-          projects={projects} meta={meta} areas={areas} categories={categories}
+          projects={projects} vendors={vendors} meta={meta} areas={areas} categories={categories}
         />
       )}
 
@@ -472,10 +475,33 @@ function InlineNumber({ value, onChange }) {
 // ================================================================
 // New task form (with employee/vendor variants)
 // ================================================================
-function TaskForm({ form, setForm, onSubmit, projects, meta, areas, categories }) {
+function TaskForm({ form, setForm, onSubmit, projects, vendors, meta, areas, categories }) {
   const set = (k, v) => setForm({ ...form, [k]: v });
   const setVendor = (k, v) => setForm({ ...form, vendor_contact: { ...(form.vendor_contact || {}), [k]: v } });
   const isVendor = form.task_type === "vendor";
+
+  // Pick vendor from master → auto-fill contact card so the task detail shows the right info,
+  // and store vendor_id so the vendor's "assigned tasks" tab lights up automatically.
+  const pickVendor = (vendorId) => {
+    if (!vendorId) {
+      setForm({ ...form, vendor_id: "", vendor_contact: { vendor_name: "", contact_person: "", phone: "", email: "", whatsapp: "", company_name: "" } });
+      return;
+    }
+    const v = vendors.find((x) => x.id === vendorId);
+    if (!v) return;
+    setForm({
+      ...form,
+      vendor_id: v.id,
+      vendor_contact: {
+        vendor_name: v.name || "",
+        company_name: v.company || "",
+        contact_person: v.contact_person || "",
+        phone: v.phone || "",
+        email: v.email || "",
+        whatsapp: form.vendor_contact?.whatsapp || "",
+      },
+    });
+  };
 
   return (
     <form onSubmit={onSubmit} className="card-flat space-y-4 scale-in" data-testid="task-form">
@@ -525,10 +551,22 @@ function TaskForm({ form, setForm, onSubmit, projects, meta, areas, categories }
           onChange={(e) => set("due_date", e.target.value)} placeholder="Due" />
         {isVendor ? (
           <>
-            <input className="input-flat" placeholder="Vendor / agency name"
-              value={form.vendor_contact?.vendor_name || ""} onChange={(e) => setVendor("vendor_name", e.target.value)} />
-            <input className="input-flat" placeholder="Contact phone"
-              value={form.vendor_contact?.phone || ""} onChange={(e) => setVendor("phone", e.target.value)} />
+            <select
+              data-testid="task-vendor-picker"
+              className="input-flat"
+              value={form.vendor_id || ""}
+              onChange={(e) => pickVendor(e.target.value)}
+            >
+              <option value="">— Pick from Vendor master —</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}{v.company ? ` · ${v.company}` : ""}{v.agency_type ? ` · ${v.agency_type}` : ""}
+                </option>
+              ))}
+            </select>
+            <input className="input-flat" placeholder="Or type ad-hoc vendor name"
+              value={form.vendor_contact?.vendor_name || ""}
+              onChange={(e) => setVendor("vendor_name", e.target.value)} />
           </>
         ) : (
           <>

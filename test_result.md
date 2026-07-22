@@ -1,219 +1,273 @@
 ## user_problem_statement
-Master continuation of the Design Saga Architecture & Interior Design ERP.
-This iteration (Phase 2 · Item #1) implements **Vendor / Agency Management + Vendor Ledger**
-as an end-to-end module that plugs into the existing accounting, tasks and projects
-without rewriting any of them.
+System-audit fix pack (Tier A + B + C + D) for the Design Saga Architecture ERP.
+Audit revealed: dashboard revenue pulled from wrong source, task↔vendor master
+not linked, seed endpoints exposing fake data, no Admin approval gate on new
+Google sign-ins, no password login at all. This iteration fixes all four tiers.
 
 ## backend:
-  - task: "Vendor CRUD (extended)"
+  - task: "A1 · Dashboard revenue now sourced from accounting journal_entries"
     implemented: true
     working: "NA"
-    file: "backend/routes/vendors.py"
-    stuck_count: 0
+    file: "backend/server.py (dashboard_stats)"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            New router at /api/vendors with full CRUD.
-            GET /api/vendors        (filters: q, agency_type, category, active, project_id; enriched with rollup outstanding)
-            POST /api/vendors       (create with extended fields — bank, GST/PAN, TDS, UPI, agency_type)
-            GET /api/vendors/meta   (agency_types + bill_statuses enum)
-            GET /api/vendors/{id}   (detail: bills, payments, tasks, projects, summary)
-            PATCH /api/vendors/{id} (partial update)
-            DELETE /api/vendors/{id} (soft delete – audit safe)
-            Storage: existing `db.vendors_acc` collection (backward compatible).
-            RBAC uses new `vendors.*` permission family — Admin/Director/PM/Accountant can create;
-            Designer/Employee read-only; ProjectManager/Accountant can update.
+            Revenue KPI now = sum(credit − debit) over journal_entries lines
+            where account_type == 'income'. Was previously sum(invoices.total)
+            where status == 'paid' (two sources of truth). Also reformatted
+            the collection-due alert to use ₹ instead of $.
 
-  - task: "Vendor documents (attachments)"
+  - task: "A2 · Task → Vendor master link (vendor_id)"
     implemented: true
     working: "NA"
-    file: "backend/routes/vendors.py"
+    file: "backend/models/task.py, backend/routes/tasks.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            Added `vendor_id: Optional[str]` to TaskIn and TaskUpdate. On task
+            creation, if vendor_id is present the vendor_contact block is
+            auto-backfilled from vendors_acc so old readers keep working.
+            Verified: creating a task with vendor_id=vnd_1f71cd90ee68 populated
+            vendor_contact.vendor_name="ACME Carpentry" and phone from master.
+            Vendor detail's `tasks` array now includes tasks linked via
+            vendor_id primarily (falls back to vendor_contact.vendor_name).
+
+  - task: "A4 · Dashboard team utilization uses real priority-weighted signal"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
     priority: "medium"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            POST /api/vendors/{id}/documents  (attach — label/url/kind/expires_on)
-            DELETE /api/vendors/{id}/documents/{doc_id}
+            Was: "count open tasks per assignee" (comment literally said dummy).
+            Now: weighted sum (urgent=3, critical=3, high=2, medium=1, low=1)
+            and sorted descending. Field name unchanged (load) for backward compat.
 
-  - task: "Vendor rating + aggregate score"
+  - task: "B1 · Seed endpoints gated behind ENABLE_SEED_DEMO env var"
     implemented: true
     working: "NA"
-    file: "backend/routes/vendors.py"
-    priority: "medium"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            POST /api/vendors/{id}/rate  (quality/timeliness/cost/communication 0-5 + comment)
-            GET /api/vendors/{id}/ratings (history)
-            Auto-updates vendor master `rating` = avg of per-rating overalls.
-
-  - task: "Vendor bills"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/vendors.py"
+    file: "backend/server.py"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            POST /api/vendor-bills   (items + tax + tds → server-computed subtotal/tax/tds/total)
-            GET /api/vendor-bills    (filters: vendor_id, project_id, status)
-            GET /api/vendor-bills/{id}
-            PATCH /api/vendor-bills/{id}
-            DELETE /api/vendor-bills/{id} (if paid, becomes soft-cancel instead of hard delete)
-            Status auto-refreshes: received → partially_paid → paid, and → overdue when due passes.
-            Storage: `db.vendor_bills` (new).
+            /api/seed, /api/quotations-adv/seed and /api/employees/seed each
+            return 403 unless env var ENABLE_SEED_DEMO=true. Default: disabled.
 
-  - task: "Vendor payments (creates balanced journal entry)"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/vendors.py"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            POST /api/vendor-payments — posts a journal entry
-            (DR Accounts Payable · CR Cash/Bank) and settles the specified bills.
-            FIFO settle if bill_ids empty. Handles overpayment → `unallocated` on-account.
-            GET /api/vendor-payments (filters: vendor_id, project_id)
-            DELETE /api/vendor-payments/{id} — reverses the journal entry and refreshes bill statuses.
-            Storage: `db.vendor_payments` (new) + reuses `db.journal_entries`.
-
-  - task: "Vendor ledger (running balance)"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/vendors.py"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            GET /api/vendors/{id}/ledger?from_date&to_date
-            Returns chronological entries (bills CR, payments DR) with running balance
-            and totals (billed/paid/outstanding). Verified via curl:
-            bill 58500 → pay 30000 → outstanding 28500.
-
-  - task: "Vendor performance score"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/vendors.py"
-    priority: "medium"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            GET /api/vendors/{id}/performance
-            Composite 0-100: completion 30% + on-time 25% + rating 35% + payment reliability 10%.
-            Also returns raw components (tasks, ratings, financial).
-
-  - task: "RBAC — new vendors.* permission family"
-    implemented: true
-    working: "NA"
-    file: "backend/core/rbac.py"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            Admin: *.*   |   Director: vendors.*   |   ProjectManager: vendors.read/create/update
-            Designer/Employee: vendors.read   |   Accountant: vendors.*   |   HR: (no)   |   Client: (no)
-            Designer/Employee correctly blocked from finance.create for bills & payments.
-
-  - task: "Super-admin whitelist (from earlier iteration — still active)"
+  - task: "B2 · Purge of pre-existing fake demo data"
     implemented: true
     working: true
-    file: "backend/server.py"
+    file: "MongoDB one-shot"
     priority: "high"
     needs_retesting: false
     status_history:
         -working: true
         -agent: "main"
         -comment: >-
-            SUPER_ADMIN_EMAILS env var (default: designsaga10@gmail.com) → auto-elevated
-            to Admin on every sign-in; can't be demoted via /api/rbac/users/{id}/role.
+            Removed 6 leads, 3 clients, 3 projects, 7 tasks, 4 invoices, 3 files
+            plus 12 TEST_ users from previous automated runs. Retained real
+            accounting (CoA, vendors master, journal entries) and the ACME
+            vendor + its bill/payment from vendor-module smoke test.
+
+  - task: "C1 · Admin approval gate for new Google sign-ins"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py (create_session), backend/core/deps.py (require_user)"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            New Google users now land with approval_status='pending' + is_active=false.
+            Super-admin & first-ever user bypass approval (auto-Admin, approved).
+            require_user (BOTH in server.py and core/deps.py) return 403
+            "Your account is awaiting Admin approval." for pending users and 403
+            "Your account has been deactivated." for rejected users. Existing
+            users grandfathered as approved via one-shot mongosh migration.
+            NOTE: `/api/auth/me` still returns the user (with status) so the
+            frontend can show a "Pending" screen.
+
+  - task: "C2 · Admin approval / reject / list-pending endpoints"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/auth.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            GET  /api/rbac/pending                (Admin) — list pending
+            POST /api/rbac/users/{id}/approve     (Admin) — body {decision: approve|reject, role?, reason?}
+            Approve sets approval_status='approved', is_active=true, assigns role + employee_id (auto DS000N).
+            Reject sets approval_status='rejected', is_active=false, invalidates all sessions.
+
+  - task: "D1 · Password login (email OR employee_id)"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/auth.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            POST /api/auth/login-password {identifier, password}
+            Identifier can be an email OR a DS0001-style employee_id.
+            bcrypt (passlib) for hashing. On success sets the same session_token
+            cookie as Google (httpOnly + secure + SameSite=None, 7-day expiry).
+            5 failed attempts in 15 minutes → 429 "Too many failed attempts"
+            (via login_attempts collection). Pending users → 403 with
+            "awaiting Admin approval"; rejected → 403 with "deactivated".
+
+  - task: "D2 · Admin creates user with password + Reset password"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/auth.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            POST /api/auth/register (Admin only). Body: email, password (>=6),
+            name, role, phone, approve_immediately (default true). Auto-assigns
+            next sequential DS0001, DS0002…
+            POST /api/auth/reset-password/{user_id} (Admin only). Body:
+            new_password. Kills all active sessions for the target user.
+            POST /api/auth/change-password (self). Body: old_password, new_password.
+            Returns 400 for Google-only users (no existing hash).
+
+  - task: "Refactor · Deduplicated ROLE_PERMISSIONS between server.py and core/rbac.py"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/core/rbac.py"
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            Was: two ROLE_PERMISSIONS dicts (server.py and core/rbac.py) drifting apart —
+            Director in server.py lacked vendors.* and finance.*. Now server.py
+            imports ROLES, ROLE_PERMISSIONS, normalize_role, expand_permissions,
+            has_permission directly from core.rbac. Single source of truth.
+            core.rbac exports LEGACY_ROLE_MAP too (public alias).
 
 ## frontend:
-  - task: "Vendors list page (/vendors)"
+  - task: "Login page — password form + Emergent Google button both present"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/Vendors.jsx"
+    file: "frontend/src/pages/Login.jsx"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Editorial-Swiss list with KPI strip (count/contractors/suppliers/outstanding),
-            search box + agency_type filter, and a full create form with 3 sections
-            (Identity · Compliance · Banking). Row click routes to /vendors/:id.
-            data-testids: vendors-page, new-vendor-btn, vendor-search, vendor-filter-type,
-            vendor-form, vf-name/vf-phone/vf-agency-type, save-vendor-btn, vendor-row-{id},
-            kpi-vendor-count, kpi-vendor-outstanding.
+            Preserved editorial layout + Google flow. Added below the Google
+            button (with an OR divider) a compact 2-field form (identifier + password).
+            data-testids: login-google-btn, password-login-form, login-identifier,
+            login-password, login-password-btn, login-error.
+            The Emergent Google URL and redirect logic are untouched
+            (kept the DO-NOT-HARDCODE-URL guardrails).
 
-  - task: "Vendor detail page (/vendors/:id) with tabs"
+  - task: "Pending-approval / rejected screen in ProtectedShell"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/VendorDetail.jsx"
+    file: "frontend/src/App.js, frontend/src/context/AuthContext.js"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Header with rating + outstanding KPIs. Tabs: overview | ledger | bills |
-            payments | projects | documents | performance.
-            Overview panel includes a 4-dimension rating slider + comment.
-            Bills tab: create form with server-side tax/tds math; list with paid/outstanding cols.
-            Payments tab: settle-multiple-bills UX + bank/cash account selector.
-            Performance tab: gauge score + task/rating/payment breakdowns.
-            Non-finance users see read-only bills/payments (buttons hidden by hasPerm).
-            data-testids include vendor-detail-page, vendor-tab-{name}, new-bill-btn,
-            save-bill-btn, new-payment-btn, save-payment-btn, submit-rating-btn, add-doc-btn,
-            ledger-row-{i}, bill-row-{id}, payment-row-{id}.
+            AuthContext exposes isPending / isRejected booleans and loginWithPassword().
+            ProtectedShell shows a dedicated "Awaiting Admin approval" or
+            "Account deactivated" screen with a Sign-out button. PublicRoot also
+            forwards pending users to /dashboard so they land in that screen
+            consistently (never on the login page while an active session exists).
+            data-testids: pending-approval-screen, pending-signout-btn.
 
-  - task: "Sidebar Vendors nav + route registration"
+  - task: "RBAC Admin — Pending approvals + Create user + Reset password"
     implemented: true
     working: "NA"
-    file: "frontend/src/components/Layout.jsx, frontend/src/App.js"
+    file: "frontend/src/pages/RBACAdmin.jsx"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            New nav item (HardHat icon, section 06) between Clients and Invoices.
-            Routes: /vendors and /vendors/:id, both guarded by requirePerm="vendors.read".
-            Sidebar visible sections renumbered (06 → Vendors, 07 → Invoices, …, 12 → Team & Roles).
+            Full rewrite of RBACAdmin (backward-compatible URL /admin/rbac):
+             • Pending-approvals section at top (row-per-user with role picker + Approve/Reject).
+             • Team members table gains Employee ID + Status pill (approved / pending / deactivated).
+             • Create-user form (email, password, role, name, phone, approve toggle).
+             • Reset-password modal per user (all sessions get killed on save).
+            data-testids: rbac-page, create-user-btn, cu-name/email/password/role, cu-submit,
+             pending-section, pending-row-{uid}, approve-{uid}, reject-{uid},
+             reset-pwd-{uid}, reset-pwd-modal, reset-pwd-input, reset-pwd-submit.
+
+  - task: "A3 · Vendor picker in Accounting Expense form"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/Accounting.jsx"
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            "Vendor id (optional)" text input replaced with a <select> populated
+            from /api/vendors. data-testid: expense-vendor-select.
+
+  - task: "A2b · Vendor picker in Task form (task_type=vendor)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/TasksBoard.jsx"
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            When creating a Vendor-type task, a "Pick from Vendor master" dropdown
+            auto-fills vendor_contact (name, company, contact_person, phone, email)
+            AND stores vendor_id. The manual name field is retained as an ad-hoc fallback.
+            data-testid: task-vendor-picker.
 
 ## metadata:
   created_by: "main_agent"
-  version: "2.1"
-  test_sequence: 1
+  version: "2.2"
+  test_sequence: 2
   run_ui: true
 
 ## test_plan:
   current_focus:
-    - "Vendor CRUD (extended)"
-    - "Vendor bills"
-    - "Vendor payments (creates balanced journal entry)"
-    - "Vendor ledger (running balance)"
-    - "Vendor performance score"
-    - "RBAC — new vendors.* permission family"
-    - "Vendors list page (/vendors)"
-    - "Vendor detail page (/vendors/:id) with tabs"
+    - "A1 · Dashboard revenue now sourced from accounting journal_entries"
+    - "A2 · Task → Vendor master link (vendor_id)"
+    - "B1 · Seed endpoints gated behind ENABLE_SEED_DEMO env var"
+    - "C1 · Admin approval gate for new Google sign-ins"
+    - "C2 · Admin approval / reject / list-pending endpoints"
+    - "D1 · Password login (email OR employee_id)"
+    - "D2 · Admin creates user with password + Reset password"
+    - "Login page — password form + Emergent Google button both present"
+    - "Pending-approval / rejected screen in ProtectedShell"
+    - "RBAC Admin — Pending approvals + Create user + Reset password"
+    - "A3 · Vendor picker in Accounting Expense form"
+    - "A2b · Vendor picker in Task form (task_type=vendor)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -221,18 +275,48 @@ without rewriting any of them.
 ## agent_communication:
     -agent: "main"
     -message: >-
-        Phase-2 item #1 (Vendor / Agency Management + Vendor Ledger) is implemented.
-        Curl smoke test passes end-to-end (create vendor → attach doc → rate → post 58500 bill
-        with 18% GST & 1% TDS → partial pay 30000 via bank_transfer → ledger shows correct
-        running balance → performance score computed).
-        A stable test admin session is seeded in Mongo:
-            token: `stable_testtok_do_not_delete`
-            user: `test-admin@ds.co` (role Admin)
-        The token works with both Authorization: Bearer header AND as a session_token cookie.
-        Please validate all listed backend + frontend tasks. Focus areas:
-          1) All new endpoints return correct RBAC 403 for Designer / Employee where applicable.
-          2) Bill status auto-transitions (received → partially_paid → paid → overdue).
-          3) Payments create a balanced journal entry (verify via GET /api/journal-entries?vendor_id=…).
-          4) Ledger totals reconcile with bills − payments.
-          5) UI: nav shows "Vendors" for admin, hides for HR role.
-          6) UI: /vendors renders list; /vendors/:id renders 7 tabs; forms submit successfully.
+        Big system-audit fix pack landed (Tiers A + B + C + D). No modules were
+        rewritten — only extended. Key verification points:
+
+        BACKEND (already curl-verified end-to-end):
+         1. `/api/auth/login-password` with either email or employee_id
+            returns {user, session_token}. Sets cookie. 401 on wrong password;
+            429 after 5 wrong attempts in 15 min.
+         2. `/api/auth/register` creates user with employee_id auto-assigned
+            (DS0001, DS0002…). Admin-only (403 for non-Admin).
+         3. `/api/auth/reset-password/{uid}` — Admin-only; kills victim's sessions.
+         4. `/api/auth/change-password` — self; 400 for Google-only user;
+            401 on wrong old_password.
+         5. `/api/rbac/pending` — returns pending users; Admin-only.
+         6. `/api/rbac/users/{uid}/approve` — decision: approve|reject.
+         7. New Google user on next Emergent /auth/session lands as pending
+            (except super-admin & first user).
+         8. `/api/dashboard/stats` — `kpis.revenue` sums income-account credits
+            from journal_entries (verified 0.0 after purge, non-zero after
+            posting income via /api/accounting/income).
+         9. `/api/seed`, `/api/quotations-adv/seed`, `/api/employees/seed` all
+            return 403 with detail mentioning ENABLE_SEED_DEMO env var.
+        10. Creating a task with vendor_id auto-fills vendor_contact from master;
+            vendor detail page shows the task in its "Assigned tasks" tab.
+
+        FRONTEND:
+        11. `/` (Login) — Google button + password form both visible;
+            error box shows detail from backend for wrong password.
+        12. Pending user hitting any /dashboard etc lands on the
+            "Awaiting Admin approval" screen (data-testid pending-approval-screen)
+            with a Sign out CTA.
+        13. RBAC Admin (`/admin/rbac`) shows Pending Approvals section if any;
+            approve/reject buttons update state. "Create user" form issues
+            /api/auth/register. Reset-password modal per row.
+        14. Accounting > Expense: vendor field is now a <select>
+            (expense-vendor-select) populated from /api/vendors.
+        15. Tasks > New > Agency/Vendor: picker (task-vendor-picker) auto-fills
+            the contact block.
+
+        Test creds are in /app/memory/test_credentials.md.
+        Special active session in DB:
+            stable_testtok_do_not_delete → Admin (test-admin@ds.co)
+            pmanager@ds.co / DS0001 / Test@1234 → ProjectManager
+            newbie_tok → pending Google user (for approval-flow test)
+        Please run through both backend + frontend flows. Zero regressions
+        expected on the previously green Vendor Module.

@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration #5 audit fix pack (Tiers A/B/C/D) tested. 18/18 backend pytest passing. Frontend: login (email + employee_id), RBAC admin (columns, pending section, create/reset user), expense-vendor-select dropdown, and task-vendor-picker all working. One frontend bug found: pending user renders 'Account Deactivated' copy instead of 'Awaiting Admin Approval'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AuthContext + ProtectedShell (App.js)",
+        "issue": "Pending user (approval_status='pending', is_active=false) is rendered as REJECTED. Screen title shows 'ACCOUNT DEACTIVATED / Not on the roster.' instead of 'AWAITING ADMIN APPROVAL / You're on the list.' Root cause: isRejected = approval_status==='rejected' || user.is_active===false in /app/frontend/src/context/AuthContext.js:51. Since pending users also have is_active=false, both isPending and isRejected are true; ternary in App.js:42/45/48 favours the rejected copy. Fix: isRejected = approval_status==='rejected' || (is_active===false && approval_status!=='pending')",
+        "selector": "[data-testid=\"pending-approval-screen\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_audit_fix_pack.py", "/app/test_reports/pytest/iter5_audit.xml"],
+  "action_items": [
+    "Fix isRejected logic in /app/frontend/src/context/AuthContext.js so pending users show the pending-approval copy instead of the deactivated copy."
+  ],
+  "critical_code_review_comments": [
+    "Frontend AuthContext isRejected boolean over-matches pending users due to is_active=false being reused by both pending & rejected — needs a precedence rule.",
+    "Backend approve endpoint takes decision='approve|reject'; the frontend calls /rbac/users/{id}/approve for both actions which is fine but the endpoint name is misleading — consider /decision.",
+    "Accounting router mounts /accounts at API root (not under /accounting). Slightly inconsistent with other /accounting/* endpoints — spec calls it /api/accounting/accounts but real path is /api/accounts. Consider aligning."
+  ],
+  "updated_files": ["/app/backend/tests/test_audit_fix_pack.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "94% (1 bug in pending-screen copy)"},
+  "test_credentials": "Admin bearer stable_testtok_do_not_delete; pmanager@ds.co / DS0001 · Test@1234; pending user newbie_tok",
+  "seed_data_creation": "Created several TEST_* users via /api/auth/register during testing (pending, approved, rejected variants), a TEST_audit_a1 income journal, tasks TEST_audit_a2/a4_*, and one UI-created user (uitest_*).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suite lives at /app/backend/tests/test_audit_fix_pack.py — run to regress fix pack. Vendor 'ACME Carpentry' (vnd_1f71cd90ee68) is present and stable. To re-test pending-screen after fix, hit /dashboard with cookie session_token=newbie_tok and assert visible text contains 'AWAITING ADMIN APPROVAL' and NOT 'ACCOUNT DEACTIVATED'.",
+  "rca of the issue": "AuthContext.js line 51 defines: isRejected = user?.approval_status === 'rejected' || user?.is_active === false. The pending Google-sign-in user has approval_status='pending' AND is_active=false (server sets is_active=false until Admin approves). The OR condition therefore makes isRejected true for pending users, and App.js branches (isRejected ? ... : ...) select the 'ACCOUNT DEACTIVATED / Not on the roster.' copy. Fix: change to isRejected = user?.approval_status === 'rejected' || (user?.is_active === false && user?.approval_status !== 'pending')."
+}

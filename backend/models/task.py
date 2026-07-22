@@ -128,6 +128,7 @@ class TaskIn(BaseModel):
     assignee_id: Optional[str] = None
     assignee_name: Optional[str] = None
     assignees: Optional[List[str]] = None
+    vendor_id: Optional[str] = None           # FK → vendors_acc (primary link)
     vendor_contact: Optional[VendorContact] = None
     due_date: Optional[str] = None
     follow_up_date: Optional[str] = None
@@ -153,6 +154,7 @@ class TaskUpdate(BaseModel):
     assignee_id: Optional[str] = None
     assignee_name: Optional[str] = None
     assignees: Optional[List[str]] = None
+    vendor_id: Optional[str] = None           # FK → vendors_acc
     vendor_contact: Optional[VendorContact] = None
     due_date: Optional[str] = None
     follow_up_date: Optional[str] = None

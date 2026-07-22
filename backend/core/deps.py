@@ -43,6 +43,14 @@ async def require_user(
     user = await get_current_user(request, session_token, authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    # Approval / active gates — pending or rejected users cannot use protected routes.
+    status = user.get("approval_status")
+    if status == "pending":
+        raise HTTPException(status_code=403,
+                            detail="Your account is awaiting Admin approval.")
+    if status == "rejected" or user.get("is_active") is False:
+        raise HTTPException(status_code=403,
+                            detail="Your account has been deactivated. Contact an Admin.")
     return user
 
 

@@ -22,6 +22,7 @@ export default function Accounting() {
   const [accounts, setAccounts] = useState([]);
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [journal, setJournal] = useState([]);
   const [pl, setPL] = useState(null);
   const [tb, setTB] = useState(null);
@@ -29,13 +30,14 @@ export default function Accounting() {
   const [meta, setMeta] = useState(null);
 
   const loadCommon = async () => {
-    const [a, c, p, m] = await Promise.all([
+    const [a, c, p, m, v] = await Promise.all([
       api.get("/accounts"),
       api.get("/clients"),
       api.get("/projects"),
       api.get("/accounting/meta"),
+      api.get("/vendors").catch(() => ({ data: [] })),
     ]);
-    setAccounts(a.data); setClients(c.data); setProjects(p.data); setMeta(m.data);
+    setAccounts(a.data); setClients(c.data); setProjects(p.data); setMeta(m.data); setVendors(v.data);
   };
   const loadDashboard = async () => (setDashboard((await api.get("/accounting/dashboard")).data));
   const loadJournal = async () => (setJournal((await api.get("/journal-entries")).data));
@@ -103,7 +105,7 @@ export default function Accounting() {
         <TxnList
           kind="expense" showForm={showForm} setShowForm={setShowForm}
           accounts={accounts} banks={banks} txnAccs={expenseAccs}
-          clients={clients} projects={projects}
+          clients={clients} projects={projects} vendors={vendors}
           journal={journal.filter((j) => j.source === "expense")}
           onSubmit={async (payload) => {
             await api.post("/accounting/expense", payload);
@@ -215,7 +217,7 @@ function SubKPI({ label, value, tint }) {
 }
 
 // ================================================================
-function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, clients, projects, journal, onSubmit }) {
+function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, clients, projects, vendors, journal, onSubmit }) {
   const [form, setForm] = useState(() => ({
     date: new Date().toISOString().slice(0, 10), amount: "",
     ...(kind === "income" ? { income_account_id: "", bank_account_id: "", client_id: "", project_id: "" }
@@ -284,7 +286,19 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
 
           {kind === "expense" && (
             <>
-              <input className="input-flat" placeholder="Vendor id (optional)" value={form.vendor_id || ""} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })} />
+              <select
+                data-testid="expense-vendor-select"
+                className="input-flat"
+                value={form.vendor_id || ""}
+                onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}
+              >
+                <option value="">— Vendor (optional) —</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}{v.company ? ` · ${v.company}` : ""}
+                  </option>
+                ))}
+              </select>
               <select className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
                 <option value="">— Project (optional) —</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

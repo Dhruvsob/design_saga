@@ -101,106 +101,31 @@ async def require_user(request: Request, session_token: Optional[str] = Cookie(d
     user = await get_current_user(request, session_token, authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    # Approval / active gates — pending or rejected users cannot use protected routes.
+    status = user.get("approval_status")
+    if status == "pending":
+        raise HTTPException(status_code=403,
+                            detail="Your account is awaiting Admin approval.")
+    if status == "rejected" or user.get("is_active") is False:
+        raise HTTPException(status_code=403,
+                            detail="Your account has been deactivated. Contact an Admin.")
     return user
 
 
 # ============================================================
 # RBAC – Roles, Permissions, Guards
 # ============================================================
-ROLES = ["Admin", "Director", "ProjectManager", "Designer",
-         "Accountant", "HR", "Employee", "Client"]
-
-# Permission grammar: "resource.action" — supports wildcards.
-#   "*.*"           → grants everything
-#   "leads.*"       → grants every action on leads
-#   "leads.delete"  → grants only that exact action
-ROLE_PERMISSIONS = {
-    "Admin": ["*.*"],
-    "Director": [
-        "leads.*", "projects.*", "tasks.*", "clients.*",
-        "files.*", "invoices.*", "quotations.*",
-        "employees.*",
-        "users.read", "users.update",
-        "dashboard.read", "ai.use", "rbac.read",
-    ],
-    "ProjectManager": [
-        "leads.*", "projects.*", "tasks.*",
-        "clients.read", "clients.create", "clients.update",
-        "files.*", "invoices.read",
-        "quotations.read", "quotations.create", "quotations.update",
-        "employees.read",
-        "users.read", "dashboard.read", "ai.use",
-    ],
-    "Designer": [
-        "projects.read", "projects.update",
-        "tasks.read", "tasks.create", "tasks.update",
-        "files.*",
-        "quotations.read", "quotations.create", "quotations.update",
-        "clients.read", "leads.read",
-        "employees.read",
-        "dashboard.read", "ai.use",
-    ],
-    "Accountant": [
-        "invoices.*", "quotations.*",
-        "clients.read", "projects.read", "leads.read",
-        "files.read", "dashboard.read", "ai.use",
-        "employees.read",
-    ],
-    "HR": [
-        "users.read", "users.update",
-        "employees.*",
-        "dashboard.read", "ai.use",
-    ],
-    "Employee": [
-        "projects.read", "tasks.read", "tasks.update",
-        "clients.read", "leads.read",
-        "files.read", "files.create",
-        "dashboard.read", "ai.use",
-    ],
-    "Client": [],  # Studio panel access denied; portal is a separate token-based flow.
-}
-
-# Legacy → new-casing mapping (safe forward migration for existing docs).
-_LEGACY_ROLE_MAP = {
-    "admin": "Admin",
-    "employee": "Employee",
-    "manager": "ProjectManager",
-    "designer": "Designer",
-    "accountant": "Accountant",
-    "hr": "HR",
-    "director": "Director",
-    "owner": "Director",
-    "client": "Client",
-}
-
-
-def _normalize_role(role: Optional[str]) -> str:
-    if not role:
-        return "Employee"
-    if role in ROLES:
-        return role
-    return _LEGACY_ROLE_MAP.get(role.lower(), "Employee")
-
-
-def _expand_permissions(role: str) -> List[str]:
-    """Return the explicit list of grants for a role (wildcards preserved)."""
-    return list(ROLE_PERMISSIONS.get(_normalize_role(role), []))
-
-
-def has_permission(user: dict, perm: str) -> bool:
-    """True if `user` has the `resource.action` permission."""
-    if not user:
-        return False
-    role = _normalize_role(user.get("role"))
-    grants = ROLE_PERMISSIONS.get(role, [])
-    if not grants:
-        return False
-    if "*.*" in grants:
-        return True
-    if perm in grants:
-        return True
-    resource = perm.split(".", 1)[0] if "." in perm else perm
-    return f"{resource}.*" in grants
+# NOTE: Roles + permissions live in `core/rbac.py` (single source of truth).
+# We re-export names here so the rest of server.py doesn't need to be rewritten.
+# ============================================================
+from core.rbac import (
+    ROLES,
+    ROLE_PERMISSIONS,
+    LEGACY_ROLE_MAP as _LEGACY_ROLE_MAP,
+    normalize_role as _normalize_role,
+    expand_permissions as _expand_permissions,
+    has_permission,
+)
 
 
 def require_permission(perm: str):
@@ -217,10 +142,11 @@ def require_permission(perm: str):
 
 
 def _user_with_perms(user: dict) -> dict:
-    """Attach normalised role + expanded permissions for wire output."""
+    """Attach normalised role + expanded permissions for wire output.
+    Always strips `password_hash` — never leak the bcrypt digest."""
     if not user:
         return user
-    out = dict(user)
+    out = {k: v for k, v in user.items() if k != "password_hash"}
     out["role"] = _normalize_role(user.get("role"))
     out["permissions"] = _expand_permissions(out["role"])
     return out
@@ -455,19 +381,25 @@ async def create_session(request: Request, response: Response):
         # Super-admin guarantee: force-elevate to Admin on every sign-in
         if _is_super_admin(email) and _normalize_role(existing.get("role")) != "Admin":
             update_set["role"] = "Admin"
+            update_set["approval_status"] = "approved"
+            update_set["is_active"] = True
         await db.users.update_one({"user_id": user_id}, {"$set": update_set})
         user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         user_count = await db.users.count_documents({})
-        # Super-admin whitelist OR first-ever user → Admin. Otherwise Employee.
-        role = "Admin" if (_is_super_admin(email) or user_count == 0) else "Employee"
+        # First-ever user OR whitelisted super-admin = auto-approved Admin.
+        # Every other Google sign-up lands in `pending` and must be approved.
+        is_privileged = _is_super_admin(email) or user_count == 0
         user = {
             "user_id": user_id,
             "email": email,
             "name": name,
             "picture": picture,
-            "role": role,
+            "role": "Admin" if is_privileged else "Employee",
+            "approval_status": "approved" if is_privileged else "pending",
+            "is_active": True if is_privileged else False,
+            "auth_type": "google",
             "created_at": iso(now_utc()),
             "last_login": iso(now_utc()),
         }
@@ -606,11 +538,14 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
     active_projects = await db.projects.count_documents({"stage": {"$nin": ["Handover"]}})
     total_projects = await db.projects.count_documents({})
 
-    # Revenue: sum of paid invoices
-    paid_cursor = db.invoices.find({"status": "paid", "doc_type": "invoice"}, {"_id": 0})
+    # Revenue: sum from ACCOUNTING journal entries (income line credits) — single source
+    # of truth. Falls back to zero if no journal exists yet. This matches the P&L report.
     revenue = 0.0
-    async for inv in paid_cursor:
-        revenue += float(inv.get("total", 0))
+    async for je in db.journal_entries.find({}, {"_id": 0, "lines": 1}):
+        for l in je.get("lines", []):
+            if l.get("account_type") == "income":
+                revenue += float(l.get("credit", 0)) - float(l.get("debit", 0))
+    revenue = round(revenue, 2)
 
     # Collection due: sum of sent+overdue
     due_cursor = db.invoices.find({"status": {"$in": ["sent", "overdue"]}, "doc_type": "invoice"}, {"_id": 0})
@@ -643,14 +578,20 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
     if overdue_tasks > 0:
         alerts.append({"level": "high", "message": f"{overdue_tasks} tasks overdue"})
     if collection_due > 0:
-        alerts.append({"level": "medium", "message": f"${collection_due:,.0f} pending collection"})
+        alerts.append({"level": "medium", "message": f"₹{collection_due:,.0f} pending collection"})
 
-    # Team utilization (dummy: count tasks per assignee)
+    # Team utilization — real signal: weighted open tasks (urgent=3, high=2, medium=1, low=1)
+    # per active employee. Not a percentage — a workload index the studio owner can eyeball.
+    weight = {"urgent": 3, "critical": 3, "high": 2, "medium": 1, "low": 1}
     util = {}
-    async for t in db.tasks.find({"status": {"$ne": "done"}}, {"_id": 0, "assignee_name": 1}):
+    async for t in db.tasks.find({"status": {"$ne": "done"}},
+                                 {"_id": 0, "assignee_name": 1, "priority": 1}):
         n = t.get("assignee_name") or "Unassigned"
-        util[n] = util.get(n, 0) + 1
-    utilization = [{"name": k, "load": v} for k, v in util.items()]
+        util[n] = util.get(n, 0) + weight.get((t.get("priority") or "medium").lower(), 1)
+    utilization = sorted(
+        [{"name": k, "load": v} for k, v in util.items()],
+        key=lambda x: -x["load"],
+    )
 
     return {
         "kpis": {
@@ -1252,6 +1193,9 @@ async def ai_history(session_id: str, request: Request,
 @api.post("/seed")
 async def seed_demo(request: Request, session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
+    if os.environ.get("ENABLE_SEED_DEMO", "").lower() not in ("1", "true", "yes"):
+        raise HTTPException(status_code=403,
+                            detail="Demo seeding disabled. Set ENABLE_SEED_DEMO=true to enable.")
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "*.*"):
         raise HTTPException(status_code=403, detail="Admin only")
@@ -2434,6 +2378,9 @@ async def adv_pdf(qid: str, request: Request, session_token: Optional[str] = Coo
 @api.post("/quotations-adv/seed")
 async def adv_seed(request: Request, session_token: Optional[str] = Cookie(default=None),
                    authorization: Optional[str] = Header(default=None)):
+    if os.environ.get("ENABLE_SEED_DEMO", "").lower() not in ("1", "true", "yes"):
+        raise HTTPException(status_code=403,
+                            detail="Demo seeding disabled. Set ENABLE_SEED_DEMO=true to enable.")
     user = await require_user(request, session_token, authorization)
     # find first project
     projects = await db.projects.find({}, {"_id": 0}).to_list(5)
@@ -2831,6 +2778,9 @@ async def add_reward(eid: str, payload: RewardIn, request: Request,
 async def seed_employees(request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
+    if os.environ.get("ENABLE_SEED_DEMO", "").lower() not in ("1", "true", "yes"):
+        raise HTTPException(status_code=403,
+                            detail="Demo seeding disabled. Set ENABLE_SEED_DEMO=true to enable.")
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "*.*"):
         raise HTTPException(status_code=403, detail="Admin only")
@@ -2900,11 +2850,13 @@ from routes.attendance import router as attendance_router  # noqa: E402
 from routes.accounting import router as accounting_router  # noqa: E402
 from routes.payroll import router as payroll_router  # noqa: E402
 from routes.vendors import router as vendors_router  # noqa: E402
+from routes.auth import router as auth_router  # noqa: E402
 api.include_router(tasks_router)
 api.include_router(attendance_router)
 api.include_router(accounting_router)
 api.include_router(payroll_router)
 api.include_router(vendors_router)
+api.include_router(auth_router)
 
 app.include_router(api)
 

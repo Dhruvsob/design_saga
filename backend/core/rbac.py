@@ -73,6 +73,8 @@ _LEGACY_ROLE_MAP = {
     "owner": "Director",
     "client": "Client",
 }
+# Public alias — imported by server.py so it doesn't duplicate the map.
+LEGACY_ROLE_MAP = _LEGACY_ROLE_MAP
 
 
 def normalize_role(role: Optional[str]) -> str:
@@ -105,7 +107,7 @@ def has_permission(user: dict, perm: str) -> bool:
 def user_with_perms(user: dict) -> dict:
     if not user:
         return user
-    out = dict(user)
+    out = {k: v for k, v in user.items() if k != "password_hash"}
     out["role"] = normalize_role(user.get("role"))
     out["permissions"] = expand_permissions(out["role"])
     return out
