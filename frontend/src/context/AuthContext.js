@@ -48,7 +48,11 @@ export function AuthProvider({ children }) {
 
   const hasPerm = useCallback((perm) => checkPerm(user?.permissions, perm), [user]);
   const isPending = user?.approval_status === "pending";
-  const isRejected = user?.approval_status === "rejected" || user?.is_active === false;
+  // Rejected takes effect only when the user is not simply "still pending".
+  // A pending user has is_active=false too, so guard against mis-branding them.
+  const isRejected =
+    user?.approval_status === "rejected" ||
+    (user?.is_active === false && user?.approval_status !== "pending");
 
   return (
     <AuthContext.Provider

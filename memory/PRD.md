@@ -4,6 +4,7 @@
 
 **Continuation contract:** Treat the ERP as an established product (~70% complete). No rebuilds; every iteration is a versioned enhancement. User-approved Phase-2 order:
   1. **Vendor / Agency Management + Vendor Ledger  ✅ v2.1  (Jul 21, 2026)**
+  1.5 **System audit fix pack — data integrity + demo purge + Admin approval + password login  ✅ v2.2  (Jul 21, 2026)**
   2. Payment Reminder Center (global bell)
   3. Attendance Policies (office hours, grace mins, weekly off, holidays)
   4. Salary Slip PDF (fpdf2, logo-ready)
@@ -12,6 +13,20 @@
   7. ERP intelligence (AI-driven suggestions after 1-6 land)
 
 Multi-tenant note: every new schema from v2.1 onward carries an optional `org_id` field so a future tenant switch is a filter change, not a migration.
+
+**Latest expansion (Jul 21, 2026 — v2.2): System audit fix pack (Tiers A/B/C/D).**
+- **A1 · Dashboard revenue** now sourced from `journal_entries` income accounts (single source of truth) — was previously double-counting via paid invoices.
+- **A2 · Task ↔ Vendor master** — new `vendor_id` FK on TaskIn/TaskUpdate; task creation auto-backfills `vendor_contact` from the vendor master; vendor detail's `tasks` array picks up FK-linked tasks and legacy name-matched ones.
+- **A3/A2b · Vendor pickers** replace text fields on the Accounting Expense form and the Vendor-type Task form (`expense-vendor-select`, `task-vendor-picker`).
+- **A4 · Dashboard team utilisation** is now a priority-weighted (urgent=3, high=2, medium/low=1) real signal, not a raw open-task count.
+- **B1/B2 · Demo cleanup** — three seed endpoints (`/api/seed`, `/api/employees/seed`, `/api/quotations-adv/seed`) are gated behind `ENABLE_SEED_DEMO=true`; existing fake leads/projects/tasks/invoices/clients purged from DB.
+- **C1/C2 · Admin approval workflow** — new Google sign-ins land as `approval_status="pending"`, `is_active=false`; `require_user` (both server.py and core/deps) return 403 for pending/rejected users; `/api/rbac/pending` + `/api/rbac/users/{id}/approve` (decision: approve|reject) manage the queue. Super-admin & first user bypass approval. Frontend: dedicated Pending / Deactivated screens in ProtectedShell (`pending-approval-screen`).
+- **D1 · Password login** (`POST /api/auth/login-password`) accepts email OR employee_id + password; bcrypt (passlib). Brute-force protection: 5 fails / 15 min → 429. Same session_token cookie as Google flow, so downstream code is untouched.
+- **D2 · Admin creates users with passwords** (`POST /api/auth/register`) — auto-assigns sequential `DS0001`, `DS0002`… employee IDs. Reset-password kills victim's sessions. Self-service change-password with old→new. Fully wired in `/admin/rbac` (Create user modal + Reset password per row).
+- **Refactor · Deduped ROLE_PERMISSIONS** — server.py now imports directly from `core/rbac.py` (was two drifting maps). Director + Accountant now correctly have `vendors.*` + `finance.*`.
+- **Login page** kept the Emergent Google button and preserved the `DO NOT HARDCODE URL` guardrails; added a password form below.
+- **AuthContext** now exposes `isPending`, `isRejected`, `loginWithPassword`. Bug in initial fix (pending user mis-branded as rejected) was caught by testing agent and corrected: `isRejected = status==='rejected' || (is_active===false && status !== 'pending')`.
+- **Testing** — 18/18 backend pytest pass (`backend/tests/test_audit_fix_pack.py`), frontend flows verified (login-by-email, login-by-employee_id, RBAC admin approve/reject/create/reset, pending screen, both vendor pickers). Zero regressions on vendor module.
 
 **Latest expansion (Jul 21, 2026 — v2.1): Vendor / Agency Management + Vendor Ledger.**
 
