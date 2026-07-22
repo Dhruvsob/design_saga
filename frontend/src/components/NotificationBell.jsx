@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { Bell, Check, X, ArrowClockwise } from "@phosphor-icons/react";
 
 const KIND_COLOR = {
@@ -36,6 +37,8 @@ const relativeTime = (iso) => {
 };
 
 export default function NotificationBell() {
+  const { user, isPending, isRejected } = useAuth();
+  const canPoll = !!user && !isPending && !isRejected;
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
@@ -44,6 +47,7 @@ export default function NotificationBell() {
   const timerRef = useRef(null);
 
   const load = async () => {
+    if (!canPoll) return;
     try {
       const { data } = await api.get("/notifications", { params: { limit: 30 } });
       setItems(data.notifications || []);
@@ -53,12 +57,14 @@ export default function NotificationBell() {
     }
   };
 
-  // Poll every 30 s while mounted
+  // Poll every 30 s while mounted AND user is fully approved.
   useEffect(() => {
+    if (!canPoll) return;
     load();
     timerRef.current = setInterval(load, 30_000);
     return () => clearInterval(timerRef.current);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canPoll]);
 
   // Close on outside click
   useEffect(() => {

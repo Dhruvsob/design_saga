@@ -5,14 +5,33 @@
 **Continuation contract:** Treat the ERP as an established product (~70% complete). No rebuilds; every iteration is a versioned enhancement. User-approved Phase-2 order:
   1. **Vendor / Agency Management + Vendor Ledger  ✅ v2.1  (Jul 21, 2026)**
   1.5 **System audit fix pack — data integrity + demo purge + Admin approval + password login  ✅ v2.2  (Jul 21, 2026)**
-  2. Payment Reminder Center (global bell)
+  2. **Notification Center — global bell + module emitters  ✅ v2.3  (Jul 21, 2026)**
   3. Attendance Policies (office hours, grace mins, weekly off, holidays)
   4. Salary Slip PDF (fpdf2, logo-ready)
   5. Multi-tenant schema-ready (org_id) — no enforcement yet
-  6. Accounting improvements (advanced ledgers, filters, exports, cash flow)
+  6. **Accounting improvements — Balance Sheet + Cash Flow + Extended Dashboard + CSV exports  ✅ v2.3 (partial · Jul 21, 2026)**
+       Remaining P6 items (project/client/employee ledgers polish, archive/restore accounts, advanced filters) deferred to v2.4.
   7. ERP intelligence (AI-driven suggestions after 1-6 land)
 
 Multi-tenant note: every new schema from v2.1 onward carries an optional `org_id` field so a future tenant switch is a filter change, not a migration.
+
+**Latest expansion (Jul 21, 2026 — v2.3): Notification Center + Accounting Upgrade.**
+
+**A · Notification Center (P2)**
+- New `db.notifications` + `core/notifications.py` emit helpers (`emit`, `emit_admins`, `emit_finance`, `emit_hr`) — idempotent via per-user `dedup_key`.
+- REST surface: `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/{id}/read`, `POST /api/notifications/mark-all-read`, `DELETE /api/notifications/{id}`, `POST /api/notifications/scan` (idempotent daily scanner — emits vendor_bill/invoice/milestone due & overdue + overdue-tasks per assignee).
+- Emitters wired into: task creation (`task_assigned` to assignee, skip self), leave submit (`leave_request` to HR+Admin), leave decision (`leave_decided` to requester), RBAC approve (`account_approved`).
+- **Frontend**: top-right `NotificationBell` component polls every 30s, red badge (99+ cap), dropdown with kind pills, clickable deep-links, per-row Read/Dismiss + Mark-all-read + manual Scan. Guarded so pending/rejected users don't poll.
+- Architecture ready for WebSocket push later — no call-site changes needed, only extend `emit()`.
+
+**B · Accounting P6 partial**
+- `GET /api/accounting/reports/balance-sheet?as_of=` — Assets vs Liab + Eq + Net Income, with `balanced` reconciliation flag.
+- `GET /api/accounting/reports/cash-flow?from_date=&to_date=` — Opening → inflows (income/client_payment/other) → outflows (expense/vendor_payment/payroll/other) → net change → closing.
+- `GET /api/accounting/dashboard/extended` — Receivables + payables (with overdue splits from real invoices/vendor bills), 12-month income/expense/profit trend, top-10 expense breakdown for current month.
+- **5 CSV exports** — `/api/accounting/reports/pl.csv`, `/trial-balance.csv`, `/balance-sheet.csv`, `/cash-flow.csv`, and `/api/journal-entries.csv` (with project/client/vendor/source/date filters). All gated by `finance.read`.
+- **Frontend Accounting** — two new tabs (`Balance Sheet`, `Cash Flow`) with KPI strips + colored sections. Reports tab gets three CSV download buttons.
+
+**Testing** — 18/18 backend pytest (`backend/tests/test_notifications_accounting.py`) + full frontend E2E green. Zero regressions.
 
 **Latest expansion (Jul 21, 2026 — v2.2): System audit fix pack (Tiers A/B/C/D).**
 - **A1 · Dashboard revenue** now sourced from `journal_entries` income accounts (single source of truth) — was previously double-counting via paid invoices.
