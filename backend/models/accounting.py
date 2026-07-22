@@ -18,7 +18,11 @@ DEFAULT_COA = [
     # Income
     ("Consultancy Income", "income", "3001"), ("Design Fees", "income", "3002"),
     ("Site Supervision Fees", "income", "3003"), ("Project Revenue", "income", "3004"),
-    ("Interior Revenue", "income", "3005"), ("Other Income", "income", "3099"),
+    ("Interior Revenue", "income", "3005"),
+    ("Vendor Commission Income", "income", "3010"),
+    ("Referral Income", "income", "3011"),
+    ("Incentive Income", "income", "3012"),
+    ("Other Income", "income", "3099"),
     # Expenses
     ("Employee Salary", "expense", "4001"), ("Office Rent", "expense", "4002"),
     ("Electricity", "expense", "4003"), ("Internet", "expense", "4004"),

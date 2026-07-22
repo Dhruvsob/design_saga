@@ -38,7 +38,8 @@ from models.accounting import VendorIn
 from models.vendor import (
     VendorUpdate, VendorBillIn, VendorBillUpdate, VendorPaymentIn,
     VendorRatingIn, VendorDocumentIn,
-    AGENCY_TYPES, VENDOR_BILL_STATUSES,
+    CommissionConfig, CommissionReceiveIn,
+    AGENCY_TYPES, VENDOR_BILL_STATUSES, COMMISSION_TYPES, COMMISSION_STATUSES,
 )
 
 
@@ -394,6 +395,8 @@ async def create_vendor_bill(payload: VendorBillIn, request: Request,
     doc["created_by"] = user["user_id"]
     await db.vendor_bills.insert_one(dict(doc))
     await _refresh_bill_status(doc["id"])
+    # Auto-compute commission for this bill (if vendor has commission enabled).
+    await _compute_commission_for_bill(doc["id"])
     return await db.vendor_bills.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -458,6 +461,9 @@ async def update_vendor_bill(bill_id: str, payload: VendorBillUpdate, request: R
     patch["updated_at"] = iso_now()
     await db.vendor_bills.update_one({"id": bill_id}, {"$set": patch})
     await _refresh_bill_status(bill_id)
+    # If financials changed, re-compute commission for this bill.
+    if "items" in patch or "tax_rate" in patch or "tds_rate" in patch or "status" in patch:
+        await _compute_commission_for_bill(bill_id)
     return await db.vendor_bills.find_one({"id": bill_id}, {"_id": 0})
 
 
@@ -748,3 +754,468 @@ async def vendor_performance(vendor_id: str, request: Request,
                       "payment_reliability": pay_pct},
         "performance_score": performance_score,
     }
+
+
+# ==================================================================
+# COMMISSION MANAGEMENT
+# ==================================================================
+# Vendors like furniture / lighting / marble suppliers often pay us a
+# commission on every purchase we route through them. This section:
+#   - stores per-vendor commission config on the master (embedded)
+#   - auto-computes a `vendor_commissions` row when a bill is created
+#   - lets an Admin/Accountant mark commission received → posts a balanced
+#     journal entry (DR Bank · CR Vendor Commission Income) so the income
+#     shows up automatically on Dashboard, P&L, Cash Flow, everywhere.
+# ==================================================================
+
+def _bill_purchase_base(bill: dict) -> float:
+    """The number commission percentages apply to — subtotal (pre-tax, pre-TDS)."""
+    return float(bill.get("subtotal") or 0)
+
+
+def _calc_commission_amount(cfg: dict, base: float) -> float:
+    """Pure commission math. Returns amount for a given purchase base."""
+    if not cfg or not cfg.get("applicable"):
+        return 0.0
+    min_p = float(cfg.get("min_purchase") or 0)
+    if base < min_p:
+        return 0.0
+    t = (cfg.get("type") or "").lower()
+    if t == "fixed":
+        return round(float(cfg.get("fixed_amount") or 0), 2)
+    if t == "percentage":
+        return round(base * float(cfg.get("percentage") or 0) / 100.0, 2)
+    if t == "slab":
+        for s in (cfg.get("slabs") or []):
+            lo = float(s.get("min_purchase") or 0)
+            hi = s.get("max_purchase")
+            hi = float(hi) if hi is not None else float("inf")
+            if lo <= base < hi or (hi == float("inf") and base >= lo):
+                return round(base * float(s.get("percentage") or 0) / 100.0, 2)
+    return 0.0
+
+
+async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
+    """Create or update the commission row for a bill.
+    Idempotent — safe to run on every bill update.
+    Cancelled bills → cancel the commission (keep row for audit)."""
+    bill = await db.vendor_bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
+        return None
+    vendor = await db.vendors_acc.find_one({"id": bill["vendor_id"]}, {"_id": 0})
+    if not vendor:
+        return None
+    cfg = vendor.get("commission") or {}
+    existing = await db.vendor_commissions.find_one({"bill_id": bill_id}, {"_id": 0})
+
+    # Effective-date filter
+    b_date = bill.get("bill_date") or ""
+    if cfg.get("effective_from") and b_date and b_date < cfg["effective_from"]:
+        cfg = {**cfg, "applicable": False}
+    if cfg.get("effective_to") and b_date and b_date > cfg["effective_to"]:
+        cfg = {**cfg, "applicable": False}
+
+    base = _bill_purchase_base(bill)
+    amount = _calc_commission_amount(cfg, base)
+
+    # Bill cancelled → cancel commission
+    if bill.get("status") == "cancelled":
+        if existing:
+            await db.vendor_commissions.update_one(
+                {"id": existing["id"]}, {"$set": {"status": "cancelled",
+                                                   "amount": 0.0,
+                                                   "updated_at": iso_now()}}
+            )
+        return None
+
+    # No commission earned → drop existing pending row (never delete received rows)
+    if amount <= 0.001:
+        if existing and existing.get("status") in ("pending", "invoiced"):
+            await db.vendor_commissions.delete_one({"id": existing["id"]})
+        return None
+
+    doc = {
+        "vendor_id": vendor["id"],
+        "vendor_name": vendor.get("name"),
+        "bill_id": bill_id,
+        "bill_number": bill.get("bill_number"),
+        "bill_date": bill.get("bill_date"),
+        "project_id": bill.get("project_id"),
+        "purchase_amount": base,
+        "commission_type": cfg.get("type"),
+        "commission_config_snapshot": {
+            "percentage": cfg.get("percentage"),
+            "fixed_amount": cfg.get("fixed_amount"),
+            "slabs": cfg.get("slabs"),
+            "income_label": cfg.get("income_label") or "Vendor Commission Income",
+        },
+        "amount": amount,
+        "updated_at": iso_now(),
+    }
+    if existing:
+        # Preserve received/invoiced status if any; only update pending rows numerically.
+        if existing.get("status") == "received":
+            # Already booked as income. Do not overwrite; log a discrepancy note.
+            if abs(float(existing.get("amount") or 0) - amount) > 0.01:
+                await db.vendor_commissions.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {"recompute_variance": round(amount - float(existing["amount"]), 2),
+                              "updated_at": iso_now()}}
+                )
+            return existing
+        await db.vendor_commissions.update_one(
+            {"id": existing["id"]}, {"$set": doc}
+        )
+        return await db.vendor_commissions.find_one({"id": existing["id"]}, {"_id": 0})
+    doc["id"] = new_id("vcom_")
+    doc["status"] = "pending"
+    doc["created_at"] = iso_now()
+    await db.vendor_commissions.insert_one(dict(doc))
+    return doc
+
+
+# ---------- Update vendor commission config ----------
+@router.patch("/vendors/{vendor_id}/commercial")
+async def update_vendor_commercial(vendor_id: str, payload: CommissionConfig, request: Request,
+                                   session_token: Optional[str] = Cookie(default=None),
+                                   authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.update")
+    if payload.type not in COMMISSION_TYPES:
+        raise HTTPException(status_code=400,
+                            detail=f"commission type must be one of {COMMISSION_TYPES}")
+    cfg = payload.model_dump()
+    res = await db.vendors_acc.update_one(
+        {"id": vendor_id},
+        {"$set": {"commission": cfg,
+                  "commercial_updated_at": iso_now(),
+                  "commercial_updated_by": user["user_id"]}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    # Recompute commissions for all bills of this vendor (idempotent).
+    updated = 0
+    async for b in db.vendor_bills.find({"vendor_id": vendor_id}, {"_id": 0, "id": 1}):
+        await _compute_commission_for_bill(b["id"])
+        updated += 1
+    return {"ok": True, "recomputed_bills": updated,
+            "vendor": await db.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})}
+
+
+# ---------- Get commission config (returns full vendor incl. computed rollup) ----------
+@router.get("/vendors/{vendor_id}/commercial")
+async def get_vendor_commercial(vendor_id: str, request: Request,
+                                session_token: Optional[str] = Cookie(default=None),
+                                authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.read")
+    vendor = await db.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    return {"commission": vendor.get("commission") or {"applicable": False},
+            "effective": bool((vendor.get("commission") or {}).get("applicable"))}
+
+
+# ---------- List commissions for a vendor ----------
+@router.get("/vendors/{vendor_id}/commissions")
+async def list_vendor_commissions(vendor_id: str, request: Request,
+                                  status: Optional[str] = None,
+                                  session_token: Optional[str] = Cookie(default=None),
+                                  authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.read")
+    q: dict = {"vendor_id": vendor_id}
+    if status:
+        q["status"] = status
+    rows = await db.vendor_commissions.find(q, {"_id": 0}) \
+                                      .sort("bill_date", -1).to_list(2000)
+    return rows
+
+
+# ---------- Vendor commission ledger (running totals) ----------
+@router.get("/vendors/{vendor_id}/commission-ledger")
+async def vendor_commission_ledger(vendor_id: str, request: Request,
+                                   session_token: Optional[str] = Cookie(default=None),
+                                   authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.read")
+    vendor = await db.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    rows = await db.vendor_commissions.find({"vendor_id": vendor_id}, {"_id": 0}) \
+                                      .sort("bill_date", 1).to_list(5000)
+    total_purchase = 0.0
+    total_earned = 0.0
+    total_received = 0.0
+    for r in rows:
+        if r.get("status") == "cancelled":
+            continue
+        total_purchase += float(r.get("purchase_amount") or 0)
+        total_earned += float(r.get("amount") or 0)
+        if r.get("status") == "received":
+            total_received += float(r.get("received_amount") or r.get("amount") or 0)
+
+    return {
+        "vendor_id": vendor_id,
+        "vendor_name": vendor.get("name"),
+        "config": vendor.get("commission") or {"applicable": False},
+        "totals": {
+            "total_purchase": round(total_purchase, 2),
+            "total_earned": round(total_earned, 2),
+            "total_received": round(total_received, 2),
+            "pending": round(total_earned - total_received, 2),
+        },
+        "entries": rows,
+    }
+
+
+# ---------- Receive commission (create Income journal entry) ----------
+@router.post("/vendors/{vendor_id}/commissions/receive")
+async def receive_commission(vendor_id: str, payload: CommissionReceiveIn, request: Request,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.create")
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    vendor = await db.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    bank = await db.accounts.find_one({"id": payload.bank_account_id}, {"_id": 0})
+    if not bank:
+        raise HTTPException(status_code=404, detail="Bank/cash account not found")
+
+    income_label = ((vendor.get("commission") or {}).get("income_label")
+                    or "Vendor Commission Income")
+    inc = await db.accounts.find_one({"name": income_label}, {"_id": 0})
+    if not inc:
+        raise HTTPException(status_code=500,
+                            detail=f"Income account '{income_label}' missing – seed COA first")
+
+    # Pick rows to settle — FIFO across pending/invoiced if none provided.
+    if payload.commission_ids:
+        rows = []
+        for cid in payload.commission_ids:
+            r = await db.vendor_commissions.find_one({"id": cid, "vendor_id": vendor_id},
+                                                    {"_id": 0})
+            if r and r.get("status") in ("pending", "invoiced"):
+                rows.append(r)
+    else:
+        rows = await db.vendor_commissions.find(
+            {"vendor_id": vendor_id, "status": {"$in": ["pending", "invoiced"]}},
+            {"_id": 0}
+        ).sort("bill_date", 1).to_list(500)
+
+    remaining = float(payload.amount)
+    settled: list = []
+    for r in rows:
+        if remaining <= 0.001:
+            break
+        due = float(r.get("amount") or 0) - float(r.get("received_amount") or 0)
+        if due <= 0.001:
+            continue
+        pay = min(due, remaining)
+        settled.append({"id": r["id"], "applied": round(pay, 2)})
+        remaining -= pay
+
+    # Post the journal (DR Bank / CR Commission Income)
+    je_id = new_id("je_")
+    je_lines = [
+        {"account_id": bank["id"], "account_name": bank["name"],
+         "account_type": bank["type"], "debit": float(payload.amount), "credit": 0.0,
+         "description": f"Commission received from {vendor.get('name')}"},
+        {"account_id": inc["id"], "account_name": inc["name"],
+         "account_type": inc["type"], "debit": 0.0, "credit": float(payload.amount),
+         "description": income_label},
+    ]
+    je_doc = {
+        "id": je_id, "date": payload.received_date,
+        "narration": f"Vendor commission – {vendor.get('name')}",
+        "reference": payload.reference,
+        "vendor_id": vendor_id,
+        "project_id": None,
+        "source": "commission_income",
+        "source_id": None,
+        "total": float(payload.amount),
+        "lines": je_lines,
+        "created_at": iso_now(),
+        "created_by": user["user_id"],
+        "created_by_name": user.get("name"),
+    }
+    await db.journal_entries.insert_one(dict(je_doc))
+
+    # Persist a payment record + update settled commission rows
+    settlement_id = new_id("vcpay_")
+    await db.commission_settlements.insert_one({
+        "id": settlement_id,
+        "vendor_id": vendor_id,
+        "vendor_name": vendor.get("name"),
+        "amount": float(payload.amount),
+        "received_date": payload.received_date,
+        "payment_method": payload.payment_method,
+        "bank_account_id": payload.bank_account_id,
+        "reference": payload.reference,
+        "notes": payload.notes,
+        "journal_entry_id": je_id,
+        "commissions": settled,
+        "unallocated": round(remaining, 2),
+        "created_at": iso_now(),
+        "created_by": user["user_id"],
+    })
+    for s in settled:
+        row = await db.vendor_commissions.find_one({"id": s["id"]}, {"_id": 0})
+        already = float(row.get("received_amount") or 0)
+        new_received = round(already + s["applied"], 2)
+        status = "received" if new_received + 0.01 >= float(row.get("amount") or 0) else "invoiced"
+        await db.vendor_commissions.update_one(
+            {"id": s["id"]}, {"$set": {
+                "received_amount": new_received,
+                "received_date": payload.received_date,
+                "payment_method": payload.payment_method,
+                "reference": payload.reference,
+                "journal_entry_id": je_id,
+                "status": status,
+                "updated_at": iso_now(),
+            }}
+        )
+    return {"ok": True, "settlement_id": settlement_id, "journal_entry_id": je_id,
+            "settled": settled, "unallocated": round(remaining, 2)}
+
+
+# ---------- Cross-vendor commission dashboard ----------
+@router.get("/commissions/dashboard")
+async def commissions_dashboard(request: Request,
+                                session_token: Optional[str] = Cookie(default=None),
+                                authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.read")
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).date()
+    month_start = f"{today.year:04d}-{today.month:02d}-01"
+
+    totals = {"total_earned": 0.0, "total_received": 0.0, "pending": 0.0,
+              "this_month": 0.0, "this_month_received": 0.0}
+    by_vendor: dict = {}
+    by_project: dict = {}
+    rows = await db.vendor_commissions.find({"status": {"$ne": "cancelled"}}, {"_id": 0}) \
+                                      .to_list(20000)
+    for r in rows:
+        earned = float(r.get("amount") or 0)
+        received = float(r.get("received_amount") or 0)
+        totals["total_earned"] += earned
+        totals["total_received"] += received
+        if (r.get("bill_date") or "") >= month_start:
+            totals["this_month"] += earned
+            totals["this_month_received"] += received
+        vid = r.get("vendor_id")
+        by_vendor.setdefault(vid, {"vendor_id": vid, "vendor_name": r.get("vendor_name"),
+                                    "earned": 0.0, "received": 0.0})
+        by_vendor[vid]["earned"] += earned
+        by_vendor[vid]["received"] += received
+        pid = r.get("project_id")
+        if pid:
+            by_project.setdefault(pid, {"project_id": pid, "earned": 0.0, "received": 0.0})
+            by_project[pid]["earned"] += earned
+            by_project[pid]["received"] += received
+
+    top_vendors = sorted(by_vendor.values(), key=lambda x: -x["earned"])[:10]
+    # Enrich projects with names
+    project_ids = list(by_project.keys())
+    proj_names = {}
+    async for p in db.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "name": 1}):
+        proj_names[p["id"]] = p.get("name")
+    project_rows = [
+        {**v, "project_name": proj_names.get(v["project_id"], "—"),
+         "earned": round(v["earned"], 2), "received": round(v["received"], 2)}
+        for v in by_project.values()
+    ]
+    project_rows.sort(key=lambda x: -x["earned"])
+
+    for k in list(totals.keys()):
+        totals[k] = round(totals[k], 2)
+    totals["pending"] = round(totals["total_earned"] - totals["total_received"], 2)
+
+    return {"totals": totals,
+            "top_vendors": [{"vendor_id": v["vendor_id"],
+                             "vendor_name": v["vendor_name"],
+                             "earned": round(v["earned"], 2),
+                             "received": round(v["received"], 2)} for v in top_vendors],
+            "by_project": project_rows[:20]}
+
+
+# ---------- Filterable commission report + CSV ----------
+@router.get("/commissions/report")
+async def commissions_report(request: Request,
+                             vendor_id: Optional[str] = None,
+                             project_id: Optional[str] = None,
+                             status: Optional[str] = None,
+                             from_date: Optional[str] = None,
+                             to_date: Optional[str] = None,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.read")
+    q: dict = {}
+    if vendor_id:  q["vendor_id"] = vendor_id
+    if project_id: q["project_id"] = project_id
+    if status:     q["status"] = status
+    if from_date or to_date:
+        d = {}
+        if from_date: d["$gte"] = from_date
+        if to_date:   d["$lte"] = to_date
+        q["bill_date"] = d
+    rows = await db.vendor_commissions.find(q, {"_id": 0}) \
+                                      .sort("bill_date", -1).to_list(5000)
+    totals = {
+        "earned":   round(sum(float(r.get("amount") or 0)
+                              for r in rows if r.get("status") != "cancelled"), 2),
+        "received": round(sum(float(r.get("received_amount") or 0)
+                              for r in rows if r.get("status") != "cancelled"), 2),
+        "count":    len(rows),
+    }
+    totals["pending"] = round(totals["earned"] - totals["received"], 2)
+    return {"filters": {"vendor_id": vendor_id, "project_id": project_id,
+                        "status": status, "from_date": from_date, "to_date": to_date},
+            "totals": totals, "rows": rows}
+
+
+@router.get("/commissions/report.csv")
+async def commissions_report_csv(request: Request,
+                                 vendor_id: Optional[str] = None,
+                                 project_id: Optional[str] = None,
+                                 status: Optional[str] = None,
+                                 from_date: Optional[str] = None,
+                                 to_date: Optional[str] = None,
+                                 session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    from fastapi.responses import Response as FastAPIResponse
+    import csv, io
+    data = await commissions_report(request, vendor_id, project_id, status,
+                                    from_date, to_date, session_token, authorization)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["bill_date", "vendor", "bill_number", "project_id", "purchase_amount",
+                "commission_type", "amount", "received_amount", "status",
+                "received_date", "reference"])
+    for r in data["rows"]:
+        w.writerow([r.get("bill_date"), r.get("vendor_name"), r.get("bill_number"),
+                    r.get("project_id"), r.get("purchase_amount"),
+                    r.get("commission_type"), r.get("amount"),
+                    r.get("received_amount") or 0, r.get("status"),
+                    r.get("received_date"), r.get("reference")])
+    return FastAPIResponse(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="commissions.csv"'},
+    )
+
+
+# ---------- Meta helper for UI ----------
+@router.get("/vendors/commissions/meta")
+async def commission_meta(request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    await require_user(request, session_token, authorization)
+    return {"types": COMMISSION_TYPES, "statuses": COMMISSION_STATUSES}

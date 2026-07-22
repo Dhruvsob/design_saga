@@ -1,180 +1,176 @@
 ## user_problem_statement
-Iteration v2.3 of the Design Saga ERP: land P2 (Notification Center — global bell + all module emitters) AND P6 subset (Balance Sheet, Cash Flow, Enhanced Financial Dashboard, CSV exports on every report). Preserve everything from v2.2.
+Iteration v2.4: extend the existing Vendor module with commission/incentive/rebate management. Do NOT rebuild. Reuse vendors_acc + vendor_bills + journal_entries. Auto-compute commissions on bill create, auto-post journal entry (DR Bank · CR Vendor Commission Income) when commission is received. Add a Commercial tab + Commissions tab in the vendor detail page and a cross-vendor Commissions dashboard tab in Accounting.
 
 ## backend:
-  - task: "Notification Center — collection, emitters, endpoints"
+  - task: "Commission master config on vendor (percentage / fixed / slab)"
     implemented: true
     working: "NA"
-    file: "backend/core/notifications.py, backend/routes/notifications.py"
+    file: "backend/models/vendor.py, backend/routes/vendors.py"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            New `db.notifications` collection with schema {id, user_id, kind, title,
-            body, link, priority, read, meta, dedup_key, created_at}.
-            `core/notifications.py` provides `emit(user_ids, kind, title, body, link,
-            priority, meta, dedup_key)` + `emit_admins()`, `emit_finance()`, `emit_hr()`
-            broadcasters. Dedup via `(user_id, dedup_key)` uniqueness — safe to re-emit.
+            New embedded `commission` object on vendors_acc with fields
+            {applicable, type in ('fixed','percentage','slab','category','project','none'),
+             percentage, fixed_amount, slabs:[{min_purchase,max_purchase,percentage}],
+             min_purchase, effective_from, effective_to, notes, income_label}.
             Endpoints:
-              GET  /api/notifications?unread_only=&kind=&limit=
-              GET  /api/notifications/unread-count
-              POST /api/notifications/{id}/read
-              POST /api/notifications/mark-all-read
-              DELETE /api/notifications/{id}
-              POST /api/notifications/scan  — idempotent daily scanner. Emits
-                vendor_bill_due/overdue, invoice_due/overdue, milestone_due/overdue,
-                task_overdue notifications to the right audiences (finance for financial
-                items, individual assignees for tasks).
+              PATCH /api/vendors/{id}/commercial  (idempotent, triggers full recompute
+                    for all existing bills of that vendor)
+              GET   /api/vendors/{id}/commercial
+              GET   /api/vendors/commissions/meta  (COMMISSION_TYPES / STATUSES)
 
-  - task: "Emit notifications from existing flows"
+  - task: "Auto-compute commission on vendor bill create / update"
     implemented: true
     working: "NA"
-    file: "backend/routes/tasks.py, backend/routes/attendance.py, backend/routes/auth.py"
+    file: "backend/routes/vendors.py (_compute_commission_for_bill)"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            - Task create → 'task_assigned' notif to the assignee (skips self-assignment).
-            - Leave create → 'leave_request' to HR + Admins.
-            - Leave action (approve/reject) → 'leave_decided' to requester.
-            - RBAC approval → 'account_approved' notif to the newly-approved user.
-            - All emits wrapped in try/except so notification failures never break the parent flow.
+            Called from `create_vendor_bill` and `update_vendor_bill`. Purchase base
+            = bill.subtotal (pre-tax, pre-tds). Handles fixed / percentage / slab
+            math + min_purchase threshold + effective-date window. On cancelled bill:
+            cancel the linked commission row (kept for audit). If a commission is
+            already 'received', we do NOT overwrite it — just log a
+            `recompute_variance` for auditing. Idempotent.
 
-  - task: "Accounting · Balance Sheet report"
+  - task: "Commission list + ledger per vendor"
     implemented: true
     working: "NA"
-    file: "backend/routes/accounting.py"
+    file: "backend/routes/vendors.py"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            GET /api/accounting/reports/balance-sheet?as_of=YYYY-MM-DD
-            Returns: {assets:{rows,total}, liabilities:{rows,total},
-                      equity:{rows,total,net_income,total_with_net_income},
-                      total_assets, total_liabilities_and_equity, balanced}
-            The `balanced` flag is Assets ≈ Liab + Eq + Net Income (0.01 tolerance).
+            GET /api/vendors/{id}/commissions?status=
+            GET /api/vendors/{id}/commission-ledger — returns {vendor, config,
+                totals:{total_purchase,total_earned,total_received,pending}, entries[]}
 
-  - task: "Accounting · Cash Flow statement"
+  - task: "Receive commission → posts a balanced Income journal entry"
     implemented: true
     working: "NA"
-    file: "backend/routes/accounting.py"
+    file: "backend/routes/vendors.py"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            GET /api/accounting/reports/cash-flow?from_date=&to_date=
-            Bucketed by journal_entry.source into inflows (income, client_payment, other)
-            and outflows (expense, vendor_payment, payroll, other). Includes opening &
-            closing bank/cash balance. Verified against journal in smoke test.
+            POST /api/vendors/{id}/commissions/receive
+            body {amount, received_date, bank_account_id, payment_method, reference?, notes?, commission_ids?}
+            Requires `finance.create`. Posts a JE with source='commission_income' — 2 lines,
+            DR chosen Bank/Cash · CR income account matching cfg.income_label
+            (default: 'Vendor Commission Income'). Settles specified commission rows
+            or FIFO across pending/invoiced. Persists a `commission_settlements` doc
+            with per-row splits + unallocated (on-account) balance. Also updates each
+            settled commission row's status → 'received' or 'invoiced' as appropriate.
 
-  - task: "Accounting · Extended Financial Dashboard"
+  - task: "Cross-vendor commission dashboard + report + CSV"
     implemented: true
     working: "NA"
-    file: "backend/routes/accounting.py"
+    file: "backend/routes/vendors.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            GET /api/commissions/dashboard → {totals:{total_earned,total_received,pending,
+                this_month,this_month_received}, top_vendors[<=10], by_project[<=20]}
+            GET /api/commissions/report?vendor_id=&project_id=&status=&from_date=&to_date=
+              → {filters, totals:{earned,received,pending,count}, rows[]}
+            GET /api/commissions/report.csv → text/csv attachment.
+
+  - task: "Idempotent COA seed — auto-installs new default income accounts"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/accounting.py (_seed_coa_if_empty)"
     priority: "medium"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            GET /api/accounting/dashboard/extended
-            Returns: {receivables:{total,overdue}, payables:{total,overdue},
-                      monthly_trend:[{key,income,expense,profit} x 12 months],
-                      expense_breakdown:[{category,amount} top 10 for current month]}
-            All values pulled from real journal_entries + vendor_bills + invoices.
-
-  - task: "Accounting · CSV export endpoints (5 files)"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/accounting.py"
-    priority: "medium"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            GET /api/accounting/reports/pl.csv, /trial-balance.csv, /balance-sheet.csv,
-            /cash-flow.csv, and /api/journal-entries.csv — each returns text/csv with
-            Content-Disposition attachment. Journal export supports filters
-            ?project_id=, ?client_id=, ?vendor_id=, ?source=, ?from_date=, ?to_date=.
+            Previously bailed if any accounts existed → new default accounts
+            (Vendor Commission Income, Referral Income, Incentive Income) never got
+            installed on existing DBs. Now it inserts only the missing names on
+            every call. Fires from /api/accounts and POST /api/accounting/seed-coa.
 
 ## frontend:
-  - task: "Notification bell (top-right of Layout) — real-time badge + dropdown"
+  - task: "Vendor detail — Commercial tab (commission config UI)"
     implemented: true
     working: "NA"
-    file: "frontend/src/components/NotificationBell.jsx, frontend/src/components/Layout.jsx"
+    file: "frontend/src/pages/VendorDetail.jsx (Commercial)"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            NotificationBell polls GET /api/notifications every 30 s, shows red badge
-            with unread count (99+ if over). Dropdown lists items sorted unread-first,
-            with kind pill, title (clickable → deep link), body, relative time, and
-            per-row "mark read" + "dismiss" buttons. Header has a manual "scan" refresh
-            (calls /notifications/scan) plus "Mark all read".
-            testids: top-notifications-btn, notif-badge, notif-panel, notif-row-{id},
-                     notif-read-{id}, notif-dismiss-{id}, notif-scan-btn,
-                     notif-mark-all-btn.
+            New tab 'Commercial' between Overview and Ledger. Applicable toggle,
+            type selector (percentage/fixed/slab/category/project/none), rate/amount
+            fields, min purchase threshold, effective date window, income label,
+            slabs sub-editor for slab type. Right-hand summary card shows live
+            totals (total purchase / earned / received / pending) once the config
+            has been saved.
+            testids: commercial-tab, cm-applicable, cm-type, cm-pct, cm-fixed, cm-save.
 
-  - task: "Accounting page — Balance Sheet + Cash Flow tabs"
+  - task: "Vendor detail — Commissions tab (list + record received)"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/Accounting.jsx"
+    file: "frontend/src/pages/VendorDetail.jsx (Commissions)"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Two new tabs appended after "Reports": Balance Sheet (Scales icon) and
-            Cash Flow (Waves icon). Both fetch on activation and render KPI strips +
-            structured sections. Balance Sheet shows the reconciliation banner
-            (green if balanced, red otherwise). Cash Flow shows opening → inflows →
-            outflows → closing with color-coded totals.
-            testids: tab-balance, tab-cashflow, balance-sheet-tab, cashflow-tab,
-                     dl-bs-csv, dl-cf-csv.
+            New tab 'Commissions' between Payments and Projects. 4-KPI strip,
+            'Record commission received' form (amount + date + bank picker +
+            payment method + reference + settle checkboxes), and the row-per-bill
+            table with earned/received/status.
+            testids: commissions-tab, receive-cm-btn, rcm-amount, rcm-bank, rcm-submit,
+                     cm-row-{id}.
 
-  - task: "Accounting Reports tab — CSV download buttons"
+  - task: "Accounting — new 'Commissions' dashboard tab"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/Accounting.jsx"
+    file: "frontend/src/pages/Accounting.jsx (CommissionsDashboard)"
     priority: "medium"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Added inline buttons at the top of Reports: P&L CSV, Trial Balance CSV,
-            Journal CSV. Each fetches with credentials and triggers a file download.
-            testids: dl-pl-csv, dl-tb-csv, dl-journal-csv.
+            Cross-vendor snapshot appended to the Accounting tab bar. KPIs
+            (Total earned / Received / Pending / This month), Top vendors list,
+            By-project list, CSV download button.
+            testids: commissions-dashboard-tab, dl-cm-csv.
 
 ## metadata:
   created_by: "main_agent"
-  version: "2.3"
-  test_sequence: 3
+  version: "2.4"
+  test_sequence: 4
   run_ui: true
 
 ## test_plan:
   current_focus:
-    - "Notification Center — collection, emitters, endpoints"
-    - "Emit notifications from existing flows"
-    - "Accounting · Balance Sheet report"
-    - "Accounting · Cash Flow statement"
-    - "Accounting · Extended Financial Dashboard"
-    - "Accounting · CSV export endpoints (5 files)"
-    - "Notification bell (top-right of Layout) — real-time badge + dropdown"
-    - "Accounting page — Balance Sheet + Cash Flow tabs"
-    - "Accounting Reports tab — CSV download buttons"
+    - "Commission master config on vendor (percentage / fixed / slab)"
+    - "Auto-compute commission on vendor bill create / update"
+    - "Commission list + ledger per vendor"
+    - "Receive commission → posts a balanced Income journal entry"
+    - "Cross-vendor commission dashboard + report + CSV"
+    - "Idempotent COA seed — auto-installs new default income accounts"
+    - "Vendor detail — Commercial tab (commission config UI)"
+    - "Vendor detail — Commissions tab (list + record received)"
+    - "Accounting — new 'Commissions' dashboard tab"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -182,43 +178,33 @@ Iteration v2.3 of the Design Saga ERP: land P2 (Notification Center — global b
 ## agent_communication:
     -agent: "main"
     -message: >-
-        v2.3 lands the Notification Center (P2) + a focused Accounting Upgrade (P6).
-        Zero rewrites — new endpoints & UI surfaces only.
+        v2.4 lands Vendor Commission Management as an extension to the existing
+        Vendor module. Zero rewrites. Reuses vendors_acc + vendor_bills +
+        journal_entries + accounts.
 
-        Focused test surface:
+        Curl-verified end-to-end:
+          - Vendor ACME set to 10% percentage commission.
+          - Existing bill (subtotal ₹50,000) → auto-computed commission ₹5,000
+            with status 'pending'.
+          - Receive ₹5,000 → posts JE 'commission_income' (DR Bank 5000 · CR
+            Vendor Commission Income 5000). Commission row status → 'received'.
+          - P&L now includes 'Vendor Commission Income: ₹5,000'.
+          - Dashboard totals: earned 5,000, received 5,000, pending 0.
+          - CSV report downloads OK.
 
-        BACKEND (already curl-verified):
-         1. GET /api/notifications returns {unread_count, notifications: []}.
-         2. Assigning a task to another user (POST /api/tasks with assignee_id) emits
-            a 'task_assigned' notification visible to that user. Assigning to yourself
-            does NOT emit.
-         3. Submitting a leave request (POST /api/leaves) emits 'leave_request' to
-            HR + Admins. Approving it emits 'leave_decided' to the requester.
-         4. Admin approving a pending user via /api/rbac/users/{id}/approve emits
-            'account_approved' to that user.
-         5. POST /api/notifications/scan is idempotent — running it twice on the same
-            day inserts each notification only once (verify via unread count).
-         6. GET /api/accounting/reports/balance-sheet returns balanced=true after
-            posting a symmetrical journal (income + expense).
-         7. GET /api/accounting/reports/cash-flow — opening+net_change == closing.
-         8. GET /api/accounting/dashboard/extended — receivables + payables reflect
-            actual invoice/bill data.
-         9. GET /api/accounting/reports/pl.csv (and the four other CSV endpoints)
-            returns text/csv with a filename in Content-Disposition. RBAC: finance.read
-            is required (403 for Employee).
+        Please validate on top of an already-seeded environment. To create the
+        test vendor + bill (if the stub in DB is gone):
+          POST /api/vendors     name=ACME agency_type=supplier
+          POST /api/vendor-bills vendor_id=<vid> bill_date=today items=[{qty:2,rate:25000}] tax_rate=18 tds_rate=1
+          PATCH /api/vendors/<vid>/commercial {"applicable":true,"type":"percentage","percentage":10}
+          Verify GET /api/vendors/<vid>/commissions shows one row w/ amount = 5000.
 
-        FRONTEND (please test):
-        10. As Admin, top-right bell shows red badge with unread count. Clicking
-            it opens the dropdown. Task/leave/RBAC notifications appear correctly.
-            'Mark all read' clears the badge. 'Scan' refreshes.
-        11. Accounting page → tab 'Balance Sheet' renders KPIs + Assets & Liab+Equity
-            sections and the green 'balanced' banner. 'Cash Flow' tab shows
-            opening → inflows → outflows → closing with KPI strip.
-        12. Reports tab has three CSV buttons (P&L / Trial balance / Journal); each
-            triggers a browser download.
-        13. Bell hidden and Accounting reports gated behind finance.read for
-            Designer/Employee roles.
+        Fixed as I coded:
+          - The COA seed used to short-circuit when accounts existed → new default
+            income accounts never propagated. Now upsert-style. Auth agent should
+            regression-test that GET /api/accounts still lists the pre-existing
+            36 accounts + the 3 new ones (Vendor Commission Income, Referral
+            Income, Incentive Income).
 
-        Test credentials: /app/memory/test_credentials.md
-        Special: stable_testtok_do_not_delete (Admin), pmanager@ds.co / DS0001 /
-        Test@1234 (ProjectManager).
+        Test creds: /app/memory/test_credentials.md — stable_testtok_do_not_delete
+        (Admin), pmanager@ds.co / DS0001 / Test@1234 (ProjectManager).

@@ -19,6 +19,40 @@ AGENCY_TYPES = [
 
 VENDOR_BILL_STATUSES = ["draft", "received", "partially_paid", "paid", "overdue", "cancelled"]
 
+COMMISSION_TYPES = ["fixed", "percentage", "slab", "category", "project", "none"]
+COMMISSION_STATUSES = ["pending", "invoiced", "received", "cancelled"]
+
+
+# ---------- Commission Config (embedded on vendor master) ----------
+class CommissionSlab(BaseModel):
+    min_purchase: float = 0
+    max_purchase: Optional[float] = None       # None = open-ended top slab
+    percentage: float = 0
+
+
+class CommissionConfig(BaseModel):
+    applicable: bool = False
+    type: str = "percentage"                   # from COMMISSION_TYPES
+    percentage: Optional[float] = 0.0
+    fixed_amount: Optional[float] = 0.0
+    slabs: Optional[List[CommissionSlab]] = None
+    min_purchase: Optional[float] = 0.0        # only compute commission above this
+    effective_from: Optional[str] = None       # YYYY-MM-DD
+    effective_to: Optional[str] = None
+    notes: Optional[str] = None
+    # Default income category label — surfaces on generated JEs.
+    income_label: Optional[str] = "Vendor Commission Income"
+
+
+class CommissionReceiveIn(BaseModel):
+    amount: float
+    received_date: str                          # YYYY-MM-DD
+    bank_account_id: str                        # cash/bank account credited
+    payment_method: Optional[str] = "bank_transfer"
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+    commission_ids: Optional[List[str]] = None  # settle specific commission rows (FIFO if empty)
+
 
 # ---------- Bills ----------
 class VendorBillItem(BaseModel):

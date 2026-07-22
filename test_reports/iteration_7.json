@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration v2.4 Vendor Commission Management tested end-to-end. Backend: 16/17 pytest passing (1 real bug: DELETE /vendor-bills orphans commission row). Frontend: /vendors/{id} Commercial + Commissions tabs render, config persists, KPIs + rows visible, receive-cm-btn shown for admin. /accounting Commissions tab renders with KPIs, top vendors, by-project, and dl-cm-csv triggers commissions.csv download.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "DELETE /api/vendor-bills/{bill_id}",
+        "issue": "When a bill has no payments and is hard-deleted (delete_one on vendor_bills), the associated vendor_commissions row is NOT cleaned up. Spec says 'Commission row for that bill should be dropped (or set to cancelled if received)'. Only PATCH-to-cancelled path triggers _compute_commission_for_bill; delete_vendor_bill does not. Result: orphaned commission rows in dashboard/reports pointing to a non-existent bill_id.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_vendor_commissions.py",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "action_items": [
+    "Fix DELETE /api/vendor-bills/{bill_id}: after `db.vendor_bills.delete_one(...)`, delete any pending vendor_commissions row for that bill_id (e.g., `await db.vendor_commissions.delete_one({'bill_id': bill_id, 'status': {'$in': ['pending','invoiced']}})` and set received rows to cancelled).",
+    "Optional: consider calling _compute_commission_for_bill(bill_id) BEFORE delete when status=cancelled path is taken so audit-status transitions are consistent, and add cleanup for hard-delete path."
+  ],
+  "critical_code_review_comments": [
+    "routes/vendors.py has grown to ~1220 lines — split commission logic into `routes/vendor_commissions.py` (helpers _bill_purchase_base, _calc_commission_amount, _compute_commission_for_bill + all /commissions endpoints) to keep files under 700 lines per guideline.",
+    "_compute_commission_for_bill: when a bill goes cancelled → the commission is force-set to amount=0 even for status='received' rows. That would rewrite already-booked income silently. Should skip mutation if row.status=='received' (only mark cancelled if not yet received) — currently the guard exists only inside the amount>0 branch, not the cancelled branch.",
+    "receive_commission: the JE line for advance (unallocated) still books the full amount to 'Vendor Commission Income'. Strictly, the unallocated slice should credit an 'Advance from Vendor' liability, not income. Overpayment is currently recognised as immediate income — flag with accountant before shipping.",
+    "GET /commissions/dashboard reads up to 20 000 rows into memory and aggregates in Python — fine now, but add a MongoDB $group aggregation pipeline for scale.",
+    "commissions_report_csv calls the async commissions_report function directly (works because FastAPI resolves the coroutine), but relies on the internal signature. If commissions_report ever adds a new parameter it will silently break the CSV endpoint. Extract a shared internal helper.",
+    "vendor_commissions collection has no unique index on bill_id — _compute_commission_for_bill uses find_one + upsert semantics that can race under concurrent bill updates. Add unique index on (bill_id).",
+    "PATCH /vendors/{id}/commercial does not validate slab configuration for the 'slab' type (no slabs → 0 commission silently). Add 400 if type='slab' and slabs is empty/invalid.",
+    "Consider indexing (vendor_id, status) on vendor_commissions and (vendor_id, source) on journal_entries for the receive/dashboard hot paths."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_vendor_commissions.py"
+  ],
+  "success_rate": {"backend": "94% (16/17)", "frontend": "100% for tested flows"},
+  "test_credentials": "Admin bearer stable_testtok_do_not_delete; ProjectManager pmanager@ds.co / Test@1234 (for RBAC receive-forbidden test).",
+  "seed_data_creation": "Created TEST_COMM_ACME vendor with a bill (25000 subtotal, 10% commission, 2500 received) and TEST_FIFO_VENDOR with 2 bills (5000 each, all received + 100000 unallocated advance). Both soft-deleted at fixture teardown; ledger rows persist for audit.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run `pytest /app/backend/tests/test_vendor_commissions.py -v` after main agent fixes DELETE /vendor-bills orphan commission cleanup. Frontend flows fully validated with admin session cookie stable_testtok_do_not_delete. Verify Accounting > Commissions dashboard also — CSV download works; top_vendors and by_project rendered correctly with current seed data.",
+  "rca of the issue": "delete_vendor_bill (routes/vendors.py:470-483) has two branches — (a) paid > 0 → soft cancel + set status=cancelled on bill (does not call _compute_commission_for_bill so commission row is NOT touched), (b) paid==0 → hard delete of the bill doc (again does not touch commission rows). Fix: at end of both branches, run a cleanup on db.vendor_commissions for this bill_id. For soft-cancel: set status='cancelled' via _compute_commission_for_bill. For hard-delete: delete pending/invoiced rows; if received row exists, set status='cancelled' (audit)."
+}

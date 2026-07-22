@@ -17,6 +17,7 @@ const TABS = [
   { id: "reports",   label: "Reports",   Icon: Receipt },
   { id: "balance",   label: "Balance Sheet", Icon: Scales },
   { id: "cashflow",  label: "Cash Flow", Icon: Waves },
+  { id: "commissions", label: "Commissions", Icon: Coins },
 ];
 
 export default function Accounting() {
@@ -31,6 +32,7 @@ export default function Accounting() {
   const [tb, setTB] = useState(null);
   const [bs, setBS] = useState(null);
   const [cf, setCF] = useState(null);
+  const [commissions, setCommissions] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [meta, setMeta] = useState(null);
 
@@ -59,6 +61,7 @@ export default function Accounting() {
   useEffect(() => {
     if (tab === "balance")  api.get("/accounting/reports/balance-sheet").then(({ data }) => setBS(data));
     if (tab === "cashflow") api.get("/accounting/reports/cash-flow").then(({ data }) => setCF(data));
+    if (tab === "commissions") api.get("/commissions/dashboard").then(({ data }) => setCommissions(data));
   }, [tab]);
 
   // CSV download helper — hits an auth-cookied endpoint via fetch (blob) → save.
@@ -151,6 +154,61 @@ export default function Accounting() {
       {tab === "cashflow" && (
         <CashFlowView cf={cf} onDownload={downloadCsv} />
       )}
+
+      {tab === "commissions" && (
+        <CommissionsDashboard data={commissions} onDownload={downloadCsv} />
+      )}
+    </div>
+  );
+}
+
+// ================================================================
+function CommissionsDashboard({ data, onDownload }) {
+  if (!data) return <div className="overline">LOADING COMMISSIONS…</div>;
+  const t = data.totals;
+  return (
+    <div className="space-y-4" data-testid="commissions-dashboard-tab">
+      <div className="flex items-center justify-between">
+        <div className="overline">VENDOR COMMISSION INCOME</div>
+        <button className="btn-ghost text-xs" onClick={() => onDownload("/commissions/report.csv", "commissions.csv")} data-testid="dl-cm-csv">
+          <DownloadSimple size={12} /> CSV
+        </button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KPI label="Total earned" value={CURRENCY(t.total_earned)} Icon={Coins} tint="#002FA7" />
+        <KPI label="Received" value={CURRENCY(t.total_received)} Icon={TrendUp} tint="#1D633E" />
+        <KPI label="Pending" value={CURRENCY(t.pending)} Icon={TrendDown} tint={t.pending > 0 ? "#B22B22" : "#5C5C5C"} />
+        <KPI label="This month" value={CURRENCY(t.this_month)} Icon={ChartLine} tint="#7A4E1A" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card-flat">
+          <div className="overline mb-3">TOP VENDORS</div>
+          {(data.top_vendors || []).length === 0 && <div className="text-sm text-[#9A9A9A]">No commission data yet.</div>}
+          {(data.top_vendors || []).map((v) => (
+            <div key={v.vendor_id} className="flex justify-between items-center border-b border-[#F5F5F5] py-2 text-sm">
+              <a href={`/vendors/${v.vendor_id}`} className="font-semibold hover:text-[#002FA7]">{v.vendor_name}</a>
+              <div className="flex gap-4 font-mono">
+                <span className="text-[#5C5C5C]">{CURRENCY(v.received)}</span>
+                <span className="font-bold">{CURRENCY(v.earned)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="card-flat">
+          <div className="overline mb-3">BY PROJECT</div>
+          {(data.by_project || []).length === 0 && <div className="text-sm text-[#9A9A9A]">No project-linked commission yet.</div>}
+          {(data.by_project || []).slice(0, 10).map((p) => (
+            <div key={p.project_id} className="flex justify-between items-center border-b border-[#F5F5F5] py-2 text-sm">
+              <a href={`/projects/${p.project_id}`} className="font-semibold hover:text-[#002FA7]">{p.project_name}</a>
+              <div className="flex gap-4 font-mono">
+                <span className="text-[#5C5C5C]">{CURRENCY(p.received)}</span>
+                <span className="font-bold">{CURRENCY(p.earned)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

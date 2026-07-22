@@ -46,10 +46,13 @@ router = APIRouter(dependencies=[Depends(_require_finance_read)])
 # Chart of Accounts
 # ==================================================
 async def _seed_coa_if_empty():
-    count = await db.accounts.count_documents({})
-    if count > 0:
-        return
+    """Idempotent seed — inserts only the DEFAULT_COA accounts that are missing.
+    Runs on every /accounts fetch so newly-shipped default accounts (e.g. new
+    income categories) show up on existing installations without a migration."""
+    existing_names = {a["name"] async for a in db.accounts.find({}, {"_id": 0, "name": 1})}
     for name, typ, code in DEFAULT_COA:
+        if name in existing_names:
+            continue
         await db.accounts.insert_one({
             "id": new_id("acc_"),
             "name": name,
