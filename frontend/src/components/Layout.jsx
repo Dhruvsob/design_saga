@@ -6,6 +6,7 @@ import {
   IdentificationCard, Clock, Bank, HardHat,
 } from "@phosphor-icons/react";
 import AIWidget from "./AIWidget";
+import NotificationBell from "./NotificationBell";
 import { useEffect, useState } from "react";
 
 const NAV = [
@@ -156,9 +157,7 @@ export default function Layout({ children }) {
               <span className="live-dot" />
               <span>{now.toDateString().toUpperCase()} · {fmtClock(now)}</span>
             </div>
-            <button className="btn-icon" data-testid="top-notifications-btn" aria-label="Notifications">
-              <Bell size={16} />
-            </button>
+            <NotificationBell />
           </div>
         </header>
 

@@ -1,226 +1,150 @@
 ## user_problem_statement
-System-audit fix pack (Tier A + B + C + D) for the Design Saga Architecture ERP.
-Audit revealed: dashboard revenue pulled from wrong source, task↔vendor master
-not linked, seed endpoints exposing fake data, no Admin approval gate on new
-Google sign-ins, no password login at all. This iteration fixes all four tiers.
+Iteration v2.3 of the Design Saga ERP: land P2 (Notification Center — global bell + all module emitters) AND P6 subset (Balance Sheet, Cash Flow, Enhanced Financial Dashboard, CSV exports on every report). Preserve everything from v2.2.
 
 ## backend:
-  - task: "A1 · Dashboard revenue now sourced from accounting journal_entries"
+  - task: "Notification Center — collection, emitters, endpoints"
     implemented: true
     working: "NA"
-    file: "backend/server.py (dashboard_stats)"
+    file: "backend/core/notifications.py, backend/routes/notifications.py"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Revenue KPI now = sum(credit − debit) over journal_entries lines
-            where account_type == 'income'. Was previously sum(invoices.total)
-            where status == 'paid' (two sources of truth). Also reformatted
-            the collection-due alert to use ₹ instead of $.
+            New `db.notifications` collection with schema {id, user_id, kind, title,
+            body, link, priority, read, meta, dedup_key, created_at}.
+            `core/notifications.py` provides `emit(user_ids, kind, title, body, link,
+            priority, meta, dedup_key)` + `emit_admins()`, `emit_finance()`, `emit_hr()`
+            broadcasters. Dedup via `(user_id, dedup_key)` uniqueness — safe to re-emit.
+            Endpoints:
+              GET  /api/notifications?unread_only=&kind=&limit=
+              GET  /api/notifications/unread-count
+              POST /api/notifications/{id}/read
+              POST /api/notifications/mark-all-read
+              DELETE /api/notifications/{id}
+              POST /api/notifications/scan  — idempotent daily scanner. Emits
+                vendor_bill_due/overdue, invoice_due/overdue, milestone_due/overdue,
+                task_overdue notifications to the right audiences (finance for financial
+                items, individual assignees for tasks).
 
-  - task: "A2 · Task → Vendor master link (vendor_id)"
+  - task: "Emit notifications from existing flows"
     implemented: true
     working: "NA"
-    file: "backend/models/task.py, backend/routes/tasks.py"
+    file: "backend/routes/tasks.py, backend/routes/attendance.py, backend/routes/auth.py"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Added `vendor_id: Optional[str]` to TaskIn and TaskUpdate. On task
-            creation, if vendor_id is present the vendor_contact block is
-            auto-backfilled from vendors_acc so old readers keep working.
-            Verified: creating a task with vendor_id=vnd_1f71cd90ee68 populated
-            vendor_contact.vendor_name="ACME Carpentry" and phone from master.
-            Vendor detail's `tasks` array now includes tasks linked via
-            vendor_id primarily (falls back to vendor_contact.vendor_name).
+            - Task create → 'task_assigned' notif to the assignee (skips self-assignment).
+            - Leave create → 'leave_request' to HR + Admins.
+            - Leave action (approve/reject) → 'leave_decided' to requester.
+            - RBAC approval → 'account_approved' notif to the newly-approved user.
+            - All emits wrapped in try/except so notification failures never break the parent flow.
 
-  - task: "A4 · Dashboard team utilization uses real priority-weighted signal"
+  - task: "Accounting · Balance Sheet report"
     implemented: true
     working: "NA"
-    file: "backend/server.py"
+    file: "backend/routes/accounting.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            GET /api/accounting/reports/balance-sheet?as_of=YYYY-MM-DD
+            Returns: {assets:{rows,total}, liabilities:{rows,total},
+                      equity:{rows,total,net_income,total_with_net_income},
+                      total_assets, total_liabilities_and_equity, balanced}
+            The `balanced` flag is Assets ≈ Liab + Eq + Net Income (0.01 tolerance).
+
+  - task: "Accounting · Cash Flow statement"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/accounting.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: >-
+            GET /api/accounting/reports/cash-flow?from_date=&to_date=
+            Bucketed by journal_entry.source into inflows (income, client_payment, other)
+            and outflows (expense, vendor_payment, payroll, other). Includes opening &
+            closing bank/cash balance. Verified against journal in smoke test.
+
+  - task: "Accounting · Extended Financial Dashboard"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/accounting.py"
     priority: "medium"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Was: "count open tasks per assignee" (comment literally said dummy).
-            Now: weighted sum (urgent=3, critical=3, high=2, medium=1, low=1)
-            and sorted descending. Field name unchanged (load) for backward compat.
+            GET /api/accounting/dashboard/extended
+            Returns: {receivables:{total,overdue}, payables:{total,overdue},
+                      monthly_trend:[{key,income,expense,profit} x 12 months],
+                      expense_breakdown:[{category,amount} top 10 for current month]}
+            All values pulled from real journal_entries + vendor_bills + invoices.
 
-  - task: "B1 · Seed endpoints gated behind ENABLE_SEED_DEMO env var"
+  - task: "Accounting · CSV export endpoints (5 files)"
     implemented: true
     working: "NA"
-    file: "backend/server.py"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            /api/seed, /api/quotations-adv/seed and /api/employees/seed each
-            return 403 unless env var ENABLE_SEED_DEMO=true. Default: disabled.
-
-  - task: "B2 · Purge of pre-existing fake demo data"
-    implemented: true
-    working: true
-    file: "MongoDB one-shot"
-    priority: "high"
-    needs_retesting: false
-    status_history:
-        -working: true
-        -agent: "main"
-        -comment: >-
-            Removed 6 leads, 3 clients, 3 projects, 7 tasks, 4 invoices, 3 files
-            plus 12 TEST_ users from previous automated runs. Retained real
-            accounting (CoA, vendors master, journal entries) and the ACME
-            vendor + its bill/payment from vendor-module smoke test.
-
-  - task: "C1 · Admin approval gate for new Google sign-ins"
-    implemented: true
-    working: "NA"
-    file: "backend/server.py (create_session), backend/core/deps.py (require_user)"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            New Google users now land with approval_status='pending' + is_active=false.
-            Super-admin & first-ever user bypass approval (auto-Admin, approved).
-            require_user (BOTH in server.py and core/deps.py) return 403
-            "Your account is awaiting Admin approval." for pending users and 403
-            "Your account has been deactivated." for rejected users. Existing
-            users grandfathered as approved via one-shot mongosh migration.
-            NOTE: `/api/auth/me` still returns the user (with status) so the
-            frontend can show a "Pending" screen.
-
-  - task: "C2 · Admin approval / reject / list-pending endpoints"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/auth.py"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            GET  /api/rbac/pending                (Admin) — list pending
-            POST /api/rbac/users/{id}/approve     (Admin) — body {decision: approve|reject, role?, reason?}
-            Approve sets approval_status='approved', is_active=true, assigns role + employee_id (auto DS000N).
-            Reject sets approval_status='rejected', is_active=false, invalidates all sessions.
-
-  - task: "D1 · Password login (email OR employee_id)"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/auth.py"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            POST /api/auth/login-password {identifier, password}
-            Identifier can be an email OR a DS0001-style employee_id.
-            bcrypt (passlib) for hashing. On success sets the same session_token
-            cookie as Google (httpOnly + secure + SameSite=None, 7-day expiry).
-            5 failed attempts in 15 minutes → 429 "Too many failed attempts"
-            (via login_attempts collection). Pending users → 403 with
-            "awaiting Admin approval"; rejected → 403 with "deactivated".
-
-  - task: "D2 · Admin creates user with password + Reset password"
-    implemented: true
-    working: "NA"
-    file: "backend/routes/auth.py"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            POST /api/auth/register (Admin only). Body: email, password (>=6),
-            name, role, phone, approve_immediately (default true). Auto-assigns
-            next sequential DS0001, DS0002…
-            POST /api/auth/reset-password/{user_id} (Admin only). Body:
-            new_password. Kills all active sessions for the target user.
-            POST /api/auth/change-password (self). Body: old_password, new_password.
-            Returns 400 for Google-only users (no existing hash).
-
-  - task: "Refactor · Deduplicated ROLE_PERMISSIONS between server.py and core/rbac.py"
-    implemented: true
-    working: "NA"
-    file: "backend/server.py, backend/core/rbac.py"
+    file: "backend/routes/accounting.py"
     priority: "medium"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Was: two ROLE_PERMISSIONS dicts (server.py and core/rbac.py) drifting apart —
-            Director in server.py lacked vendors.* and finance.*. Now server.py
-            imports ROLES, ROLE_PERMISSIONS, normalize_role, expand_permissions,
-            has_permission directly from core.rbac. Single source of truth.
-            core.rbac exports LEGACY_ROLE_MAP too (public alias).
+            GET /api/accounting/reports/pl.csv, /trial-balance.csv, /balance-sheet.csv,
+            /cash-flow.csv, and /api/journal-entries.csv — each returns text/csv with
+            Content-Disposition attachment. Journal export supports filters
+            ?project_id=, ?client_id=, ?vendor_id=, ?source=, ?from_date=, ?to_date=.
 
 ## frontend:
-  - task: "Login page — password form + Emergent Google button both present"
+  - task: "Notification bell (top-right of Layout) — real-time badge + dropdown"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/Login.jsx"
+    file: "frontend/src/components/NotificationBell.jsx, frontend/src/components/Layout.jsx"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            Preserved editorial layout + Google flow. Added below the Google
-            button (with an OR divider) a compact 2-field form (identifier + password).
-            data-testids: login-google-btn, password-login-form, login-identifier,
-            login-password, login-password-btn, login-error.
-            The Emergent Google URL and redirect logic are untouched
-            (kept the DO-NOT-HARDCODE-URL guardrails).
+            NotificationBell polls GET /api/notifications every 30 s, shows red badge
+            with unread count (99+ if over). Dropdown lists items sorted unread-first,
+            with kind pill, title (clickable → deep link), body, relative time, and
+            per-row "mark read" + "dismiss" buttons. Header has a manual "scan" refresh
+            (calls /notifications/scan) plus "Mark all read".
+            testids: top-notifications-btn, notif-badge, notif-panel, notif-row-{id},
+                     notif-read-{id}, notif-dismiss-{id}, notif-scan-btn,
+                     notif-mark-all-btn.
 
-  - task: "Pending-approval / rejected screen in ProtectedShell"
+  - task: "Accounting page — Balance Sheet + Cash Flow tabs"
     implemented: true
     working: "NA"
-    file: "frontend/src/App.js, frontend/src/context/AuthContext.js"
+    file: "frontend/src/pages/Accounting.jsx"
     priority: "high"
     needs_retesting: true
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: >-
-            AuthContext exposes isPending / isRejected booleans and loginWithPassword().
-            ProtectedShell shows a dedicated "Awaiting Admin approval" or
-            "Account deactivated" screen with a Sign-out button. PublicRoot also
-            forwards pending users to /dashboard so they land in that screen
-            consistently (never on the login page while an active session exists).
-            data-testids: pending-approval-screen, pending-signout-btn.
+            Two new tabs appended after "Reports": Balance Sheet (Scales icon) and
+            Cash Flow (Waves icon). Both fetch on activation and render KPI strips +
+            structured sections. Balance Sheet shows the reconciliation banner
+            (green if balanced, red otherwise). Cash Flow shows opening → inflows →
+            outflows → closing with color-coded totals.
+            testids: tab-balance, tab-cashflow, balance-sheet-tab, cashflow-tab,
+                     dl-bs-csv, dl-cf-csv.
 
-  - task: "RBAC Admin — Pending approvals + Create user + Reset password"
-    implemented: true
-    working: "NA"
-    file: "frontend/src/pages/RBACAdmin.jsx"
-    priority: "high"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            Full rewrite of RBACAdmin (backward-compatible URL /admin/rbac):
-             • Pending-approvals section at top (row-per-user with role picker + Approve/Reject).
-             • Team members table gains Employee ID + Status pill (approved / pending / deactivated).
-             • Create-user form (email, password, role, name, phone, approve toggle).
-             • Reset-password modal per user (all sessions get killed on save).
-            data-testids: rbac-page, create-user-btn, cu-name/email/password/role, cu-submit,
-             pending-section, pending-row-{uid}, approve-{uid}, reject-{uid},
-             reset-pwd-{uid}, reset-pwd-modal, reset-pwd-input, reset-pwd-submit.
-
-  - task: "A3 · Vendor picker in Accounting Expense form"
+  - task: "Accounting Reports tab — CSV download buttons"
     implemented: true
     working: "NA"
     file: "frontend/src/pages/Accounting.jsx"
@@ -230,44 +154,27 @@ Google sign-ins, no password login at all. This iteration fixes all four tiers.
         -working: "NA"
         -agent: "main"
         -comment: >-
-            "Vendor id (optional)" text input replaced with a <select> populated
-            from /api/vendors. data-testid: expense-vendor-select.
-
-  - task: "A2b · Vendor picker in Task form (task_type=vendor)"
-    implemented: true
-    working: "NA"
-    file: "frontend/src/pages/TasksBoard.jsx"
-    priority: "medium"
-    needs_retesting: true
-    status_history:
-        -working: "NA"
-        -agent: "main"
-        -comment: >-
-            When creating a Vendor-type task, a "Pick from Vendor master" dropdown
-            auto-fills vendor_contact (name, company, contact_person, phone, email)
-            AND stores vendor_id. The manual name field is retained as an ad-hoc fallback.
-            data-testid: task-vendor-picker.
+            Added inline buttons at the top of Reports: P&L CSV, Trial Balance CSV,
+            Journal CSV. Each fetches with credentials and triggers a file download.
+            testids: dl-pl-csv, dl-tb-csv, dl-journal-csv.
 
 ## metadata:
   created_by: "main_agent"
-  version: "2.2"
-  test_sequence: 2
+  version: "2.3"
+  test_sequence: 3
   run_ui: true
 
 ## test_plan:
   current_focus:
-    - "A1 · Dashboard revenue now sourced from accounting journal_entries"
-    - "A2 · Task → Vendor master link (vendor_id)"
-    - "B1 · Seed endpoints gated behind ENABLE_SEED_DEMO env var"
-    - "C1 · Admin approval gate for new Google sign-ins"
-    - "C2 · Admin approval / reject / list-pending endpoints"
-    - "D1 · Password login (email OR employee_id)"
-    - "D2 · Admin creates user with password + Reset password"
-    - "Login page — password form + Emergent Google button both present"
-    - "Pending-approval / rejected screen in ProtectedShell"
-    - "RBAC Admin — Pending approvals + Create user + Reset password"
-    - "A3 · Vendor picker in Accounting Expense form"
-    - "A2b · Vendor picker in Task form (task_type=vendor)"
+    - "Notification Center — collection, emitters, endpoints"
+    - "Emit notifications from existing flows"
+    - "Accounting · Balance Sheet report"
+    - "Accounting · Cash Flow statement"
+    - "Accounting · Extended Financial Dashboard"
+    - "Accounting · CSV export endpoints (5 files)"
+    - "Notification bell (top-right of Layout) — real-time badge + dropdown"
+    - "Accounting page — Balance Sheet + Cash Flow tabs"
+    - "Accounting Reports tab — CSV download buttons"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -275,48 +182,43 @@ Google sign-ins, no password login at all. This iteration fixes all four tiers.
 ## agent_communication:
     -agent: "main"
     -message: >-
-        Big system-audit fix pack landed (Tiers A + B + C + D). No modules were
-        rewritten — only extended. Key verification points:
+        v2.3 lands the Notification Center (P2) + a focused Accounting Upgrade (P6).
+        Zero rewrites — new endpoints & UI surfaces only.
 
-        BACKEND (already curl-verified end-to-end):
-         1. `/api/auth/login-password` with either email or employee_id
-            returns {user, session_token}. Sets cookie. 401 on wrong password;
-            429 after 5 wrong attempts in 15 min.
-         2. `/api/auth/register` creates user with employee_id auto-assigned
-            (DS0001, DS0002…). Admin-only (403 for non-Admin).
-         3. `/api/auth/reset-password/{uid}` — Admin-only; kills victim's sessions.
-         4. `/api/auth/change-password` — self; 400 for Google-only user;
-            401 on wrong old_password.
-         5. `/api/rbac/pending` — returns pending users; Admin-only.
-         6. `/api/rbac/users/{uid}/approve` — decision: approve|reject.
-         7. New Google user on next Emergent /auth/session lands as pending
-            (except super-admin & first user).
-         8. `/api/dashboard/stats` — `kpis.revenue` sums income-account credits
-            from journal_entries (verified 0.0 after purge, non-zero after
-            posting income via /api/accounting/income).
-         9. `/api/seed`, `/api/quotations-adv/seed`, `/api/employees/seed` all
-            return 403 with detail mentioning ENABLE_SEED_DEMO env var.
-        10. Creating a task with vendor_id auto-fills vendor_contact from master;
-            vendor detail page shows the task in its "Assigned tasks" tab.
+        Focused test surface:
 
-        FRONTEND:
-        11. `/` (Login) — Google button + password form both visible;
-            error box shows detail from backend for wrong password.
-        12. Pending user hitting any /dashboard etc lands on the
-            "Awaiting Admin approval" screen (data-testid pending-approval-screen)
-            with a Sign out CTA.
-        13. RBAC Admin (`/admin/rbac`) shows Pending Approvals section if any;
-            approve/reject buttons update state. "Create user" form issues
-            /api/auth/register. Reset-password modal per row.
-        14. Accounting > Expense: vendor field is now a <select>
-            (expense-vendor-select) populated from /api/vendors.
-        15. Tasks > New > Agency/Vendor: picker (task-vendor-picker) auto-fills
-            the contact block.
+        BACKEND (already curl-verified):
+         1. GET /api/notifications returns {unread_count, notifications: []}.
+         2. Assigning a task to another user (POST /api/tasks with assignee_id) emits
+            a 'task_assigned' notification visible to that user. Assigning to yourself
+            does NOT emit.
+         3. Submitting a leave request (POST /api/leaves) emits 'leave_request' to
+            HR + Admins. Approving it emits 'leave_decided' to the requester.
+         4. Admin approving a pending user via /api/rbac/users/{id}/approve emits
+            'account_approved' to that user.
+         5. POST /api/notifications/scan is idempotent — running it twice on the same
+            day inserts each notification only once (verify via unread count).
+         6. GET /api/accounting/reports/balance-sheet returns balanced=true after
+            posting a symmetrical journal (income + expense).
+         7. GET /api/accounting/reports/cash-flow — opening+net_change == closing.
+         8. GET /api/accounting/dashboard/extended — receivables + payables reflect
+            actual invoice/bill data.
+         9. GET /api/accounting/reports/pl.csv (and the four other CSV endpoints)
+            returns text/csv with a filename in Content-Disposition. RBAC: finance.read
+            is required (403 for Employee).
 
-        Test creds are in /app/memory/test_credentials.md.
-        Special active session in DB:
-            stable_testtok_do_not_delete → Admin (test-admin@ds.co)
-            pmanager@ds.co / DS0001 / Test@1234 → ProjectManager
-            newbie_tok → pending Google user (for approval-flow test)
-        Please run through both backend + frontend flows. Zero regressions
-        expected on the previously green Vendor Module.
+        FRONTEND (please test):
+        10. As Admin, top-right bell shows red badge with unread count. Clicking
+            it opens the dropdown. Task/leave/RBAC notifications appear correctly.
+            'Mark all read' clears the badge. 'Scan' refreshes.
+        11. Accounting page → tab 'Balance Sheet' renders KPIs + Assets & Liab+Equity
+            sections and the green 'balanced' banner. 'Cash Flow' tab shows
+            opening → inflows → outflows → closing with KPI strip.
+        12. Reports tab has three CSV buttons (P&L / Trial balance / Journal); each
+            triggers a browser download.
+        13. Bell hidden and Accounting reports gated behind finance.read for
+            Designer/Employee roles.
+
+        Test credentials: /app/memory/test_credentials.md
+        Special: stable_testtok_do_not_delete (Admin), pmanager@ds.co / DS0001 /
+        Test@1234 (ProjectManager).

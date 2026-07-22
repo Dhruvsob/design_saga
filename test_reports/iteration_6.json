@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration v2.3 (Notification Center + Accounting v2.3) tested end-to-end. Backend: 18/18 pytest passing. Frontend: bell (open/close/scan/read/dismiss/mark-all/link-nav) and Accounting tabs (Balance Sheet, Cash Flow) + all 5 CSV exports (pl, tb, bs, cf, journal) verified via download listener.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/leaves/{id}/action", "issue": "Spec says body `{status:'approved'}` but the Pydantic model (LeaveActionIn) requires `{action: 'approve'|'reject'}`. Not a bug per se, but the review-request wording diverges from the implementation — clarify in spec or add a `status` alias."},
+      {"endpoint": "POST /api/auth/register", "issue": "Emails are normalized to lowercase server-side. Callers must lookup pending users case-insensitively. Documented so future tests don't fail on case."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_notifications_accounting.py",
+    "/app/test_reports/pytest/iter6.xml"
+  ],
+  "action_items": [
+    "Optional: align LeaveActionIn field name to match spec (`status`) or update spec doc to say `action`.",
+    "Optional (still open from iter5): pending-user AuthContext.isRejected precedence bug — not in this iteration's scope but still to be fixed by main agent."
+  ],
+  "critical_code_review_comments": [
+    "notifications.py scan endpoint is nice and idempotent via dedup_key — but it uses find_one per (user_id, dedup_key) inside emit(). For large user counts, consider a unique compound index (user_id, dedup_key) and use insert_many with ordered=False to leverage duplicate-key skip. Current O(N users) find_one is fine for the current scale.",
+    "accounting.py has grown to ~1030 lines; splitting into `accounting/reports.py`, `accounting/journal.py`, `accounting/exports.py` submodules would keep files <700 lines per guideline.",
+    "cash_flow_statement classifies inflows as 'client_payment' only when source=='invoice_payment' but the codebase never writes that source (income endpoint uses source='income'). All client payments end up as 'income'. Consider unifying or adding a doc note.",
+    "NotificationBell.jsx swallows all polling errors silently — a 401/expired-session will keep spinning quietly. Consider surfacing on repeated failures.",
+    "GET /api/notifications requires require_user (approved+active). Frontend Layout mounts NotificationBell on every route including pending screen — a pending user will just see 403s silently. Consider hiding the bell when !user.is_approved."
+  ],
+  "updated_files": ["/app/backend/tests/test_notifications_accounting.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% for tested flows"},
+  "test_credentials": "Admin bearer stable_testtok_do_not_delete (user_testadmin_stable); pmanager@ds.co (user_be5ef6d7a393) session f9ff566b859e4e9080ea2cefbffae93c; password Test@1234",
+  "seed_data_creation": "Created TEST_notif_task_*, TEST_selfassign_*, TEST_mrk_* tasks; a Casual leave 2026-02-01 for EMP-2026-0001 (auto-approved by admin); TEST_appr_* pending user + approved via /rbac; one TEST_bs_income journal (₹1000) on 2026-01-15.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/test_notifications_accounting.py -v` for regression. Frontend flows validated with admin cookie session_token=stable_testtok_do_not_delete — all data-testids from spec are present and clickable. Balance sheet and cash flow tabs both render on /accounting.",
+  "rca of the issue": "No issues found in this iteration. The two spec-vs-code mismatches (leave action body, register email case) are minor documentation drift, not bugs."
+}

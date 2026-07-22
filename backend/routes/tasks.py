@@ -218,6 +218,28 @@ async def create_task(payload: TaskIn, request: Request,
         )
 
     await db.tasks.insert_one(dict(doc))
+
+    # Emit notification to the assignee.
+    try:
+        from core.notifications import emit as _notify
+        assignee_uid = doc.get("assignee_id")
+        if not assignee_uid and doc.get("assignee_name"):
+            assignee = await db.users.find_one({"name": doc["assignee_name"]},
+                                               {"_id": 0, "user_id": 1})
+            if assignee:
+                assignee_uid = assignee["user_id"]
+        if assignee_uid and assignee_uid != user["user_id"]:
+            await _notify(
+                [assignee_uid], "task_assigned",
+                f"New task · {doc['title'][:60]}",
+                body=(doc.get("description") or "")[:120] or "You've been assigned a new task.",
+                link=f"/tasks/{doc['id']}",
+                priority="high" if (doc.get("priority") or "").lower() in ("urgent", "critical", "high") else "normal",
+                meta={"task_id": doc["id"], "assigned_by": user.get("name")},
+            )
+    except Exception:
+        pass  # notifications never block task creation
+
     return await db.tasks.find_one({"id": doc["id"]}, {"_id": 0})
 
 

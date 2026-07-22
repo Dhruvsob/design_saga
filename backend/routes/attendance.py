@@ -309,6 +309,21 @@ async def create_leave(payload: LeaveRequestIn, request: Request,
         "created_by": user["user_id"],
     }
     await db.leaves.insert_one(dict(doc))
+
+    # Notify HR + Admins that a leave request needs review
+    try:
+        from core.notifications import emit_hr
+        await emit_hr(
+            "leave_request",
+            f"Leave request · {doc['employee_name']}",
+            body=f"{doc['leave_type']} · {doc['from_date']} → {doc['to_date']} ({doc['days']} day{'s' if doc['days'] != 1 else ''})",
+            link="/attendance",
+            priority="normal",
+            meta={"leave_id": doc["id"], "employee_id": emp_id, "days": doc["days"]},
+        )
+    except Exception:
+        pass
+
     return await db.leaves.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -377,6 +392,22 @@ async def act_on_leave(leave_id: str, payload: LeaveActionIn, request: Request,
                 upsert=True,
             )
             cur += timedelta(days=1)
+
+    # Notify the requester of the decision
+    try:
+        from core.notifications import emit as _notify
+        requester_uid = lv.get("created_by")
+        if requester_uid:
+            await _notify(
+                [requester_uid], "leave_decided",
+                f"Leave {new_status} · {lv['from_date']} → {lv['to_date']}",
+                body=(payload.remarks or f"Your leave request was {new_status} by {user.get('name')}."),
+                link="/attendance",
+                priority="normal",
+                meta={"leave_id": lv["id"], "status": new_status},
+            )
+    except Exception:
+        pass
 
     return await db.leaves.find_one({"id": leave_id}, {"_id": 0})
 

@@ -578,6 +578,357 @@ async def finance_dashboard(request: Request,
 
 
 # ==================================================
+# Balance Sheet  (Assets = Liabilities + Equity + Net Income)
+# ==================================================
+@router.get("/accounting/reports/balance-sheet")
+async def balance_sheet(request: Request, as_of: Optional[str] = None,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+    q = {}
+    if as_of: q["date"] = {"$lte": as_of}
+    entries = await db.journal_entries.find(q, {"_id": 0}).to_list(20000)
+
+    accs = await db.accounts.find({}, {"_id": 0}).to_list(500)
+    by_id = {a["id"]: a for a in accs}
+    balances: dict = {}
+    for a in accs:
+        balances[a["id"]] = float(a.get("opening_balance") or 0)
+
+    income_total = 0.0
+    expense_total = 0.0
+    for e in entries:
+        for l in e["lines"]:
+            acc = by_id.get(l["account_id"])
+            if not acc: continue
+            t = acc["type"]
+            balances[l["account_id"]] += _movement_for(t, l["debit"], l["credit"])
+            if t == "income":  income_total  += l["credit"] - l["debit"]
+            if t == "expense": expense_total += l["debit"] - l["credit"]
+
+    def _bucket(type_):
+        rows = [{"account_id": a["id"], "name": a["name"], "balance": round(balances[a["id"]], 2)}
+                for a in accs if a["type"] == type_ and abs(balances[a["id"]]) > 0.001]
+        return rows, round(sum(r["balance"] for r in rows), 2)
+
+    assets, total_assets = _bucket("asset")
+    liabilities, total_liabilities = _bucket("liability")
+    equity, total_equity = _bucket("equity")
+    net_income = round(income_total - expense_total, 2)
+    total_liab_eq = round(total_liabilities + total_equity + net_income, 2)
+    return {
+        "as_of": as_of,
+        "assets": {"rows": assets, "total": total_assets},
+        "liabilities": {"rows": liabilities, "total": total_liabilities},
+        "equity": {"rows": equity, "total": total_equity,
+                   "net_income": net_income,
+                   "total_with_net_income": round(total_equity + net_income, 2)},
+        "total_assets": total_assets,
+        "total_liabilities_and_equity": total_liab_eq,
+        "balanced": abs(total_assets - total_liab_eq) < 0.01,
+    }
+
+
+# ==================================================
+# Cash Flow  (indirect-ish, aggregated by source)
+# ==================================================
+@router.get("/accounting/reports/cash-flow")
+async def cash_flow_statement(request: Request,
+                              from_date: Optional[str] = None,
+                              to_date: Optional[str] = None,
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+
+    # Cash & bank accounts
+    cash_accs = await db.accounts.find({"$or": [{"is_bank": True},
+                                                 {"name": "Cash"},
+                                                 {"name": "Petty Cash"}]},
+                                       {"_id": 0}).to_list(50)
+    cash_ids = {a["id"] for a in cash_accs}
+
+    opening_q: dict = {}
+    if from_date: opening_q["date"] = {"$lt": from_date}
+    period_q: dict = {}
+    if from_date or to_date:
+        d = {}
+        if from_date: d["$gte"] = from_date
+        if to_date:   d["$lte"] = to_date
+        period_q["date"] = d
+
+    # Opening balance = sum of movements on cash accounts before from_date
+    opening = 0.0
+    for a in cash_accs:
+        opening += float(a.get("opening_balance") or 0)
+    if from_date:
+        async for e in db.journal_entries.find(opening_q, {"_id": 0, "lines": 1}):
+            for l in e["lines"]:
+                if l["account_id"] in cash_ids:
+                    opening += l["debit"] - l["credit"]
+
+    # Inflows / outflows within the period, bucketed by journal source.
+    inflows: dict = {"income": 0.0, "client_payment": 0.0, "other": 0.0}
+    outflows: dict = {"expense": 0.0, "vendor_payment": 0.0, "payroll": 0.0, "other": 0.0}
+    async for e in db.journal_entries.find(period_q, {"_id": 0}):
+        net = 0.0
+        for l in e["lines"]:
+            if l["account_id"] in cash_ids:
+                net += l["debit"] - l["credit"]
+        if abs(net) < 0.001:
+            continue
+        src = e.get("source") or "other"
+        if net > 0:
+            key = "income" if src == "income" else ("client_payment" if src == "invoice_payment" else "other")
+            inflows[key] = inflows.get(key, 0.0) + net
+        else:
+            key = ("expense" if src == "expense"
+                   else "vendor_payment" if src == "vendor_payment"
+                   else "payroll" if src in ("payroll", "salary")
+                   else "other")
+            outflows[key] = outflows.get(key, 0.0) + (-net)
+
+    total_in = round(sum(inflows.values()), 2)
+    total_out = round(sum(outflows.values()), 2)
+    net_change = round(total_in - total_out, 2)
+    closing = round(opening + net_change, 2)
+
+    return {
+        "from": from_date, "to": to_date,
+        "opening_balance": round(opening, 2),
+        "inflows": {k: round(v, 2) for k, v in inflows.items()},
+        "outflows": {k: round(v, 2) for k, v in outflows.items()},
+        "total_inflow": total_in,
+        "total_outflow": total_out,
+        "net_change": net_change,
+        "closing_balance": closing,
+    }
+
+
+# ==================================================
+# Enhanced Financial Dashboard extension
+#   Adds: receivables (invoices), payables (vendor bills), monthly trend
+# ==================================================
+@router.get("/accounting/dashboard/extended")
+async def finance_dashboard_extended(request: Request,
+                                     session_token: Optional[str] = Cookie(default=None),
+                                     authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+
+    # Receivables = unpaid invoices
+    receivables_total = 0.0
+    receivables_overdue = 0.0
+    today = now_utc().date().isoformat()
+    async for inv in db.invoices.find({"status": {"$in": ["sent", "overdue", "partially_paid"]},
+                                       "doc_type": {"$ne": "quotation"}},
+                                      {"_id": 0}):
+        amt = float(inv.get("total") or 0)
+        receivables_total += amt
+        if (inv.get("due_date") or "") < today:
+            receivables_overdue += amt
+
+    # Payables = unpaid vendor bills
+    payables_total = 0.0
+    payables_overdue = 0.0
+    async for b in db.vendor_bills.find({"status": {"$in": ["received", "partially_paid", "overdue"]}},
+                                        {"_id": 0}):
+        out = float(b.get("outstanding") or b.get("total") or 0)
+        payables_total += out
+        if (b.get("due_date") or "") < today:
+            payables_overdue += out
+
+    # 12-month trend (income + expense per month)
+    now = now_utc().date()
+    year_start_month = now.replace(day=1)
+    months = []
+    for i in range(11, -1, -1):
+        y = year_start_month.year
+        m = year_start_month.month - i
+        while m <= 0:
+            m += 12; y -= 1
+        key = f"{y:04d}-{m:02d}"
+        months.append({"key": key, "income": 0.0, "expense": 0.0})
+
+    key_index = {m["key"]: m for m in months}
+    async for e in db.journal_entries.find(
+        {"date": {"$gte": months[0]["key"] + "-01"}}, {"_id": 0}
+    ):
+        mkey = (e.get("date") or "")[:7]
+        bucket = key_index.get(mkey)
+        if not bucket:
+            continue
+        for l in e["lines"]:
+            if l["account_type"] == "income":
+                bucket["income"] += l["credit"] - l["debit"]
+            elif l["account_type"] == "expense":
+                bucket["expense"] += l["debit"] - l["credit"]
+    for m in months:
+        m["income"] = round(m["income"], 2)
+        m["expense"] = round(m["expense"], 2)
+        m["profit"] = round(m["income"] - m["expense"], 2)
+
+    # Expense breakdown by category — current month
+    month_start = f"{now.year:04d}-{now.month:02d}-01"
+    expense_by_cat: dict = {}
+    async for e in db.journal_entries.find(
+        {"date": {"$gte": month_start}}, {"_id": 0}
+    ):
+        for l in e["lines"]:
+            if l["account_type"] == "expense":
+                k = l["account_name"]
+                expense_by_cat[k] = expense_by_cat.get(k, 0.0) + (l["debit"] - l["credit"])
+    expense_breakdown = sorted(
+        [{"category": k, "amount": round(v, 2)} for k, v in expense_by_cat.items() if v > 0],
+        key=lambda x: -x["amount"],
+    )[:10]
+
+    return {
+        "receivables": {"total": round(receivables_total, 2),
+                        "overdue": round(receivables_overdue, 2)},
+        "payables":    {"total": round(payables_total, 2),
+                        "overdue": round(payables_overdue, 2)},
+        "monthly_trend": months,
+        "expense_breakdown": expense_breakdown,
+    }
+
+
+# ==================================================
+# CSV Exports  (returns text/csv download)
+# ==================================================
+from fastapi.responses import Response as FastAPIResponse
+import csv, io
+
+
+def _csv_response(filename: str, rows: list, headers: list) -> FastAPIResponse:
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(headers)
+    for r in rows:
+        w.writerow([r.get(h, "") for h in headers])
+    return FastAPIResponse(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/accounting/reports/pl.csv")
+async def export_pl_csv(request: Request,
+                        from_date: Optional[str] = None, to_date: Optional[str] = None,
+                        project_id: Optional[str] = None,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission")
+    data = await profit_and_loss(request, from_date, to_date, project_id,
+                                 session_token, authorization)
+    rows = [{"section": "Income", "account": r["name"], "amount": r["amount"]} for r in data["income"]]
+    rows.append({"section": "", "account": "TOTAL INCOME", "amount": data["total_income"]})
+    rows += [{"section": "Expense", "account": r["name"], "amount": r["amount"]} for r in data["expense"]]
+    rows.append({"section": "", "account": "TOTAL EXPENSE", "amount": data["total_expense"]})
+    rows.append({"section": "", "account": "NET PROFIT", "amount": data["net_profit"]})
+    return _csv_response("profit-loss.csv", rows, ["section", "account", "amount"])
+
+
+@router.get("/accounting/reports/trial-balance.csv")
+async def export_tb_csv(request: Request, as_of: Optional[str] = None,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission")
+    data = await trial_balance(request, as_of, session_token, authorization)
+    return _csv_response("trial-balance.csv", data["rows"],
+                         ["account_name", "account_type", "debit", "credit", "balance"])
+
+
+@router.get("/accounting/reports/balance-sheet.csv")
+async def export_bs_csv(request: Request, as_of: Optional[str] = None,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission")
+    data = await balance_sheet(request, as_of, session_token, authorization)
+    rows = []
+    for r in data["assets"]["rows"]:      rows.append({"section": "Assets", "name": r["name"], "balance": r["balance"]})
+    rows.append({"section": "", "name": "TOTAL ASSETS", "balance": data["assets"]["total"]})
+    for r in data["liabilities"]["rows"]: rows.append({"section": "Liabilities", "name": r["name"], "balance": r["balance"]})
+    rows.append({"section": "", "name": "TOTAL LIABILITIES", "balance": data["liabilities"]["total"]})
+    for r in data["equity"]["rows"]:      rows.append({"section": "Equity", "name": r["name"], "balance": r["balance"]})
+    rows.append({"section": "Equity", "name": "Net Income (period)", "balance": data["equity"]["net_income"]})
+    rows.append({"section": "", "name": "TOTAL LIAB + EQ + NI", "balance": data["total_liabilities_and_equity"]})
+    return _csv_response("balance-sheet.csv", rows, ["section", "name", "balance"])
+
+
+@router.get("/accounting/reports/cash-flow.csv")
+async def export_cf_csv(request: Request,
+                        from_date: Optional[str] = None, to_date: Optional[str] = None,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission")
+    data = await cash_flow_statement(request, from_date, to_date, session_token, authorization)
+    rows = [{"section": "", "line": "Opening balance", "amount": data["opening_balance"]}]
+    for k, v in data["inflows"].items():  rows.append({"section": "Inflow",  "line": k, "amount": v})
+    rows.append({"section": "", "line": "Total inflow", "amount": data["total_inflow"]})
+    for k, v in data["outflows"].items(): rows.append({"section": "Outflow", "line": k, "amount": v})
+    rows.append({"section": "", "line": "Total outflow", "amount": data["total_outflow"]})
+    rows.append({"section": "", "line": "Net change", "amount": data["net_change"]})
+    rows.append({"section": "", "line": "Closing balance", "amount": data["closing_balance"]})
+    return _csv_response("cash-flow.csv", rows, ["section", "line", "amount"])
+
+
+@router.get("/journal-entries.csv")
+async def export_journal_csv(request: Request,
+                             from_date: Optional[str] = None, to_date: Optional[str] = None,
+                             project_id: Optional[str] = None, client_id: Optional[str] = None,
+                             vendor_id: Optional[str] = None, source: Optional[str] = None,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission")
+    q: dict = {}
+    if from_date or to_date:
+        d = {}
+        if from_date: d["$gte"] = from_date
+        if to_date:   d["$lte"] = to_date
+        q["date"] = d
+    if project_id: q["project_id"] = project_id
+    if client_id:  q["client_id"] = client_id
+    if vendor_id:  q["vendor_id"] = vendor_id
+    if source:     q["source"] = source
+
+    rows = []
+    async for e in db.journal_entries.find(q, {"_id": 0}).sort("date", 1):
+        for l in e["lines"]:
+            rows.append({
+                "date": e["date"],
+                "reference": e.get("reference") or "",
+                "narration": e.get("narration") or "",
+                "source": e.get("source") or "",
+                "account": l.get("account_name"),
+                "account_type": l.get("account_type"),
+                "debit": l.get("debit", 0),
+                "credit": l.get("credit", 0),
+                "project_id": e.get("project_id") or "",
+                "client_id": e.get("client_id") or "",
+                "vendor_id": e.get("vendor_id") or "",
+            })
+    return _csv_response("journal.csv", rows,
+        ["date", "reference", "narration", "source", "account", "account_type",
+         "debit", "credit", "project_id", "client_id", "vendor_id"])
+
+
+# ==================================================
 # Payment Milestones per project
 # ==================================================
 @router.get("/projects/{project_id}/milestones")

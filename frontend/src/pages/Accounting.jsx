@@ -4,6 +4,7 @@ import PageHero from "../components/PageHero";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
+  Scales, Waves, DownloadSimple,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -14,6 +15,8 @@ const TABS = [
   { id: "expense",   label: "Expense",   Icon: ArrowUp },
   { id: "coa",       label: "Chart of Accounts", Icon: ListDashes },
   { id: "reports",   label: "Reports",   Icon: Receipt },
+  { id: "balance",   label: "Balance Sheet", Icon: Scales },
+  { id: "cashflow",  label: "Cash Flow", Icon: Waves },
 ];
 
 export default function Accounting() {
@@ -26,6 +29,8 @@ export default function Accounting() {
   const [journal, setJournal] = useState([]);
   const [pl, setPL] = useState(null);
   const [tb, setTB] = useState(null);
+  const [bs, setBS] = useState(null);
+  const [cf, setCF] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [meta, setMeta] = useState(null);
 
@@ -51,6 +56,23 @@ export default function Accounting() {
 
   useEffect(() => { loadCommon(); loadDashboard(); loadJournal(); }, []);
   useEffect(() => { if (tab === "reports") loadReports(); }, [tab]);
+  useEffect(() => {
+    if (tab === "balance")  api.get("/accounting/reports/balance-sheet").then(({ data }) => setBS(data));
+    if (tab === "cashflow") api.get("/accounting/reports/cash-flow").then(({ data }) => setCF(data));
+  }, [tab]);
+
+  // CSV download helper — hits an auth-cookied endpoint via fetch (blob) → save.
+  const downloadCsv = async (url, filename) => {
+    const base = process.env.REACT_APP_BACKEND_URL;
+    const res = await fetch(`${base}/api${url}`, { credentials: "include" });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const banks = accounts.filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
   const incomeAccs = accounts.filter((a) => a.type === "income");
@@ -119,8 +141,132 @@ export default function Accounting() {
       )}
 
       {tab === "reports" && (
-        <Reports pl={pl} tb={tb} onReload={loadReports} />
+        <Reports pl={pl} tb={tb} onReload={loadReports} onDownload={downloadCsv} />
       )}
+
+      {tab === "balance" && (
+        <BalanceSheetView bs={bs} onDownload={downloadCsv} />
+      )}
+
+      {tab === "cashflow" && (
+        <CashFlowView cf={cf} onDownload={downloadCsv} />
+      )}
+    </div>
+  );
+}
+
+// ================================================================
+function BalanceSheetView({ bs, onDownload }) {
+  if (!bs) return <div className="overline">LOADING BALANCE SHEET…</div>;
+  const Section = ({ title, rows, total, extraRow }) => (
+    <div className="card-flat">
+      <div className="overline mb-3">{title}</div>
+      <table className="w-full text-sm">
+        <tbody>
+          {rows.length === 0 && <tr><td className="text-[#9A9A9A] py-2">No entries.</td></tr>}
+          {rows.map((r) => (
+            <tr key={r.account_id} className="border-b border-[#F5F5F5]">
+              <td className="py-1.5">{r.name}</td>
+              <td className="py-1.5 text-right font-mono">{CURRENCY(r.balance)}</td>
+            </tr>
+          ))}
+          {extraRow}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-[#0A0A0A]">
+            <td className="py-2 overline">TOTAL</td>
+            <td className="py-2 text-right font-mono font-bold text-lg">{CURRENCY(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+  return (
+    <div className="space-y-4" data-testid="balance-sheet-tab">
+      <div className="flex items-center justify-between">
+        <div className="overline">AS OF {bs.as_of || "TODAY"} · {bs.balanced ? "BALANCED ✓" : "MISMATCH"}</div>
+        <button className="btn-ghost text-xs" onClick={() => onDownload("/accounting/reports/balance-sheet.csv", "balance-sheet.csv")} data-testid="dl-bs-csv">
+          <DownloadSimple size={12} /> CSV
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Section title="Assets" rows={bs.assets.rows} total={bs.assets.total} />
+        <div className="space-y-4">
+          <Section title="Liabilities" rows={bs.liabilities.rows} total={bs.liabilities.total} />
+          <Section
+            title="Equity"
+            rows={bs.equity.rows}
+            total={bs.equity.total_with_net_income}
+            extraRow={
+              <tr className="border-b border-[#F5F5F5] italic text-[#5C5C5C]">
+                <td className="py-1.5">Net Income (period)</td>
+                <td className="py-1.5 text-right font-mono">{CURRENCY(bs.equity.net_income)}</td>
+              </tr>
+            }
+          />
+        </div>
+      </div>
+      <div className={`p-4 border text-sm ${bs.balanced ? "border-[#1D633E] bg-[#EFF7EF] text-[#1D633E]" : "border-[#B22B22] bg-[#FCEEEC] text-[#B22B22]"}`}>
+        <span className="overline">RECONCILIATION</span> · Assets {CURRENCY(bs.total_assets)} = Liabilities + Equity {CURRENCY(bs.total_liabilities_and_equity)}
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
+function CashFlowView({ cf, onDownload }) {
+  if (!cf) return <div className="overline">LOADING CASH FLOW…</div>;
+  const Row = ({ label, value, tint }) => (
+    <div className="flex justify-between border-b border-[#F5F5F5] py-1.5 text-sm">
+      <span className="text-[#5C5C5C] capitalize">{label.replace(/_/g, " ")}</span>
+      <span className={`font-mono ${tint || ""}`}>{CURRENCY(value)}</span>
+    </div>
+  );
+  return (
+    <div className="space-y-4" data-testid="cashflow-tab">
+      <div className="flex items-center justify-between">
+        <div className="overline">
+          {cf.from ? `${cf.from} → ${cf.to || "today"}` : "ALL TIME"}
+        </div>
+        <button className="btn-ghost text-xs" onClick={() => onDownload("/accounting/reports/cash-flow.csv", "cash-flow.csv")} data-testid="dl-cf-csv">
+          <DownloadSimple size={12} /> CSV
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <KPI label="Opening balance" value={CURRENCY(cf.opening_balance)} Icon={Wallet} tint="#5C5C5C" />
+        <KPI label="Inflows" value={CURRENCY(cf.total_inflow)} Icon={TrendUp} tint="#1D633E" />
+        <KPI label="Outflows" value={CURRENCY(cf.total_outflow)} Icon={TrendDown} tint="#B4001C" />
+        <KPI label="Closing balance" value={CURRENCY(cf.closing_balance)} Icon={Wallet} tint={cf.closing_balance >= 0 ? "#002FA7" : "#B4001C"} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card-flat">
+          <div className="overline mb-3">INFLOWS</div>
+          {Object.entries(cf.inflows).map(([k, v]) => (
+            <Row key={k} label={k} value={v} tint="text-[#1D633E]" />
+          ))}
+          <div className="flex justify-between pt-3 mt-2 border-t-2 border-[#0A0A0A]">
+            <span className="overline">TOTAL</span>
+            <span className="font-mono font-bold">{CURRENCY(cf.total_inflow)}</span>
+          </div>
+        </div>
+        <div className="card-flat">
+          <div className="overline mb-3">OUTFLOWS</div>
+          {Object.entries(cf.outflows).map(([k, v]) => (
+            <Row key={k} label={k} value={v} tint="text-[#B4001C]" />
+          ))}
+          <div className="flex justify-between pt-3 mt-2 border-t-2 border-[#0A0A0A]">
+            <span className="overline">TOTAL</span>
+            <span className="font-mono font-bold">{CURRENCY(cf.total_outflow)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className={`p-4 border text-sm ${cf.net_change >= 0 ? "border-[#1D633E] bg-[#EFF7EF] text-[#1D633E]" : "border-[#B4001C] bg-[#FCEEEC] text-[#B4001C]"}`}>
+        <span className="overline">NET CHANGE FOR PERIOD</span>
+        <span className="ml-3 font-mono font-bold text-lg">{CURRENCY(cf.net_change)}</span>
+      </div>
     </div>
   );
 }
@@ -404,13 +550,24 @@ function ChartOfAccounts({ accounts, onReload, meta }) {
 }
 
 // ================================================================
-function Reports({ pl, tb, onReload }) {
+function Reports({ pl, tb, onReload, onDownload }) {
   if (!pl || !tb) return <div className="text-center py-16 overline">LOADING…</div>;
   return (
     <div className="space-y-6" data-testid="reports-tab">
       <div className="flex justify-between items-center">
         <div className="overline">FINANCIAL REPORTS</div>
-        <button onClick={onReload} className="btn-ghost text-xs" data-testid="reports-refresh"><ArrowsClockwise size={12} /> Refresh</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onDownload("/accounting/reports/pl.csv", "profit-loss.csv")} className="btn-ghost text-xs" data-testid="dl-pl-csv">
+            <DownloadSimple size={12} /> P&amp;L
+          </button>
+          <button onClick={() => onDownload("/accounting/reports/trial-balance.csv", "trial-balance.csv")} className="btn-ghost text-xs" data-testid="dl-tb-csv">
+            <DownloadSimple size={12} /> Trial balance
+          </button>
+          <button onClick={() => onDownload("/journal-entries.csv", "journal.csv")} className="btn-ghost text-xs" data-testid="dl-journal-csv">
+            <DownloadSimple size={12} /> Journal
+          </button>
+          <button onClick={onReload} className="btn-ghost text-xs" data-testid="reports-refresh"><ArrowsClockwise size={12} /> Refresh</button>
+        </div>
       </div>
 
       <div className="card-flat" data-testid="pl-report">

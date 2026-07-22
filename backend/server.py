@@ -2851,12 +2851,14 @@ from routes.accounting import router as accounting_router  # noqa: E402
 from routes.payroll import router as payroll_router  # noqa: E402
 from routes.vendors import router as vendors_router  # noqa: E402
 from routes.auth import router as auth_router  # noqa: E402
+from routes.notifications import router as notifications_router  # noqa: E402
 api.include_router(tasks_router)
 api.include_router(attendance_router)
 api.include_router(accounting_router)
 api.include_router(payroll_router)
 api.include_router(vendors_router)
 api.include_router(auth_router)
+api.include_router(notifications_router)
 
 app.include_router(api)
 

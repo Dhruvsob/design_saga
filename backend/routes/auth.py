@@ -287,6 +287,19 @@ async def approve_user(user_id: str, payload: ApprovalDecisionIn, request: Reque
             "approved_at": iso_now(),
             "approved_by": admin["user_id"],
         }})
+        # Notify the newly approved user
+        try:
+            from core.notifications import emit as _notify
+            await _notify(
+                [user_id], "account_approved",
+                "Your account is approved.",
+                body=f"Welcome aboard. You've been assigned the role of {role} (ID {emp_id}).",
+                link="/dashboard",
+                priority="high",
+                meta={"role": role, "employee_id": emp_id},
+            )
+        except Exception:
+            pass
     elif payload.decision == "reject":
         await db.users.update_one({"user_id": user_id}, {"$set": {
             "approval_status": "rejected",
