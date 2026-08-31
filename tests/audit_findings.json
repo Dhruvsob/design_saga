@@ -1,0 +1,17 @@
+[
+ {
+  "sev": "P1",
+  "area": "HTTP",
+  "msg": "GET /calendar/feed -> 422: {\"detail\":[{\"type\":\"missing\",\"loc\":[\"query\",\"start\"],\"msg\":\"Field required\",\"input\":null,\"url\":\"https://errors.pydantic."
+ },
+ {
+  "sev": "P1",
+  "area": "HTTP",
+  "msg": "GET /payroll/preview -> 422: {\"detail\":[{\"type\":\"missing\",\"loc\":[\"query\",\"year\"],\"msg\":\"Field required\",\"input\":null,\"url\":\"https://errors.pydantic.d"
+ },
+ {
+  "sev": "P1",
+  "area": "ACCOUNTING",
+  "msg": "validation diagnostic orphan_paid_invoices: 1 items"
+ }
+]
