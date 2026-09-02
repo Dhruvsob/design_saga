@@ -144,16 +144,29 @@ async def login_password(payload: LoginPasswordIn, response: Response):
 
     await _check_lockout(ident)
 
-    # Look up by email OR employee_id
+    # Look up by email OR employee_id.
+    # IMPORTANT (multi-tenant): employee_id is per-organisation — every org's
+    # first admin starts at DS0001 — so it is NOT globally unique and the same
+    # id legitimately exists across tenants. Email *should* be unique but we
+    # defend against duplicates too. Using find_one() here would always resolve
+    # to a single fixed user, so admins of *other* tenants sharing that id would
+    # be rejected with "invalid credentials" even with the correct password.
+    # Fix: fetch ALL candidates for the identifier and authenticate against the
+    # one whose password actually matches.
     query: dict
     if EMPLOYEE_ID_PATTERN.match(ident):
         query = {"employee_id": ident.upper()}
     else:
         query = {"email": ident.lower()}
-    user = await db.users.find_one(query, {"_id": 0})
+    candidates = await db.users.find(query, {"_id": 0}).to_list(50)
 
-    if not user or not user.get("password_hash") \
-            or not verify_password(payload.password, user["password_hash"]):
+    user = None
+    for cand in candidates:
+        if cand.get("password_hash") and verify_password(payload.password, cand["password_hash"]):
+            user = cand
+            break
+
+    if user is None:
         await _register_failed_attempt(ident)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
