@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { PERIOD_PRESETS, computeRange, periodLabel } from "../lib/period";
+import { downloadFile } from "../lib/download";
+import { TransactionDetail } from "./TransactionDetail";
 import {
   MagnifyingGlass, ArrowDown, ArrowUp, ArrowsLeftRight,
-  X, ArrowSquareOut, CaretRight,
+  CaretRight, DownloadSimple, Printer,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) =>
@@ -25,7 +25,6 @@ function classify(entry) {
 // Reuses GET /journal-entries (server-side date range); search + party
 // resolution + money-in/out totals are computed on the client.
 export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = [], employees = [] }) => {
-  const navigate = useNavigate();
   const [preset, setPreset] = useState("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -45,20 +44,29 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
     };
   }, [clients, vendors, projects, employees]);
 
-  useEffect(() => {
+  const rangeQs = useCallback(() => {
     const r = computeRange(preset);
     const fromDate = r ? r.from : from;
     const toDate = r ? r.to : to;
     const params = new URLSearchParams();
     if (fromDate) params.set("from_date", fromDate);
     if (toDate) params.set("to_date", toDate);
-    const qs = params.toString() ? `?${params.toString()}` : "";
+    return params.toString() ? `?${params.toString()}` : "";
+  }, [preset, from, to]);
+
+  const load = useCallback(() => {
     setLoading(true);
     api
-      .get(`/journal-entries${qs}`)
+      .get(`/journal-entries${rangeQs()}`)
       .then(({ data }) => setEntries(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
-  }, [preset, from, to]);
+  }, [rangeQs]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const exportCsv = () => {
+    downloadFile(`/journal-entries.csv${rangeQs()}`, `daybook-${preset}.csv`).catch(() => {});
+  };
 
   const enriched = useMemo(() => {
     return entries.map((e) => {
@@ -102,14 +110,21 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
     return { inc, out, count: filtered.length };
   }, [filtered]);
 
-  const openSource = (e) => {
-    if (e.project_id) return navigate(`/projects/${e.project_id}`);
-    if (["invoice_payment", "invoice"].includes(e.source)) return navigate("/invoices");
-    if (e.client_id) return navigate(`/clients/${e.client_id}`);
-  };
-
   return (
     <div className="space-y-4" data-testid="daybook-tab">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="overline">DAYBOOK · {periodLabel(preset, from, to)}</div>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCsv} className="btn-ghost text-xs" data-testid="daybook-export-csv">
+            <DownloadSimple size={12} /> Export CSV
+          </button>
+          <button onClick={() => window.print()} className="btn-ghost text-xs" data-testid="daybook-print">
+            <Printer size={12} /> Print
+          </button>
+        </div>
+      </div>
+
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="card-flat" data-testid="daybook-summary-count">
@@ -235,7 +250,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
       </div>
 
       {detail && (
-        <TransactionDetail entry={detail} onClose={() => setDetail(null)} onOpenSource={openSource} />
+        <TransactionDetail entry={detail} onClose={() => setDetail(null)} onChanged={load} />
       )}
     </div>
   );
@@ -247,64 +262,4 @@ const DirBadge = ({ dir }) => {
   if (dir === "out")
     return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#B4001C]"><ArrowUp size={12} /> OUT</span>;
   return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#8B7F6A]"><ArrowsLeftRight size={12} /> JE</span>;
-};
-
-// "Simple outside, professional underneath" — the full double-entry detail.
-const TransactionDetail = ({ entry, onClose, onOpenSource }) => {
-  const lines = entry.lines || [];
-  const totalDr = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
-  const totalCr = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
-  const canOpen = entry.project_id || entry.client_id || ["invoice_payment", "invoice"].includes(entry.source);
-  return createPortal(
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" data-testid="txn-detail-modal" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-      <div onClick={(e) => e.stopPropagation()} className="relative z-[201] w-full max-w-xl bg-white shadow-2xl max-h-[90vh] overflow-auto">
-        <div className="flex items-start justify-between p-5 border-b border-[#E5E5E5]">
-          <div>
-            <div className="overline text-[#8B7F6A]">TRANSACTION DETAIL</div>
-            <div className="font-display font-bold text-xl" data-testid="txn-detail-narration">{entry.narration || "Journal entry"}</div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5 font-mono">
-              {entry.date}{entry.reference ? ` · Ref ${entry.reference}` : ""}{entry.created_by_name ? ` · by ${entry.created_by_name}` : ""}
-            </div>
-          </div>
-          <button onClick={onClose} className="btn-ghost" data-testid="txn-detail-close"><X size={16} /></button>
-        </div>
-
-        <div className="p-5">
-          <div className="overline mb-2 text-[#9A9A9A]">ACCOUNTING ENTRY (DEBIT / CREDIT)</div>
-          <table className="w-full text-sm">
-            <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
-              <tr><th className="p-2 text-left">Account</th><th className="p-2 text-right">Debit</th><th className="p-2 text-right">Credit</th></tr>
-            </thead>
-            <tbody>
-              {lines.map((l, i) => (
-                <tr key={i} className="border-t border-[#F0F0F0]">
-                  <td className="p-2">{l.account_name}<span className="text-[10px] text-[#9A9A9A] uppercase ml-1">{l.account_type}</span></td>
-                  <td className="p-2 text-right font-mono text-[#1D633E]">{l.debit ? CURRENCY(l.debit) : "—"}</td>
-                  <td className="p-2 text-right font-mono text-[#B4001C]">{l.credit ? CURRENCY(l.credit) : "—"}</td>
-                </tr>
-              ))}
-              <tr className="border-t-2 border-[#0A0A0A] font-semibold">
-                <td className="p-2">Total</td>
-                <td className="p-2 text-right font-mono">{CURRENCY(totalDr)}</td>
-                <td className="p-2 text-right font-mono">{CURRENCY(totalCr)}</td>
-              </tr>
-            </tbody>
-          </table>
-          {entry.reversed && (
-            <div className="mt-3 text-xs text-[#B4001C]">This entry has been reversed.</div>
-          )}
-        </div>
-
-        {canOpen && (
-          <div className="p-4 border-t border-[#E5E5E5] flex justify-end">
-            <button onClick={() => onOpenSource(entry)} className="btn-ghost text-sm" data-testid="txn-open-source">
-              <ArrowSquareOut size={14} /> Open related record
-            </button>
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body
-  );
 };

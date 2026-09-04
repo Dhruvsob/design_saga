@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import {
   MagnifyingGlass, Briefcase, UserCircle, UsersThree, Kanban, HardHat,
-  Receipt, IdentificationCard, Package, ArrowRight, Plus,
+  Receipt, IdentificationCard, Package, ArrowRight, Plus, Coins,
 } from "@phosphor-icons/react";
 
 const TYPE_META = {
@@ -15,6 +15,7 @@ const TYPE_META = {
   invoice:        { label: "INVOICE",  Icon: Receipt },
   employee:       { label: "EMPLOYEE", Icon: IdentificationCard },
   purchase_order: { label: "PO",       Icon: Package },
+  transaction:    { label: "TXN",      Icon: Coins },
 };
 
 const QUICK_ACTIONS = [
@@ -112,7 +113,7 @@ export default function CommandPalette({ open, setOpen }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onInputKey}
-            placeholder="Search projects, clients, tasks, vendors, invoices…"
+            placeholder="Search projects, clients, invoices, expenses, amounts…"
             className="flex-1 outline-none text-sm placeholder-[#9A9A9A] bg-transparent"
             data-testid="command-palette-input"
           />

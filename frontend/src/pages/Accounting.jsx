@@ -258,7 +258,7 @@ export default function Accounting() {
       )}
 
       {ledgerAccount && (
-        <AccountLedgerPanel account={ledgerAccount} onClose={() => setLedgerAccount(null)} />
+        <AccountLedgerPanel account={ledgerAccount} accounts={accounts} onClose={() => setLedgerAccount(null)} />
       )}
     </div>
   );

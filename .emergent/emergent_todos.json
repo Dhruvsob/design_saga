@@ -1,26 +1,38 @@
 [
   {
-    "content": "Phase 1: Shared date-preset util in lib/period.js",
+    "content": "Backend: journal GET-one, PATCH, DELETE, POST reverse — built, smoke-tested & UI-verified",
     "status": "completed"
   },
   {
-    "content": "Phase 1: Account Ledger drill-down (clickable CoA -> AccountLedgerPanel)",
+    "content": "Backend: account-ledger CSV endpoint — built & verified",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Daybook tab (timeline + search + presets + money in/out + detail modal)",
+    "content": "Backend: global search covers journal entries — verified (desc + amount)",
     "status": "completed"
   },
   {
-    "content": "Verify frontend compiles (esbuild) — PASSED",
+    "content": "Frontend: shared TransactionDetail with Edit/Delete/Reverse — verified",
     "status": "completed"
   },
   {
-    "content": "Fix overlay bugs from testing (portal to body) + pre-existing Dashboard key warning",
+    "content": "Frontend: Daybook shared detail + Export CSV/Print + refresh — verified",
     "status": "completed"
   },
   {
-    "content": "Re-verify all fixes with testing_agent — 100% PASS",
+    "content": "Frontend: AccountLedgerPanel Quick-Add + Export CSV/Print + clickable rows -> detail — verified",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: CommandPalette transaction result type — verified",
+    "status": "completed"
+  },
+  {
+    "content": "testing_agent 100% (10/10) + QA data cleaned up",
+    "status": "completed"
+  },
+  {
+    "content": "Migration: Atlas STILL BLOCKED -> needs user to whitelist IP 34.170.12.145 + confirm source/target",
     "status": "completed"
   }
 ]

@@ -92,4 +92,22 @@ async def global_search(request: Request, q: str = "", limit: int = 5,
                lambda r: " \u00b7 ".join(x for x in [r.get("vendor_name"), r.get("status")] if x),
                "vendors.read")
 
+    # Accounting transactions (journal entries) — by description/reference, and
+    # by amount when the query is numeric (e.g. "30000" or "₹30,000").
+    je_or = [{"narration": rx}, {"reference": rx}]
+    _num = q.replace("\u20b9", "").replace(",", "").strip()
+    try:
+        je_or.append({"total": float(_num)})
+    except ValueError:
+        pass
+    await push(sdb.journal_entries, {"$or": je_or},
+               "transaction", "narration",
+               lambda r: "/accounting",
+               lambda r: " \u00b7 ".join(x for x in [
+                   r.get("date"),
+                   (f"\u20b9{r.get('total'):,.0f}" if r.get("total") is not None else None),
+                   (r.get("source") or "").replace("_", " ").strip() or None,
+               ] if x),
+               "finance.read")
+
     return {"query": q, "results": results[:40]}

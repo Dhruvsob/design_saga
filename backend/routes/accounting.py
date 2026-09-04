@@ -22,6 +22,8 @@ from core.helpers import now_utc, iso_now, new_id
 from core.deps import require_user
 from core.rbac import has_permission
 from core.tenancy import user_org_id
+from core.audit import audit
+from pydantic import BaseModel
 from core.finance import resolve_period, current_fy_label, fy_choices, fy_range
 from models.accounting import (
     AccountIn, JournalIn, IncomeIn, ExpenseIn,
@@ -294,6 +296,165 @@ async def list_journal(request: Request,
 
 
 # ==================================================
+# Single transaction: view / edit / delete / reverse
+# ==================================================
+class JournalEditIn(BaseModel):
+    date: Optional[str] = None
+    narration: Optional[str] = None
+    reference: Optional[str] = None
+    amount: Optional[float] = None
+
+
+# Sources that are auto-posted from another module — never hard-delete these;
+# they must be reversed so the source document and books stay consistent.
+_LINKED_SOURCES = {
+    "invoice_payment", "milestone_payment", "invoice", "payroll",
+    "vendor_payment", "vendor_bill", "loan", "loan_payment",
+}
+
+
+def _is_simple_two_line(je: dict) -> bool:
+    """A plain entry = 2 lines, one pure debit + one pure credit of equal value.
+    These are safe to re-amount in place (single expense/income/manual)."""
+    lines = je.get("lines") or []
+    if len(lines) != 2:
+        return False
+    debits = [l for l in lines if float(l.get("debit") or 0) > 0 and float(l.get("credit") or 0) == 0]
+    credits = [l for l in lines if float(l.get("credit") or 0) > 0 and float(l.get("debit") or 0) == 0]
+    return len(debits) == 1 and len(credits) == 1
+
+
+@router.get("/journal-entries/{je_id}")
+async def get_journal(je_id: str, request: Request,
+                      session_token: Optional[str] = Cookie(default=None),
+                      authorization: Optional[str] = Header(default=None)):
+    je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
+    if not je:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return je
+
+
+@router.patch("/journal-entries/{je_id}")
+async def edit_journal(je_id: str, payload: JournalEditIn, request: Request,
+                       session_token: Optional[str] = Cookie(default=None),
+                       authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
+    if not je:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if (je.get("source") or "").endswith("_reversal"):
+        raise HTTPException(status_code=409, detail="Reversal entries cannot be edited.")
+
+    updates: dict = {}
+    if payload.date is not None:
+        updates["date"] = payload.date
+    if payload.narration is not None:
+        updates["narration"] = payload.narration
+    if payload.reference is not None:
+        updates["reference"] = payload.reference
+
+    # Amount change is only safe for a plain, standalone, un-reversed entry.
+    if payload.amount is not None and round(float(payload.amount), 2) != round(float(je.get("total") or 0), 2):
+        amt = round(float(payload.amount), 2)
+        if amt <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+        if je.get("source") not in {"manual", "income", "expense"} or je.get("source_id") or je.get("reversed"):
+            raise HTTPException(status_code=409,
+                detail="This entry is linked to another record. Reverse it and record a new one to change the amount.")
+        if not _is_simple_two_line(je):
+            raise HTTPException(status_code=409,
+                detail="This entry has multiple lines (e.g. GST/splits). Reverse it and record a new one to change the amount.")
+        new_lines = []
+        for l in je["lines"]:
+            nl = dict(l)
+            if float(l.get("debit") or 0) > 0:
+                nl["debit"], nl["credit"] = amt, 0
+            else:
+                nl["credit"], nl["debit"] = amt, 0
+            new_lines.append(nl)
+        updates["lines"] = new_lines
+        updates["total"] = amt
+
+    if not updates:
+        return je
+    updates["updated_at"] = iso_now()
+    updates["updated_by"] = user["user_id"]
+    await sdb.journal_entries.update_one({"id": je_id}, {"$set": updates})
+    await audit(user, "journal.update", target=je_id, target_type="journal_entry",
+                meta={"fields": [k for k in updates if k not in ("updated_at", "updated_by")]},
+                org_id=user_org_id(user))
+    return await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
+
+
+@router.delete("/journal-entries/{je_id}")
+async def delete_journal(je_id: str, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.delete")
+    je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
+    if not je:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    src = je.get("source") or "manual"
+    # Only plain, standalone entries may be physically deleted. Anything posted
+    # from another module (or already part of a reversal chain) must be reversed.
+    if src in _LINKED_SOURCES or src.endswith("_reversal") or je.get("source_id") or je.get("reversed"):
+        raise HTTPException(status_code=409,
+            detail="This is a posted/linked transaction and cannot be deleted. Use Reverse to keep your books balanced.")
+    if src not in {"manual", "income", "expense"}:
+        raise HTTPException(status_code=409,
+            detail="This transaction cannot be deleted. Use Reverse instead.")
+
+    await sdb.journal_entries.delete_one({"id": je_id})
+    await audit(user, "journal.delete", target=je_id, target_type="journal_entry",
+                meta={"narration": je.get("narration"), "total": je.get("total"), "source": src},
+                org_id=user_org_id(user))
+    return {"ok": True, "deleted": je_id}
+
+
+@router.post("/journal-entries/{je_id}/reverse")
+async def reverse_journal(je_id: str, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
+    if not je:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if je.get("reversed"):
+        raise HTTPException(status_code=409, detail="This transaction has already been reversed.")
+    if (je.get("source") or "").endswith("_reversal"):
+        raise HTTPException(status_code=409, detail="You cannot reverse a reversal entry.")
+
+    rev_lines = [
+        {"account_id": l["account_id"], "debit": l.get("credit") or 0, "credit": l.get("debit") or 0,
+         "description": f"Reversal · {l.get('description') or ''}".strip()}
+        for l in je["lines"]
+    ]
+    narration = f"Reversal of: {je.get('narration') or je_id}"
+    rev = await _post_journal(
+        user, now_utc().date().isoformat(), narration, rev_lines,
+        reference=je.get("reference"),
+        project_id=je.get("project_id"), client_id=je.get("client_id"),
+        vendor_id=je.get("vendor_id"), employee_id=je.get("employee_id"),
+        source=f"{je.get('source') or 'manual'}_reversal", source_id=je_id,
+    )
+    await sdb.journal_entries.update_one(
+        {"id": je_id}, {"$set": {"reversed": True, "reversal_je_id": rev["id"],
+                                 "reversed_at": iso_now(), "reversed_by": user["user_id"]}})
+    await audit(user, "journal.reverse", target=je_id, target_type="journal_entry",
+                meta={"reversal_je_id": rev["id"], "total": je.get("total")},
+                org_id=user_org_id(user))
+    return {"ok": True, "reversal": rev}
+
+
+
+# ==================================================
 # Income (payment received) — convenience wrapper
 # ==================================================
 @router.post("/accounting/income")
@@ -431,6 +592,29 @@ async def account_ledger(acc_id: str, request: Request,
             "closing_balance": round(running, 2),
             "total_debit": round(total_debit, 2), "total_credit": round(total_credit, 2),
             "rows": rows}
+
+
+@router.get("/accounting/ledger/account/{acc_id}/csv")
+async def account_ledger_csv(acc_id: str, request: Request,
+                             from_date: Optional[str] = None, to_date: Optional[str] = None,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    """CSV export of a single account's ledger (with running balance)."""
+    data = await account_ledger(acc_id, request, from_date=from_date, to_date=to_date,
+                                session_token=session_token, authorization=authorization)
+    acc_name = (data.get("account") or {}).get("name", "account")
+    rows = [{
+        "date": r.get("date"),
+        "narration": r.get("narration") or "",
+        "reference": r.get("reference") or "",
+        "debit": r.get("debit", 0),
+        "credit": r.get("credit", 0),
+        "balance": r.get("balance", 0),
+    } for r in data.get("rows", [])]
+    safe = "".join(c for c in acc_name if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "-").lower()
+    return _csv_response(f"ledger-{safe or 'account'}.csv", rows,
+                         ["date", "narration", "reference", "debit", "credit", "balance"])
+
 
 
 @router.get("/accounting/ledger/client/{client_id}")
