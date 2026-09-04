@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
+import { Daybook } from "../components/Daybook";
+import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
-  Scales, Waves, DownloadSimple,
+  Scales, Waves, DownloadSimple, Notebook, CaretRight,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -13,6 +15,7 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", Icon: ChartLine },
   { id: "income",    label: "Income",    Icon: ArrowDown },
   { id: "expense",   label: "Expense",   Icon: ArrowUp },
+  { id: "daybook",   label: "Daybook",   Icon: Notebook },
   { id: "coa",       label: "Chart of Accounts", Icon: ListDashes },
   { id: "ledgers",   label: "Ledgers",   Icon: Bank },
   { id: "reports",   label: "Reports",   Icon: Receipt },
@@ -39,6 +42,7 @@ export default function Accounting() {
   const [validation, setValidation] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [meta, setMeta] = useState(null);
+  const [ledgerAccount, setLedgerAccount] = useState(null);
   // Financial period: fy label OR explicit from/to date range
   const [fyOptions, setFyOptions] = useState([]);
   const [fy, setFy] = useState("");
@@ -205,8 +209,15 @@ export default function Accounting() {
         />
       )}
 
+      {tab === "daybook" && (
+        <Daybook
+          accounts={accounts} clients={clients} vendors={vendors}
+          projects={projects} employees={employees}
+        />
+      )}
+
       {tab === "coa" && (
-        <ChartOfAccounts accounts={accounts} onReload={loadCommon} meta={meta} />
+        <ChartOfAccounts accounts={accounts} onReload={loadCommon} meta={meta} onOpenAccount={setLedgerAccount} />
       )}
 
       {tab === "reports" && (
@@ -244,6 +255,10 @@ export default function Accounting() {
 
       {tab === "validation" && (
         <ValidationReport data={validation} />
+      )}
+
+      {ledgerAccount && (
+        <AccountLedgerPanel account={ledgerAccount} onClose={() => setLedgerAccount(null)} />
       )}
     </div>
   );
@@ -498,8 +513,8 @@ function Dashboard({ d, onRefresh }) {
             <div className="overline">CASH & BANK ACCOUNTS</div>
             <button onClick={onRefresh} className="btn-ghost text-xs"><ArrowsClockwise size={12} /> Refresh</button>
           </div>
-          {k.cash_bank_by_account.map((b) => (
-            <div key={b.account_id} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm" data-testid={`bank-${b.account_id}`}>
+          {k.cash_bank_by_account.map((b, i) => (
+            <div key={b.account_id ?? i} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm" data-testid={`bank-${b.account_id}`}>
               <div className="flex items-center gap-2"><Bank size={14} className="text-[#8B7F6A]" />{b.name}</div>
               <span className="font-mono font-semibold">{CURRENCY(b.balance)}</span>
             </div>
@@ -509,8 +524,8 @@ function Dashboard({ d, onRefresh }) {
         <div className="card-flat">
           <div className="overline mb-3">UPCOMING PAYMENTS · next 30d</div>
           {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[#9A9A9A]">All clear.</div>}
-          {d.upcoming_payments.slice(0, 8).map((m) => (
-            <div key={m.id} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
+          {d.upcoming_payments.slice(0, 8).map((m, i) => (
+            <div key={m.id ?? i} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
               <div>
                 <div className="font-semibold">{m.name}</div>
                 <div className="text-xs font-mono text-[#5C5C5C]">DUE · {m.due_date || "—"}</div>
@@ -528,8 +543,8 @@ function Dashboard({ d, onRefresh }) {
             <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Narration</th><th className="p-2 text-left">Source</th><th className="p-2 text-right">Amount</th></tr>
           </thead>
           <tbody>
-            {d.recent_transactions.map((t) => (
-              <tr key={t.id} className="border-t border-[#F0F0F0]" data-testid={`recent-${t.id}`}>
+            {d.recent_transactions.map((t, i) => (
+              <tr key={t.id ?? i} className="border-t border-[#F0F0F0]" data-testid={`recent-${t.id}`}>
                 <td className="p-2 font-mono text-xs">{t.date}</td>
                 <td className="p-2">{t.narration}</td>
                 <td className="p-2 text-xs uppercase">{t.source}</td>
@@ -710,7 +725,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
 }
 
 // ================================================================
-function ChartOfAccounts({ accounts, onReload, meta }) {
+function ChartOfAccounts({ accounts, onReload, meta, onOpenAccount }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
   const grouped = accounts.reduce((acc, a) => {
@@ -753,11 +768,19 @@ function ChartOfAccounts({ accounts, onReload, meta }) {
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <tbody>
               {list.map((a) => (
-                <tr key={a.id} className="border-b border-[#F0F0F0]" data-testid={`account-${a.id}`}>
+                <tr key={a.id}
+                  onClick={() => onOpenAccount && onOpenAccount(a)}
+                  className="border-b border-[#F0F0F0] cursor-pointer hover:bg-[#FAFAF7] transition-colors group"
+                  data-testid={`account-${a.id}`}>
                   <td className="p-2 font-mono text-xs w-20">{a.code || "—"}</td>
-                  <td className="p-2 font-semibold">{a.name}</td>
+                  <td className="p-2 font-semibold group-hover:text-[#8B7F6A]">{a.name}</td>
                   <td className="p-2 text-right font-mono text-xs text-[#5C5C5C]">{CURRENCY(a.opening_balance)}</td>
-                  <td className="p-2 text-right">{a.is_bank && <Bank size={12} className="text-[#8B7F6A] ml-auto" />}</td>
+                  <td className="p-2 text-right w-24">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-[#9A9A9A] group-hover:text-[#8B7F6A]">
+                      {a.is_bank && <Bank size={12} className="text-[#8B7F6A]" />}
+                      View ledger <CaretRight size={12} />
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

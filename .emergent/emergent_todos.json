@@ -1,30 +1,26 @@
 [
   {
-    "content": "Phase 1: Deep audit + seed + verification — COMPLETE",
+    "content": "Phase 1: Shared date-preset util in lib/period.js",
     "status": "completed"
   },
   {
-    "content": "Phase 2: P0 data-integrity fixes + scheduler — COMPLETE",
+    "content": "Phase 1: Account Ledger drill-down (clickable CoA -> AccountLedgerPanel)",
     "status": "completed"
   },
   {
-    "content": "Phase 3: Module improvements (master data wiring, quotation PDFs, employee ERP access, calendar bug, invoice→JE) — COMPLETE",
+    "content": "Phase 2: Daybook tab (timeline + search + presets + money in/out + detail modal)",
     "status": "completed"
   },
   {
-    "content": "Phase 4: SuperAdmin tenant management (health, isolation check, plan limits, suspension) — COMPLETE",
+    "content": "Verify frontend compiles (esbuild) — PASSED",
     "status": "completed"
   },
   {
-    "content": "Phase 5: UI/UX polish (task filters, calendar nav) + final visual pass — COMPLETE",
+    "content": "Fix overlay bugs from testing (portal to body) + pre-existing Dashboard key warning",
     "status": "completed"
   },
   {
-    "content": "Phase 6: Productivity features verified (global search, command palette, notification deep links) — COMPLETE",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 7: Final security/QA + testing agent round 2 (100% backend, 0 bugs) — COMPLETE",
+    "content": "Re-verify all fixes with testing_agent — 100% PASS",
     "status": "completed"
   }
 ]
