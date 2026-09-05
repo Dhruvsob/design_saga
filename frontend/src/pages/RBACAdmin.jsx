@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import {
   ShieldCheck, CaretDown, Info, UserPlus, Key, Check, X, Warning,
+  LockKeyOpen, FloppyDisk, ArrowCounterClockwise, Sliders,
 } from "@phosphor-icons/react";
 
 const ROLE_DESCRIPTIONS = {
@@ -29,6 +32,7 @@ export default function RBACAdmin() {
   const [users, setUsers] = useState([]);
   const [pending, setPending] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [catalog, setCatalog] = useState({ modules: [] });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState("");
@@ -45,6 +49,7 @@ export default function RBACAdmin() {
       ]);
       setUsers(u.data);
       setRoles(r.data.roles);
+      setCatalog(r.data.catalog || { modules: [] });
       setPending(p.data);
       setError("");
     } catch (e) {
@@ -79,6 +84,17 @@ export default function RBACAdmin() {
     } finally { setSavingId(null); }
   };
 
+  const unlockUser = async (userId) => {
+    setSavingId(userId);
+    try {
+      await api.post(`/rbac/users/${userId}/unlock`);
+      toast.success("Login unlocked — the user can sign in now");
+      await load();
+    } catch (e) {
+      toast.error(fmtErr(e?.response?.data?.detail, "Failed to unlock"));
+    } finally { setSavingId(null); }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -96,6 +112,9 @@ export default function RBACAdmin() {
         kicker="Role-based access control. Admin-only zone."
         count={users.length}
       >
+        <Link to="/settings/company" className="btn-ghost" data-testid="master-data-link">
+          <Sliders size={14} /> Dropdown lists (Master Data)
+        </Link>
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary" data-testid="create-user-btn">
           <UserPlus size={14} /> {showCreate ? "Cancel" : "Create user"}
         </button>
@@ -181,14 +200,28 @@ export default function RBACAdmin() {
                     </select>
                   </Td>
                   <Td>
-                    <StatusPill status={u.approval_status || "approved"} active={u.is_active !== false} />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <StatusPill status={u.approval_status || "approved"} active={u.is_active !== false} />
+                      {u.is_locked && (
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FFF4E5] text-[#B87500]" data-testid={`locked-${u.user_id}`}>locked</span>
+                      )}
+                    </div>
                   </Td>
                   <Td className="font-mono text-xs">{(u.created_at || "").slice(0, 10) || "—"}</Td>
                   <Td className="text-right">
-                    <button
-                      onClick={() => setShowReset(u.user_id)}
-                      className="btn-ghost text-xs" data-testid={`reset-pwd-${u.user_id}`}
-                    ><Key size={12} /> Reset password</button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => unlockUser(u.user_id)}
+                        disabled={isSaving}
+                        className={`btn-ghost text-xs ${u.is_locked ? "text-[#B87500]" : ""}`}
+                        data-testid={`unlock-${u.user_id}`}
+                        title="Clear login lockout"
+                      ><LockKeyOpen size={12} /> Unlock</button>
+                      <button
+                        onClick={() => setShowReset(u.user_id)}
+                        className="btn-ghost text-xs" data-testid={`reset-pwd-${u.user_id}`}
+                      ><Key size={12} /> Reset password</button>
+                    </div>
                   </Td>
                 </tr>
               );
@@ -208,10 +241,15 @@ export default function RBACAdmin() {
         />
       )}
 
-      {/* Roles reference */}
-      <div className="card-flat">
-        <div className="flex items-center justify-between mb-4">
-          <div className="overline">PERMISSION MATRIX</div>
+      {/* Roles & permissions — EDITABLE matrix */}
+      <div className="card-flat" data-testid="permission-matrix">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <div className="overline">ROLES &amp; PERMISSIONS</div>
+            <div className="text-xs text-[#5C5C5C] mt-1">
+              Choose exactly what each role can View, Create, Edit or Delete. Changes apply to your studio only.
+            </div>
+          </div>
           <span className="overline">{roles.length} ROLES</span>
         </div>
         <div className="border border-[#E5E5E5] divide-y divide-[#F0F0F0]">
@@ -229,27 +267,157 @@ export default function RBACAdmin() {
                     <div className="text-sm text-[#5C5C5C] truncate">{ROLE_DESCRIPTIONS[r.name] || "—"}</div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
+                    {r.customized && (
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EAF1FF] text-[#2B5FB4]">customized</span>
+                    )}
+                    {!r.editable && (
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#8B7F6A]">locked</span>
+                    )}
                     <span className="font-mono text-xs tabular-nums text-[#5C5C5C]">{r.permissions.length} grants</span>
                     <CaretDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
                   </div>
                 </button>
                 {isOpen && (
                   <div className="px-4 pb-4 pt-1 fade-up">
-                    {r.permissions.length === 0 ? (
-                      <p className="text-sm text-[#5C5C5C]">No grants. Portal-only role.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {r.permissions.map((p) => (
-                          <span key={p} className="font-mono text-[11px] px-2 py-1 bg-[#F5F4F0] text-[#8B7F6A] border border-[#DDE3F4]">{p}</span>
-                        ))}
-                      </div>
-                    )}
+                    <RolePermissionEditor role={r} catalog={catalog} onSaved={load} />
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Editable permission matrix for one role ---------- */
+const ACTION_COLS = [
+  { key: "read", label: "View" },
+  { key: "create", label: "Create" },
+  { key: "update", label: "Edit" },
+  { key: "delete", label: "Delete" },
+  { key: "use", label: "Use" },
+];
+
+function RolePermissionEditor({ role, catalog, onSaved }) {
+  const [sel, setSel] = useState(() => new Set(role.permissions || []));
+  const [busy, setBusy] = useState(false);
+  const modules = catalog?.modules || [];
+
+  const has = (mod, action) => sel.has(`${mod.key}.*`) || sel.has(`${mod.key}.${action}`);
+  const allOn = (mod) => sel.has(`${mod.key}.*`) || mod.actions.every((a) => sel.has(`${mod.key}.${a}`));
+
+  const toggle = (mod, action) => {
+    const next = new Set(sel);
+    if (next.has(`${mod.key}.*`)) {
+      next.delete(`${mod.key}.*`);
+      mod.actions.forEach((a) => next.add(`${mod.key}.${a}`));
+    }
+    const key = `${mod.key}.${action}`;
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setSel(next);
+  };
+
+  const toggleAll = (mod) => {
+    const next = new Set(sel);
+    const on = allOn(mod);
+    next.delete(`${mod.key}.*`);
+    mod.actions.forEach((a) => next.delete(`${mod.key}.${a}`));
+    if (!on) mod.actions.forEach((a) => next.add(`${mod.key}.${a}`));
+    setSel(next);
+  };
+
+  const buildPayload = () => {
+    const out = [];
+    for (const mod of modules) {
+      const everyOn = mod.actions.every((a) => sel.has(`${mod.key}.*`) || sel.has(`${mod.key}.${a}`));
+      if (everyOn && mod.actions.length > 0) out.push(`${mod.key}.*`);
+      else mod.actions.forEach((a) => { if (sel.has(`${mod.key}.${a}`)) out.push(`${mod.key}.${a}`); });
+    }
+    return out;
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put(`/rbac/roles/${role.name}/permissions`, { permissions: buildPayload() });
+      toast.success(`${role.name} permissions updated`);
+      onSaved && onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save");
+    } finally { setBusy(false); }
+  };
+
+  const reset = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/rbac/roles/${role.name}/reset-permissions`);
+      toast.success(`${role.name} reset to default`);
+      onSaved && onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not reset");
+    } finally { setBusy(false); }
+  };
+
+  if (!role.editable) {
+    return (
+      <div className="text-sm text-[#5C5C5C] flex items-center gap-2">
+        <ShieldCheck size={16} className="text-[#8B7F6A]" />
+        This role has full, fixed access and cannot be edited.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3" data-testid={`perm-editor-${role.name}`}>
+      <div className="overflow-x-auto border border-[#E5E5E5]">
+        <table className="w-full text-sm">
+          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+            <tr>
+              <th className="p-3 text-left">Module</th>
+              {ACTION_COLS.map((c) => <th key={c.key} className="p-3 text-center w-16">{c.label}</th>)}
+              <th className="p-3 text-center w-16">All</th>
+            </tr>
+          </thead>
+          <tbody>
+            {modules.map((mod) => (
+              <tr key={mod.key} className="border-t border-[#F0F0F0]">
+                <td className="p-3 font-semibold">{mod.label}</td>
+                {ACTION_COLS.map((c) => (
+                  <td key={c.key} className="p-3 text-center">
+                    {mod.actions.includes(c.key) ? (
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-[#8B7F6A] cursor-pointer"
+                        checked={has(mod, c.key)}
+                        onChange={() => toggle(mod, c.key)}
+                        data-testid={`perm-${role.name}-${mod.key}-${c.key}`}
+                      />
+                    ) : <span className="text-[#DADADA]">·</span>}
+                  </td>
+                ))}
+                <td className="p-3 text-center">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-[#0A0A0A] cursor-pointer"
+                    checked={allOn(mod)}
+                    onChange={() => toggleAll(mod)}
+                    data-testid={`perm-${role.name}-${mod.key}-all`}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={reset} disabled={busy} className="btn-ghost text-sm" data-testid={`perm-reset-${role.name}`}>
+          <ArrowCounterClockwise size={14} /> Reset to default
+        </button>
+        <button onClick={save} disabled={busy} className="btn-primary text-sm" data-testid={`perm-save-${role.name}`}>
+          <FloppyDisk size={14} /> {busy ? "Saving…" : "Save permissions"}
+        </button>
       </div>
     </div>
   );

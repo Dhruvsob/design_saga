@@ -5,8 +5,27 @@ from fastapi import HTTPException, Request, Cookie, Header
 
 from .db import db
 from .helpers import now_utc
-from .rbac import has_permission
+from .rbac import has_permission, normalize_role, expand_permissions, PROTECTED_ROLES
 from .scoped_db import set_scope_from_user, clear_scope
+
+
+async def resolve_permissions(role, org_id):
+    """Effective permissions for a role in a tenant.
+
+    Returns the tenant's saved override for the role if one exists, otherwise
+    the static role default. Protected roles (SuperAdmin/Admin) and SuperAdmins
+    with no tenant always get the static defaults (never editable)."""
+    role = normalize_role(role)
+    if role in PROTECTED_ROLES or not org_id:
+        return expand_permissions(role)
+    try:
+        doc = await db.role_permissions.find_one(
+            {"org_id": org_id, "role": role}, {"_id": 0, "permissions": 1})
+    except Exception:
+        doc = None
+    if doc and isinstance(doc.get("permissions"), list):
+        return list(doc["permissions"])
+    return expand_permissions(role)
 
 
 async def get_current_user(
@@ -36,6 +55,14 @@ async def get_current_user(
         return None
 
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    if user:
+        # Attach effective (override-aware) permissions so has_permission and
+        # the frontend both honour any per-tenant role customisation.
+        try:
+            from .tenancy import user_org_id
+            user["permissions"] = await resolve_permissions(user.get("role"), user_org_id(user))
+        except Exception:
+            pass
     set_scope_from_user(user)
     return user
 

@@ -136,6 +136,9 @@ from core.rbac import (
     normalize_role as _normalize_role,
     expand_permissions as _expand_permissions,
     has_permission,
+    PERMISSION_CATALOG,
+    PROTECTED_ROLES,
+    valid_permission_keys,
 )
 
 
@@ -159,7 +162,10 @@ def _user_with_perms(user: dict) -> dict:
         return user
     out = {k: v for k, v in user.items() if k != "password_hash"}
     out["role"] = _normalize_role(user.get("role"))
-    out["permissions"] = _expand_permissions(out["role"])
+    if isinstance(user.get("permissions"), list) and user.get("permissions"):
+        out["permissions"] = list(user["permissions"])
+    else:
+        out["permissions"] = _expand_permissions(out["role"])
     # Multi-tenant: expose org_id and super-admin flag
     from core.tenancy import DEFAULT_ORG_ID, SUPER_ADMIN_EMAILS as _SA_EMAILS
     if out["role"] == "SuperAdmin" and not out.get("impersonating"):
@@ -511,6 +517,12 @@ async def create_session(request: Request, response: Response):
     )
 
     user_out = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    try:
+        from core.deps import resolve_permissions as _resolve_perms
+        from core.tenancy import user_org_id as _uoid_sess
+        user_out["permissions"] = await _resolve_perms(user_out.get("role"), _uoid_sess(user_out))
+    except Exception:
+        pass
     return {"user": _user_with_perms(user_out), "session_token": session_token}
 
 
@@ -543,14 +555,71 @@ class RoleAssignIn(BaseModel):
 async def rbac_roles(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
-    """Any authenticated user may read the role catalogue (for their own UI)."""
-    await require_user(request, session_token, authorization)
-    return {
-        "roles": [
-            {"name": r, "permissions": ROLE_PERMISSIONS.get(r, [])}
-            for r in ROLES
-        ]
-    }
+    """Role catalogue with EFFECTIVE (per-tenant override-aware) permissions,
+    the static defaults, and the editable-permission catalogue for the UI."""
+    user = await require_user(request, session_token, authorization)
+    from core.deps import resolve_permissions as _resolve_perms
+    from core.tenancy import user_org_id as _uoid
+    org_id = _uoid(user)
+    roles_out = []
+    for r in ROLES:
+        default_perms = ROLE_PERMISSIONS.get(r, [])
+        if r in PROTECTED_ROLES:
+            eff = default_perms
+        else:
+            eff = await _resolve_perms(r, org_id)
+        roles_out.append({
+            "name": r,
+            "permissions": eff,
+            "default_permissions": default_perms,
+            "editable": r not in PROTECTED_ROLES,
+            "customized": r not in PROTECTED_ROLES and sorted(eff) != sorted(default_perms),
+        })
+    return {"roles": roles_out, "catalog": PERMISSION_CATALOG}
+
+
+class RolePermsIn(BaseModel):
+    permissions: List[str]
+
+
+@api.put("/rbac/roles/{role}/permissions")
+async def set_role_permissions(role: str, payload: RolePermsIn, request: Request,
+                               session_token: Optional[str] = Cookie(default=None),
+                               authorization: Optional[str] = Header(default=None)):
+    """Admin-only. Save a per-tenant permission override for a role."""
+    actor = await require_user(request, session_token, authorization)
+    if not (has_permission(actor, "*.*") or has_permission(actor, "rbac.manage")):
+        raise HTTPException(status_code=403, detail="Only Admin can edit role permissions")
+    role = _normalize_role(role)
+    if role in PROTECTED_ROLES:
+        raise HTTPException(status_code=400, detail=f"The {role} role's permissions are locked.")
+    from core.tenancy import user_org_id as _uoid
+    org_id = _uoid(actor)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="No tenant context")
+    valid = valid_permission_keys()
+    perms = sorted({p for p in payload.permissions if p in valid})
+    await db.role_permissions.update_one(
+        {"org_id": org_id, "role": role},
+        {"$set": {"org_id": org_id, "role": role, "permissions": perms,
+                  "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": actor["user_id"]}},
+        upsert=True)
+    return {"ok": True, "role": role, "permissions": perms}
+
+
+@api.post("/rbac/roles/{role}/reset-permissions")
+async def reset_role_permissions(role: str, request: Request,
+                                 session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    """Admin-only. Remove the tenant override → revert role to platform default."""
+    actor = await require_user(request, session_token, authorization)
+    if not (has_permission(actor, "*.*") or has_permission(actor, "rbac.manage")):
+        raise HTTPException(status_code=403, detail="Only Admin can edit role permissions")
+    role = _normalize_role(role)
+    from core.tenancy import user_org_id as _uoid
+    org_id = _uoid(actor)
+    await db.role_permissions.delete_one({"org_id": org_id, "role": role})
+    return {"ok": True, "role": role, "permissions": ROLE_PERMISSIONS.get(role, [])}
 
 
 @api.get("/rbac/users")
@@ -562,18 +631,37 @@ async def rbac_users(request: Request,
     if not (has_permission(user, "users.read") or has_permission(user, "rbac.read")):
         raise HTTPException(status_code=403, detail="Missing permission: users.read")
     users = await db.users.find({}, {"_id": 0}).sort("created_at", 1).to_list(500)
-    return [
-        {
+    # Which identifiers are currently locked out (>=5 fails in the window)?
+    from datetime import timedelta as _td
+    cutoff = now_utc() - _td(minutes=15)
+    locked_idents = set()
+    try:
+        agg = await db.login_attempts.aggregate([
+            {"$match": {"at": {"$gte": cutoff}}},
+            {"$group": {"_id": "$identifier", "n": {"$sum": 1}}},
+            {"$match": {"n": {"$gte": 5}}},
+        ]).to_list(1000)
+        locked_idents = {a["_id"] for a in agg}
+    except Exception:
+        locked_idents = set()
+    out = []
+    for u in users:
+        is_locked = ((u.get("email") or "").lower() in locked_idents) or \
+                    ((str(u.get("employee_id") or "").lower()) in locked_idents)
+        out.append({
             "user_id": u.get("user_id"),
             "email": u.get("email"),
             "name": u.get("name"),
             "picture": u.get("picture"),
             "role": _normalize_role(u.get("role")),
+            "employee_id": u.get("employee_id"),
+            "approval_status": u.get("approval_status", "approved"),
+            "is_active": u.get("is_active", True),
+            "is_locked": is_locked,
             "created_at": u.get("created_at"),
             "last_login": u.get("last_login"),
-        }
-        for u in users
-    ]
+        })
+    return out
 
 
 @api.patch("/rbac/users/{user_id}/role")

@@ -80,7 +80,10 @@ def _pack_user(u: dict) -> dict:
     out = {k: v for k, v in u.items() if k != "password_hash"}
     role = normalize_role(u.get("role"))
     out["role"] = role
-    out["permissions"] = expand_permissions(role)
+    if isinstance(u.get("permissions"), list) and u.get("permissions"):
+        out["permissions"] = list(u["permissions"])
+    else:
+        out["permissions"] = expand_permissions(role)
     # Multi-tenant fields
     from core.tenancy import DEFAULT_ORG_ID, SUPER_ADMIN_EMAILS as _SA
     if role != "SuperAdmin":
@@ -131,6 +134,20 @@ async def _check_lockout(identifier: str):
 
 async def _clear_attempts(identifier: str):
     await db.login_attempts.delete_many({"identifier": identifier.lower()})
+
+
+async def _clear_lockout_for_user(user: dict):
+    """Remove any brute-force lockout for a user, keyed by BOTH their email and
+    employee_id (either could have been used as the login identifier). Called
+    when an Admin resets a password / approves / explicitly unlocks, so the user
+    can sign in immediately instead of waiting out the 15-minute window."""
+    idents = []
+    if user.get("email"):
+        idents.append(str(user["email"]).lower())
+    if user.get("employee_id"):
+        idents.append(str(user["employee_id"]).lower())
+    if idents:
+        await db.login_attempts.delete_many({"identifier": {"$in": idents}})
 
 
 # ==================================================
@@ -193,6 +210,12 @@ async def login_password(payload: LoginPasswordIn, response: Response):
     )
     token = await _set_session_cookie(response, user["user_id"])
     fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    try:
+        from core.deps import resolve_permissions
+        from core.tenancy import user_org_id
+        fresh["permissions"] = await resolve_permissions(fresh.get("role"), user_org_id(fresh))
+    except Exception:
+        pass
     return {"user": _pack_user(fresh), "session_token": token}
 
 
@@ -291,7 +314,27 @@ async def admin_reset_password(user_id: str, payload: ResetPasswordIn, request: 
     )
     # Invalidate every active session of the target so they must re-login.
     await db.user_sessions.delete_many({"user_id": user_id})
-    return {"ok": True}
+    # Clear any brute-force lockout so the NEW password works immediately
+    # (otherwise a previously locked user stays blocked for 15 min after reset).
+    await _clear_lockout_for_user(target)
+    return {"ok": True, "unlocked": True}
+
+
+# ==================================================
+# UNLOCK (Admin clears a brute-force lockout)
+# ==================================================
+@router.post("/rbac/users/{user_id}/unlock")
+async def unlock_user(user_id: str, request: Request,
+                      session_token: Optional[str] = Cookie(default=None),
+                      authorization: Optional[str] = Header(default=None)):
+    admin = await require_user(request, session_token, authorization)
+    if not has_permission(admin, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    await _clear_lockout_for_user(target)
+    return {"ok": True, "unlocked": True}
 
 
 # ==================================================
@@ -332,6 +375,10 @@ async def approve_user(user_id: str, payload: ApprovalDecisionIn, request: Reque
             "approved_at": iso_now(),
             "approved_by": admin["user_id"],
         }})
+        # Clear any lockout so a freshly-approved user can sign in right away.
+        fresh_target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+        if fresh_target:
+            await _clear_lockout_for_user(fresh_target)
         # Notify the newly approved user
         try:
             from core.notifications import emit as _notify
