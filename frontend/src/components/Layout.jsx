@@ -6,7 +6,6 @@ import {
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard,
   Package, Wallet, List, X, CalendarBlank,
 } from "@phosphor-icons/react";
-import AIWidget from "./AIWidget";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
 import { useEffect, useState } from "react";
@@ -238,7 +237,6 @@ export default function Layout({ children }) {
       </main>
 
       <CommandPalette open={paletteOpen} setOpen={setPaletteOpen} />
-      <AIWidget />
     </div>
   );
 }

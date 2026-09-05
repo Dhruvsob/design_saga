@@ -103,6 +103,18 @@ async def get_current_user(
         return None
 
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    if user:
+        # Attach EFFECTIVE (per-tenant override-aware) permissions so that
+        # has_permission() and _user_with_perms() both honour any role
+        # customisation an Admin made via the Team & Roles matrix. Without this
+        # a revoked permission (e.g. Designer -> employees.read) would silently
+        # fall back to the static role default and stay granted.
+        try:
+            from core.deps import resolve_permissions as _resolve_perms
+            from core.tenancy import user_org_id as _uoid
+            user["permissions"] = await _resolve_perms(user.get("role"), _uoid(user))
+        except Exception:
+            pass
     set_scope_from_user(user)
     return user
 
