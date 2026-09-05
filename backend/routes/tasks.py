@@ -369,8 +369,20 @@ async def update_task_status(task_id: str, payload: TaskStatusUpdate, request: R
 async def delete_task(task_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    from core.rbac import has_permission
+    if not has_permission(user, "tasks.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: tasks.delete")
+    t = await sdb.tasks.find_one({"id": task_id}, {"_id": 0, "title": 1, "project_id": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
     await sdb.tasks.delete_one({"id": task_id})
+    try:
+        from core.audit import audit as _audit
+        await _audit(user, "task.delete", target=task_id, target_type="task",
+                     meta={"title": t.get("title"), "project_id": t.get("project_id")})
+    except Exception:
+        pass
     return {"ok": True}
 
 

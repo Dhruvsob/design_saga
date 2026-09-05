@@ -226,3 +226,12 @@
 - Login page: google button type=button hardening
 - Holidays bulk seed corrected (year field) — both orgs seeded
 - Global search verified (projects/clients/invoices), notification deep links verified
+
+## Phase: Full-ERP Audit → P0 quick fixes (Status: COMPLETED)
+Done (verified via curl):
+- Milestones unified on `payment_milestones` (project page, portal, delete-guard) — #1
+- Atomic per-org document numbering (`core.helpers.next_sequence`), never reused; uses Company Settings prefixes — #3/#12
+- Paid invoice delete blocked; vendor-payment delete now posts reversal JE instead of hard-deleting — #4
+- RBAC checks added: task delete, lead create/stage/convert, client create, project stage, file create, invoice create — #7
+- Lead double-convert guard — #8 ; Dashboard excludes archived projects — #11 ; confirm dialog before "paid" — #9 (partial)
+Deferred (need bigger budget): #2 vendor bills → AP posting, #5 portal messages, #6 employee soft-delete, #9 full payment dialog, #10 PO↔bill link, P1/P2 list.

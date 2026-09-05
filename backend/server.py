@@ -723,8 +723,8 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
                           authorization: Optional[str] = Header(default=None)):
     await require_user(request, session_token, authorization)
 
-    active_projects = await sdb.projects.count_documents({"stage": {"$nin": ["Handover"]}})
-    total_projects = await sdb.projects.count_documents({})
+    active_projects = await sdb.projects.count_documents({"stage": {"$nin": ["Handover"]}, "archived": {"$ne": True}})
+    total_projects = await sdb.projects.count_documents({"archived": {"$ne": True}})
 
     # Revenue: sum from ACCOUNTING journal entries (income line credits) — single source
     # of truth. Falls back to zero if no journal exists yet. This matches the P&L report.
@@ -812,6 +812,8 @@ async def create_lead(payload: LeadIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "leads.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: leads.create")
     lead = payload.model_dump()
     lead["id"] = new_id("lead_")
     lead["created_at"] = iso(now_utc())
@@ -847,6 +849,8 @@ async def update_lead_stage(lead_id: str, payload: LeadStageUpdate, request: Req
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "leads.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: leads.update")
     from routes.master_data import get_values as _md_values
     valid_stages = await _md_values(user.get("org_id") or "org_default", "lead_stage", PIPELINE_STAGES)
     if payload.stage not in valid_stages and payload.stage not in PIPELINE_STAGES:
@@ -877,9 +881,15 @@ async def convert_lead_to_project(lead_id: str, request: Request,
                                    session_token: Optional[str] = Cookie(default=None),
                                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "leads.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: leads.update")
     lead = await sdb.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    if lead.get("converted_project_id"):
+        raise HTTPException(
+            status_code=409,
+            detail="This lead was already converted. Open the existing project instead of converting again.")
 
     # create client
     client_id = new_id("cli_")
@@ -933,7 +943,9 @@ async def list_clients(request: Request, include_archived: bool = False,
 async def create_client(payload: ClientIn, request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "clients.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: clients.create")
     doc = payload.model_dump()
     doc["id"] = new_id("cli_")
     doc["created_at"] = iso(now_utc())
@@ -1108,7 +1120,7 @@ async def get_project(project_id: str, request: Request,
     p["tasks"] = await sdb.tasks.find({"project_id": project_id}, {"_id": 0}).to_list(500)
     p["files"] = await sdb.files.find({"project_id": project_id}, {"_id": 0}).to_list(500)
     p["invoices"] = await sdb.invoices.find({"project_id": project_id}, {"_id": 0}).to_list(500)
-    p["milestones"] = await sdb.milestones.find({"project_id": project_id}, {"_id": 0}).to_list(200)
+    p["milestones"] = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).to_list(200)
     # --- connected records: vendors / purchase orders / bills ---
     p["purchase_orders"] = await sdb.purchase_orders.find(
         {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
@@ -1153,6 +1165,8 @@ async def update_project_stage(project_id: str, payload: ProjectStageUpdate, req
                                 session_token: Optional[str] = Cookie(default=None),
                                 authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "projects.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: projects.update")
     from routes.master_data import get_values as _md_values
     valid_stages = await _md_values(user.get("org_id") or "org_default", "project_stage", PROJECT_STAGES)
     if payload.stage not in valid_stages and payload.stage not in PROJECT_STAGES:
@@ -1171,7 +1185,7 @@ async def delete_project(project_id: str, request: Request,
     if not has_permission(user, "projects.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: projects.delete")
     n_inv = await sdb.invoices.count_documents({"project_id": project_id})
-    n_ms = await sdb.milestones.count_documents({"project_id": project_id, "status": "paid"})
+    n_ms = await sdb.payment_milestones.count_documents({"project_id": project_id, "status": "paid"})
     if n_inv or n_ms:
         raise HTTPException(
             status_code=409,
@@ -1264,6 +1278,8 @@ async def create_file(payload: FileIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "files.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: files.create")
     doc = payload.model_dump()
     doc["id"] = new_id("fil_")
     doc["created_at"] = iso(now_utc())
@@ -1324,11 +1340,19 @@ async def create_invoice(payload: InvoiceIn, request: Request,
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     doc = payload.model_dump()
+    if not has_permission(user, "invoices.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: invoices.create")
     doc["id"] = new_id("inv_")
-    # number
-    prefix = "QUO" if doc.get("doc_type") == "quotation" else "INV"
-    count = await sdb.invoices.count_documents({"doc_type": doc.get("doc_type", "invoice")})
-    doc["number"] = f"{prefix}-{1000 + count + 1}"
+    # number — atomic per-org counter (never reused after delete); prefix from Company Settings
+    from core.helpers import next_sequence, max_trailing_number
+    _dtype = doc.get("doc_type", "invoice")
+    _org = await db.organizations.find_one({"org_id": user.get("org_id") or "org_default"},
+                                           {"_id": 0, "invoice_prefix": 1, "quotation_prefix": 1})
+    prefix = ((_org or {}).get("quotation_prefix") or "QUO") if _dtype == "quotation" \
+        else ((_org or {}).get("invoice_prefix") or "INV")
+    seed = await max_trailing_number(sdb.invoices.find({"doc_type": _dtype}, {"_id": 0, "number": 1}))
+    seq = await next_sequence(user.get("org_id"), f"invoice:{_dtype}", seed)
+    doc["number"] = f"{prefix}-{seq}"
     doc["created_at"] = iso(now_utc())
     doc["issue_date"] = now_utc().date().isoformat()
     doc["created_by"] = user["user_id"]
@@ -1459,7 +1483,17 @@ async def delete_invoice(invoice_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "invoices.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: invoices.delete")
+    inv = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Not found")
+    if inv.get("status") == "paid" and inv.get("doc_type", "invoice") == "invoice":
+        raise HTTPException(
+            status_code=409,
+            detail="This invoice is marked PAID and has a receipt in Accounting. "
+                   "Change its status to 'sent' first (this reverses the receipt), then delete.")
     await sdb.invoices.delete_one({"id": invoice_id})
+    await audit_log(user, "invoice.delete", target=invoice_id, target_type="invoice",
+                    meta={"number": inv.get("number"), "total": inv.get("total")})
     return {"ok": True}
 
 
@@ -1852,7 +1886,7 @@ async def portal_view(token: str):
     tasks = await sdb.tasks.find({"project_id": project["id"]}, {"_id": 0}).to_list(200)
     files = await sdb.files.find({"project_id": project["id"]}, {"_id": 0}).to_list(200)
     invoices = await sdb.invoices.find({"project_id": project["id"]}, {"_id": 0}).to_list(200)
-    milestones = await sdb.milestones.find({"project_id": project["id"]}, {"_id": 0}).to_list(100)
+    milestones = await sdb.payment_milestones.find({"project_id": project["id"]}, {"_id": 0}).to_list(100)
 
     stage_index = PROJECT_STAGES.index(project.get("stage", "Requirement")) if project.get("stage") in PROJECT_STAGES else 0
     progress = round(((stage_index + 1) / len(PROJECT_STAGES)) * 100)
@@ -2544,8 +2578,12 @@ async def adv_create(payload: QuotationCreate, request: Request,
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     doc = _new_quotation_doc(payload.model_dump(), user)
-    count = await sdb.quotations_adv.count_documents({})
-    doc["number"] = f"Q-{2026}-{1000 + count + 1}"
+    from core.helpers import next_sequence, max_trailing_number
+    _org = await db.organizations.find_one({"org_id": user.get("org_id") or "org_default"},
+                                           {"_id": 0, "quotation_prefix": 1})
+    _qp = (_org or {}).get("quotation_prefix") or f"Q-{now_utc().year}"
+    _seed = await max_trailing_number(sdb.quotations_adv.find({}, {"_id": 0, "number": 1}))
+    doc["number"] = f"{_qp}-{await next_sequence(user.get('org_id'), 'quotation_adv', _seed)}"
     if doc.get("client_id") and not doc.get("client_name"):
         c = await sdb.clients.find_one({"id": doc["client_id"]}, {"_id": 0})
         if c:

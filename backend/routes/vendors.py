@@ -388,8 +388,11 @@ async def create_vendor_bill(payload: VendorBillIn, request: Request,
     doc["id"] = new_id("vbill_")
     # Auto-generate a sequential bill number if the vendor didn't provide one.
     if not doc.get("bill_number"):
-        count = await sdb.vendor_bills.count_documents({})
-        doc["bill_number"] = f"VB-{1000 + count + 1}"
+        from core.helpers import next_sequence, max_trailing_number
+        _seed = await max_trailing_number(
+            sdb.vendor_bills.find({"bill_number": {"$regex": "^VB-"}}, {"_id": 0, "bill_number": 1}),
+            field="bill_number")
+        doc["bill_number"] = f"VB-{await next_sequence(user.get('org_id'), 'vendor_bill', _seed)}"
     doc["items"] = [i if isinstance(i, dict) else i.model_dump()
                     for i in (doc.get("items") or [])]
     _bill_total(doc)
@@ -615,15 +618,28 @@ async def list_vendor_payments(request: Request,
 async def delete_vendor_payment(pmt_id: str, request: Request,
                                 session_token: Optional[str] = Cookie(default=None),
                                 authorization: Optional[str] = Header(default=None)):
-    """Reverse a vendor payment: soft-cancel the payment, delete the journal
-    entry, and refresh linked bill statuses."""
+    """Reverse a vendor payment: remove the payment record, post a balanced
+    REVERSAL journal entry (ledger stays immutable / audit-safe), and refresh
+    linked bill statuses."""
     user = await require_user(request, session_token, authorization)
     _require(user, "finance.create")
     pmt = await sdb.vendor_payments.find_one({"id": pmt_id}, {"_id": 0})
     if not pmt:
         raise HTTPException(status_code=404, detail="Payment not found")
     if pmt.get("journal_entry_id"):
-        await sdb.journal_entries.delete_one({"id": pmt["journal_entry_id"]})
+        orig = await sdb.journal_entries.find_one({"id": pmt["journal_entry_id"]}, {"_id": 0})
+        if orig and not orig.get("reversed"):
+            from routes.accounting import _post_journal
+            rev_lines = [{"account_id": l["account_id"], "debit": l.get("credit", 0),
+                          "credit": l.get("debit", 0),
+                          "description": f"Reversal · {l.get('description') or ''}".strip()}
+                         for l in orig.get("lines") or []]
+            rev = await _post_journal(
+                user, iso_now()[:10], f"Vendor payment reversed · {pmt.get('vendor_name') or ''}".strip(),
+                rev_lines, reference=orig.get("reference"), project_id=orig.get("project_id"),
+                vendor_id=orig.get("vendor_id"), source="vendor_payment_reversal", source_id=pmt_id)
+            await sdb.journal_entries.update_one(
+                {"id": orig["id"]}, {"$set": {"reversed": True, "reversal_je_id": rev["id"]}})
     await sdb.vendor_payments.delete_one({"id": pmt_id})
     for bid in (pmt.get("bill_ids") or []):
         await _refresh_bill_status(bid)

@@ -83,13 +83,28 @@ export default function Invoices({ docType = "invoice" }) {
   };
 
   const changeStatus = async (id, status) => {
-    await api.patch(`/invoices/${id}/status`, { status });
+    const row = rows.find((r) => r.id === id);
+    if (status === "paid" && row?.doc_type !== "quotation") {
+      const ok = window.confirm(
+        `Mark ${row?.number || "this invoice"} as PAID?\n\nThis records a receipt of ₹${(row?.total || 0).toLocaleString("en-IN")} in Accounting (dated today). You can undo by changing status back to "sent".`
+      );
+      if (!ok) { load(); return; }
+    }
+    try {
+      await api.patch(`/invoices/${id}/status`, { status });
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Could not update status");
+    }
     load();
   };
 
   const del = async (id) => {
     if (!window.confirm("Delete?")) return;
-    await api.delete(`/invoices/${id}`);
+    try {
+      await api.delete(`/invoices/${id}`);
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Could not delete");
+    }
     load();
   };
 
