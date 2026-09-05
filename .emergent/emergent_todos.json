@@ -1,50 +1,22 @@
 [
   {
-    "content": "P1: Payment reversal - reset source invoice/milestone + clear journal_id references",
+    "content": "Recurring Expenses: model + CRUD + scheduler that posts on due date + UI",
     "status": "completed"
   },
   {
-    "content": "P1: Accounting RBAC - use finance.* permissions consistently (not invoices.*)",
+    "content": "Favorite Accounts: pin/unpin API + sidebar quick access + star in CoA",
     "status": "completed"
   },
   {
-    "content": "P1: Commission receipt - use central _post_journal engine, keep project_id link",
+    "content": "Vendor Statement PDF: /vendors/{id}/commission-statement.pdf + UI download button",
     "status": "completed"
   },
   {
-    "content": "P1: Loan deletion - never hard-delete JE, reverse instead",
+    "content": "Bank Reconciliation: CSV upload + auto-match JEs + reconcile UI",
     "status": "completed"
   },
   {
-    "content": "P1: Verify opening balances and tenant safety on commission/settlement",
-    "status": "completed"
-  },
-  {
-    "content": "P2: Daybook filters (project/client/vendor), better pagination",
-    "status": "completed"
-  },
-  {
-    "content": "P2: Drill-through extended - vendor/employee/loan links from TransactionDetail",
-    "status": "completed"
-  },
-  {
-    "content": "P2: Dashboard 'Today's Collections' fix (include invoice_payment/milestone_payment)",
-    "status": "completed"
-  },
-  {
-    "content": "P2: Quick-add income/expense - client + project selection",
-    "status": "completed"
-  },
-  {
-    "content": "P3: Hide inactive accounts from dropdowns, mobile friendly polish",
-    "status": "completed"
-  },
-  {
-    "content": "P3: Commission Vendor-wise report (earned/received/pending)",
-    "status": "completed"
-  },
-  {
-    "content": "Testing: end-to-end backend tests via testing_agent",
+    "content": "Backend testing_agent verification of all four features",
     "status": "completed"
   }
 ]

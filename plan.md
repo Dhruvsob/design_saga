@@ -266,3 +266,34 @@ Deferred (need bigger budget): #2 vendor bills → AP posting, #5 portal message
 ### Test coverage
 - `/app/tests/test_accounting_audit_fixes.py` — 8 tests: reversal cascades (invoice + milestone), RBAC by role, commission engine + project link, TB/BS balance parity, journal pagination + search, loan reverse-on-delete, today's collections classification. All PASS.
 
+## Phase: Finance Add-Ons (Status: COMPLETED)
+
+### 1) Recurring Expenses
+- Model: `recurring_expenses` collection (tenant-scoped via `sdb`). Frequencies: weekly/monthly/quarterly/yearly, optional day_of_month or day_of_week, start/end_date, GST, project/vendor/client link.
+- Endpoints: `GET/POST/PATCH/DELETE /api/recurring-expenses`, `POST /api/recurring-expenses/{id}/run-now`, `POST /api/recurring-expenses/scan`.
+- Scheduler: `_run_recurring_expense_scan` wired into the existing 6-hour background scan loop, iterates all orgs (context-var scoping), catches up missed periods.
+- Idempotency: dedup by `(source=recurring_expense, source_id=rule_id, date=run_date)` — never posts twice for the same date.
+- Delete rule: keeps historic JEs (audit-safe).
+
+### 2) Favourite Accounts
+- Per-user (not shared): `user_favorite_accounts` collection, one doc per user_id.
+- Endpoints: `GET /api/favorite-accounts`, `POST /api/favorite-accounts {account_id}`, `DELETE /api/favorite-accounts/{account_id}`.
+- UI: yellow star column in Chart of Accounts to pin/unpin; sticky "FAVOURITES" strip on the Accounting dashboard that opens each pinned ledger with one click.
+
+### 3) Vendor Commission Statement PDF
+- Endpoint: `GET /api/vendors/{vid}/commission-statement.pdf?from_date=&to_date=` returns proper `application/pdf` (fpdf2, latin-1 safe with unicode fallbacks).
+- Layout: org header + vendor details + Earned/Received/Pending totals + row-level table (bill date, bill #, base, earned, received, status, ref).
+- UI: "Statement PDF" button on the Vendor → Commissions tab, uses axios blob download.
+
+### 4) Bank Reconciliation
+- Upload: `POST /api/bank-reconciliation/{account_id}/upload` accepts a CSV — parses Date, Description, Debit/Credit or signed Amount, optional Reference. Robust date parser (ISO, DD/MM/YYYY, DD-MM-YYYY, DD-Mon-YY, Excel serial); amount parser handles bracketed negatives, ₹/Rs./INR prefixes, commas.
+- Storage: `bank_statement_rows` (tenant-scoped) with status = unmatched / auto_matched / matched / reconciled / ignored.
+- Auto-match: for each row, aggregate against JE lines on the same bank account within ±3 days and ±0.5 rupees tolerance; skips reversed and already-matched JEs. Positive row → looks for a bank-debit line; negative → bank-credit line.
+- Actions: `/match {journal_id}`, `/reconcile`, `/ignore`, `/create-je {counterpart_account_id, narration?, project_id?, vendor_id?, client_id?}` — the last one routes through `_post_journal` so the freshly posted entry is balanced, audit-tracked, and instantly linked back to the bank row.
+- Summary: `GET /api/bank-reconciliation/summary` — status counters per bank/cash account for a dashboard card.
+- UI: new "Bank Reconciliation" tab with account picker, CSV upload button, 5 status counter cards, filter + rows table with contextual actions (Link JE, Create JE, Reconcile, Ignore) + dedicated modal dialogs for LinkJE and CreateJE.
+
+### Testing
+- `/app/tests/test_finance_extras.py` — 7 tests (100% pass).
+- Deep testing_agent scenarios (`iteration_2.json`): 26/26 tests including bracketed-negative CSV parsing, non-ISO date normalization, catch-up posting for past start dates, per-user isolation of favourites, RBAC gating on all mutating endpoints. All PASS.
+

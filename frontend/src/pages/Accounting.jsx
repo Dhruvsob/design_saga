@@ -3,10 +3,12 @@ import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { Daybook } from "../components/Daybook";
 import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
+import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
+import { toast } from "sonner";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
-  Scales, Waves, DownloadSimple, Notebook, CaretRight,
+  Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -22,6 +24,8 @@ const TABS = [
   { id: "balance",   label: "Balance Sheet", Icon: Scales },
   { id: "cashflow",  label: "Cash Flow", Icon: Waves },
   { id: "commissions", label: "Commissions", Icon: Coins },
+  { id: "recurring", label: "Recurring", Icon: Repeat },
+  { id: "bank",      label: "Bank Reconciliation", Icon: Bank },
   { id: "validation", label: "Validation", Icon: ArrowsClockwise },
 ];
 
@@ -179,8 +183,11 @@ export default function Accounting() {
         </div>
       )}
 
-      {tab === "dashboard" && dashboard && (
-        <Dashboard d={dashboard} onRefresh={loadDashboard} />
+      {tab === "dashboard" && (
+        <>
+          <FavoriteAccountsStrip onOpen={setLedgerAccount} />
+          {dashboard && <Dashboard d={dashboard} onRefresh={loadDashboard} />}
+        </>
       )}
 
       {tab === "income" && (
@@ -243,6 +250,16 @@ export default function Accounting() {
 
       {tab === "commissions" && (
         <CommissionsDashboard data={commissions} onDownload={downloadCsv} />
+      )}
+
+      {tab === "recurring" && (
+        <RecurringExpenses accounts={accounts} vendors={vendors}
+          projects={projects} clients={clients}
+          onChanged={() => { loadDashboard(); loadJournal(); }} />
+      )}
+
+      {tab === "bank" && (
+        <BankReconciliation accounts={accounts} />
       )}
 
       {tab === "ledgers" && (
@@ -749,22 +766,59 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
 }
 
 // ================================================================
-function ChartOfAccounts({ accounts, onReload, meta, onOpenAccount }) {
+function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount }) {
   const [showForm, setShowForm] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [accounts, setAccounts] = useState(baseAccounts);
   const [form, setForm] = useState({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
+  const [favIds, setFavIds] = useState([]);
+  useEffect(() => { setAccounts(baseAccounts); }, [baseAccounts]);
+  useEffect(() => {
+    api.get("/favorite-accounts").then(({ data }) => setFavIds(data.account_ids || [])).catch(() => {});
+  }, []);
+  useEffect(() => {
+    api.get(`/accounts${showInactive ? "?include_inactive=1" : ""}`)
+       .then(({ data }) => setAccounts(data))
+       .catch(() => {});
+  }, [showInactive]);
   const grouped = accounts.reduce((acc, a) => {
     (acc[a.type] = acc[a.type] || []).push(a); return acc;
   }, {});
   const submit = async (e) => {
     e.preventDefault();
     const payload = { ...form, opening_balance: Number(form.opening_balance) || 0 };
-    await api.post("/accounts", payload);
-    setForm({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
-    setShowForm(false); onReload();
+    if (!payload.code) delete payload.code;
+    try {
+      await api.post("/accounts", payload);
+      toast.success("Account created");
+      setForm({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
+      setShowForm(false); onReload();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not create account");
+    }
+  };
+  const toggleFav = async (a, e) => {
+    e.stopPropagation();
+    try {
+      if (favIds.includes(a.id)) {
+        const { data } = await api.delete(`/favorite-accounts/${a.id}`);
+        setFavIds(data.account_ids || []);
+        toast.success("Unpinned");
+      } else {
+        const { data } = await api.post("/favorite-accounts", { account_id: a.id });
+        setFavIds(data.account_ids || []);
+        toast.success("Pinned to Favourites");
+      }
+    } catch (err) { toast.error("Could not update favourites"); }
   };
   return (
     <div className="space-y-4" data-testid="coa-tab">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <label className="flex items-center gap-2 text-xs text-[#5C5C5C]">
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)}
+            data-testid="coa-show-inactive" />
+          Show inactive accounts
+        </label>
         <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-account-btn">
           <Plus size={14} /> {showForm ? "Cancel" : "New account"}
         </button>
@@ -776,7 +830,7 @@ function ChartOfAccounts({ accounts, onReload, meta, onOpenAccount }) {
           <select className="input-flat" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
             {(meta?.account_types || []).map((t) => <option key={t}>{t}</option>)}
           </select>
-          <input className="input-flat" placeholder="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+          <input className="input-flat" placeholder="Code (auto if blank)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
           <input type="number" className="input-flat" placeholder="Opening balance" value={form.opening_balance}
             onChange={(e) => setForm({ ...form, opening_balance: e.target.value })} />
           <label className="text-xs col-span-full flex items-center gap-2">
@@ -791,22 +845,36 @@ function ChartOfAccounts({ accounts, onReload, meta, onOpenAccount }) {
           <div className="overline mb-2">{type.toUpperCase()} · {list.length}</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <tbody>
-              {list.map((a) => (
-                <tr key={a.id}
-                  onClick={() => onOpenAccount && onOpenAccount(a)}
-                  className="border-b border-[#F0F0F0] cursor-pointer hover:bg-[#FAFAF7] transition-colors group"
-                  data-testid={`account-${a.id}`}>
-                  <td className="p-2 font-mono text-xs w-20">{a.code || "—"}</td>
-                  <td className="p-2 font-semibold group-hover:text-[#8B7F6A]">{a.name}</td>
-                  <td className="p-2 text-right font-mono text-xs text-[#5C5C5C]">{CURRENCY(a.opening_balance)}</td>
-                  <td className="p-2 text-right w-24">
-                    <span className="inline-flex items-center gap-1 text-[10px] text-[#9A9A9A] group-hover:text-[#8B7F6A]">
-                      {a.is_bank && <Bank size={12} className="text-[#8B7F6A]" />}
-                      View ledger <CaretRight size={12} />
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {list.map((a) => {
+                const isFav = favIds.includes(a.id);
+                return (
+                  <tr key={a.id}
+                    onClick={() => onOpenAccount && onOpenAccount(a)}
+                    className={`border-b border-[#F0F0F0] cursor-pointer hover:bg-[#FAFAF7] transition-colors group ${a.active === false ? "opacity-50" : ""}`}
+                    data-testid={`account-${a.id}`}>
+                    <td className="p-2 w-8">
+                      <button onClick={(e) => toggleFav(a, e)}
+                        className={`transition-colors ${isFav ? "text-[#C9A84C]" : "text-[#C5C5C5] hover:text-[#8B7F6A]"}`}
+                        title={isFav ? "Unpin from Favourites" : "Pin to Favourites"}
+                        data-testid={`fav-toggle-${a.id}`}>
+                        <Star size={14} weight={isFav ? "fill" : "regular"} />
+                      </button>
+                    </td>
+                    <td className="p-2 font-mono text-xs w-20">{a.code || "—"}</td>
+                    <td className="p-2 font-semibold group-hover:text-[#8B7F6A]">
+                      {a.name}
+                      {a.active === false && <span className="ml-2 text-[10px] text-[#B87500]">INACTIVE</span>}
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs text-[#5C5C5C]">{CURRENCY(a.opening_balance)}</td>
+                    <td className="p-2 text-right w-24">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[#9A9A9A] group-hover:text-[#8B7F6A]">
+                        {a.is_bank && <Bank size={12} className="text-[#8B7F6A]" />}
+                        View ledger <CaretRight size={12} />
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table></div>
         </div>

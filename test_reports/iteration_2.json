@@ -1,0 +1,72 @@
+{
+  "summary": "Completed comprehensive backend testing of 4 new finance features: Recurring Expenses, Favorite Accounts, Vendor Commission Statement PDF, and Bank Reconciliation. All 26 tests passed (7 basic + 8 audit fixes + 11 deep scenarios).",
+  "backend_issues": {
+    "critical_bugs": [],
+    "flaky_endpoints": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Recurring Expenses: Create monthly rule with day_of_month=5, amount=12345 → response includes id, next_run_date, run_count=0",
+    "Recurring Expenses: run-now posts balanced JE (DR expense / CR bank) with source=recurring_expense",
+    "Recurring Expenses: Idempotent — same-day run-now returns journal=null",
+    "Recurring Expenses: Scan endpoint processes all rules with next_run_date <= today, advances next_run_date, increments run_count",
+    "Recurring Expenses: No duplicate posting (idempotency verified)",
+    "Recurring Expenses: PATCH active=false excludes from scan; PATCH active=true includes again",
+    "Recurring Expenses: DELETE removes rule but historic JEs remain (audit trail preserved)",
+    "Recurring Expenses: Past start_date triggers catch-up posting (posts JEs for missed periods)",
+    "Recurring Expenses: Weekly frequency works correctly",
+    "Favorite Accounts: POST /api/favorite-accounts adds to per-user list",
+    "Favorite Accounts: Duplicate POST keeps list stable (no double entries)",
+    "Favorite Accounts: DELETE /api/favorite-accounts/{id} removes it",
+    "Favorite Accounts: GET returns {account_ids, accounts[]} with full account docs sorted in insertion order",
+    "Favorite Accounts: Two users on same tenant have separate favorites (personal, not shared)",
+    "Vendor Statement PDF: GET /api/vendors/{vid}/commission-statement.pdf returns Content-Type application/pdf",
+    "Vendor Statement PDF: Response starts with %PDF, size > 500 bytes",
+    "Vendor Statement PDF: Works with vendors that have zero commissions",
+    "Bank Reconciliation: POST /api/bank-reconciliation/{bank_id}/upload with CSV file — rows parsed correctly",
+    "Bank Reconciliation: Debit → negative, Credit → positive conversion works",
+    "Bank Reconciliation: Auto-matches JE lines on bank account within ±3 days at ±0.5 tolerance",
+    "Bank Reconciliation: Returns {rows_saved, auto_matched}",
+    "Bank Reconciliation: CSV with bracketed negatives '(1,200)' parsed correctly as -1200",
+    "Bank Reconciliation: CSV with non-ISO dates (DD/MM/YYYY, DD-MM-YYYY) normalized to ISO format",
+    "Bank Reconciliation: GET /api/bank-reconciliation/{bank_id}/rows returns {rows[], counts{unmatched, auto_matched, matched, reconciled, ignored}}",
+    "Bank Reconciliation: Status filter parameter works",
+    "Bank Reconciliation: POST /api/bank-reconciliation/rows/{row_id}/reconcile flips status → reconciled",
+    "Bank Reconciliation: POST /api/bank-reconciliation/rows/{row_id}/create-je creates balanced JE via _post_journal",
+    "Bank Reconciliation: Positive row amount → DR bank / CR income; Negative row amount → DR expense / CR bank",
+    "Bank Reconciliation: Row status flips to matched with matched_journal_id set after create-je",
+    "Bank Reconciliation: POST /api/bank-reconciliation/rows/{row_id}/ignore sets status=ignored",
+    "Bank Reconciliation: RBAC — Accountant (has finance.*) can upload/reconcile/create-je",
+    "Bank Reconciliation: GET /api/bank-reconciliation/summary returns {accounts:[{account, unmatched, matched, auto_matched, reconciled, ignored}]}",
+    "All JEs are balanced (DR=CR) — verified across all features",
+    "No duplicate postings — idempotency verified for recurring expenses and bank rec",
+    "Audit trail preserved — DELETE recurring rule keeps historic JEs",
+    "Payment reversal resets invoice to 'sent' and clears journal_id",
+    "Milestone reversal resets milestone to 'pending' and clears journal_id",
+    "RBAC uses finance.* permissions — Accountant can create accounts",
+    "Commission receipt uses central engine, JE is balanced and linked to project",
+    "Trial Balance includes opening balances and stays balanced",
+    "Journal search and pagination work correctly",
+    "Loan deletion reverses JE instead of hard-deleting",
+    "Today's collections includes invoice_payment JEs"
+  ],
+  "test_report_links": [
+    "/app/tests/test_finance_extras.py",
+    "/app/tests/test_accounting_audit_fixes.py",
+    "/app/tests/test_finance_extras_deep.py"
+  ],
+  "success_percentage": {
+    "backend": "100% (26/26 tests passed)",
+    "frontend": "N/A (backend-only testing)"
+  },
+  "action_item_for_main_agent": "",
+  "updated_files": [
+    "/app/tests/test_finance_extras_deep.py"
+  ],
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_test_itself": false
+}

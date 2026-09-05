@@ -3895,6 +3895,7 @@ from routes.master_data import router as master_data_router  # noqa: E402
 from routes.search import router as search_router  # noqa: E402
 from routes.comments import router as comments_router  # noqa: E402
 from routes.calendar import router as calendar_router  # noqa: E402
+from routes.finance_extras import router as finance_extras_router  # noqa: E402
 api.include_router(tasks_router)
 api.include_router(attendance_router)
 api.include_router(accounting_router)
@@ -3913,6 +3914,7 @@ api.include_router(master_data_router)
 api.include_router(search_router)
 api.include_router(comments_router)
 api.include_router(calendar_router)
+api.include_router(finance_extras_router)
 
 app.include_router(api)
 
@@ -4067,9 +4069,53 @@ async def _bootstrap_default_org():
                             {k: v for k, v in list(results.items())[:5]})
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[Scheduler] scan failed: %s", exc)
+            # Recurring-expense poster: run once per loop across all orgs.
+            try:
+                await _run_recurring_expense_scan()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[Scheduler] recurring-expense scan failed: %s", exc)
             await asyncio.sleep(6 * 3600)
 
     app.state._scan_task = asyncio.create_task(_scan_loop())
+
+
+async def _run_recurring_expense_scan():
+    """Iterate every org, post any recurring-expense rules whose next_run_date
+    is on-or-before today. Idempotent (via source/source_id/date dedup)."""
+    from routes.finance_extras import _post_recurring_rule
+    from core.scoped_db import _scope
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    total_posted = 0
+    async for org in db.organizations.find({}, {"_id": 0, "id": 1}):
+        oid = org.get("id")
+        if not oid:
+            continue
+        _scope.set({"org_id": oid})
+        try:
+            # Fetch active due rules for this org (sdb applies the scope).
+            # We fetch a plain list so the ContextVar remains stable across awaits.
+            rules = []
+            async for r in db.recurring_expenses.find(
+                {"org_id": oid, "active": True, "next_run_date": {"$lte": today}},
+                {"_id": 0},
+            ):
+                rules.append(r)
+            for r in rules:
+                system_user = {"user_id": "system", "name": "System scheduler",
+                               "org_id": oid, "role": "Admin",
+                               "permissions": ["*.*"]}
+                for _ in range(60):
+                    if not r or not r.get("active") or r["next_run_date"] > today:
+                        break
+                    je = await _post_recurring_rule(r, system_user)
+                    if je:
+                        total_posted += 1
+                    r = await db.recurring_expenses.find_one({"id": r["id"], "org_id": oid}, {"_id": 0})
+        finally:
+            _scope.set(None)
+    if total_posted:
+        logger.info("[Scheduler] posted %d recurring expense entries", total_posted)
 
 
 @app.on_event("shutdown")

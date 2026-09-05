@@ -6,7 +6,7 @@ import {
   ArrowLeft, Star, Buildings, Phone, Envelope, MapPin, Bank as BankIcon,
   IdentificationCard, CurrencyInr, Plus, Trash, FileText, Gauge, Receipt,
   PaperPlaneTilt, ShieldCheck, Notepad, Certificate, Wrench,
-  Handshake, Percent, TrendUp,
+  Handshake, Percent, TrendUp, DownloadSimple,
 } from "@phosphor-icons/react";
 
 const INR = (n) =>
@@ -794,6 +794,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
 
 /* -------------------- COMMISSIONS (list + receive) -------------------- */
 function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
+  const { id } = useParams();
   const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
@@ -806,6 +807,18 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
     }
     // eslint-disable-next-line
   }, [accounts.length]);
+
+  const downloadStatementPdf = async () => {
+    try {
+      const res = await api.get(`/vendors/${id}/commission-statement.pdf`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `commission-statement.pdf`;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) { /* toast handled by axios interceptor */ }
+  };
 
   if (!ledger) return <div className="overline">LOADING…</div>;
   const openRows = (ledger.entries || []).filter((r) => ["pending", "invoiced"].includes(r.status));
@@ -820,9 +833,12 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
       </div>
 
       {canReceive && (
-        <div>
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setOpen(!open)} className="btn-primary" data-testid="receive-cm-btn">
             <Plus size={14} /> {open ? "Cancel" : "Record commission received"}
+          </button>
+          <button onClick={downloadStatementPdf} className="btn-ghost" data-testid="cm-statement-pdf-btn">
+            <DownloadSimple size={13} /> Statement PDF
           </button>
         </div>
       )}
