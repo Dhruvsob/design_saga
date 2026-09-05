@@ -700,11 +700,126 @@ async def upload_bank_statement(account_id: str, request: Request,
             match_count += 1
             break
 
+    # Persist an import-log record for this upload so accountants can review the
+    # history per account, re-download the original CSV, or delete a bad import.
+    batch_doc = {
+        "id": batch_id,
+        "account_id": account_id,
+        "account_name": acc.get("name"),
+        "filename": (file.filename or "statement.csv"),
+        "raw_csv": text,                      # original file content for re-download
+        "file_size": len(raw),
+        "rows_saved": len(rows_saved),
+        "auto_matched": match_count,
+        "status": "active",
+        "created_at": iso_now(),
+        "created_by": user["user_id"],
+        "created_by_name": user.get("name") or user.get("email") or user["user_id"],
+    }
+    await sdb.bank_statement_batches.insert_one(dict(batch_doc))
+
     await audit(user, "bank_recon.upload", target=batch_id, target_type="bank_batch",
                 meta={"account_id": account_id, "rows": len(rows_saved),
                       "auto_matched": match_count})
     return {"ok": True, "batch_id": batch_id, "rows_saved": len(rows_saved),
             "auto_matched": match_count}
+
+
+# ==========================================================================
+# 4b) BANK STATEMENT IMPORT LOG
+# ==========================================================================
+# A history of uploaded statements per account. Each upload creates a batch
+# record (see upload endpoint). Accountants can review the log, re-download the
+# original CSV, or delete a bad import. Deleting a batch removes its statement
+# rows but NEVER touches posted journal entries (accounting safety) — any JE
+# created from a row stays on the books and simply loses its bank-row pointer.
+# ==========================================================================
+
+async def _batch_live_stats(batch_id: str) -> dict:
+    """Live status breakdown of the rows still belonging to a batch."""
+    stats = {"total": 0, "unmatched": 0, "auto_matched": 0,
+             "matched": 0, "reconciled": 0, "ignored": 0, "has_je": 0}
+    async for r in sdb.bank_statement_rows.find(
+            {"batch_id": batch_id}, {"_id": 0, "status": 1, "matched_journal_id": 1}):
+        stats["total"] += 1
+        s = r.get("status") or "unmatched"
+        stats[s] = stats.get(s, 0) + 1
+        if r.get("matched_journal_id"):
+            stats["has_je"] += 1
+    return stats
+
+
+@router.get("/bank-reconciliation/{account_id}/batches")
+async def list_bank_batches(account_id: str, request: Request,
+                            session_token: Optional[str] = Cookie(default=None),
+                            authorization: Optional[str] = Header(default=None)):
+    """Import log for a bank/cash account — newest upload first."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(403, "Missing permission: finance.read")
+    batches = await sdb.bank_statement_batches.find(
+        {"account_id": account_id}, {"_id": 0, "raw_csv": 0},
+    ).sort("created_at", -1).to_list(500)
+    for b in batches:
+        b["live"] = await _batch_live_stats(b["id"])
+    return {"batches": batches}
+
+
+@router.get("/bank-reconciliation/batches/{batch_id}/download")
+async def download_bank_batch(batch_id: str, request: Request,
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    """Re-download the original uploaded CSV for a batch."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(403, "Missing permission: finance.read")
+    batch = await sdb.bank_statement_batches.find_one({"id": batch_id}, {"_id": 0})
+    if not batch:
+        raise HTTPException(404, "Import batch not found")
+    csv_text = batch.get("raw_csv")
+    if csv_text is None:
+        raise HTTPException(404, "Original file not available for this import")
+    filename = batch.get("filename") or f"{batch_id}.csv"
+    body = csv_text.encode("utf-8-sig")
+    return FastAPIResponse(
+        content=body,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.delete("/bank-reconciliation/batches/{batch_id}")
+async def delete_bank_batch(batch_id: str, request: Request,
+                            force: bool = False,
+                            session_token: Optional[str] = Cookie(default=None),
+                            authorization: Optional[str] = Header(default=None)):
+    """Delete a bad import: removes the batch's statement rows and the log entry.
+
+    Posted journal entries are NEVER deleted. If any row in the batch is already
+    reconciled or linked to a JE, the caller must pass `force=true` to confirm —
+    the JEs remain on the books, only the bank-row pointers are removed.
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.delete"):
+        raise HTTPException(403, "Missing permission: finance.delete")
+    batch = await sdb.bank_statement_batches.find_one({"id": batch_id}, {"_id": 0})
+    if not batch:
+        raise HTTPException(404, "Import batch not found")
+    stats = await _batch_live_stats(batch_id)
+    sensitive = stats.get("reconciled", 0) + stats.get("has_je", 0)
+    if sensitive > 0 and not force:
+        raise HTTPException(
+            409,
+            f"This import has {stats.get('reconciled', 0)} reconciled and "
+            f"{stats.get('has_je', 0)} JE-linked row(s). Re-send with force=true "
+            f"to delete anyway (journal entries are preserved).",
+        )
+    del_res = await sdb.bank_statement_rows.delete_many({"batch_id": batch_id})
+    await sdb.bank_statement_batches.delete_one({"id": batch_id})
+    await audit(user, "bank_recon.delete_batch", target=batch_id, target_type="bank_batch",
+                meta={"account_id": batch.get("account_id"),
+                      "rows_deleted": del_res.deleted_count, "forced": force})
+    return {"ok": True, "rows_deleted": del_res.deleted_count}
 
 
 @router.get("/bank-reconciliation/{account_id}/rows")

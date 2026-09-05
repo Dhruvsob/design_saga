@@ -1,22 +1,18 @@
 [
   {
-    "content": "Recurring Expenses: model + CRUD + scheduler that posts on due date + UI",
+    "content": "Backend: persist upload batch (metadata + raw CSV) on bank statement upload",
     "status": "completed"
   },
   {
-    "content": "Favorite Accounts: pin/unpin API + sidebar quick access + star in CoA",
+    "content": "Backend: add list batches, download CSV, delete batch endpoints",
     "status": "completed"
   },
   {
-    "content": "Vendor Statement PDF: /vendors/{id}/commission-statement.pdf + UI download button",
+    "content": "Frontend: add Import Log panel with download & delete actions",
     "status": "completed"
   },
   {
-    "content": "Bank Reconciliation: CSV upload + auto-match JEs + reconcile UI",
-    "status": "completed"
-  },
-  {
-    "content": "Backend testing_agent verification of all four features",
+    "content": "Test backend endpoints + verify UI via screenshot",
     "status": "completed"
   }
 ]

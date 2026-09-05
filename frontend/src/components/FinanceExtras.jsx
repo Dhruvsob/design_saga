@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import {
   Plus, X, PencilSimple, Trash, Play, ClockCounterClockwise, Warning, Pause,
+  DownloadSimple, ClockClockwise, CaretDown, CaretRight,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -290,10 +291,54 @@ export const BankReconciliation = ({ accounts = [] }) => {
   const [statusFilter, setStatusFilter] = useState("");
   const [linkRow, setLinkRow] = useState(null);
   const [createFor, setCreateFor] = useState(null);
+  const [batches, setBatches] = useState([]);
+  const [showLog, setShowLog] = useState(false);
 
   useEffect(() => {
     if (!selectedBank && banks[0]) setSelectedBank(banks[0].id);
   }, [banks]); // eslint-disable-line
+
+  const loadBatches = async () => {
+    if (!selectedBank) { setBatches([]); return; }
+    try {
+      const { data } = await api.get(`/bank-reconciliation/${selectedBank}/batches`);
+      setBatches(data.batches || []);
+    } catch { /* interceptor toasts */ }
+  };
+  useEffect(() => { loadBatches(); }, [selectedBank]); // eslint-disable-line
+
+  const downloadBatch = async (batch) => {
+    try {
+      const res = await api.get(`/bank-reconciliation/batches/${batch.id}/download`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = batch.filename || `import-${batch.id}.csv`;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Download failed");
+    }
+  };
+
+  const deleteBatch = async (batch, force = false) => {
+    if (!force && !window.confirm(`Delete this import "${batch.filename}"? Its ${batch.rows_saved} statement row(s) will be removed. Posted journal entries are kept.`)) return;
+    try {
+      const qs = force ? "?force=true" : "";
+      await api.delete(`/bank-reconciliation/batches/${batch.id}${qs}`);
+      toast.success("Import deleted");
+      loadBatches();
+      load();
+    } catch (e) {
+      if (e?.response?.status === 409) {
+        if (window.confirm(`${e.response.data.detail}\n\nDelete anyway? Journal entries stay on the books.`)) {
+          return deleteBatch(batch, true);
+        }
+        return;
+      }
+      toast.error(e?.response?.data?.detail || "Delete failed");
+    }
+  };
 
   const load = async () => {
     if (!selectedBank) return;
@@ -317,6 +362,8 @@ export const BankReconciliation = ({ accounts = [] }) => {
       const { data } = await api.post(`/bank-reconciliation/${selectedBank}/upload`, fd);
       toast.success(`${data.rows_saved} rows uploaded · ${data.auto_matched} auto-matched`);
       load();
+      loadBatches();
+      setShowLog(true);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Upload failed");
     } finally { setUploading(false); }
@@ -375,6 +422,77 @@ export const BankReconciliation = ({ accounts = [] }) => {
         <div className="text-[11px] text-[#9A9A9A]">
           Expected CSV columns (case-insensitive): <code>Date, Description, Debit, Credit</code> (or a single signed <code>Amount</code>), and optional <code>Reference</code>.
         </div>
+      </div>
+
+      {/* Import Log — history of uploaded statements for this account */}
+      <div className="card-flat" data-testid="import-log-panel">
+        <button
+          type="button"
+          onClick={() => setShowLog((v) => !v)}
+          className="w-full flex items-center justify-between text-left"
+          data-testid="import-log-toggle"
+        >
+          <div className="flex items-center gap-2">
+            {showLog ? <CaretDown size={12} /> : <CaretRight size={12} />}
+            <ClockClockwise size={13} className="text-[#8B7F6A]" />
+            <span className="overline">IMPORT LOG</span>
+            <span className="text-[11px] text-[#9A9A9A]">
+              {batches.length} upload{batches.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <span className="text-[11px] text-[#9A9A9A]">Re-download or delete a bad import</span>
+        </button>
+
+        {showLog && (
+          <div className="mt-3 border border-[#E5E5E5] overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+                <tr>
+                  <th className="p-3 text-left">Uploaded</th>
+                  <th className="p-3 text-left">File</th>
+                  <th className="p-3 text-right">Rows</th>
+                  <th className="p-3 text-right">Auto-matched</th>
+                  <th className="p-3 text-right">Reconciled</th>
+                  <th className="p-3 text-right">Remaining</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody data-testid="import-log-rows">
+                {batches.map((b) => {
+                  const live = b.live || {};
+                  return (
+                    <tr key={b.id} className="border-t border-[#F0F0F0]" data-testid={`import-batch-${b.id}`}>
+                      <td className="p-3 text-xs">
+                        <div className="font-mono">{(b.created_at || "").slice(0, 16).replace("T", " ")}</div>
+                        <div className="text-[10px] text-[#9A9A9A]">{b.created_by_name || "—"}</div>
+                      </td>
+                      <td className="p-3 text-xs max-w-[220px] truncate" title={b.filename}>{b.filename || "—"}</td>
+                      <td className="p-3 text-right font-mono text-xs">{b.rows_saved ?? 0}</td>
+                      <td className="p-3 text-right font-mono text-xs text-[#B87500]">{b.auto_matched ?? 0}</td>
+                      <td className="p-3 text-right font-mono text-xs text-[#1D633E]">{live.reconciled ?? 0}</td>
+                      <td className="p-3 text-right font-mono text-xs text-[#5C5C5C]">{live.total ?? 0}</td>
+                      <td className="p-3 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <button onClick={() => downloadBatch(b)} className="btn-ghost text-[11px]" title="Re-download original CSV" data-testid={`import-download-${b.id}`}>
+                            <DownloadSimple size={12} /> CSV
+                          </button>
+                          <button onClick={() => deleteBatch(b)} className="btn-ghost text-[11px] text-[#B4001C]" title="Delete this import" data-testid={`import-delete-${b.id}`}>
+                            <Trash size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {batches.length === 0 && (
+                  <tr><td colSpan={7} className="p-8 text-center text-[#9A9A9A]">
+                    No statement imports yet for this account.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="border border-[#E5E5E5] overflow-x-auto">
