@@ -16,6 +16,8 @@ from datetime import date, timedelta
 BASE = "https://finance-corrections.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@designsaga.com"
 ADMIN_PASSWORD = "Admin@123"
+SUPERADMIN_EMAIL = "designsaga10@gmail.com"
+SUPERADMIN_PASSWORD = "Admin@123"
 ACCOUNTANT_EMAIL = "acct@test.com"
 ACCOUNTANT_PASSWORD = "Acct@1234"
 
@@ -609,6 +611,67 @@ def test_general_all_jes_balanced():
 
 
 # ==================================================
+# COMPANY SETTINGS TESTS (Bug Fix: SuperAdmin org fetch)
+# ==================================================
+
+def test_company_settings_superadmin_org_current():
+    """Company Settings: SuperAdmin can fetch /api/org/current."""
+    s, _ = runner.login(SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD)
+    
+    r = s.get(f"{BASE}/org/current")
+    assert r.status_code == 200, f"SuperAdmin should access /org/current, got {r.status_code}: {r.text}"
+    
+    org = r.json()
+    assert org is not None, "SuperAdmin should get org data"
+    # Should have branding (even if default)
+    assert "branding" in org, "Org should have branding field"
+    
+    print(f"   ✓ SuperAdmin can fetch /org/current (org_id={org.get('org_id')})")
+
+
+def test_company_settings_admin_org_current():
+    """Company Settings: Admin can fetch /api/org/current."""
+    s, _ = runner.login(ADMIN_EMAIL, ADMIN_PASSWORD)
+    
+    r = s.get(f"{BASE}/org/current")
+    assert r.status_code == 200, f"Admin should access /org/current, got {r.status_code}: {r.text}"
+    
+    org = r.json()
+    assert org is not None, "Admin should get org data"
+    assert "branding" in org, "Org should have branding field"
+    
+    print(f"   ✓ Admin can fetch /org/current (org_id={org.get('org_id')})")
+
+
+def test_company_settings_superadmin_master_data():
+    """Company Settings: SuperAdmin can fetch /api/master-data."""
+    s, _ = runner.login(SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD)
+    
+    r = s.get(f"{BASE}/master-data")
+    assert r.status_code == 200, f"SuperAdmin should access /master-data, got {r.status_code}: {r.text}"
+    
+    data = r.json()
+    assert "kinds" in data, "Master data should have 'kinds' field"
+    assert "data" in data, "Master data should have 'data' field"
+    
+    print(f"   ✓ SuperAdmin can fetch /master-data (kinds={len(data.get('kinds', {}))})")
+
+
+def test_company_settings_admin_master_data():
+    """Company Settings: Admin can fetch /api/master-data."""
+    s, _ = runner.login(ADMIN_EMAIL, ADMIN_PASSWORD)
+    
+    r = s.get(f"{BASE}/master-data")
+    assert r.status_code == 200, f"Admin should access /master-data, got {r.status_code}: {r.text}"
+    
+    data = r.json()
+    assert "kinds" in data, "Master data should have 'kinds' field"
+    assert "data" in data, "Master data should have 'data' field"
+    
+    print(f"   ✓ Admin can fetch /master-data (kinds={len(data.get('kinds', {}))})")
+
+
+# ==================================================
 # MAIN
 # ==================================================
 
@@ -661,6 +724,16 @@ if __name__ == "__main__":
     # General correctness
     runner.run_test("General: All JEs balanced (DR = CR)", 
                     test_general_all_jes_balanced)
+    
+    # Company Settings (Bug Fix)
+    runner.run_test("Company Settings: SuperAdmin can fetch /org/current", 
+                    test_company_settings_superadmin_org_current)
+    runner.run_test("Company Settings: Admin can fetch /org/current", 
+                    test_company_settings_admin_org_current)
+    runner.run_test("Company Settings: SuperAdmin can fetch /master-data", 
+                    test_company_settings_superadmin_master_data)
+    runner.run_test("Company Settings: Admin can fetch /master-data", 
+                    test_company_settings_admin_master_data)
     
     # Print summary and exit
     sys.exit(runner.print_summary())

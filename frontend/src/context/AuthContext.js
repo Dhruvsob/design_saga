@@ -40,10 +40,11 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
-      // Fetch org branding for logged-in users (skip SuperAdmin without org context)
-      if (data?.role !== "SuperAdmin" || data?.org_id) {
-        await fetchOrg();
-      }
+      // Fetch org branding for every logged-in user. fetchOrg() handles a
+      // missing org gracefully (catches + sets null), and the backend resolves
+      // a default org even for SuperAdmins without an org_id — so the Company
+      // settings page loads instead of being stuck on a skeleton.
+      await fetchOrg();
     } catch {
       setUser(null);
       setCurrentOrg(null);
