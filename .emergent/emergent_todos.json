@@ -1,0 +1,50 @@
+[
+  {
+    "content": "P1: Payment reversal - reset source invoice/milestone + clear journal_id references",
+    "status": "completed"
+  },
+  {
+    "content": "P1: Accounting RBAC - use finance.* permissions consistently (not invoices.*)",
+    "status": "completed"
+  },
+  {
+    "content": "P1: Commission receipt - use central _post_journal engine, keep project_id link",
+    "status": "completed"
+  },
+  {
+    "content": "P1: Loan deletion - never hard-delete JE, reverse instead",
+    "status": "completed"
+  },
+  {
+    "content": "P1: Verify opening balances and tenant safety on commission/settlement",
+    "status": "completed"
+  },
+  {
+    "content": "P2: Daybook filters (project/client/vendor), better pagination",
+    "status": "completed"
+  },
+  {
+    "content": "P2: Drill-through extended - vendor/employee/loan links from TransactionDetail",
+    "status": "completed"
+  },
+  {
+    "content": "P2: Dashboard 'Today's Collections' fix (include invoice_payment/milestone_payment)",
+    "status": "completed"
+  },
+  {
+    "content": "P2: Quick-add income/expense - client + project selection",
+    "status": "completed"
+  },
+  {
+    "content": "P3: Hide inactive accounts from dropdowns, mobile friendly polish",
+    "status": "completed"
+  },
+  {
+    "content": "P3: Commission Vendor-wise report (earned/received/pending)",
+    "status": "completed"
+  },
+  {
+    "content": "Testing: end-to-end backend tests via testing_agent",
+    "status": "completed"
+  }
+]
