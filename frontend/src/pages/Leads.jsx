@@ -27,7 +27,7 @@ export default function Leads() {
   const TYPES = values("project_type", FALLBACK_TYPES);
   const [leads, setLeads] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "Website", project_type: "Residential", budget: 0, location: "", stage: "New" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "Website", project_type: "Residential", budget: "", location: "", stage: "New" });
   const [editing, setEditing] = useState(null); // lead being edited
   const [dragId, setDragId] = useState(null);
   const [dragOver, setDragOver] = useState(null);
@@ -42,7 +42,7 @@ export default function Leads() {
     e.preventDefault();
     await api.post("/leads", { ...form, budget: Number(form.budget || 0) });
     setShowForm(false);
-    setForm({ name: "", email: "", phone: "", source: "Website", project_type: "Residential", budget: 0, location: "", stage: "New" });
+    setForm({ name: "", email: "", phone: "", source: "Website", project_type: "Residential", budget: "", location: "", stage: "New" });
     load();
   };
 
@@ -109,7 +109,7 @@ export default function Leads() {
           <select className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
             {TYPES.map((s) => <option key={s}>{s}</option>)}
           </select>
-          <input className="input-flat" type="number" placeholder="Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+          <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
           <input className="input-flat md:col-span-2" placeholder="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
           <button className="btn-primary" type="submit" data-testid="lead-submit">Save lead</button>
         </form>
@@ -208,7 +208,7 @@ export default function Leads() {
               <select className="input-flat" value={editing.project_type || ""} onChange={(e) => setEditing({ ...editing, project_type: e.target.value })}>
                 {TYPES.map((s) => <option key={s}>{s}</option>)}
               </select>
-              <input className="input-flat" type="number" placeholder="Budget (₹)" value={editing.budget ?? 0} onChange={(e) => setEditing({ ...editing, budget: e.target.value })} data-testid="edit-lead-budget" />
+              <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={editing.budget ?? ""} onChange={(e) => setEditing({ ...editing, budget: e.target.value })} data-testid="edit-lead-budget" />
               <input className="input-flat" placeholder="Location" value={editing.location || ""} onChange={(e) => setEditing({ ...editing, location: e.target.value })} />
             </div>
             <textarea className="input-flat w-full" rows="2" placeholder="Notes" value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />

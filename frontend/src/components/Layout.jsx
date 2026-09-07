@@ -4,11 +4,12 @@ import {
   SquaresFour, UsersThree, Briefcase, Kanban, Receipt, UserCircle,
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard,
-  Package, Wallet, List, X, CalendarBlank,
+  Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn,
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
 import { useEffect, useState } from "react";
+import { formatDate, formatTime } from "../lib/format";
 
 const NAV = [
   { to: "/dashboard",   label: "Dashboard",    section: "01", perm: "dashboard.read", Icon: SquaresFour },
@@ -31,8 +32,7 @@ const NAV = [
   { to: "/admin/rbac",  label: "Team & Roles", section: "16", perm: "users.read",     Icon: ShieldCheck, admin: true },
 ];
 
-const fmtClock = (d) =>
-  d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+const fmtClock = (d) => formatTime(d);
 
 export default function Layout({ children }) {
   const { user, logout, hasPerm, currentOrg, isSuperAdmin } = useAuth();
@@ -41,6 +41,7 @@ export default function Layout({ children }) {
   const [now, setNow] = useState(new Date());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Close the mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -49,6 +50,23 @@ export default function Layout({ children }) {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // Track browser full-screen state so the icon reflects reality (Esc, F11 etc.)
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.();
+      } else {
+        document.documentElement.requestFullscreen?.();
+      }
+    } catch { /* fullscreen not supported — no-op */ }
+  };
 
   // Filter nav by permission + module feature flag + admin flag.
   const enabledModules = currentOrg?.features?.modules || {};
@@ -224,11 +242,20 @@ export default function Layout({ children }) {
             <kbd className="hidden md:inline-block px-1.5 py-0.5 rounded bg-[#F5F4F0] border border-[#E8E6E1] font-mono text-[10px] text-[#6B6B6B]">⌘K</kbd>
           </button>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-2 overline">
               <span className="live-dot" />
-              <span>{now.toDateString().toUpperCase()} · {fmtClock(now)}</span>
+              <span>{formatDate(now)} · {fmtClock(now)} IST</span>
             </div>
+            <button
+              onClick={toggleFullscreen}
+              className="btn-icon"
+              aria-label={isFullscreen ? "Exit full screen" : "Enter full screen"}
+              title={isFullscreen ? "Exit full screen" : "Full screen"}
+              data-testid="fullscreen-toggle"
+            >
+              {isFullscreen ? <ArrowsIn size={18} /> : <ArrowsOut size={18} />}
+            </button>
             <NotificationBell />
           </div>
         </header>

@@ -61,6 +61,18 @@ class OrgAddress(BaseModel):
     pincode: Optional[str] = None
 
 
+class OrgBilling(BaseModel):
+    """Manual subscription bookkeeping for a tenant (no payment gateway).
+    Amounts are in INR. Dates are YYYY-MM-DD strings."""
+    owner_override: Optional[str] = None      # manual owner name (else primary Admin)
+    amount_charged: Optional[float] = None    # one-time / setup or plan amount
+    maintenance_charge: Optional[float] = None  # recurring subscription / AMC
+    billing_cycle: Optional[str] = None       # monthly | quarterly | yearly
+    start_date: Optional[str] = None
+    renewal_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class OrgCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     slug: Optional[str] = None                    # Auto-generated if omitted
@@ -77,6 +89,7 @@ class OrgCreateIn(BaseModel):
     plan: Optional[str] = "starter"               # starter | pro | enterprise
     address: Optional[OrgAddress] = None
     branding: Optional[OrgBranding] = None
+    billing: Optional[OrgBilling] = None
     notes: Optional[str] = None
 
 
@@ -92,6 +105,7 @@ class OrgUpdateIn(BaseModel):
     plan: Optional[str] = None
     address: Optional[OrgAddress] = None
     branding: Optional[OrgBranding] = None
+    billing: Optional[OrgBilling] = None
     features: Optional[dict] = None
     notes: Optional[str] = None
 

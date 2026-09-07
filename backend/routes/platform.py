@@ -79,8 +79,20 @@ async def list_orgs(user=None, request: Request = None,
             users_n += await db.users.count_documents({"org_id": {"$exists": False}})
             projects_n += await db.projects.count_documents({"org_id": {"$exists": False}})
             clients_n += await db.clients.count_documents({"org_id": {"$exists": False}})
+        # Tenant owner = manual override, else the earliest active Admin.
+        owner = (o.get("billing") or {}).get("owner_override")
+        owner_email = None
+        if not owner:
+            admin = await db.users.find_one(
+                {"org_id": oid, "role": {"$in": ["Admin", "Director"]}},
+                {"_id": 0, "name": 1, "email": 1}, sort=[("created_at", 1)])
+            if admin:
+                owner = admin.get("name") or admin.get("email")
+                owner_email = admin.get("email")
         out.append({
             **o,
+            "owner": owner,
+            "owner_email": owner_email,
             "stats": {"users": users_n, "projects": projects_n, "clients": clients_n},
         })
     return out
@@ -128,6 +140,7 @@ async def create_org(payload: OrgCreateIn, request: Request,
         "address": payload.address.dict() if payload.address else {},
         "branding": (payload.branding.dict() if payload.branding
                      else {"primary_color": "#002FA7", "accent_color": "#0A0A0A"}),
+        "billing": payload.billing.dict() if payload.billing else {},
         "features": {
             "modules": features_for_mode(payload.business_mode),
             "limits": DEFAULT_FEATURES["limits"],
@@ -174,6 +187,10 @@ async def update_org(org_id: str, payload: OrgUpdateIn, request: Request,
         up["address"] = up["address"].dict()
     if "branding" in up and hasattr(up["branding"], "dict"):
         up["branding"] = up["branding"].dict()
+    if "billing" in up:
+        # Merge with existing billing so partial edits don't wipe other fields.
+        new_billing = up["billing"].dict(exclude_unset=True) if hasattr(up["billing"], "dict") else dict(up["billing"])
+        up["billing"] = {**(org.get("billing") or {}), **new_billing}
     # If business_mode changes, re-derive the module feature flags
     if "business_mode" in up and up["business_mode"] != org.get("business_mode"):
         new_modules = features_for_mode(up["business_mode"])

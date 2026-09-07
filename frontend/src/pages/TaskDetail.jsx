@@ -76,6 +76,14 @@ export default function TaskDetail() {
         </button>
       </PageHero>
 
+      {task.assigned_to_me && (
+        <div className="flex items-center gap-2 border border-[#C7D7FE] bg-[#EFF4FF] text-[#1D4ED8] px-4 py-2.5 rounded-lg text-sm" data-testid="assigned-to-me-banner">
+          <Users size={16} weight="fill" />
+          <span className="font-semibold">Task assigned to me{task.assigned_by_name ? ` by ${task.assigned_by_name}` : ""}</span>
+          <span className="text-[#4B5F9E]">— update the status below when you make progress.</span>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[#E5E5E5]">
         {TABS.map(({ id: tid, label, Icon, testid }) => (

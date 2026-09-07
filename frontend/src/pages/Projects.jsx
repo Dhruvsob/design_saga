@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import { Plus, ArrowRight, CaretRight } from "@phosphor-icons/react";
 import PageHero from "../components/PageHero";
+import { formatINR, empName } from "../lib/format";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
 const FALLBACK_TYPES = ["Residential", "Commercial"];
@@ -20,29 +21,48 @@ export default function Projects() {
                    : businessMode === "turnkey" ? "turnkey" : "consultancy";
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     name: "", client_id: "", project_type: "Residential",
-    engagement_type: defaultEng, budget: 0, stage: "Requirement", description: "",
+    engagement_type: defaultEng, budget: "", stage: "Requirement", description: "",
+    project_manager_id: "", team_ids: [],
   });
   const [err, setErr] = useState("");
   const navigate = useNavigate();
 
   const load = async () => {
-    const [p, c] = await Promise.all([api.get("/projects"), api.get("/clients")]);
+    const [p, c, e] = await Promise.all([
+      api.get("/projects"),
+      api.get("/clients"),
+      api.get("/employees").catch(() => ({ data: [] })),
+    ]);
     setProjects(p.data);
     setClients(c.data);
+    setEmployees(Array.isArray(e.data) ? e.data : e.data?.employees || []);
   };
   useEffect(() => { load(); }, []);
   useEffect(() => { setForm((f) => ({ ...f, engagement_type: defaultEng })); }, [defaultEng]);
 
+  const toggleTeam = (id) =>
+    setForm((f) => ({
+      ...f,
+      team_ids: f.team_ids.includes(id) ? f.team_ids.filter((x) => x !== id) : [...f.team_ids, id],
+    }));
+
   const submit = async (e) => {
     e.preventDefault(); setErr("");
     try {
-      await api.post("/projects", { ...form, budget: Number(form.budget || 0) });
+      await api.post("/projects", {
+        ...form,
+        budget: form.budget === "" ? 0 : Number(form.budget),
+        project_manager_id: form.project_manager_id || undefined,
+        team_ids: form.team_ids,
+      });
       setShowForm(false);
       setForm({ name: "", client_id: "", project_type: "Residential",
-                engagement_type: defaultEng, budget: 0, stage: "Requirement", description: "" });
+                engagement_type: defaultEng, budget: "", stage: "Requirement", description: "",
+                project_manager_id: "", team_ids: [] });
       load();
     } catch (ex) {
       const d = ex?.response?.data?.detail;
@@ -95,8 +115,46 @@ export default function Projects() {
               </div>
             </label>
           )}
-          <input className="input-flat" type="number" placeholder="Budget" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+          <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="project-budget" />
           <input className="input-flat" placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+
+          {/* Project Team — controls who can see this project's tasks */}
+          <div className="md:col-span-2 border-t border-[#EFEDE8] pt-3">
+            <div className="overline text-[10px] mb-2">PROJECT TEAM</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[11px] text-[#5C5C5C] mb-1 block">Project Manager</span>
+                <select className="input-flat w-full" value={form.project_manager_id}
+                  onChange={(e) => setForm({ ...form, project_manager_id: e.target.value })}
+                  data-testid="project-pm-select">
+                  <option value="">— Select PM (optional) —</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {empName(emp)}{emp.designation ? ` · ${emp.designation}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="block">
+                <span className="text-[11px] text-[#5C5C5C] mb-1 block">Team members (can see project tasks)</span>
+                <div className="border border-[#E5E5E5] rounded-md max-h-32 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="project-team-picker">
+                  {employees.length === 0 && <span className="text-xs text-[#9A9A9A]">No employees yet.</span>}
+                  {employees.map((emp) => {
+                    const on = form.team_ids.includes(emp.id);
+                    return (
+                      <button type="button" key={emp.id} onClick={() => toggleTeam(emp.id)}
+                        className={`px-2.5 py-1 text-xs rounded-full border transition ${on
+                          ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#8B7F6A] font-semibold"
+                          : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#8B7F6A]"}`}
+                        data-testid={`team-opt-${emp.id}`}>
+                        {empName(emp)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
           {err && <div className="md:col-span-2 border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
           <button className="btn-primary md:col-span-2" data-testid="project-submit" type="submit">Create project</button>
         </form>
@@ -143,7 +201,7 @@ export default function Projects() {
               </div>
 
               <div className="mt-5 flex items-center justify-between">
-                <div className="font-mono text-sm font-semibold tabular-nums">₹{(p.budget || 0).toLocaleString("en-IN")}</div>
+                <div className="font-mono text-sm font-semibold tabular-nums">{formatINR(p.budget)}</div>
                 <div className="overline flex items-center gap-1 group-hover:text-[#8B7F6A] transition-colors">
                   OPEN <CaretRight size={10} weight="bold" className="transition-transform group-hover:translate-x-0.5" />
                 </div>

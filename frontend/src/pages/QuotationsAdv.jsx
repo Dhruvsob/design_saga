@@ -20,7 +20,7 @@ export default function QuotationsAdv() {
   const [projects, setProjects] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [seeding, setSeeding] = useState(false);
-  const [form, setForm] = useState({ type: "turnkey", project_title: "", client_id: "", project_id: "", project_location: "", area_sqft: 0 });
+  const [form, setForm] = useState({ type: "turnkey", project_title: "", client_id: "", project_id: "", project_location: "", area_sqft: "" });
   const navigate = useNavigate();
 
   const load = async () => {
@@ -93,7 +93,7 @@ export default function QuotationsAdv() {
             <option value="">Link project (optional)</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <input className="input-flat" type="number" placeholder="Area (sq.ft)" value={form.area_sqft} onChange={(e) => setForm({ ...form, area_sqft: e.target.value })} />
+          <input className="input-flat" type="number" placeholder="Enter area (sq ft)" value={form.area_sqft} onChange={(e) => setForm({ ...form, area_sqft: e.target.value })} />
           <input className="input-flat md:col-span-2" placeholder="Project location" value={form.project_location} onChange={(e) => setForm({ ...form, project_location: e.target.value })} />
           <button className="btn-primary md:col-span-3" data-testid="q-submit">Create quotation</button>
         </form>

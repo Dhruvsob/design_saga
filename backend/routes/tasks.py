@@ -117,12 +117,13 @@ async def list_tasks(request: Request,
                      area: Optional[str] = None,
                      category: Optional[str] = None,
                      assignee_id: Optional[str] = None,
+                     mine: Optional[bool] = False,
                      search: Optional[str] = None,
                      due_before: Optional[str] = None,
                      due_after: Optional[str] = None,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
     q: dict = {}
     if project_id: q["project_id"] = project_id
     if task_type: q["task_type"] = task_type
@@ -145,8 +146,63 @@ async def list_tasks(request: Request,
             {"item_description": rx}, {"remarks": rx},
             {"vendor_contact.vendor_name": rx},
         ]
+
+    # ---- Identity: map the logged-in user to their employee record so we can
+    # match against project team membership and task assignment. ----
+    my_ids = await _user_identity_ids(user)
+    my_name = user.get("name")
+
+    # ---- Visibility gate (Project Team → Tasks) ----
+    # Privileged roles (permission `tasks.delete` → Admin/Director/PM/SuperAdmin)
+    # see every task in the tenant. Regular staff (Designer/Employee/HR) only see
+    # tasks for projects they're on (team member or PM) OR tasks assigned to them.
+    from core.rbac import has_permission
+    can_see_all = has_permission(user, "tasks.delete")
+    if not can_see_all:
+        my_project_ids = await _projects_for_member(my_ids)
+        visibility = {"$or": [
+            {"project_id": {"$in": my_project_ids}},
+            {"assignee_id": {"$in": list(my_ids)}},
+            {"assignees": {"$in": list(my_ids)}},
+            {"created_by": user["user_id"]},
+        ]}
+        if my_name:
+            visibility["$or"].append({"assignee_name": my_name})
+        q = {"$and": [q, visibility]} if q else visibility
+
     rows = await sdb.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+
+    # ---- Annotate `assigned_to_me` so the UI can badge "Assigned to me". ----
+    for t in rows:
+        assignees = t.get("assignees") or []
+        t["assigned_to_me"] = bool(
+            (t.get("assignee_id") and t["assignee_id"] in my_ids)
+            or any(a in my_ids for a in assignees)
+            or (my_name and t.get("assignee_name") == my_name)
+        )
+    if mine:
+        rows = [t for t in rows if t["assigned_to_me"]]
     return rows
+
+
+async def _user_identity_ids(user: dict) -> set:
+    """All ids that can represent this user in task/team fields:
+    their user_id plus any linked employee id(s) (matched by user_id or email)."""
+    ids = {user["user_id"]}
+    async for e in sdb.employees.find(
+            {"$or": [{"user_id": user["user_id"]}, {"email": user.get("email")}]},
+            {"_id": 0, "id": 1}):
+        ids.add(e["id"])
+    return ids
+
+
+async def _projects_for_member(member_ids: set) -> list:
+    """Project ids where any of `member_ids` is a team member or the PM."""
+    ids = list(member_ids)
+    rows = await sdb.projects.find(
+        {"$or": [{"team_ids": {"$in": ids}}, {"project_manager_id": {"$in": ids}}]},
+        {"_id": 0, "id": 1}).to_list(1000)
+    return [r["id"] for r in rows]
 
 
 # ==================================================
@@ -156,7 +212,7 @@ async def list_tasks(request: Request,
 async def get_task(task_id: str, request: Request,
                    session_token: Optional[str] = Cookie(default=None),
                    authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
     t = await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -164,6 +220,13 @@ async def get_task(task_id: str, request: Request,
     for k in ("follow_ups", "timeline", "attachments", "reference_links", "assignees"):
         if not t.get(k):
             t[k] = []
+    my_ids = await _user_identity_ids(user)
+    my_name = user.get("name")
+    t["assigned_to_me"] = bool(
+        (t.get("assignee_id") and t["assignee_id"] in my_ids)
+        or any(a in my_ids for a in t["assignees"])
+        or (my_name and t.get("assignee_name") == my_name)
+    )
     return t
 
 
@@ -210,6 +273,10 @@ async def create_task(payload: TaskIn, request: Request,
     for k in ("follow_ups", "attachments", "reference_links", "assignees"):
         if not doc.get(k):
             doc[k] = []
+    # Record who assigned it (for the "Task assigned to me by …" label).
+    if doc.get("assignee_id") or doc.get("assignees") or doc.get("assignee_name"):
+        doc["assigned_by"] = user["user_id"]
+        doc["assigned_by_name"] = user.get("name")
     # Future-compat placeholders (never break schema when procurement/PO come online)
     doc.setdefault("procurement_link", None)
     doc.setdefault("po_id", None)
@@ -226,21 +293,17 @@ async def create_task(payload: TaskIn, request: Request,
 
     await sdb.tasks.insert_one(dict(doc))
 
-    # Emit notification to the assignee.
+    # Emit notification to every assignee (employee ids + legacy assignee).
     try:
         from core.notifications import emit as _notify
-        assignee_uid = doc.get("assignee_id")
-        if not assignee_uid and doc.get("assignee_name"):
-            assignee = await db.users.find_one(
-                {"name": doc["assignee_name"], "org_id": user_org_id(user)},
-                {"_id": 0, "user_id": 1})
-            if assignee:
-                assignee_uid = assignee["user_id"]
-        if assignee_uid and assignee_uid != user["user_id"]:
+        recipient_uids = await _assignee_user_ids(
+            user, doc.get("assignee_id"), doc.get("assignees"), doc.get("assignee_name"))
+        recipient_uids = [u for u in recipient_uids if u and u != user["user_id"]]
+        if recipient_uids:
             await _notify(
-                [assignee_uid], "task_assigned",
+                recipient_uids, "task_assigned",
                 f"New task · {doc['title'][:60]}",
-                body=(doc.get("description") or "")[:120] or "You've been assigned a new task.",
+                body=(doc.get("description") or "")[:120] or f"Assigned to you by {user.get('name') or 'Admin'}.",
                 link=f"/tasks/{doc['id']}",
                 priority="high" if (doc.get("priority") or "").lower() in ("urgent", "critical", "high") else "normal",
                 meta={"task_id": doc["id"], "assigned_by": user.get("name")},
@@ -248,7 +311,50 @@ async def create_task(payload: TaskIn, request: Request,
     except Exception:
         pass  # notifications never block task creation
 
-    return await sdb.tasks.find_one({"id": doc["id"]}, {"_id": 0})
+    created = await sdb.tasks.find_one({"id": doc["id"]}, {"_id": 0})
+    # Annotate assigned_to_me for parity with GET responses.
+    if created is not None:
+        my_ids = await _user_identity_ids(user)
+        my_name = user.get("name")
+        assignees = created.get("assignees") or []
+        created["assigned_to_me"] = bool(
+            (created.get("assignee_id") and created["assignee_id"] in my_ids)
+            or any(a in my_ids for a in assignees)
+            or (my_name and created.get("assignee_name") == my_name)
+        )
+    return created
+
+
+async def _assignee_user_ids(user: dict, assignee_id, assignees, assignee_name) -> list:
+    """Resolve task assignees (which may be employee ids, user ids or a legacy
+    name) into notifiable user_ids within the tenant."""
+    candidate_ids = set()
+    if assignee_id:
+        candidate_ids.add(assignee_id)
+    for a in (assignees or []):
+        candidate_ids.add(a)
+    uids = set()
+    if candidate_ids:
+        # direct user_id match
+        async for u in db.users.find({"user_id": {"$in": list(candidate_ids)}},
+                                     {"_id": 0, "user_id": 1}):
+            uids.add(u["user_id"])
+        # employee id → linked user_id / email
+        async for e in sdb.employees.find({"id": {"$in": list(candidate_ids)}},
+                                          {"_id": 0, "user_id": 1, "email": 1}):
+            if e.get("user_id"):
+                uids.add(e["user_id"])
+            elif e.get("email"):
+                u = await db.users.find_one({"email": e["email"], "org_id": user_org_id(user)},
+                                            {"_id": 0, "user_id": 1})
+                if u:
+                    uids.add(u["user_id"])
+    if not uids and assignee_name:
+        u = await db.users.find_one({"name": assignee_name, "org_id": user_org_id(user)},
+                                    {"_id": 0, "user_id": 1})
+        if u:
+            uids.add(u["user_id"])
+    return list(uids)
 
 
 # ==================================================
@@ -299,6 +405,12 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
     updates["updated_at"] = iso_now()
     updates["updated_by"] = user["user_id"]
 
+    # If assignment changed, record who assigned and notify the (new) assignees.
+    assignment_changed = any(k in updates for k in ("assignee_id", "assignees", "assignee_name"))
+    if assignment_changed:
+        updates["assigned_by"] = user["user_id"]
+        updates["assigned_by_name"] = user.get("name")
+
     if merged.get("status") == "done":
         events.append(_timeline_entry(user, TIMELINE_EVENTS["COMPLETED"], "Task completed"))
 
@@ -309,6 +421,31 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
         })
     else:
         await sdb.tasks.update_one({"id": task_id}, {"$set": updates})
+
+    if assignment_changed:
+        try:
+            from core.notifications import emit as _notify
+            new_ids = set((updates.get("assignees") or merged.get("assignees") or []))
+            if updates.get("assignee_id"):
+                new_ids.add(updates["assignee_id"])
+            prev_ids = set(existing.get("assignees") or [])
+            if existing.get("assignee_id"):
+                prev_ids.add(existing["assignee_id"])
+            added = new_ids - prev_ids
+            uids = await _assignee_user_ids(user, updates.get("assignee_id"),
+                                            list(added), updates.get("assignee_name"))
+            uids = [u for u in uids if u and u != user["user_id"]]
+            if uids:
+                await _notify(
+                    uids, "task_assigned",
+                    f"Task assigned · {merged.get('title', '')[:60]}",
+                    body=f"Assigned to you by {user.get('name') or 'Admin'}.",
+                    link=f"/tasks/{task_id}",
+                    meta={"task_id": task_id, "assigned_by": user.get("name")},
+                )
+        except Exception:
+            pass
+
     return await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
 
 

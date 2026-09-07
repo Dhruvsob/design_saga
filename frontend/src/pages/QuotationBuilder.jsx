@@ -320,7 +320,7 @@ function Overview({ q, update, tpl, isConsult }) {
             <input className="input-flat" value={q.project_location || ""} onChange={(e) => update({ project_location: e.target.value })} />
           </Field>
           <Field label="Area (sq.ft)">
-            <input type="number" className="input-flat" value={q.area_sqft || 0} onChange={(e) => update({ area_sqft: Number(e.target.value) || 0 })} />
+            <input type="number" className="input-flat" placeholder="Enter area (sq ft)" value={q.area_sqft ?? ""} onChange={(e) => update({ area_sqft: e.target.value === "" ? "" : Number(e.target.value) })} />
           </Field>
         </Card>
       </div>
@@ -588,8 +588,8 @@ function Costing({ q, update }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="tab-costing">
       <Card title="ADJUST COMMERCIALS">
-        <Field label="Discount %"><input type="number" className="input-flat" value={c.discount_pct || 0} onChange={(e) => setC("discount_pct", e.target.value)} /></Field>
-        <Field label="Contingency %"><input type="number" className="input-flat" value={c.contingency_pct || 0} onChange={(e) => setC("contingency_pct", e.target.value)} /></Field>
+        <Field label="Discount %"><input type="number" className="input-flat" placeholder="Enter discount %" value={c.discount_pct ?? ""} onChange={(e) => setC("discount_pct", e.target.value)} /></Field>
+        <Field label="Contingency %"><input type="number" className="input-flat" placeholder="Enter contingency %" value={c.contingency_pct ?? ""} onChange={(e) => setC("contingency_pct", e.target.value)} /></Field>
         <Field label="GST %"><input type="number" className="input-flat" value={c.tax_pct || 18} onChange={(e) => setC("tax_pct", e.target.value)} /></Field>
         <p className="text-xs text-[#5C5C5C] mt-2">Save to recompute totals on the server.</p>
       </Card>
@@ -669,7 +669,7 @@ function PaymentPlan({ q, update, tpl }) {
                   </select>
                 </td>
                 <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} value={p.percentage} onChange={(e) => setRow(i, "percentage", e.target.value)} /></td>
-                <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} value={p.due_after_days || 0} onChange={(e) => setRow(i, "due_after_days", e.target.value)} /></td>
+                <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} placeholder="Days" value={p.due_after_days ?? ""} onChange={(e) => setRow(i, "due_after_days", e.target.value)} /></td>
                 <td className="font-mono text-right">{fmt(p.amount)}</td>
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={p.notes || ""} onChange={(e) => setRow(i, "notes", e.target.value)} /></td>
                 <td><button onClick={() => removeRow(i)} className="text-[#FF2A00]"><Trash size={14} /></button></td>

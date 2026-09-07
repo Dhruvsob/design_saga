@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
+import { formatDate } from "../lib/format";
 import {
   Crown, Plus, Buildings, Users, Briefcase, CurrencyInr,
   Trash, ShieldCheck, PauseCircle, PlayCircle, Warning, Check,
@@ -232,9 +233,11 @@ export default function SuperAdminPanel() {
           <thead className="bg-[#FAFAFA] border-y border-[#E5E5E5]">
             <tr className="text-left">
               <Th>Workspace</Th>
+              <Th>Owner</Th>
               <Th>Mode</Th>
-              <Th>Slug</Th>
               <Th>Plan</Th>
+              <Th>Amount</Th>
+              <Th>Renewal</Th>
               <Th>Users</Th>
               <Th>Projects</Th>
               <Th>Status</Th>
@@ -262,7 +265,10 @@ export default function SuperAdminPanel() {
                     </div>
                   </div>
                 </Td>
-                <Td className="font-mono text-xs">{o.slug}</Td>
+                <Td>
+                  <div className="text-sm truncate max-w-[160px]">{o.owner || "—"}</div>
+                  {o.owner_email && <div className="text-[10px] text-[#9A9A9A] truncate max-w-[160px]">{o.owner_email}</div>}
+                </Td>
                 <Td>
                   {(() => {
                     const tone = { consultancy: "bg-[#F5F4F0] text-[#8B7F6A]",
@@ -274,6 +280,13 @@ export default function SuperAdminPanel() {
                 <Td>
                   <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#8B7F6A]">{o.plan || "starter"}</span>
                 </Td>
+                <Td className="font-mono text-xs tabular-nums">
+                  {o.billing?.amount_charged != null ? fmtMoney(o.billing.amount_charged) : "—"}
+                  {o.billing?.maintenance_charge != null && (
+                    <div className="text-[10px] text-[#9A9A9A]">+{fmtMoney(o.billing.maintenance_charge)} AMC</div>
+                  )}
+                </Td>
+                <Td className="font-mono text-xs">{o.billing?.renewal_date ? formatDate(o.billing.renewal_date) : "—"}</Td>
                 <Td className="font-mono text-xs tabular-nums">{o.stats?.users ?? 0}</Td>
                 <Td className="font-mono text-xs tabular-nums">{o.stats?.projects ?? 0}</Td>
                 <Td>
@@ -319,7 +332,7 @@ export default function SuperAdminPanel() {
               </tr>
             ))}
             {orgs.length === 0 && (
-              <tr><td colSpan={8} className="p-12 text-center text-[#5C5C5C]">
+              <tr><td colSpan={10} className="p-12 text-center text-[#5C5C5C]">
                 No workspaces yet. Click <em>Create workspace</em> to spin up the first tenant.
               </td></tr>
             )}
@@ -484,18 +497,34 @@ function CreateOrgModal({ onClose, onCreated }) {
 
 /* ------- Edit org modal ------- */
 function EditOrgModal({ org, onClose, onSaved }) {
+  const b = org.billing || {};
   const [f, setF] = useState({
     display_name: org.display_name || org.name, phone: org.phone || "",
     website: org.website || "", gstin: org.gstin || "", pan: org.pan || "",
     plan: org.plan || "starter", industry: org.industry || "",
     business_mode: org.business_mode || "hybrid",
   });
+  const [billing, setBilling] = useState({
+    owner_override: b.owner_override || "",
+    amount_charged: b.amount_charged ?? "",
+    maintenance_charge: b.maintenance_charge ?? "",
+    billing_cycle: b.billing_cycle || "yearly",
+    start_date: b.start_date || "",
+    renewal_date: b.renewal_date || "",
+    notes: b.notes || "",
+  });
+  const setB = (k, v) => setBilling((s) => ({ ...s, [k]: v }));
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e) => {
     e.preventDefault(); setErr(""); setBusy(true);
     try {
-      await api.patch(`/platform/orgs/${org.org_id}`, f);
+      const billingPayload = {
+        ...billing,
+        amount_charged: billing.amount_charged === "" ? null : Number(billing.amount_charged),
+        maintenance_charge: billing.maintenance_charge === "" ? null : Number(billing.maintenance_charge),
+      };
+      await api.patch(`/platform/orgs/${org.org_id}`, { ...f, billing: billingPayload });
       onSaved();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Update failed"));
@@ -538,6 +567,52 @@ function EditOrgModal({ org, onClose, onSaved }) {
             <option value="pro">Pro</option>
             <option value="enterprise">Enterprise</option>
           </select>
+        </div>
+
+        {/* Subscription / billing (manual bookkeeping — no payment gateway) */}
+        <div className="border-t border-[#EFEDE8] pt-3">
+          <div className="overline mb-2">SUBSCRIPTION & BILLING</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Owner name (override)</span>
+              <input className="input-flat w-full" placeholder={org.owner || "Primary Admin"}
+                     value={billing.owner_override} onChange={(e) => setB("owner_override", e.target.value)}
+                     data-testid="billing-owner" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Billing cycle</span>
+              <select className="input-flat w-full" value={billing.billing_cycle}
+                      onChange={(e) => setB("billing_cycle", e.target.value)} data-testid="billing-cycle">
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Amount charged (₹)</span>
+              <input className="input-flat w-full" type="number" placeholder="Enter amount"
+                     value={billing.amount_charged} onChange={(e) => setB("amount_charged", e.target.value)}
+                     data-testid="billing-amount" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Maintenance / AMC (₹)</span>
+              <input className="input-flat w-full" type="number" placeholder="Enter charge"
+                     value={billing.maintenance_charge} onChange={(e) => setB("maintenance_charge", e.target.value)}
+                     data-testid="billing-maintenance" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Start date</span>
+              <input className="input-flat w-full" type="date"
+                     value={billing.start_date} onChange={(e) => setB("start_date", e.target.value)}
+                     data-testid="billing-start" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Renewal date</span>
+              <input className="input-flat w-full" type="date"
+                     value={billing.renewal_date} onChange={(e) => setB("renewal_date", e.target.value)}
+                     data-testid="billing-renewal" />
+            </label>
+          </div>
         </div>
         {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">

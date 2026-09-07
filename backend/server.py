@@ -300,6 +300,8 @@ class ProjectIn(BaseModel):
     end_date: Optional[str] = None
     stage: Optional[str] = "Requirement"
     description: Optional[str] = None
+    project_manager_id: Optional[str] = None           # employee id (project team lead)
+    team_ids: Optional[List[str]] = None               # employee ids on the project team
 
 
 class ProjectStageUpdate(BaseModel):
@@ -1132,8 +1134,12 @@ async def get_project(project_id: str, request: Request,
     lookup_ids = list({*team_ids, *( [pm_id] if pm_id else [] )})
     if lookup_ids:
         emps = await sdb.employees.find({"id": {"$in": lookup_ids}},
-                                        {"_id": 0, "id": 1, "name": 1, "designation": 1,
+                                        {"_id": 0, "id": 1, "name": 1, "first_name": 1,
+                                         "last_name": 1, "designation": 1,
                                          "department": 1, "employee_id": 1}).to_list(50)
+        for e in emps:
+            if not e.get("name"):
+                e["name"] = " ".join([e.get("first_name") or "", e.get("last_name") or ""]).strip() or e.get("employee_id") or "—"
         emap = {e["id"]: e for e in emps}
         p["project_manager"] = emap.get(pm_id)
         p["team"] = [emap[i] for i in team_ids if i in emap]

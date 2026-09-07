@@ -14,7 +14,7 @@ export default function Invoices({ docType = "invoice" }) {
   function initialForm(dt) {
     return {
       client_id: "", project_id: "",
-      items: [{ description: "", quantity: 1, rate: 0, amount: 0 }],
+      items: [{ description: "", quantity: 1, rate: "", amount: 0 }],
       tax_rate: 18, notes: "Payment due within 15 days.",
       due_date: "", status: "draft", doc_type: dt,
     };
@@ -39,7 +39,7 @@ export default function Invoices({ docType = "invoice" }) {
     setForm({ ...form, items });
   };
 
-  const addItem = () => setForm({ ...form, items: [...form.items, { description: "", quantity: 1, rate: 0, amount: 0 }] });
+  const addItem = () => setForm({ ...form, items: [...form.items, { description: "", quantity: 1, rate: "", amount: 0 }] });
   const removeItem = (i) => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) });
 
   const subtotal = form.items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0);

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
+import { empName } from "../lib/format";
 import {
   Plus, X, Trash, DotsSixVertical, MagnifyingGlass, ListChecks,
   Table as TableIcon, SquaresFour, Warning, Bell, DownloadSimple,
@@ -34,7 +35,7 @@ const EMPTY_TASK = {
   title: "", description: "", project_id: "", task_type: "employee",
   area: "", category: "", item_description: "", quantity: "",
   priority: "medium", status_detail: "Pending",
-  remarks: "", assignee_name: "", due_date: "",
+  remarks: "", assignee_name: "", assignee_id: "", assignees: [], due_date: "",
   vendor_contact: { vendor_name: "", contact_person: "", phone: "", email: "", whatsapp: "" },
 };
 
@@ -48,6 +49,7 @@ export default function TasksBoard() {
   const [view, setView] = useState("kanban");   // kanban | table
   const [taskType, setTaskType] = useState("all");  // all | employee | vendor
   const [q, setQ] = useState("");
+  const [mineOnly, setMineOnly] = useState(false);
   const [filters, setFilters] = useState({ project_id: "", area: "", category: "", priority: "", status_detail: "" });
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_TASK);
@@ -73,6 +75,7 @@ export default function TasksBoard() {
 
   const filtered = useMemo(() => {
     let rows = tasks;
+    if (mineOnly) rows = rows.filter((t) => t.assigned_to_me);
     if (taskType !== "all") rows = rows.filter((t) => (t.task_type || "employee") === taskType);
     if (filters.project_id) rows = rows.filter((t) => t.project_id === filters.project_id);
     if (filters.area) rows = rows.filter((t) => t.area === filters.area);
@@ -87,7 +90,7 @@ export default function TasksBoard() {
       );
     }
     return rows;
-  }, [tasks, taskType, filters, q]);
+  }, [tasks, taskType, filters, q, mineOnly]);
 
   const drop = async (lane) => {
     if (!dragId) return;
@@ -245,6 +248,13 @@ export default function TasksBoard() {
             <X size={12} /> Clear
           </button>
         )}
+        <button onClick={() => setMineOnly((v) => !v)}
+          className={`text-xs px-3 py-2 rounded-md border transition ${mineOnly
+            ? "border-[#1D4ED8] bg-[#EFF4FF] text-[#1D4ED8] font-semibold"
+            : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#1D4ED8]"}`}
+          data-testid="filter-assigned-to-me">
+          Assigned to me
+        </button>
       </div>
 
       {/* Bulk actions bar */}
@@ -262,7 +272,7 @@ export default function TasksBoard() {
       {showForm && (
         <TaskForm
           form={form} setForm={setForm} onSubmit={submit}
-          projects={projects} vendors={vendors} meta={meta} areas={areas} categories={categories}
+          projects={projects} vendors={vendors} employees={employees} meta={meta} areas={areas} categories={categories}
         />
       )}
 
@@ -299,7 +309,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
       status_detail: patch.status_detail,
       priority: patch.priority,
       assignee_id: patch.assignee_id,
-      assignee_name: emp?.name || "",
+      assignee_name: emp ? empName(emp) : "",
       due_date: patch.due_date,
     });
     setPatch({ status_detail: "", priority: "", assignee_id: "", due_date: "" });
@@ -324,7 +334,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
           className="bg-transparent border border-white/30 px-2 py-1.5 text-xs max-w-[200px]" data-testid="bulk-assignee">
           <option value="" className="text-black">Assignee — no change</option>
           {employees.map((e) => (
-            <option key={e.id} value={e.id} className="text-black">{e.name}{e.designation ? ` · ${e.designation}` : ""}</option>
+            <option key={e.id} value={e.id} className="text-black">{empName(e)}{e.designation ? ` · ${e.designation}` : ""}</option>
           ))}
         </select>
         <label className="flex items-center gap-1.5 text-xs">
@@ -403,11 +413,21 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                       <DotsSixVertical size={12} className="text-[#CCCCCC] ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     <div className="font-semibold text-sm leading-snug">{t.title}</div>
+                    {t.assigned_to_me && (
+                      <div className="mt-1.5">
+                        <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#EFF4FF] text-[#1D4ED8] border border-[#C7D7FE]" data-testid={`assigned-to-me-${t.id}`}>
+                          Assigned to me
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C5C5C]">
                       {t.area && <span>{t.area}</span>}
                       {t.category && <span>· {t.category}</span>}
                     </div>
                     {t.project_name && <div className="text-xs text-[#5C5C5C] mt-1.5">{t.project_name}</div>}
+                    {t.assigned_to_me && t.assigned_by_name && (
+                      <div className="text-[10px] text-[#8B7F6A] mt-1">Assigned by {t.assigned_by_name}</div>
+                    )}
                     {t.status_detail && (
                       <div className="mt-2">
                         <span className="text-[10px] font-mono px-1.5 py-0.5" style={{ background: `${STATUS_COLORS[t.status_detail] || "#000"}15`, color: STATUS_COLORS[t.status_detail] || "#000" }}>
@@ -568,10 +588,24 @@ function InlineNumber({ value, onChange }) {
 // ================================================================
 // New task form (with employee/vendor variants)
 // ================================================================
-function TaskForm({ form, setForm, onSubmit, projects, vendors, meta, areas, categories }) {
+function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], meta, areas, categories }) {
   const set = (k, v) => setForm({ ...form, [k]: v });
   const setVendor = (k, v) => setForm({ ...form, vendor_contact: { ...(form.vendor_contact || {}), [k]: v } });
   const isVendor = form.task_type === "vendor";
+
+  // Toggle an employee in the assignees list; keep primary assignee_id/name in
+  // sync (first selected) so display + notifications keep working.
+  const toggleAssignee = (empId) => {
+    const cur = form.assignees || [];
+    const next = cur.includes(empId) ? cur.filter((x) => x !== empId) : [...cur, empId];
+    const primary = employees.find((e) => e.id === next[0]);
+    setForm({
+      ...form,
+      assignees: next,
+      assignee_id: next[0] || "",
+      assignee_name: primary ? empName(primary) : "",
+    });
+  };
 
   // Pick vendor from master → auto-fill contact card so the task detail shows the right info,
   // and store vendor_id so the vendor's "assigned tasks" tab lights up automatically.
@@ -663,9 +697,25 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, meta, areas, cat
           </>
         ) : (
           <>
-            <input className="input-flat" placeholder="Assignee (employee name)"
-              value={form.assignee_name} onChange={(e) => set("assignee_name", e.target.value)} />
-            <input className="input-flat" placeholder="Remarks / brief"
+            <div className="md:col-span-2">
+              <div className="text-[11px] text-[#5C5C5C] mb-1">Assign to employee(s) — they'll see it as "Assigned to me"</div>
+              <div className="border border-[#E5E5E5] rounded-md max-h-28 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="task-assignee-picker">
+                {employees.length === 0 && <span className="text-xs text-[#9A9A9A]">No employees yet — type a name below.</span>}
+                {employees.map((emp) => {
+                  const on = (form.assignees || []).includes(emp.id);
+                  return (
+                    <button type="button" key={emp.id} onClick={() => toggleAssignee(emp.id)}
+                      className={`px-2.5 py-1 text-xs rounded-full border transition ${on
+                        ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#8B7F6A] font-semibold"
+                        : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#8B7F6A]"}`}
+                      data-testid={`assignee-opt-${emp.id}`}>
+                      {empName(emp)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <input className="input-flat md:col-span-2" placeholder="Remarks / brief"
               value={form.remarks} onChange={(e) => set("remarks", e.target.value)} />
           </>
         )}

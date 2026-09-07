@@ -1,299 +1,143 @@
-# Design Saga ERP (v3.6) — Product-Level Audit & Advanced Improvement Plan
+# ERP Connection + Usability Improvements (No Rebuild) — Plan
 
 ## 1) Objectives
-- Audit the **existing 16-module ERP** end-to-end (no rebuild) and produce a prioritized, versioned fix/improvement backlog.
-- Make the system **production-ready**: tenant-safe, correct calculations, consistent workflows, premium UX, strong RBAC, and test coverage.
-- Seed **realistic multi-tenant sample data** to validate flows across CRM→Projects→Tasks→Calendar/Notifications and Finance→Accounting.
-- Strengthen **SuperAdmin/Tenant Management** (tenant CRUD, suspend, plan limits, health, isolation verification).
-- Keep Google Calendar sync **deferred**; deliver a unified **native calendar + reminders** experience.
+- Implement **high-value connectivity + usability fixes** across the existing ERP without rebuilding modules.
+- Enforce **Project Team vs Task Assignment** as separate concepts:
+  - Project Team controls *task visibility* for regular employees.
+  - Task Assignment controls *responsibility + notifications + “Assigned to me” UX*.
+- Strengthen **multi-tenant isolation** and SuperAdmin tenant management (manual billing metadata).
+- Standardize **India-style UX**: DD/MM/YYYY, IST, ₹, FY (Apr–Mar) for the most visible areas first.
+- Add a safe **Full Screen toggle** in the main header.
 
 ---
 
 ## 2) Implementation Steps
 
-### Phase 1 — Core POC (Isolation): Multi-tenant + Accounting correctness + Notifications/Calendar emitters
-**Goal:** prove the hardest failure-prone core (tenant isolation + JE source-of-truth + event emission) works before broad polish.
+### Phase 1 — Core Flow POC (Isolation): Task visibility + assignment + tenant safety
+**Goal:** prove the most failure-prone workflow works before broad UI tweaks.
 
-**POC actions**
-1. Create a **seed script** (idempotent) to generate **2 orgs** (Consultancy + Turnkey), users (Admin/Employee/Accountant), clients, projects, tasks, vendors, quotations, invoices, payments, attendance events, expenses, purchase orders/GRNs, journal entries.
-2. Add an **isolation verification script** that:
-   - calls key list endpoints with each org context and asserts **no cross-tenant leakage**
-   - checks indexed queries use `org_id` filters
-3. Add an **accounting verification script** that:
-   - asserts Trial Balance balances, Balance Sheet `delta==0` (or recon works), ledger running balances correct
-   - checks orphan records (paid invoice without JE, vendor commission reversal correctness)
-4. Add a **notifications/calendar emitter smoke test**:
-   - create task with due date → notification bell + calendar entry
-   - invoice due date/payment → notification + calendar
-5. Run scripts; fix until green.
+**POC work**
+1. Backend task visibility gate:
+   - Add helper: `can_see_all = has_permission(user, "tasks.delete")`.
+   - If not `can_see_all`, `/api/tasks` returns only:
+     - tasks assigned to the user (via user→employee mapping), OR
+     - tasks belonging to projects where the user’s employee_id is in `projects.team_ids` or `project_manager_id`.
+2. Assignment model (no rebuild):
+   - Normalize assignments in tasks:
+     - keep `assignee_id/assignee_name` for backward compatibility,
+     - use `assignees: [employee_id]` for multi-assign.
+   - On create/update: notify **all assignees** (not only legacy assignee_name).
+3. Tenant safety quick checks:
+   - Add/extend a pytest-style isolation test using existing `/api/platform/isolation-check`.
+   - Verify task listing cannot leak tasks across orgs.
 
 **User stories (POC)**
-1. As a SuperAdmin, I can switch between two tenants and never see the other tenant’s records.
-2. As an Accountant, I can run Trial Balance and it always balances.
-3. As an Admin, I can reconcile a Balance Sheet delta with one action and see diagnostics.
-4. As a PM, creating a due-date task triggers a notification and shows on the calendar.
-5. As a finance user, recording a vendor commission reversal automatically corrects reports.
+1. As an Employee, I only see tasks for projects I’m on or tasks assigned to me.
+2. As a PM/Admin, I can still see all tasks in the tenant.
+3. As an Admin, assigning a task to multiple employees sends notifications to each.
+4. As an Employee, I can open “Assigned to me” tasks and update status to done.
+5. As a SuperAdmin, I can run isolation-check and see PASS/FAIL with details.
 
-**Exit criteria**: Seed + isolation + accounting + emitter scripts pass; key endpoints verified with sample data.
-
----
-
-### Phase 2 — Deep Audit + Prioritized Report (across all modules)
-**Goal:** inspect every screen + endpoint + DB relation with seeded data; produce a ranked backlog.
-
-**Audit steps**
-1. Map **frontend pages ↔ API routes ↔ models/collections**; identify missing CRUD, dead UI, disconnected features.
-2. Validate calculations: totals, taxes, discounts, milestones, JE postings, ledgers, payroll/attendance math.
-3. RBAC: verify backend guards on every write + sensitive read; confirm super-admin boundaries.
-4. Multi-tenant: find missing `org_id` filters, cross-tenant global collections, unsafe indexes.
-5. UX: tables/forms (filters/search/sort), empty/loading/error states, inconsistent labels, hardcoded dropdowns.
-6. Output a **prioritized audit report** (P0/P1/P2) with: scope, reproduction, fix approach, test plan.
-
-**User stories (Audit)**
-1. As an Admin, I can complete each module’s core workflow without hitting a dead end.
-2. As an Employee, I only see actions I’m allowed to perform.
-3. As a finance user, every money-affecting action has an auditable trail.
-4. As a PM, I can navigate from client→project→tasks→files quickly via related links.
-5. As a SuperAdmin, I can confirm tenant isolation with a single health check.
-
-**Exit criteria**: audit report delivered + top P0 fixes merged + tests added for each P0.
+**Exit criteria:** automated tests confirm the restricted visibility rules + no cross-tenant leakage.
 
 ---
 
-### Phase 3 — Data Integrity + Architecture Hardening (cross-module, master data)
-**Core work**
-1. Enforce `org_id` + RBAC at route layer (shared dependency) and add missing indexes.
-2. Master Data: move hardcoded dropdowns to tenant-config collections (stages, categories, payment terms, tax rates, task types, expense categories).
-3. Unified **activity/audit timeline** primitives (created/updated/by, status transitions) reused by major records.
-4. Repair/guard rails: prevent orphan states (e.g., invoice payment without JE; GRN without PO links).
+### Phase 2 — V1 App Development: Project team selection + task assignment UX + vendor link
+**Backend**
+1. Projects create:
+   - Extend `ProjectIn` to accept `project_manager_id` + `team_ids` (persist on create).
+2. Tasks:
+   - Ensure `vendor_id` is supported on create/update (already in model/router) and consistently backfills `vendor_contact`.
+   - Expand notification emission to all `assignees`.
 
-**User stories**
-1. As an Admin, I can configure project stages per tenant and they appear everywhere consistently.
-2. As an Accountant, I cannot create a transaction that leaves books unbalanced.
-3. As a user, I can see who changed a record and when.
-4. As a PM, I can jump from a project to all related invoices/POs/vendors/tasks.
-5. As a SuperAdmin, I can run tenant integrity checks and get a clear report.
+**Frontend**
+1. **Projects create** (`Projects.jsx`):
+   - Load employees.
+   - Add PM dropdown + Team multi-select (reuse selection UI patterns from ProjectDetail team modal).
+   - Remove default 0 budget (initial `""`, placeholder “Enter Budget (₹)”).
+2. **Tasks** (`TasksBoard.jsx`, `TaskDetail.jsx`):
+   - Replace free-text “Assignee name” with employee picker:
+     - multi-select assignees,
+     - store primary `assignee_id/name` for display compatibility.
+   - Add “Assigned to me” badge + quick filter.
+   - Show “Task assigned to me by Admin” using `created_by_name/assigned_by` meta.
+3. Keep vendor follow-up flow:
+   - Retain existing Vendor Master picker (`task-vendor-picker`) and display vendor card in Task detail.
 
-**Exit criteria**: no known orphan patterns; master data drives all dropdowns; integrity tests pass.
+**User stories (Phase 2)**
+1. As an Admin, while creating a project I can pick PM + team members.
+2. As an Employee, I can see all tasks for projects I’m part of.
+3. As an Admin, I can assign multiple employees to a task via picker.
+4. As an Employee, I can quickly filter “Assigned to me” and mark tasks complete.
+5. As a PM, I can create vendor tasks and pick a Vendor from master for follow-ups.
 
----
-
-### Phase 4 — Core Module Improvements (production-quality workflows)
-**Targets**
-1. Records: Edit/Archive/Restore/Delete rules + attachments + related records + history.
-2. Tasks: assignment clarity, follower/visibility rules, reminders, SLA-like overdue handling, board + list parity.
-3. Attendance: policy UX, geo accuracy errors, approval queue, exports, tamper-resistant audit.
-4. Projects: lifecycle per tenant, milestones, team roles, health signals, document hub.
-5. Quotations/Invoices: mode-specific templates (Consultancy vs Turnkey), remove blanks, consistent PDFs.
-6. Vendors: single vendor master, commissions + bills + ledger coherence.
-7. Accounting: validation dashboard, duplicate detection, reconciliation workflows, KPI correctness.
-
-**User stories**
-1. As a PM, I can set task reminders and they reliably notify me.
-2. As HR, I can review and approve outside-geo check-ins with full context.
-3. As a Director, I can see project health (budget/progress/risks) at a glance.
-4. As a sales user, I can generate a clean quotation PDF with no empty sections.
-5. As an Accountant, I can trace any dashboard KPI back to source journal entries.
-
-**Exit criteria**: each module’s “happy path” + key edge cases validated with tests and seeded data.
+**Exit criteria:** 1 full end-to-end run (create project + team → create task → employee sees it → completes it).
 
 ---
 
-### Phase 5 — Cross-Module Integration (notifications + native calendar + tenant mgmt)
-**Work**
-1. Unify Notification Center + Calendar: consistent event types, deep links, snooze/mark done.
-2. Emitters: tasks, meetings, invoice due, PO/GRN milestones, approvals (attendance/expenses).
-3. SuperAdmin panel: tenant CRUD, suspend/reactivate, plan limits, usage counters, tenant health + isolation checks.
+### Phase 3 — Usability + India-style formatting + zero-default cleanup
+1. Shared formatting util (frontend): `src/lib/format.js`
+   - `formatDateIN(ymd)` → DD/MM/YYYY
+   - `formatDateTimeIST(iso)`
+   - `formatINR(amount)`
+   - `dateForInput(iso|ymd)`
+2. Apply to most visible areas first:
+   - Header clock (IST), Projects, Tasks, Invoices/Expenses key date chips.
+3. Remove default `0` from numeric inputs across modules (targeted edits):
+   - Projects/ProjectDetail, QuotationBuilder, EmployeeDetail (salary fields), PurchaseOrders, Invoices, Vendors, Leads, Attendance configs.
+   - Rule: if value is null/undefined, render `""` with placeholder; preserve real values.
 
-**User stories**
-1. As a user, I can see all actionable items in one bell and jump to the exact record.
-2. As a user, I can view my week across tasks, meetings, invoice due dates in one calendar.
-3. As a SuperAdmin, I can suspend a tenant and block logins immediately.
-4. As a SuperAdmin, I can set plan limits and see usage warnings.
-5. As a SuperAdmin, I can run an isolation check and get PASS/FAIL with details.
-
-**Exit criteria**: unified event model; tenant mgmt features live; regression tests for emitters.
-
----
-
-### Phase 6 — UI/UX Refinement (product-wide polish)
-**Work**
-1. Consistent table patterns: filters, sort, pagination, CSV export, empty/loading/error states.
-2. Form quality: validation, inline help, smart defaults, reduce clicks, remove dead controls.
-3. Navigation consistency; mode-based UI (Consultancy/Turnkey/Hybrid) without feature clutter.
-
-**User stories**
-1. As a user, I always understand what to do next on an empty screen.
-2. As a user, I can find any record quickly using consistent filters/search.
-3. As a user, forms prevent mistakes with clear validation.
-4. As a mobile user, critical flows remain usable.
-5. As a user, the UI feels fast and consistent across modules.
-
-**Exit criteria**: UI consistency checklist passes; no broken layouts; perceived performance improved.
+**User stories (Phase 3)**
+1. As a user, all dates display in DD/MM/YYYY consistently.
+2. As a user, times feel local (IST) and match my expectations.
+3. As a user, I see ₹ formatting consistently across summaries.
+4. As a user, empty numeric fields show helpful placeholders instead of “0”.
+5. As a user, existing numeric values remain unchanged and readable.
 
 ---
 
-### Phase 7 — Smart Automation + Global Productivity
-**Work**
-1. Global search improvements + saved views + quick actions.
-2. Inline edits where safe + bulk actions (archive/assign/status).
-3. Smart reminders (overdue tasks, unpaid invoices, pending approvals).
+### Phase 4 — Tenant → Team & Roles + SuperAdmin tenant billing + Full Screen
+1. Tenant Team & Roles verification (RBACAdmin):
+   - Ensure list endpoints are tenant-scoped and show correct tenant users.
+   - Confirm role permissions remain tenant-specific (existing override system).
+2. SuperAdmin tenant management enhancements:
+   - Add manual billing sub-doc to org (no payment gateway):
+     - `owner_override`, `amount_charged`, `maintenance_charge`, `start_date`, `renewal_date`.
+   - `GET /platform/orgs` attaches:
+     - owner (primary Admin),
+     - billing fields passthrough,
+     - health summary already exists.
+   - Update `SuperAdminPanel.jsx` table + modals to view/edit billing.
+3. Full-screen toggle:
+   - Add button near `NotificationBell` in `Layout.jsx`.
+   - Uses `document.documentElement.requestFullscreen()` / `document.exitFullscreen()`.
 
-**User stories**
-1. As a user, I can save a filtered view and reuse it daily.
-2. As a PM, I can bulk-assign tasks and set due dates in minutes.
-3. As finance, I get reminders for unpaid invoices before they become overdue.
-4. As HR, pending approvals surface automatically.
-5. As an Admin, I can do frequent actions from quick actions without deep navigation.
-
-**Exit criteria**: automation adds measurable speed without feature bloat; all automated actions auditable.
-
----
-
-### Phase 8 — Final Security / Performance / QA
-**Work**
-1. Auth/session hardening, rate limits, CSRF/cookie settings, password policy verification.
-2. RBAC + tenant isolation test suite (API + UI smoke).
-3. Performance pass: indexes, query shapes, payload sizes, frontend bundle hotspots.
-4. End-to-end testing with testing agent each phase; fix regressions.
-
-**User stories**
-1. As an Admin, I can trust that users cannot access unauthorized records.
-2. As a SuperAdmin, I can prove tenant separation for compliance.
-3. As a finance user, sensitive reports are protected and audited.
-4. As a user, pages load quickly and reliably.
-5. As a QA reviewer, I can run tests and get consistent results.
-
-**Exit criteria**: security checklist satisfied; perf targets met; full regression suite green.
+**User stories (Phase 4)**
+1. As a Tenant Admin, I see only my tenant’s users in Team & Roles.
+2. As a SuperAdmin, I can see each tenant’s owner, plan, billing fields, and status.
+3. As a SuperAdmin, I can edit billing fields without affecting tenant data.
+4. As a user, I can enter and exit full-screen mode instantly.
+5. As a SuperAdmin, I can verify isolation and trust tenants never see each other.
 
 ---
 
 ## 3) Next Actions
-1. Implement **seed + isolation + accounting + emitter POC scripts** and run until green.
-2. Generate Phase 2 **audit report** from seeded runs (P0/P1/P2 backlog).
-3. Begin Phase 3 hardening (org_id/RBAC enforcement + master data) focusing on P0 first.
+- Implement Phase 1 core visibility gate + assignment notifications.
+- Implement Phase 2 project-create team selection + task assignee picker + “Assigned to me” UX.
+- Implement Phase 3 formatting util + targeted date/numeric cleanup.
+- Implement Phase 4 SuperAdmin billing fields + full-screen toggle + Team/Roles verification.
+- Run `testing_agent_v3` after each phase (required) using:
+  - Admin: `admin@designsaga.com` / `Admin@123`
+  - SuperAdmin: `designsaga10@gmail.com` / `Admin@123`
+  - Create a restricted Employee user for visibility tests.
 
 ---
 
 ## 4) Success Criteria
-- No cross-tenant leakage (automated checks + manual spot checks pass).
-- Accounting integrity: TB balances; BS/CF/PL consistent; reconciliation works; orphan detection in place.
-- Every module supports complete CRUD + archive/restore where appropriate; no dead ends.
-- Unified notifications + native calendar cover core events (tasks, finance, approvals).
-- SuperAdmin panel supports tenant lifecycle + plan limits + health/isolation verification.
-- UX is consistent, fast, and production-grade; automated tests validate each phase.
-
----
-## PROGRESS LOG (auto-updated)
-
-### Phase 1 — Deep Audit ✅ (complete)
-- Seeded 2 tenants via APIs: Atelier Vista (consultancy) + BuildCraft Interiors (turnkey), full business data
-- Audit scripts: /app/tests/seed_and_audit.py + /app/tests/flow_audit.py
-- Findings: P0 cross-tenant milestone leak, notifications invisible to non-default orgs, cross-org broadcasts, invoice paid ≠ accounting JE, invoice status w/o permission, validation metrics broken (issue_date), unscoped vendor_ratings/commission_settlements, suspended orgs could re-login, no plan limit enforcement, no automated reminder scan
-
-### Phase 2 — Data integrity + architecture ✅ (complete)
-- payment_milestones fully tenant-scoped (accounting.py, notifications.py)
-- emit() stamps recipient org_id; emit_admins/finance/hr org-scoped; attendance/scan call sites pass org
-- Notifications read path = user_id scoped (correct + safe)
-- Invoice paid → auto JE (source=invoice_payment) + reversal on un-pay + paid_date + issue_date; permission gate invoices.update
-- Milestone paid → auto JE (source=milestone_payment) + reversal; create_income(invoice_id) closes loop
-- Orphan repair endpoint: POST /api/accounting/repair/orphan-invoices (verified — repaired 2 legacy orphans)
-- Automated notification scan scheduler (startup task, every 6h, all orgs, org-scoped)
-- tasks/scan assignee-by-name lookups org-scoped; vendor_ratings/commission_settlements org-stamped
-- master data now feeds tasks meta (task_area/task_category) + employees meta (department/designation)
-
-### Phase 3/4 — Tenant management (priority) ✅ backend+UI
-- Suspension enforced at login + every request (deps.require_user)
-- Plan limits: PATCH /platform/orgs/{id}/limits + enforcement (auth/register 402, create_project 402)
-- GET /platform/orgs/{id}/health (counts, usage, warnings, last login)
-- GET /platform/isolation-check (PASS/FAIL across 20 collections)
-- SuperAdminPanel UI: isolation check card, health modal + plan/limits editor
-- Quotation PDFs: org-branded (name/tagline/color), blank sections skipped, consult vs turnkey verified visually
-
-### NEXT
-- Phase 3 remainder: verify vendor commission flow, calendar UI check, tasks board UX
-- Phase 5: UI/UX refinement pass
-- Phase 6: global productivity (saved views/quick actions where valuable)
-- Phase 7: security/perf QA + testing agent full run
-
-### Phase 5/6 — UI/UX + productivity ✅
-- Tasks board filters compacted to one row (input-flat width overrides)
-- Calendar month-nav bug fixed (Aug 31 + 1mo rolled to Oct 1 — now normalises to day 1)
-- Calendar verified rendering unified feed: tasks, invoice dues, milestones, holidays
-- Employee → ERP Access tab: view linked login, create login (admin, plan-limit aware), change role, activate/deactivate (kills sessions)
-- rbac last-admin guard now org-scoped (was counting admins across all tenants)
-- AI assistant persona now tenant-branded; ai history user-scoped (verified safe)
-- Login page: google button type=button hardening
-- Holidays bulk seed corrected (year field) — both orgs seeded
-- Global search verified (projects/clients/invoices), notification deep links verified
-
-## Phase: Full-ERP Audit → P0 quick fixes (Status: COMPLETED)
-Done (verified via curl):
-- Milestones unified on `payment_milestones` (project page, portal, delete-guard) — #1
-- Atomic per-org document numbering (`core.helpers.next_sequence`), never reused; uses Company Settings prefixes — #3/#12
-- Paid invoice delete blocked; vendor-payment delete now posts reversal JE instead of hard-deleting — #4
-- RBAC checks added: task delete, lead create/stage/convert, client create, project stage, file create, invoice create — #7
-- Lead double-convert guard — #8 ; Dashboard excludes archived projects — #11 ; confirm dialog before "paid" — #9 (partial)
-Deferred (need bigger budget): #2 vendor bills → AP posting, #5 portal messages, #6 employee soft-delete, #9 full payment dialog, #10 PO↔bill link, P1/P2 list.
-
-## Phase: Accounting Audit Findings Implementation (Status: COMPLETED)
-
-### P1 — Data Safety (COMPLETED)
-- ✅ Payment reversal now resets source invoice → 'sent'/journal_id=null AND milestone → 'pending'/journal_id=null (`_reset_source_after_reversal` helper wired into both `reverse_receipt_je` and the manual `POST /journal-entries/{id}/reverse` endpoint).
-- ✅ Commission receipt uses central `_post_journal` engine (not manual insert); retains vendor + project relationship — single-project settlements tag `project_id`, multi-project settlements store `project_ids` array on the JE (respected by daybook filters).
-- ✅ Accounting RBAC: `finance.create` / `finance.update` / `finance.delete` used consistently for `POST /accounts`, `PATCH /accounts`, `DELETE /accounts`, `POST /journal-entries`, `POST /accounting/income`, `POST /accounting/expense`, `POST /accounting/seed-coa`. Invoice permissions no longer control Accounting.
-- ✅ Loan deletion (`DELETE /loans/{id}`) never hard-deletes JEs — reverses the disbursement JE (post_journal), archives the loan (`status: archived`), hidden from default lists (opt-in with `include_archived=1`).
-- ✅ Trial Balance includes account opening balances (asset/expense DR, liab/inc/eq CR) so it matches the Balance Sheet — no double counting because JEs never touch opening_balance field.
-- ✅ Commission `_reverse_commission_je` also routed through `_post_journal` for balanced + audit-tracked reversals.
-- ✅ Commission settlements now use `sdb.commission_settlements` (tenant-scoped) instead of `db.commission_settlements`.
-
-### P2 — Usability (COMPLETED)
-- ✅ Daybook filters: account, project, client, vendor dropdowns; date presets kept; free-text search over narration/reference/account/party/amount; pagination (100/page, prev/next, total shown) — server never silently truncates.
-- ✅ `GET /journal-entries` now supports `q`, `limit`, `offset` (paginated response shape `{items,total,limit,offset}` when pagination requested; backward-compat array otherwise).
-- ✅ Drill-through: TransactionDetail links to Vendor / Employee / Loan / Project / Client / Invoice depending on source. New label "Open loan"/"Open vendor"/etc.
-- ✅ "Today's Collections" now counts invoice_payment + milestone_payment + commission_income sources, not only manual `income`. Skips `reversed` JEs.
-- ✅ Outstanding = unpaid invoices + pending milestones (unified single definition on dashboard).
-- ✅ Quick-add on Account Ledger now optionally captures Client / Project / Vendor.
-- ✅ Account list hides inactive by default; `?include_inactive=1` for Chart of Accounts screen.
-- ✅ Auto account-code allocation on new accounts (uses type's 1000-block, e.g. 4xxx for expense).
-
-### P3 — Polish (COMPLETED)
-- ✅ Commissions dashboard rebuilt: Earned / Received / Pending header explanation + per-vendor table with three columns.
-- ✅ Print-friendly CSS: hides controls, black-on-white, avoids page breaks inside cards & rows.
-- ✅ Mobile-friendly Accounting tabs (horizontal scroll strip on phones), tighter card padding, larger tap targets.
-- ✅ PageHero: Accounting/Expenses copy differentiates "Direct Company Expense" vs "Staff Expense Claim" so users know which screen to use.
-
-### Test coverage
-- `/app/tests/test_accounting_audit_fixes.py` — 8 tests: reversal cascades (invoice + milestone), RBAC by role, commission engine + project link, TB/BS balance parity, journal pagination + search, loan reverse-on-delete, today's collections classification. All PASS.
-
-## Phase: Finance Add-Ons (Status: COMPLETED)
-
-### 1) Recurring Expenses
-- Model: `recurring_expenses` collection (tenant-scoped via `sdb`). Frequencies: weekly/monthly/quarterly/yearly, optional day_of_month or day_of_week, start/end_date, GST, project/vendor/client link.
-- Endpoints: `GET/POST/PATCH/DELETE /api/recurring-expenses`, `POST /api/recurring-expenses/{id}/run-now`, `POST /api/recurring-expenses/scan`.
-- Scheduler: `_run_recurring_expense_scan` wired into the existing 6-hour background scan loop, iterates all orgs (context-var scoping), catches up missed periods.
-- Idempotency: dedup by `(source=recurring_expense, source_id=rule_id, date=run_date)` — never posts twice for the same date.
-- Delete rule: keeps historic JEs (audit-safe).
-
-### 2) Favourite Accounts
-- Per-user (not shared): `user_favorite_accounts` collection, one doc per user_id.
-- Endpoints: `GET /api/favorite-accounts`, `POST /api/favorite-accounts {account_id}`, `DELETE /api/favorite-accounts/{account_id}`.
-- UI: yellow star column in Chart of Accounts to pin/unpin; sticky "FAVOURITES" strip on the Accounting dashboard that opens each pinned ledger with one click.
-
-### 3) Vendor Commission Statement PDF
-- Endpoint: `GET /api/vendors/{vid}/commission-statement.pdf?from_date=&to_date=` returns proper `application/pdf` (fpdf2, latin-1 safe with unicode fallbacks).
-- Layout: org header + vendor details + Earned/Received/Pending totals + row-level table (bill date, bill #, base, earned, received, status, ref).
-- UI: "Statement PDF" button on the Vendor → Commissions tab, uses axios blob download.
-
-### 4) Bank Reconciliation
-- Upload: `POST /api/bank-reconciliation/{account_id}/upload` accepts a CSV — parses Date, Description, Debit/Credit or signed Amount, optional Reference. Robust date parser (ISO, DD/MM/YYYY, DD-MM-YYYY, DD-Mon-YY, Excel serial); amount parser handles bracketed negatives, ₹/Rs./INR prefixes, commas.
-- Storage: `bank_statement_rows` (tenant-scoped) with status = unmatched / auto_matched / matched / reconciled / ignored.
-- Auto-match: for each row, aggregate against JE lines on the same bank account within ±3 days and ±0.5 rupees tolerance; skips reversed and already-matched JEs. Positive row → looks for a bank-debit line; negative → bank-credit line.
-- Actions: `/match {journal_id}`, `/reconcile`, `/ignore`, `/create-je {counterpart_account_id, narration?, project_id?, vendor_id?, client_id?}` — the last one routes through `_post_journal` so the freshly posted entry is balanced, audit-tracked, and instantly linked back to the bank row.
-- Summary: `GET /api/bank-reconciliation/summary` — status counters per bank/cash account for a dashboard card.
-- UI: new "Bank Reconciliation" tab with account picker, CSV upload button, 5 status counter cards, filter + rows table with contextual actions (Link JE, Create JE, Reconcile, Ignore) + dedicated modal dialogs for LinkJE and CreateJE.
-
-### Testing
-- `/app/tests/test_finance_extras.py` — 7 tests (100% pass).
-- Deep testing_agent scenarios (`iteration_2.json`): 26/26 tests including bracketed-negative CSV parsing, non-ISO date normalization, catch-up posting for past start dates, per-user isolation of favourites, RBAC gating on all mutating endpoints. All PASS.
-
+- Regular employees only see tasks for their project team + tasks assigned to them; privileged roles see all.
+- Project create supports PM + team selection; task assignment supports multi-employee tagging.
+- Vendor tasks can link a vendor from master (`vendor_id`) and show vendor context.
+- Numeric inputs show placeholders instead of default “0” when empty.
+- Dates are consistently DD/MM/YYYY and key times are IST in the most visible UI.
+- SuperAdmin can view/manage tenants with owner + manual billing fields; isolation-check shows PASS.
+- Full-screen toggle works without breaking navigation/responsiveness.

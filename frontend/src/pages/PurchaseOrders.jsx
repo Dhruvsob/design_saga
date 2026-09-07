@@ -94,11 +94,11 @@ export default function PurchaseOrders() {
 function CreatePO({ vendors, onClose, onCreated }) {
   const [f, setF] = useState({
     vendor_id: vendors[0]?.id || "", expected_delivery: "", payment_terms: "Net 30",
-    delivery_address: "", notes: "", lines: [{ item_name: "", quantity: 1, unit: "nos", unit_price: 0, tax_rate: 18 }],
+    delivery_address: "", notes: "", lines: [{ item_name: "", quantity: 1, unit: "nos", unit_price: "", tax_rate: 18 }],
   });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
 
-  const addLine = () => setF((s) => ({ ...s, lines: [...s.lines, { item_name: "", quantity: 1, unit: "nos", unit_price: 0, tax_rate: 18 }] }));
+  const addLine = () => setF((s) => ({ ...s, lines: [...s.lines, { item_name: "", quantity: 1, unit: "nos", unit_price: "", tax_rate: 18 }] }));
   const upLine = (i, patch) => setF((s) => ({ ...s, lines: s.lines.map((l, j) => j === i ? { ...l, ...patch } : l) }));
   const delLine = (i) => setF((s) => ({ ...s, lines: s.lines.filter((_, j) => j !== i) }));
   const subtotal = f.lines.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0), 0);
@@ -134,11 +134,11 @@ function CreatePO({ vendors, onClose, onCreated }) {
           {f.lines.map((l, i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`po-line-${i}`}>
               <input required placeholder="Item" className="input-flat col-span-4" value={l.item_name} onChange={(e) => upLine(i, {item_name: e.target.value})} />
-              <input type="number" placeholder="Qty" step="0.01" className="input-flat col-span-2 font-mono" value={l.quantity} onChange={(e) => upLine(i, {quantity: Number(e.target.value)})} />
+              <input type="number" placeholder="Qty" step="0.01" className="input-flat col-span-2 font-mono" value={l.quantity} onChange={(e) => upLine(i, {quantity: e.target.value === "" ? "" : Number(e.target.value)})} />
               <input placeholder="Unit" className="input-flat col-span-1" value={l.unit} onChange={(e) => upLine(i, {unit: e.target.value})} />
-              <input type="number" placeholder="Price" step="0.01" className="input-flat col-span-2 font-mono" value={l.unit_price} onChange={(e) => upLine(i, {unit_price: Number(e.target.value)})} />
-              <input type="number" placeholder="Tax %" className="input-flat col-span-1 font-mono" value={l.tax_rate} onChange={(e) => upLine(i, {tax_rate: Number(e.target.value)})} />
-              <div className="col-span-1 font-mono text-xs text-right">{fmtMoney(l.quantity * l.unit_price)}</div>
+              <input type="number" placeholder="Price" step="0.01" className="input-flat col-span-2 font-mono" value={l.unit_price} onChange={(e) => upLine(i, {unit_price: e.target.value === "" ? "" : Number(e.target.value)})} />
+              <input type="number" placeholder="Tax %" className="input-flat col-span-1 font-mono" value={l.tax_rate} onChange={(e) => upLine(i, {tax_rate: e.target.value === "" ? "" : Number(e.target.value)})} />
+              <div className="col-span-1 font-mono text-xs text-right">{fmtMoney((Number(l.quantity) || 0) * (Number(l.unit_price) || 0))}</div>
               <button type="button" onClick={() => delLine(i)} className="btn-ghost col-span-1 text-[#B22B22]"><X size={12}/></button>
             </div>
           ))}

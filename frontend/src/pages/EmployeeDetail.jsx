@@ -51,7 +51,7 @@ export default function EmployeeDetail() {
   };
 
   const patchSalary = (k, v) => patch((p) => ({
-    salary: { ...(p.salary || {}), [k]: Number(v) || 0 },
+    salary: { ...(p.salary || {}), [k]: v === "" ? "" : Number(v) },
   }));
   const patchBank = (k, v) => patch((p) => ({ bank: { ...(p.bank || {}), [k]: v } }));
   const patchEmergency = (k, v) => patch((p) => ({
@@ -322,10 +322,10 @@ export default function EmployeeDetail() {
                 <input disabled={!canEdit} type="date" className="input-flat" value={emp.probation_end_date || ""} onChange={(e) => patch(() => ({ probation_end_date: e.target.value }))} />
               </Row>
               <Row label="Notice period (days)">
-                <input disabled={!canEdit} type="number" className="input-flat" value={emp.notice_period_days || 0} onChange={(e) => patch(() => ({ notice_period_days: Number(e.target.value) || 0 }))} />
+                <input disabled={!canEdit} type="number" className="input-flat" placeholder="Enter days" value={emp.notice_period_days ?? ""} onChange={(e) => patch(() => ({ notice_period_days: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
               <Row label="Weekly hours">
-                <input disabled={!canEdit} type="number" className="input-flat" value={emp.weekly_hours || 0} onChange={(e) => patch(() => ({ weekly_hours: Number(e.target.value) || 0 }))} />
+                <input disabled={!canEdit} type="number" className="input-flat" placeholder="Enter hours" value={emp.weekly_hours ?? ""} onChange={(e) => patch(() => ({ weekly_hours: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
               <Row label="Shift start">
                 <input disabled={!canEdit} type="time" className="input-flat" value={emp.shift_start || ""} onChange={(e) => patch(() => ({ shift_start: e.target.value }))} />
@@ -344,7 +344,7 @@ export default function EmployeeDetail() {
           <Card title="EARNINGS (MONTHLY)" testid="salary-earnings">
             {["basic", "hra", "conveyance", "medical", "other_allowances"].map((k) => (
               <Row key={k} label={k.replace("_", " ").toUpperCase()}>
-                <input disabled={!canEdit} type="number" className="input-flat text-right font-mono" value={s[k] || 0} onChange={(e) => patchSalary(k, e.target.value)} />
+                <input disabled={!canEdit} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
             <div className="border-t border-[#0A0A0A] mt-2 pt-3 flex items-center justify-between">
@@ -356,7 +356,7 @@ export default function EmployeeDetail() {
           <Card title="DEDUCTIONS (MONTHLY)" testid="salary-deductions">
             {["pf_employee", "esi_employee", "professional_tax", "tds"].map((k) => (
               <Row key={k} label={k.replace("_", " ").toUpperCase()}>
-                <input disabled={!canEdit} type="number" className="input-flat text-right font-mono" value={s[k] || 0} onChange={(e) => patchSalary(k, e.target.value)} />
+                <input disabled={!canEdit} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
             <div className="border-t border-[#0A0A0A] mt-2 pt-3 flex items-center justify-between">
@@ -440,7 +440,7 @@ export default function EmployeeDetail() {
             </div>
             {canEdit && (
               <Row label="Update KPI (0-100)">
-                <input type="number" min={0} max={100} className="input-flat" value={perf.current_kpi_score || 0} onChange={(e) => patch(() => ({ current_kpi_score: Number(e.target.value) || 0 }))} />
+                <input type="number" min={0} max={100} className="input-flat" placeholder="Enter score (0-100)" value={perf.current_kpi_score ?? ""} onChange={(e) => patch(() => ({ current_kpi_score: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
             )}
             <div className="mt-3 h-2 bg-[#F0F0F0] relative">

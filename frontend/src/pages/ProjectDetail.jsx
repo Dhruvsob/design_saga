@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
+import { empName } from "../lib/format";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise,
   X, Warning, Trash, UsersThree, CaretRight,
@@ -81,7 +82,7 @@ export default function ProjectDetail() {
   const openEdit = () => {
     setForm({
       name: p.name || "", project_type: p.project_type || "",
-      budget: p.budget || 0, description: p.description || "",
+      budget: p.budget ?? "", description: p.description || "",
       start_date: p.start_date || "", end_date: p.end_date || "",
       site_address: p.site_address || "", site_area_sqft: p.site_area_sqft || "",
     });
@@ -339,7 +340,7 @@ export default function ProjectDetail() {
           {showMsForm && (
             <form onSubmit={addMilestone} className="card-flat grid grid-cols-1 md:grid-cols-4 gap-3">
               <input className="input-flat" placeholder="Milestone name" required value={msForm.name} onChange={(e) => setMsForm({ ...msForm, name: e.target.value })} data-testid="ms-name" />
-              <input className="input-flat" type="number" placeholder="Amount (₹)" required value={msForm.amount} onChange={(e) => setMsForm({ ...msForm, amount: e.target.value })} data-testid="ms-amount" />
+              <input className="input-flat" type="number" placeholder="Enter amount (₹)" required value={msForm.amount} onChange={(e) => setMsForm({ ...msForm, amount: e.target.value })} data-testid="ms-amount" />
               <input className="input-flat" type="date" value={msForm.due_date} onChange={(e) => setMsForm({ ...msForm, due_date: e.target.value })} />
               <button className="btn-primary" data-testid="ms-submit">Save</button>
             </form>
@@ -475,7 +476,7 @@ export default function ProjectDetail() {
               <select className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
                 {TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
-              <input className="input-flat" type="number" placeholder="Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="edit-project-budget" />
+              <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="edit-project-budget" />
               <label className="text-xs text-[#5C5C5C]">Start date
                 <input className="input-flat w-full mt-1" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
               </label>
@@ -484,7 +485,7 @@ export default function ProjectDetail() {
               </label>
             </div>
             <input className="input-flat w-full" placeholder="Site address" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
-            <input className="input-flat w-full" type="number" placeholder="Site area (sq.ft)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} />
+            <input className="input-flat w-full" type="number" placeholder="Enter site area (sq ft)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} />
             <textarea className="input-flat w-full" rows="2" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
             <button className="btn-primary w-full" data-testid="edit-project-save">Save changes</button>
@@ -508,7 +509,7 @@ export default function ProjectDetail() {
                 data-testid="team-pm-select">
                 <option value="">Unassigned</option>
                 {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>{emp.name} {emp.designation ? `· ${emp.designation}` : ""}</option>
+                  <option key={emp.id} value={emp.id}>{empName(emp)} {emp.designation ? `· ${emp.designation}` : ""}</option>
                 ))}
               </select>
             </label>
@@ -526,7 +527,7 @@ export default function ProjectDetail() {
                           ? [...f.team_ids, emp.id]
                           : f.team_ids.filter((x) => x !== emp.id),
                       }))} />
-                    <span className="font-semibold">{emp.name}</span>
+                    <span className="font-semibold">{empName(emp)}</span>
                     <span className="text-xs text-[#9A9A9A]">{emp.designation || emp.department || ""}</span>
                   </label>
                 ))}
