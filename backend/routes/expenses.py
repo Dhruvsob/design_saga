@@ -23,7 +23,7 @@ from core.db import db
 from core.scoped_db import sdb
 from core.helpers import iso_now, new_id
 from core.deps import require_user
-from core.rbac import has_permission
+from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
 from core.audit import audit
 from models.expense import (
@@ -95,7 +95,7 @@ async def update_policy(payload: ExpensePolicyIn, request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
+    if not has_any_permission(user, "*.*", "expenses.update"):
         raise HTTPException(403, "Admin only")
     up = payload.dict(exclude_unset=True)
     up["updated_at"] = iso_now()
@@ -142,8 +142,10 @@ async def list_expenses(request: Request, status: Optional[str] = None,
     if project_id: q["project_id"] = project_id
     if claimant_id: q["claimant_id"] = claimant_id
     if mine: q["claimant_id"] = user["user_id"]
-    # Non-admins can only see their own + those they need to approve
-    if not (has_permission(user, "*.*") or has_permission(user, "finance.read")):
+    # Non-managers can only see their own + those they need to approve.
+    # `expenses.read` is a self-service perm (all staff have it), so team-wide
+    # visibility requires a manager perm (finance.read / expenses.update|approve).
+    if not has_any_permission(user, "*.*", "finance.read", "expenses.update", "expenses.approve"):
         q = {"$or": [{"claimant_id": user["user_id"]},
                      {"pending_approver_role": user.get("role")}]}
     rows = await sdb.expenses.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
@@ -254,8 +256,8 @@ async def decide(exp_id: str, payload: ApprovalDecisionIn, request: Request,
     if exp["status"] not in ("pending_l1", "pending_l2"):
         raise HTTPException(400, f"Expense already {exp['status']}")
 
-    # Role check
-    if user.get("role") != exp.get("pending_approver_role") and not has_permission(user, "*.*"):
+    # Role check — the routed approver role, OR anyone with expense-approve rights.
+    if user.get("role") != exp.get("pending_approver_role") and not has_any_permission(user, "*.*", "expenses.approve"):
         raise HTTPException(
             403, f"Only {exp['pending_approver_role']} can approve this expense",
         )

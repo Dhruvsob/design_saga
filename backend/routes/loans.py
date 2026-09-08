@@ -21,7 +21,7 @@ from core.db import db
 from core.scoped_db import sdb
 from core.helpers import iso_now, now_utc, new_id
 from core.deps import require_user
-from core.rbac import has_permission
+from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
 from core.audit import audit
 from models.loan import LoanCreateIn, LoanUpdateIn, PayEMIIn, PrepayIn
@@ -155,7 +155,7 @@ async def list_loans(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.read"):
+    if not has_any_permission(user, "finance.read", "loans.read"):
         raise HTTPException(403, "Missing permission: finance.read")
     q: dict = {}
     if status:
@@ -177,7 +177,7 @@ async def get_loan(loan_id: str, request: Request,
                    session_token: Optional[str] = Cookie(default=None),
                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.read"):
+    if not has_any_permission(user, "finance.read", "loans.read"):
         raise HTTPException(403, "Missing permission: finance.read")
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
@@ -193,7 +193,7 @@ async def create_loan(payload: LoanCreateIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.create"):
+    if not has_any_permission(user, "finance.create", "loans.create"):
         raise HTTPException(403, "Missing permission: finance.create")
 
     # Resolve accounts
@@ -268,7 +268,7 @@ async def update_loan(loan_id: str, payload: LoanUpdateIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.update"):
+    if not has_any_permission(user, "finance.update", "loans.update"):
         raise HTTPException(403, "Missing permission: finance.update")
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
@@ -287,7 +287,7 @@ async def pay_emi(loan_id: str, payload: PayEMIIn, request: Request,
                   session_token: Optional[str] = Cookie(default=None),
                   authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.create"):
+    if not has_any_permission(user, "finance.create", "loans.create"):
         raise HTTPException(403, "Missing permission: finance.create")
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
@@ -379,7 +379,7 @@ async def prepay(loan_id: str, payload: PrepayIn, request: Request,
                  session_token: Optional[str] = Cookie(default=None),
                  authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.create"):
+    if not has_any_permission(user, "finance.create", "loans.create"):
         raise HTTPException(403, "Missing permission: finance.create")
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
@@ -446,7 +446,7 @@ async def delete_loan(loan_id: str, request: Request,
     and audit trail stay intact.
     """
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.delete"):
+    if not has_any_permission(user, "finance.delete", "loans.delete"):
         raise HTTPException(403, "Missing permission: finance.delete")
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
@@ -498,7 +498,7 @@ async def loans_summary(request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "finance.read"):
+    if not has_any_permission(user, "finance.read", "loans.read"):
         raise HTTPException(403, "Missing permission")
     rows = await sdb.loans.find({"status": "active"}, {"_id": 0}).to_list(200)
     total_outstanding = 0.0

@@ -13,52 +13,58 @@ ROLE_PERMISSIONS = {
     "SuperAdmin": ["*.*", "platform.*"],
     "Admin": ["*.*"],
     "Director": [
-        "leads.*", "projects.*", "tasks.*", "clients.*",
+        "leads.*", "projects.*", "tasks.*", "clients.*", "calendar.*",
         "files.*", "invoices.*", "quotations.*",
-        "employees.*",
-        "finance.*", "payroll.*",
-        "vendors.*",                          # full vendor management + finance
+        "employees.*", "attendance.*", "holidays.*",
+        "finance.*", "payroll.*", "loans.*", "expenses.*",
+        "vendors.*", "purchase_orders.*",     # full vendor management + finance
         "users.read", "users.update",
         "dashboard.read", "ai.use", "rbac.read",
     ],
     "ProjectManager": [
-        "leads.*", "projects.*", "tasks.*",
+        "leads.*", "projects.*", "tasks.*", "calendar.read",
         "clients.read", "clients.create", "clients.update",
         "files.*", "invoices.read",
         "quotations.read", "quotations.create", "quotations.update",
-        "employees.read",
+        "employees.read", "attendance.read", "attendance.approve", "holidays.read",
+        "expenses.read", "expenses.create",
         "vendors.read", "vendors.create", "vendors.update",   # assign vendors, no bills/payments
+        "purchase_orders.read", "purchase_orders.create", "purchase_orders.update",
         "users.read", "dashboard.read", "ai.use",
     ],
     "Designer": [
         "projects.read", "projects.update",
         "tasks.read", "tasks.create", "tasks.update",
-        "files.*",
+        "files.*", "calendar.read",
         "quotations.read", "quotations.create", "quotations.update",
         "clients.read", "leads.read",
-        "employees.read",
-        "vendors.read",                       # read-only for task assignment
+        "employees.read", "attendance.read", "holidays.read",
+        "expenses.read", "expenses.create",
+        "vendors.read", "purchase_orders.read",   # read-only for task assignment
         "dashboard.read", "ai.use",
     ],
     "Accountant": [
-        "invoices.*", "quotations.*",
+        "invoices.*", "quotations.*", "calendar.read",
         "clients.read", "projects.read", "leads.read",
         "files.read", "dashboard.read", "ai.use",
-        "employees.read",
-        "finance.*", "payroll.*",
-        "vendors.*",                          # bills, payments, ledger
+        "employees.read", "attendance.read", "holidays.read",
+        "finance.*", "payroll.*", "loans.*", "expenses.*",
+        "vendors.*", "purchase_orders.*",     # bills, payments, ledger, procurement
     ],
     "HR": [
         "users.read", "users.update",
-        "employees.*",
+        "employees.*", "attendance.*", "holidays.*",
+        "expenses.read", "calendar.read",
         "payroll.read", "payroll.create",     # limited — cannot see full accounting
         "dashboard.read", "ai.use",
     ],
     "Employee": [
         "projects.read", "tasks.read", "tasks.update",
-        "clients.read", "leads.read",
+        "clients.read", "leads.read", "calendar.read",
         "files.read", "files.create",
-        "vendors.read",                       # read-only lookup for tasks
+        "attendance.read", "attendance.create",   # self check-in / view own
+        "holidays.read", "expenses.read", "expenses.create",  # submit own claims
+        "vendors.read", "purchase_orders.read",   # read-only lookup for tasks
         "dashboard.read", "ai.use",
     ],
     "Client": [],
@@ -114,30 +120,43 @@ def has_permission(user: dict, perm: str) -> bool:
     return f"{resource}.*" in grants
 
 
+def has_any_permission(user: dict, *perms: str) -> bool:
+    """True if the user holds ANY of the given permissions. Used to keep route
+    guards backward-compatible while introducing new granular module perms
+    (e.g. accept legacy `finance.read` OR new `loans.read`)."""
+    return any(has_permission(user, p) for p in perms)
+
+
 # ------------------------------------------------------------------
 # Editable-permission catalogue — drives the Team & Roles matrix UI.
 # Each module lists the granular actions an Admin can grant/revoke per role.
 # ------------------------------------------------------------------
 PERMISSION_CATALOG = {
     "modules": [
-        {"key": "dashboard",  "label": "Dashboard",        "actions": ["read"]},
-        {"key": "leads",      "label": "Leads / CRM",      "actions": ["read", "create", "update", "delete"]},
-        {"key": "projects",   "label": "Projects",         "actions": ["read", "create", "update", "delete"]},
-        {"key": "tasks",      "label": "Tasks",            "actions": ["read", "create", "update", "delete"]},
-        {"key": "clients",    "label": "Clients",          "actions": ["read", "create", "update", "delete"]},
-        {"key": "files",      "label": "Files / Drawings", "actions": ["read", "create", "update", "delete"]},
-        {"key": "quotations", "label": "Quotations",       "actions": ["read", "create", "update", "delete"]},
-        {"key": "invoices",   "label": "Invoices",         "actions": ["read", "create", "update", "delete"]},
-        {"key": "finance",    "label": "Accounting",       "actions": ["read", "create", "update", "delete"]},
-        {"key": "vendors",    "label": "Vendors",          "actions": ["read", "create", "update", "delete"]},
-        {"key": "employees",  "label": "Employees",        "actions": ["read", "create", "update", "delete"]},
-        {"key": "payroll",    "label": "Payroll",          "actions": ["read", "create", "update", "delete"]},
-        {"key": "users",      "label": "Team / Users",     "actions": ["read", "update"]},
-        {"key": "ai",         "label": "AI Assistant",     "actions": ["use"]},
+        {"key": "dashboard",       "label": "Dashboard",        "actions": ["read"]},
+        {"key": "leads",           "label": "Leads / CRM",      "actions": ["read", "create", "update", "delete"]},
+        {"key": "projects",        "label": "Projects",         "actions": ["read", "create", "update", "delete"]},
+        {"key": "tasks",           "label": "Tasks",            "actions": ["read", "create", "update", "delete"]},
+        {"key": "calendar",        "label": "Calendar",         "actions": ["read"]},
+        {"key": "clients",         "label": "Clients",          "actions": ["read", "create", "update", "delete"]},
+        {"key": "files",           "label": "Files / Drawings", "actions": ["read", "create", "update", "delete"]},
+        {"key": "vendors",         "label": "Vendors",          "actions": ["read", "create", "update", "delete"]},
+        {"key": "purchase_orders", "label": "Purchase Orders",  "actions": ["read", "create", "update", "delete", "approve"]},
+        {"key": "invoices",        "label": "Invoices",         "actions": ["read", "create", "update", "delete"]},
+        {"key": "quotations",      "label": "Quotations",       "actions": ["read", "create", "update", "delete"]},
+        {"key": "expenses",        "label": "Expenses / Claims", "actions": ["read", "create", "update", "delete", "approve"]},
+        {"key": "employees",       "label": "Employees",        "actions": ["read", "create", "update", "delete"]},
+        {"key": "attendance",      "label": "Attendance",       "actions": ["read", "create", "update", "approve"]},
+        {"key": "holidays",        "label": "Holidays",         "actions": ["read", "create", "update", "delete"]},
+        {"key": "finance",         "label": "Accounting",       "actions": ["read", "create", "update", "delete"]},
+        {"key": "loans",           "label": "Loans & EMI",      "actions": ["read", "create", "update", "delete"]},
+        {"key": "payroll",         "label": "Payroll",          "actions": ["read", "create", "update", "delete"]},
+        {"key": "users",           "label": "Team / Users",     "actions": ["read", "update"]},
+        {"key": "ai",              "label": "AI Assistant",     "actions": ["use"]},
     ],
 }
 ACTION_LABELS = {"read": "View", "create": "Create", "update": "Edit",
-                 "delete": "Delete", "use": "Use"}
+                 "delete": "Delete", "approve": "Approve", "use": "Use"}
 
 # Roles whose permissions are locked (cannot be edited via the matrix).
 PROTECTED_ROLES = {"SuperAdmin", "Admin"}

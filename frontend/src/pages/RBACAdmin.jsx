@@ -297,6 +297,7 @@ const ACTION_COLS = [
   { key: "create", label: "Create" },
   { key: "update", label: "Edit" },
   { key: "delete", label: "Delete" },
+  { key: "approve", label: "Approve" },
   { key: "use", label: "Use" },
 ];
 

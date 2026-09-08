@@ -81,7 +81,9 @@ def _valid_date(s: str) -> bool:
 async def list_events(request: Request, start: Optional[str] = None, end: Optional[str] = None,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "calendar.read"):
+        raise HTTPException(403, "Missing permission: calendar.read")
     q: dict = {}
     if start and end:
         q["date"] = {"$gte": start[:10], "$lte": end[:10]}
@@ -94,6 +96,8 @@ async def create_event(payload: EventIn, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
                        authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "calendar.read"):
+        raise HTTPException(403, "Missing permission: calendar.read")
     if not _valid_date(payload.date):
         raise HTTPException(400, "Invalid date (expected YYYY-MM-DD)")
     if payload.end_date and not _valid_date(payload.end_date):
@@ -168,6 +172,8 @@ async def calendar_feed(start: str, end: str, request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "calendar.read"):
+        raise HTTPException(403, "Missing permission: calendar.read")
     if not (_valid_date(start) and _valid_date(end)):
         raise HTTPException(400, "start and end must be YYYY-MM-DD")
     start, end = start[:10], end[:10]

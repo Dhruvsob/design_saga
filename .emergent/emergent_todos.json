@@ -1,42 +1,22 @@
 [
   {
-    "content": "Backend: ProjectIn accepts team_ids + project_manager_id (persist on create)",
+    "content": "rbac.py: expand PERMISSION_CATALOG to all modules (+attendance, holidays, expenses, purchase_orders, loans, calendar) + approve action label",
     "status": "completed"
   },
   {
-    "content": "Backend: list_tasks visibility gate + assigned_to_me flag + notify all assignees",
+    "content": "rbac.py: update ROLE_PERMISSIONS defaults so existing visibility/access is preserved",
     "status": "completed"
   },
   {
-    "content": "Backend: org billing sub-doc (model + update) + list_orgs owner passthrough",
+    "content": "Backend enforcement: wire new perms into loans/purchase/holidays/attendance/expenses/calendar routes (accept new OR legacy)",
     "status": "completed"
   },
   {
-    "content": "Frontend: lib/format.js util (DD/MM/YYYY, IST, INR) + apply to header clock & key dates",
+    "content": "Frontend: Layout NAV perms use new module perms; RBACAdmin add Approve column; App.js route guards",
     "status": "completed"
   },
   {
-    "content": "Frontend: Full-screen toggle in Layout header",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: Projects create form team+PM picker + remove default-zero budget",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: Task form employee assignee picker + Assigned-to-me badge/reassign",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: remove default 0 across numeric inputs (all modules)",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: SuperAdminPanel Owner/Amount/Renewal columns + billing edit fields",
-    "status": "completed"
-  },
-  {
-    "content": "Test all changes (testing_agent) + verify tenant isolation & task visibility",
+    "content": "Test with testing_agent (role-based visibility + API enforcement + tenant isolation)",
     "status": "completed"
   }
 ]

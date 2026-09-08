@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from core.scoped_db import sdb
 from core.helpers import iso_now, new_id
 from core.deps import require_user
-from core.rbac import has_permission
+from core.rbac import has_permission, has_any_permission
 from core.audit import audit
 
 
@@ -91,7 +91,9 @@ async def list_holidays(request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     """List holidays. Pass `year` to auto-expand recurring rows for that year."""
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "holidays.read"):
+        raise HTTPException(403, "Missing permission: holidays.read")
     rows = await sdb.holidays.find({}, {"_id": 0}).sort("date", 1).to_list(2000)
     if year:
         rows = _expand_recurring(rows, year)
@@ -117,8 +119,8 @@ async def create_holiday(payload: HolidayIn, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
-        raise HTTPException(403, "Admin only")
+    if not has_any_permission(user, "*.*", "holidays.create"):
+        raise HTTPException(403, "Missing permission: holidays.create")
     if payload.kind and payload.kind not in HOLIDAY_KINDS:
         raise HTTPException(400, f"kind must be one of {HOLIDAY_KINDS}")
     _validate_date(payload.date)
@@ -141,8 +143,8 @@ async def bulk_create(payload: HolidayBulkIn, request: Request,
                       authorization: Optional[str] = Header(default=None)):
     """Idempotently seed a whole year of holidays. Skips duplicates."""
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
-        raise HTTPException(403, "Admin only")
+    if not has_any_permission(user, "*.*", "holidays.create"):
+        raise HTTPException(403, "Missing permission: holidays.create")
     inserted = 0
     for h in payload.holidays:
         _validate_date(h.date)
@@ -164,8 +166,8 @@ async def update_holiday(holiday_id: str, payload: HolidayUpdate, request: Reque
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
-        raise HTTPException(403, "Admin only")
+    if not has_any_permission(user, "*.*", "holidays.update"):
+        raise HTTPException(403, "Missing permission: holidays.update")
     patch = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not patch:
         raise HTTPException(400, "No fields to update")
@@ -183,8 +185,8 @@ async def delete_holiday(holiday_id: str, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
-        raise HTTPException(403, "Admin only")
+    if not has_any_permission(user, "*.*", "holidays.delete"):
+        raise HTTPException(403, "Missing permission: holidays.delete")
     r = await sdb.holidays.delete_one({"id": holiday_id})
     if not r.deleted_count:
         raise HTTPException(404, "Holiday not found")

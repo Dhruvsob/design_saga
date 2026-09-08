@@ -110,7 +110,7 @@ function AppRouter() {
       <Route path="/projects/:id" element={<ProtectedShell><ProjectDetail /></ProtectedShell>} />
       <Route path="/tasks" element={<ProtectedShell><Tasks /></ProtectedShell>} />
       <Route path="/tasks/:id" element={<ProtectedShell><TaskDetail /></ProtectedShell>} />
-      <Route path="/calendar" element={<ProtectedShell><CalendarPage /></ProtectedShell>} />
+      <Route path="/calendar" element={<ProtectedShell requirePerm="calendar.read"><CalendarPage /></ProtectedShell>} />
       <Route path="/clients" element={<ProtectedShell><Clients /></ProtectedShell>} />
       <Route path="/clients/:id" element={<ProtectedShell><ClientDetail /></ProtectedShell>} />
       <Route path="/invoices" element={<ProtectedShell><Invoices docType="invoice" /></ProtectedShell>} />
@@ -120,12 +120,12 @@ function AppRouter() {
       <Route path="/employees/:id" element={<ProtectedShell requirePerm="employees.read"><EmployeeDetail /></ProtectedShell>} />
       <Route path="/vendors" element={<ProtectedShell requirePerm="vendors.read"><Vendors /></ProtectedShell>} />
       <Route path="/vendors/:id" element={<ProtectedShell requirePerm="vendors.read"><VendorDetail /></ProtectedShell>} />
-      <Route path="/attendance" element={<ProtectedShell><Attendance /></ProtectedShell>} />
-      <Route path="/holidays" element={<ProtectedShell><Holidays /></ProtectedShell>} />
+      <Route path="/attendance" element={<ProtectedShell requirePerm="attendance.read"><Attendance /></ProtectedShell>} />
+      <Route path="/holidays" element={<ProtectedShell requirePerm="holidays.read"><Holidays /></ProtectedShell>} />
       <Route path="/accounting" element={<ProtectedShell requirePerm="finance.read"><Accounting /></ProtectedShell>} />
-      <Route path="/loans" element={<ProtectedShell requirePerm="finance.read"><Loans /></ProtectedShell>} />
-      <Route path="/purchase-orders" element={<ProtectedShell requirePerm="vendors.read"><PurchaseOrders /></ProtectedShell>} />
-      <Route path="/expenses" element={<ProtectedShell><Expenses /></ProtectedShell>} />
+      <Route path="/loans" element={<ProtectedShell requirePerm="loans.read"><Loans /></ProtectedShell>} />
+      <Route path="/purchase-orders" element={<ProtectedShell requirePerm="purchase_orders.read"><PurchaseOrders /></ProtectedShell>} />
+      <Route path="/expenses" element={<ProtectedShell requirePerm="expenses.read"><Expenses /></ProtectedShell>} />
       <Route path="/admin/rbac" element={<ProtectedShell requirePerm="users.read"><RBACAdmin /></ProtectedShell>} />
       <Route path="/settings/company" element={<ProtectedShell requirePerm="*.*"><CompanySettings /></ProtectedShell>} />
       <Route path="/super-admin" element={<ProtectedShell requireSuperAdmin><SuperAdminPanel /></ProtectedShell>} />

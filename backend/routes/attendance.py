@@ -12,7 +12,7 @@ from core.db import db
 from core.scoped_db import sdb
 from core.helpers import now_utc, iso_now, new_id
 from core.deps import require_user
-from core.rbac import has_permission
+from core.rbac import has_permission, has_any_permission
 from models.attendance import (
     CheckInIn, CheckOutIn, AttendanceOverrideIn,
     LeaveRequestIn, LeaveActionIn, LeaveRuleIn, ApproveAttendanceIn,
@@ -103,7 +103,7 @@ async def update_att_policy(payload: AttendancePolicyIn, request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
+    if not has_any_permission(user, "*.*", "attendance.update"):
         raise HTTPException(403, "Admin only")
     up = payload.dict()
     up["updated_at"] = iso_now()
@@ -133,7 +133,7 @@ async def create_location(payload: GeoLocationIn, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
+    if not has_any_permission(user, "*.*", "attendance.update"):
         raise HTTPException(403, "Admin only")
     doc = payload.dict()
     doc["id"] = new_id("loc_")
@@ -148,7 +148,7 @@ async def delete_location(loc_id: str, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "*.*"):
+    if not has_any_permission(user, "*.*", "attendance.update"):
         raise HTTPException(403, "Admin only")
     r = await sdb.office_locations.delete_one({"id": loc_id})
     if not r.deleted_count:
@@ -593,7 +593,7 @@ async def monthly_sheet(request: Request, year: Optional[int] = None, month: Opt
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
+    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.read")
 
     y = year or now_utc().year
@@ -630,7 +630,7 @@ async def override_attendance(payload: AttendanceOverrideIn, request: Request,
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.update")
     if payload.status not in ATTENDANCE_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
@@ -673,7 +673,7 @@ async def put_leave_rule(payload: LeaveRuleIn, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.update")
     doc = payload.model_dump()
     doc["id"] = "default"
@@ -768,7 +768,7 @@ async def act_on_leave(leave_id: str, payload: LeaveActionIn, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
                        authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.update")
     lv = await sdb.leaves.find_one({"id": leave_id}, {"_id": 0})
     if not lv:
@@ -884,7 +884,7 @@ async def pending_approvals(request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission")
     rows = await sdb.attendance.find(
         {"approval_status": "pending"}, {"_id": 0},
@@ -897,7 +897,7 @@ async def approve_attendance(att_id: str, payload: ApproveAttendanceIn, request:
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission")
     row = await sdb.attendance.find_one({"id": att_id}, {"_id": 0})
     if not row:
@@ -963,7 +963,7 @@ async def attendance_summary(request: Request, employee_id: str,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
+    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         # Employees may only view their own summary
         own = await _resolve_employee_id(user, None)
         if own != employee_id:
@@ -1004,7 +1004,7 @@ async def team_dashboard(request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
+    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.read")
     today = _today()
     total_emp = await sdb.employees.count_documents(
@@ -1041,7 +1041,7 @@ async def attendance_records(request: Request, employee_id: Optional[str] = None
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
+    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         employee_id = await _resolve_employee_id(user, None)
     q: dict = {}
     if employee_id:
@@ -1065,7 +1065,7 @@ async def live_board(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
+    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.read")
     today = _today()
     policy = await _get_attendance_policy()
@@ -1122,7 +1122,7 @@ async def manual_attendance(payload: ManualAttendanceIn, request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.update")
     if payload.status not in ATTENDANCE_STATUSES:
         raise HTTPException(400, "Invalid status")
@@ -1170,7 +1170,7 @@ async def short_leave(payload: ShortLeaveIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.update")
     if not payload.hours or payload.hours <= 0 or payload.hours > 12:
         raise HTTPException(400, "Hours must be between 0 and 12")
@@ -1209,7 +1209,7 @@ async def list_late_approvals(request: Request, status: Optional[str] = "pending
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
+    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.read")
     q = {"late_approval_status": status} if status else {"late_approval_status": {"$in": ["pending", "approved", "rejected"]}}
     rows = await sdb.attendance.find(q, {"_id": 0}).sort("date", -1).to_list(500)
@@ -1224,7 +1224,7 @@ async def review_late(record_id: str, payload: LateReviewIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.update")
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(400, "status must be approved or rejected")
@@ -1269,7 +1269,7 @@ async def create_correction(payload: CorrectionIn, request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    emp_id = payload.employee_id if (payload.employee_id and has_permission(user, "employees.update")) \
+    emp_id = payload.employee_id if (payload.employee_id and has_any_permission(user, "employees.update", "attendance.update", "attendance.approve")) \
         else await _resolve_employee_id(user, None)
     nm = await _employee_name_map([emp_id])
     doc = {
@@ -1302,7 +1302,7 @@ async def list_corrections(request: Request, status: Optional[str] = None,
                            authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     q: dict = {}
-    if mine or not has_permission(user, "employees.read"):
+    if mine or not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         q["employee_id"] = await _resolve_employee_id(user, None)
     if status:
         q["status"] = status
@@ -1321,7 +1321,7 @@ async def review_correction(corr_id: str, payload: CorrectionReviewIn, request: 
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.update")
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(400, "status must be approved or rejected")
@@ -1378,7 +1378,7 @@ async def get_employee_config(employee_id: str, request: Request,
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
+    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.read")
     emp = await sdb.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
@@ -1406,7 +1406,7 @@ async def set_employee_config(employee_id: str, payload: EmployeeAttendanceConfi
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
+    if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.update")
     emp = await sdb.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
