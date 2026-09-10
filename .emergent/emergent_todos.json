@@ -1,22 +1,18 @@
 [
   {
-    "content": "rbac.py: expand PERMISSION_CATALOG to all modules (+attendance, holidays, expenses, purchase_orders, loans, calendar) + approve action label",
+    "content": "Add capped GPS-accuracy tolerance to geofence inside-check (fix in-office false 'away')",
     "status": "completed"
   },
   {
-    "content": "rbac.py: update ROLE_PERMISSIONS defaults so existing visibility/access is preserved",
+    "content": "Enforce office geofencing whenever an office fence is configured (fix 'home allowed' trap)",
     "status": "completed"
   },
   {
-    "content": "Backend enforcement: wire new perms into loans/purchase/holidays/attendance/expenses/calendar routes (accept new OR legacy)",
+    "content": "Pass accuracy_m through geo-check + check-in + policy-default fallback",
     "status": "completed"
   },
   {
-    "content": "Frontend: Layout NAV perms use new module perms; RBACAdmin add Approve column; App.js route guards",
-    "status": "completed"
-  },
-  {
-    "content": "Test with testing_agent (role-based visibility + API enforcement + tenant isolation)",
+    "content": "Verify fix via testing_agent (in-office allowed, home blocked, tolerance capped)",
     "status": "completed"
   }
 ]

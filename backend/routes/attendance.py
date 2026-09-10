@@ -60,6 +60,12 @@ DEFAULT_POLICY = {
     "late_rejection_penalty": "half_day",
 }
 
+# How much of the device's reported GPS uncertainty we forgive when deciding if
+# a user is inside a fence. Indoors, accurate fixes still drift 30-80m, which
+# wrongly pushed in-office staff "outside" a 150m fence. Capped so a genuinely
+# remote location (home is typically >1km away) can never sneak in.
+GPS_TOLERANCE_CAP_M = 75.0
+
 
 async def _get_attendance_policy() -> dict:
     p = await sdb.attendance_policies.find_one({}, {"_id": 0})
@@ -170,10 +176,13 @@ def _haversine_m(lat1, lng1, lat2, lng2) -> float:
 
 
 async def _resolve_geo_fence(kind: str, lat: float, lng: float,
-                             project_id: Optional[str] = None) -> dict:
+                             project_id: Optional[str] = None,
+                             accuracy_m: Optional[float] = None) -> dict:
     """Find the nearest matching location and check if within radius.
 
-    Returns dict {inside, matched_location, distance_m, nearest}.
+    A capped GPS-accuracy tolerance is added to the radius so a real in-office
+    fix with poor accuracy isn't wrongly rejected. Returns dict
+    {inside, matched_location, distance_m, reason}.
     """
     q = {"is_active": True}
     if kind and kind != "any":
@@ -191,25 +200,28 @@ async def _resolve_geo_fence(kind: str, lat: float, lng: float,
     if best is None:
         return {"inside": False, "matched_location": None, "distance_m": None,
                 "reason": f"No {kind} geo-fence configured"}
-    inside = best_dist <= float(best.get("radius_m", 150))
+    radius = float(best.get("radius_m") or 150)
+    tolerance = min(float(accuracy_m or 0), GPS_TOLERANCE_CAP_M)
+    inside = best_dist <= (radius + tolerance)
     return {
         "inside": inside,
         "matched_location": {"id": best["id"], "name": best["name"],
                              "kind": best["kind"], "radius_m": best.get("radius_m")},
         "distance_m": round(best_dist, 1),
         "reason": None if inside else
-                  f"You are {round(best_dist)}m from '{best['name']}' (allowed: {best.get('radius_m', 150)}m)",
+                  f"You are {round(best_dist)}m from '{best['name']}' (allowed: {int(radius)}m)",
     }
 
 
 @router.get("/attendance/geo-check")
 async def geo_check(lat: float, lng: float, kind: str = "office",
-                    project_id: Optional[str] = None, request: Request = None,
+                    project_id: Optional[str] = None,
+                    accuracy_m: Optional[float] = None, request: Request = None,
                     session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     """Quick check before check-in — tells UI whether user is inside a fence."""
     await require_user(request, session_token, authorization)
-    return await _resolve_geo_fence(kind, lat, lng, project_id)
+    return await _resolve_geo_fence(kind, lat, lng, project_id, accuracy_m)
 
 
 # ==================================================
@@ -337,9 +349,21 @@ async def check_in(payload: CheckInIn, request: Request,
     # ---- Geo-fence enforcement ----
     geo_result = {"inside": True, "matched_location": None, "distance_m": None}
     is_office = att_type == "office"
-    geo_needed = policy.get("geo_fencing_enabled") and (
-        not is_office or policy.get("require_geo_for_office")
-    )
+    geo_enabled = policy.get("geo_fencing_enabled")
+    if is_office:
+        # Enforce office geofencing whenever the admin opted in OR an office
+        # fence is actually configured (a marked office/default location). This
+        # closes the trap where `require_geo_for_office` was left off/blank yet a
+        # fence existed — which previously let staff check in from home.
+        office_fence_exists = (
+            policy.get("default_office_lat") is not None
+            or await sdb.office_locations.count_documents({"kind": "office", "is_active": True}) > 0
+        )
+        geo_needed = bool(geo_enabled) and (
+            bool(policy.get("require_geo_for_office", True)) or office_fence_exists
+        )
+    else:
+        geo_needed = bool(geo_enabled)
     if geo_needed:
         if payload.lat is None or payload.lng is None:
             raise HTTPException(
@@ -366,20 +390,21 @@ async def check_in(payload: CheckInIn, request: Request,
             "vendor_visit": "vendor",
         }.get(att_type, "office")
         geo_result = await _resolve_geo_fence(kind, payload.lat, payload.lng,
-                                              payload.project_id)
+                                              payload.project_id, payload.accuracy_m)
         # For office: fall back to policy default fence if no explicit location
         if not geo_result.get("matched_location") and is_office \
                 and policy.get("default_office_lat") is not None:
             d = _haversine_m(payload.lat, payload.lng,
                              policy["default_office_lat"], policy["default_office_lng"])
             radius = policy.get("default_office_radius_m") or 150
+            tolerance = min(float(payload.accuracy_m or 0), GPS_TOLERANCE_CAP_M)
             geo_result = {
-                "inside": d <= radius,
+                "inside": d <= (radius + tolerance),
                 "matched_location": {"id": "policy_default", "name": "Head Office",
                                      "kind": "office", "radius_m": radius},
                 "distance_m": round(d, 1),
-                "reason": None if d <= radius else
-                          f"You are {round(d)}m from Head Office (allowed: {radius}m)",
+                "reason": None if d <= (radius + tolerance) else
+                          f"You are {round(d)}m from Head Office (allowed: {int(radius)}m)",
             }
 
         if not geo_result["inside"]:
