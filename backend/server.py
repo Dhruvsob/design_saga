@@ -640,11 +640,14 @@ async def reset_role_permissions(role: str, request: Request,
 async def rbac_users(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
-    """Admin or HR can list users."""
+    """Admin or HR can list users — scoped to the caller's own tenant so one
+    tenant can never see another tenant's members. SuperAdmins (cross-org) see
+    all; a tenant Admin/HR sees only their own org's users."""
     user = await require_user(request, session_token, authorization)
     if not (has_permission(user, "users.read") or has_permission(user, "rbac.read")):
         raise HTTPException(status_code=403, detail="Missing permission: users.read")
-    users = await db.users.find({}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    from core.tenancy import tenant_filter as _tfilter
+    users = await db.users.find(_tfilter(user), {"_id": 0}).sort("created_at", 1).to_list(500)
     # Which identifiers are currently locked out (>=5 fails in the window)?
     from datetime import timedelta as _td
     cutoff = now_utc() - _td(minutes=15)
@@ -691,6 +694,10 @@ async def rbac_assign_role(user_id: str, payload: RoleAssignIn, request: Request
         raise HTTPException(status_code=400, detail=f"Unknown role: {payload.role}")
     target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Tenant isolation: a non-super Admin can only manage users in their own org.
+    from core.tenancy import user_org_id as _uoid, is_super_admin as _is_sa, DEFAULT_ORG_ID as _DEF
+    if not _is_sa(actor) and (target.get("org_id") or _DEF) != _uoid(actor):
         raise HTTPException(status_code=404, detail="User not found")
     # Guard: super-admin emails can never be demoted.
     if _is_super_admin(target.get("email")) and new_role not in ("Admin", "SuperAdmin"):

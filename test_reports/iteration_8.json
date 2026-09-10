@@ -1,0 +1,109 @@
+{
+  "summary": "Completed comprehensive tenant isolation testing for multi-tenant SaaS ERP. All 5 test scenarios passed successfully, confirming that the tenant isolation bug fixes are working correctly.",
+  "backend_issues": {
+    "critical_bugs": [],
+    "flaky_endpoints": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "USER LIST ISOLATION: Org A Admin sees only Org A users (1 user)",
+    "USER LIST ISOLATION: Org B Admin sees only Org B users (2 users including pending)",
+    "USER LIST ISOLATION: org_default Admin sees only org_default users (3 users)",
+    "USER LIST ISOLATION: SuperAdmin sees all users across all tenants (6 users total)",
+    "PENDING LIST ISOLATION: Org A Admin does NOT see Org B's pending user",
+    "PENDING LIST ISOLATION: Org B Admin sees their own pending user",
+    "ROLE PERMISSION ISOLATION: Org A Admin successfully customized Designer role with distinctive permissions (holidays.read, expenses.approve)",
+    "ROLE PERMISSION ISOLATION: Org A sees customized Designer permissions (6 perms, marked as customized)",
+    "ROLE PERMISSION ISOLATION: Org B Designer remains UNCHANGED (21 default perms, does NOT have expenses.approve)",
+    "ROLE PERMISSION ISOLATION: org_default Designer remains UNCHANGED (does NOT have expenses.approve)",
+    "CROSS-TENANT MUTATION GUARD: Org A Admin CANNOT change Org B user's role (404 - User not found)",
+    "CROSS-TENANT MUTATION GUARD: Org A Admin CANNOT approve Org B pending user (404)",
+    "CROSS-TENANT MUTATION GUARD: Org A Admin CANNOT unlock Org B user (404)",
+    "CROSS-TENANT MUTATION GUARD: SuperAdmin CAN act across tenants (changed Org B user role successfully)",
+    "REGRESSION: Org A Admin CAN change own tenant user's role (200 OK)",
+    "REGRESSION: Own-tenant CRUD operations still work correctly"
+  ],
+  "test_report_links": [
+    "/app/backend/test_tenant_isolation.py",
+    "/app/backend/test_role_permissions_debug.py"
+  ],
+  "success_percentage": {
+    "backend": "100% (24/24 tests passed)",
+    "frontend": "N/A (backend-only testing)"
+  },
+  "updated_files": [
+    "/app/backend/test_tenant_isolation.py",
+    "/app/backend/test_role_permissions_debug.py"
+  ],
+  "action_item_for_main_agent": "",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_test_itself": false,
+  "detailed_findings": {
+    "test_1_user_list_isolation": {
+      "status": "PASS",
+      "description": "GET /api/rbac/users is correctly scoped by tenant_filter(). Each tenant admin sees only their own org's users.",
+      "verification": [
+        "Org A Admin: 1 user (only Org A admin)",
+        "Org B Admin: 2 users (Org B admin + pending user)",
+        "org_default Admin: 3 users (existing users in org_default)",
+        "SuperAdmin: 6 users (all users across all tenants)"
+      ]
+    },
+    "test_2_pending_list_isolation": {
+      "status": "PASS",
+      "description": "GET /api/rbac/pending is correctly scoped by tenant_filter(). Pending users are isolated per tenant.",
+      "verification": [
+        "Org A Admin: 0 pending users (does NOT see Org B's pending user)",
+        "Org B Admin: 1 pending user (sees their own pending user)"
+      ]
+    },
+    "test_3_role_permission_isolation": {
+      "status": "PASS",
+      "description": "Role permissions are correctly keyed by {org_id, role}. Customizations in one tenant do NOT affect other tenants.",
+      "verification": [
+        "Org A customized Designer with 6 permissions including expenses.approve",
+        "Org B Designer remains at 21 default permissions WITHOUT expenses.approve",
+        "org_default Designer remains at default permissions WITHOUT expenses.approve",
+        "Role permission overrides are stored per-tenant in role_permissions collection"
+      ],
+      "note": "Initial test had a false positive due to checking holidays.read which is already in default Designer permissions. Fixed to check expenses.approve which is NOT in defaults."
+    },
+    "test_4_cross_tenant_mutation_guards": {
+      "status": "PASS",
+      "description": "Non-super Admins cannot modify users from other tenants. All cross-tenant mutations return 404.",
+      "verification": [
+        "Org A Admin CANNOT change Org B user's role (404)",
+        "Org A Admin CANNOT approve Org B pending user (404)",
+        "Org A Admin CANNOT unlock Org B user (404)",
+        "SuperAdmin CAN act across tenants (200 OK)"
+      ]
+    },
+    "test_5_regression_own_tenant_crud": {
+      "status": "PASS",
+      "description": "Own-tenant CRUD operations still work correctly. Admins can manage users within their own org.",
+      "verification": [
+        "Org A Admin successfully created new user in Org A",
+        "Org A Admin successfully changed own tenant user's role (200 OK)"
+      ]
+    }
+  },
+  "implementation_notes": {
+    "tenant_filter": "tenant_filter(user) in core/tenancy.py correctly returns: SuperAdmin -> {} (all), org_default -> {$or:[org_default, no org_id, null]}, other org -> {org_id: oid}",
+    "role_permissions": "role_permissions collection correctly stores overrides keyed by {org_id, role}. resolve_permissions() in core/deps.py correctly queries by org_id.",
+    "cross_tenant_guards": "rbac_assign_role, approve_user, and unlock_user all check org_id match before allowing mutations. Non-super Admins get 404 for cross-tenant attempts.",
+    "superadmin_access": "SuperAdmin correctly bypasses tenant filters and can act across all tenants by design."
+  },
+  "test_environment": {
+    "base_url": "https://finance-corrections.preview.emergentagent.com/api",
+    "test_credentials": {
+      "super_admin": "designsaga10@gmail.com / Admin@123",
+      "org_default_admin": "admin@designsaga.com / Admin@123",
+      "test_orgs_created": "2 (Org A and Org B with their admins)",
+      "cleanup": "All test orgs and users cleaned up successfully"
+    }
+  }
+}

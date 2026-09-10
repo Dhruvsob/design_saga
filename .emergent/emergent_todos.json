@@ -1,18 +1,18 @@
 [
   {
-    "content": "Add capped GPS-accuracy tolerance to geofence inside-check (fix in-office false 'away')",
+    "content": "Scope /rbac/users to caller's tenant (fix cross-tenant member leak)",
     "status": "completed"
   },
   {
-    "content": "Enforce office geofencing whenever an office fence is configured (fix 'home allowed' trap)",
+    "content": "Scope /rbac/pending to caller's tenant",
     "status": "completed"
   },
   {
-    "content": "Pass accuracy_m through geo-check + check-in + policy-default fallback",
+    "content": "Add cross-tenant mutation guards (role assign, approve/reject, unlock)",
     "status": "completed"
   },
   {
-    "content": "Verify fix via testing_agent (in-office allowed, home blocked, tolerance capped)",
+    "content": "Verify with testing_agent: 2 tenants, isolated user lists + role permissions + no cross-tenant mutation",
     "status": "completed"
   }
 ]

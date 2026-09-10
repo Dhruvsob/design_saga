@@ -333,6 +333,9 @@ async def unlock_user(user_id: str, request: Request,
     target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    from core.tenancy import user_org_id as _uoid, is_super_admin as _is_sa, DEFAULT_ORG_ID as _DEF
+    if not _is_sa(admin) and (target.get("org_id") or _DEF) != _uoid(admin):
+        raise HTTPException(status_code=404, detail="User not found")
     await _clear_lockout_for_user(target)
     return {"ok": True, "unlocked": True}
 
@@ -347,7 +350,8 @@ async def list_pending(request: Request,
     admin = await require_user(request, session_token, authorization)
     if not has_permission(admin, "*.*"):
         raise HTTPException(status_code=403, detail="Admin only")
-    rows = await db.users.find({"approval_status": "pending"}, {"_id": 0}) \
+    from core.tenancy import tenant_filter as _tfilter
+    rows = await db.users.find({**_tfilter(admin), "approval_status": "pending"}, {"_id": 0}) \
                          .sort("created_at", 1).to_list(200)
     return [_pack_user(u) for u in rows]
 
@@ -361,6 +365,10 @@ async def approve_user(user_id: str, payload: ApprovalDecisionIn, request: Reque
         raise HTTPException(status_code=403, detail="Admin only")
     target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Tenant isolation: non-super Admins can only approve users in their own org.
+    from core.tenancy import user_org_id as _uoid, is_super_admin as _is_sa, DEFAULT_ORG_ID as _DEF
+    if not _is_sa(admin) and (target.get("org_id") or _DEF) != _uoid(admin):
         raise HTTPException(status_code=404, detail="User not found")
 
     if payload.decision == "approve":
