@@ -4,8 +4,10 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { useAuth } from "../context/AuthContext";
+import { empName } from "../lib/format";
 import {
   CaretLeft, CaretRight, Plus, X, Trash, MapPin, Clock as ClockIcon,
+  Bell, Users, Lock, Globe, HardHat, UserCircle, SpeakerHigh, SpeakerSlash,
 } from "@phosphor-icons/react";
 
 /* ---------- constants ---------- */
@@ -47,6 +49,17 @@ export default function CalendarPage() {
   const [hiddenKinds, setHiddenKinds] = useState({});   // kind -> true (hidden)
   const [selectedDay, setSelectedDay] = useState(null); // YYYY-MM-DD
   const [modal, setModal] = useState(null);             // null | {mode:"create"|"edit", data}
+  const [soundOn, setSoundOn] = useState(() => {
+    try { return (localStorage.getItem("cal_reminder_sound") ?? "on") !== "off"; } catch { return true; }
+  });
+  const toggleSound = () => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("cal_reminder_sound", next ? "on" : "off"); } catch { /* ignore */ }
+      toast.message(next ? "Reminder sound on" : "Reminder sound muted");
+      return next;
+    });
+  };
 
   /* ---- visible range for the current view ---- */
   const range = useMemo(() => {
@@ -141,12 +154,19 @@ export default function CalendarPage() {
           <button onClick={() => go(1)} className="btn-ghost px-2" data-testid="cal-next"><CaretRight size={16} /></button>
           <div className="font-display font-bold text-lg ml-2" data-testid="cal-header-label">{headerLabel}</div>
         </div>
-        <div className="flex items-center gap-1 border border-[#E5E5E5]">
-          {["month", "week", "agenda"].map((v) => (
-            <button key={v} onClick={() => setView(v)}
-              className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${view === v ? "bg-[#0A0A0A] text-white" : "text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
-              data-testid={`view-${v}`}>{v}</button>
-          ))}
+        <div className="flex items-center gap-2">
+          <button onClick={toggleSound} className="btn-ghost px-2"
+                  title={soundOn ? "Reminder sound on — click to mute" : "Reminder sound muted — click to enable"}
+                  data-testid="cal-sound-toggle">
+            {soundOn ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} className="text-[#9A9A9A]" />}
+          </button>
+          <div className="flex items-center gap-1 border border-[#E5E5E5]">
+            {["month", "week", "agenda"].map((v) => (
+              <button key={v} onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${view === v ? "bg-[#0A0A0A] text-white" : "text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
+                data-testid={`view-${v}`}>{v}</button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -323,6 +343,16 @@ function AgendaRow({ it, onOpen }) {
 }
 
 /* ---------- create / edit event modal ---------- */
+const REMINDER_OPTS = [
+  { v: "none", l: "No reminder" },
+  { v: "0", l: "At start time" },
+  { v: "5", l: "5 min before" },
+  { v: "15", l: "15 min before" },
+  { v: "30", l: "30 min before" },
+  { v: "60", l: "1 hour before" },
+  { v: "1440", l: "1 day before" },
+];
+
 function EventModal({ mode, initial, me, onClose, onSaved }) {
   const isEdit = mode === "edit";
   const [f, setF] = useState({
@@ -333,20 +363,49 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
     end_time: initial?.end_time || "",
     location: initial?.location || "",
     notes: initial?.notes || "",
+    visibility: initial?.visibility || "private",
+    reminder_minutes: initial?.reminder_minutes ?? null,
+    employee_ids: initial?.employee_ids || [],
+    vendor_id: initial?.vendor_id || "",
+    client_id: initial?.client_id || "",
   });
+  const [opts, setOpts] = useState({ employees: [], vendors: [], clients: [] });
   const [busy, setBusy] = useState(false);
+  const [empQuery, setEmpQuery] = useState("");
   const canDelete = isEdit && (initial?.created_by === me?.user_id || me?.role === "Admin" || me?.is_super_admin);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const grab = async (url) => { try { const { data } = await api.get(url); return Array.isArray(data) ? data : []; } catch { return []; } };
+      const [emps, vends, clis] = await Promise.all([grab("/employees"), grab("/vendors"), grab("/clients")]);
+      if (alive) setOpts({ employees: emps, vendors: vends, clients: clis });
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const toggleEmp = (id) =>
+    setF((s) => ({ ...s, employee_ids: s.employee_ids.includes(id) ? s.employee_ids.filter((x) => x !== id) : [...s.employee_ids, id] }));
+
+  const filteredEmps = opts.employees.filter((e) =>
+    empName(e).toLowerCase().includes(empQuery.trim().toLowerCase()));
+  const canAssign = opts.employees.length > 0 || opts.vendors.length > 0 || opts.clients.length > 0;
 
   const save = async (e) => {
     e.preventDefault();
     if (!f.title.trim() || !f.date) { toast.error("Title and date are required"); return; }
     setBusy(true);
     try {
+      const payload = {
+        ...f,
+        vendor_id: f.vendor_id || null,
+        client_id: f.client_id || null,
+      };
       if (isEdit) {
-        await api.patch(`/calendar/events/${initial.id}`, f);
+        await api.patch(`/calendar/events/${initial.id}`, payload);
         toast.success("Event updated");
       } else {
-        await api.post("/calendar/events", f);
+        await api.post("/calendar/events", payload);
         toast.success("Event added to the calendar");
       }
       onSaved();
@@ -370,7 +429,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <form onSubmit={save} className="relative bg-white border border-[#E5E5E5] w-full max-w-md p-6 space-y-4 shadow-xl"
+      <form onSubmit={save} className="relative bg-white border border-[#E5E5E5] w-full max-w-lg p-6 space-y-4 shadow-xl max-h-[92vh] overflow-y-auto"
             data-testid="event-modal">
         <div className="flex items-center justify-between">
           <div className="overline">{isEdit ? "EDIT EVENT" : "NEW EVENT"}</div>
@@ -406,6 +465,105 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
                    onChange={(e) => setF({ ...f, end_time: e.target.value })} />
           </div>
         </div>
+
+        {/* Reminder */}
+        <div>
+          <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1.5">
+            <Bell size={12} /> Reminder
+          </label>
+          <select
+            className="input-flat w-full"
+            value={f.reminder_minutes === null || f.reminder_minutes === undefined ? "none" : String(f.reminder_minutes)}
+            onChange={(e) => setF({ ...f, reminder_minutes: e.target.value === "none" ? null : Number(e.target.value) })}
+            data-testid="event-reminder-select"
+          >
+            {REMINDER_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
+          {f.reminder_minutes !== null && !f.start_time && (
+            <p className="text-[10px] text-[#B87500] mt-1">Set a start time so the reminder can fire.</p>
+          )}
+        </div>
+
+        {/* Visibility / privacy */}
+        <div>
+          <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Visibility</label>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setF({ ...f, visibility: "private" })}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border transition ${f.visibility === "private" ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#0A0A0A]"}`}
+              data-testid="event-visibility-private">
+              <Lock size={13} /> Private
+            </button>
+            <button type="button" onClick={() => setF({ ...f, visibility: "org" })}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border transition ${f.visibility === "org" ? "bg-[#1D633E] text-white border-[#1D633E]" : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#0A0A0A]"}`}
+              data-testid="event-visibility-org">
+              <Globe size={13} /> Shared with team
+            </button>
+          </div>
+          <p className="text-[10px] text-[#9A9A9A] mt-1">
+            {f.visibility === "private"
+              ? "Only you and the people you tag can see this event."
+              : "Everyone in your team can see this event."}
+          </p>
+        </div>
+
+        {/* Assignment / tagging */}
+        {canAssign && (
+          <div className="border border-[#E5E5E5] p-3 space-y-3" data-testid="event-assign-section">
+            <div className="overline flex items-center gap-1.5"><Users size={12} /> Assign / tag</div>
+
+            {opts.employees.length > 0 && (
+              <div>
+                <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Employees</label>
+                <input className="input-flat w-full mb-1.5" placeholder="Search employees…"
+                       value={empQuery} onChange={(e) => setEmpQuery(e.target.value)}
+                       data-testid="event-emp-search" />
+                <div className="max-h-32 overflow-y-auto border border-[#F0F0F0] divide-y divide-[#F5F5F5]" data-testid="event-emp-list">
+                  {filteredEmps.length === 0 && <div className="text-[11px] text-[#9A9A9A] px-2 py-2">No matches.</div>}
+                  {filteredEmps.map((emp) => {
+                    const on = f.employee_ids.includes(emp.id);
+                    return (
+                      <button type="button" key={emp.id} onClick={() => toggleEmp(emp.id)}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition ${on ? "bg-[#F5F4F0]" : "hover:bg-[#FAFAFA]"}`}
+                        data-testid={`event-emp-${emp.id}`}>
+                        <span className={`w-3.5 h-3.5 border flex items-center justify-center ${on ? "bg-[#8B7F6A] border-[#8B7F6A]" : "border-[#C9C9C9]"}`}>
+                          {on && <X size={9} className="text-white" weight="bold" />}
+                        </span>
+                        <span className="truncate">{empName(emp)}</span>
+                        {emp.department && <span className="ml-auto text-[10px] text-[#9A9A9A] shrink-0">{emp.department}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {f.employee_ids.length > 0 && (
+                  <div className="text-[10px] text-[#5C5C5C] mt-1">{f.employee_ids.length} employee(s) tagged — they'll be notified.</div>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              {opts.vendors.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1"><HardHat size={11} /> Vendor / Agency</label>
+                  <select className="input-flat w-full" value={f.vendor_id}
+                          onChange={(e) => setF({ ...f, vendor_id: e.target.value })} data-testid="event-vendor-select">
+                    <option value="">— None —</option>
+                    {opts.vendors.map((v) => <option key={v.id} value={v.id}>{v.name || v.vendor_name || v.company_name || "Vendor"}</option>)}
+                  </select>
+                </div>
+              )}
+              {opts.clients.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1"><UserCircle size={11} /> Client</label>
+                  <select className="input-flat w-full" value={f.client_id}
+                          onChange={(e) => setF({ ...f, client_id: e.target.value })} data-testid="event-client-select">
+                    <option value="">— None —</option>
+                    {opts.clients.map((c) => <option key={c.id} value={c.id}>{c.name || "Client"}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <MapPin size={14} className="text-[#5C5C5C]" />

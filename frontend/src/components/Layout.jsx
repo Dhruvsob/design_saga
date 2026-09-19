@@ -8,6 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
+import CalendarReminders from "./CalendarReminders";
 import { useEffect, useState } from "react";
 import { formatDate, formatTime } from "../lib/format";
 
@@ -264,6 +265,7 @@ export default function Layout({ children }) {
       </main>
 
       <CommandPalette open={paletteOpen} setOpen={setPaletteOpen} />
+      <CalendarReminders />
     </div>
   );
 }

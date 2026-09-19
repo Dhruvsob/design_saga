@@ -141,3 +141,32 @@
 - Dates are consistently DD/MM/YYYY and key times are IST in the most visible UI.
 - SuperAdmin can view/manage tenants with owner + manual billing fields; isolation-check shows PASS.
 - Full-screen toggle works without breaking navigation/responsiveness.
+
+
+---
+
+# Quick ERP Improvements — Batch (No Rebuild)
+
+Source: user's "QUICK ERP IMPROVEMENT CHECK" 10-item list. One active sub-batch at a time,
+tenant-isolation-safe, reuse existing components/services, minimum credits.
+
+## Item Status
+- [x] **#6 Paid-invoice delete → safe payment reversal** — shipped + test-agent verified (iter 9). Original receipt JE reversed (not hard-deleted), balances preserved.
+- [x] **Tooling: ESLint v9 flat config** — added `/app/frontend/eslint.config.js` (permissive, no app-code change) to unblock the linter engine crash. Verified `eslint .` exits 0.
+- [x] **#1 Lead Notes (editable + historically saved)**
+  - Backend (`server.py`): `notes_log[]` per lead + endpoints GET/POST/PATCH/DELETE `/api/leads/{id}/notes`. Edits keep prior versions in `history`; delete is soft (kept for history). Tenant-safe via `sdb`.
+  - Frontend (`Leads.jsx`): "Notes & History" thread in the lead edit modal — add, edit (with version history), soft-delete, author + IST timestamp.
+  - Verified: curl (add/edit/history/list) + UI screenshot. Leads route is `/crm`.
+- [x] **#7 Calendar employee privacy** — events get `visibility` (private|org). Non-admins only see shared events + their own + events they're tagged/invited to. Admin/SuperAdmin see all. Legacy events (no field) treated as shared. Applied to `/calendar/events` list + `/calendar/feed` manual events.
+- [x] **#8 Calendar assign/tag** — events can tag employees (multi), a vendor/agency, and a client. Tagged employees with a login are notified via existing `emit()`. UI pickers in the event modal (permission-graceful).
+- [x] **#9 Calendar reminders + optional sound** — event `reminder_minutes` + `GET /api/calendar/reminders/due` (IST-aware). Global `CalendarReminders` poller (mounted in Layout) shows a toast + optional WebAudio beep; sound on/off toggle in the calendar toolbar (localStorage). Verified via curl (minutes_until within window) + UI screenshot.
+
+## Remaining
+- [ ] **#2 Attendance** — monthly per-employee day view + per-employee timing/policy late calc (preserve self-service privacy).
+- [ ] **#3 Project financials hidden** from normal project employees (keep for Admin/Finance) — use existing permissions, do not delete data.
+- [ ] **#4 Employee salary/payment history + effective-dated increments.**
+- [ ] **#5 Employee → optional linked login** (role/password/status, no dup, tenant-scoped). Note: `/employees/{eid}/account` GET/POST infra already exists — extend, don't duplicate.
+
+## Verification
+- Testing agent to be run per batch. Focus: calendar privacy (non-admin cannot see others' private events), tenant isolation, and Lead Notes history integrity.
+- Test creds: Admin `admin@designsaga.com` / `Admin@123`; SuperAdmin `designsaga10@gmail.com` / `Admin@123`.

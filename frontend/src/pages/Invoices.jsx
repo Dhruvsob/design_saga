@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import api, { API } from "../lib/api";
 import { Plus, FilePdf, Trash, Eye, PencilSimple } from "@phosphor-icons/react";
 
@@ -98,12 +99,18 @@ export default function Invoices({ docType = "invoice" }) {
     load();
   };
 
-  const del = async (id) => {
-    if (!window.confirm("Delete?")) return;
+  const del = async (id, isPaid) => {
+    const msg = isPaid
+      ? "This invoice is PAID. Deleting it will reverse the linked payment in Accounting (a balanced reversing entry is posted; nothing is hard-deleted). Continue?"
+      : "Delete this invoice?";
+    if (!window.confirm(msg)) return;
     try {
-      await api.delete(`/invoices/${id}`);
+      const { data } = await api.delete(`/invoices/${id}`);
+      toast.success(data?.payment_reversed
+        ? "Invoice deleted · payment reversed in Accounting"
+        : "Invoice deleted");
     } catch (e) {
-      alert(e?.response?.data?.detail || "Could not delete");
+      toast.error(e?.response?.data?.detail || "Could not delete");
     }
     load();
   };
@@ -228,7 +235,7 @@ export default function Invoices({ docType = "invoice" }) {
                     {r.status !== "paid" && (
                       <button onClick={() => startEdit(r)} className="text-[#5C5C5C] hover:text-[#0A0A0A]" title="Edit" data-testid={`${docType}-edit-${r.id}`}><PencilSimple size={16} /></button>
                     )}
-                    <button onClick={() => del(r.id)} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>
+                    <button onClick={() => del(r.id, r.status === "paid")} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>
                   </div>
                 </Td>
               </tr>

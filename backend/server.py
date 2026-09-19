@@ -270,6 +270,10 @@ class LeadUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class LeadNoteIn(BaseModel):
+    text: str
+
+
 class ClientIn(BaseModel):
     name: str
     email: Optional[str] = None
@@ -935,6 +939,109 @@ async def convert_lead_to_project(lead_id: str, request: Request,
     return {"project_id": project_id, "client_id": client_id}
 
 
+# ----------------------------------------------------------------
+# Lead Notes — editable + historically saved (per-lead notes thread)
+# ----------------------------------------------------------------
+def _note_author(user: dict) -> str:
+    return user.get("name") or user.get("email") or "Unknown"
+
+
+@api.get("/leads/{lead_id}/notes")
+async def list_lead_notes(lead_id: str, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    await require_user(request, session_token, authorization)
+    lead = await sdb.leads.find_one({"id": lead_id}, {"_id": 0, "notes_log": 1})
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    notes = [n for n in (lead.get("notes_log") or []) if not n.get("deleted")]
+    notes.sort(key=lambda n: n.get("created_at") or "", reverse=True)
+    return notes
+
+
+@api.post("/leads/{lead_id}/notes")
+async def add_lead_note(lead_id: str, payload: LeadNoteIn, request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "leads.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: leads.update")
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Note text is required")
+    now = iso(now_utc())
+    note = {
+        "id": new_id("lnote_"),
+        "text": text,
+        "author_id": user.get("user_id"),
+        "author_name": _note_author(user),
+        "created_at": now,
+        "edited_at": None,
+        "history": [],
+    }
+    res = await sdb.leads.update_one(
+        {"id": lead_id},
+        {"$push": {"notes_log": note,
+                   "timeline": {"event": "note_added", "by": _note_author(user), "at": now}}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return note
+
+
+@api.patch("/leads/{lead_id}/notes/{note_id}")
+async def edit_lead_note(lead_id: str, note_id: str, payload: LeadNoteIn, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "leads.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: leads.update")
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Note text is required")
+    lead = await sdb.leads.find_one({"id": lead_id}, {"_id": 0, "notes_log": 1})
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    target = next((n for n in (lead.get("notes_log") or [])
+                   if n.get("id") == note_id and not n.get("deleted")), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if text == (target.get("text") or ""):
+        return target  # nothing changed — no new history entry
+    now = iso(now_utc())
+    prior = {"text": target.get("text"), "edited_at": now, "edited_by": _note_author(user)}
+    await sdb.leads.update_one(
+        {"id": lead_id, "notes_log.id": note_id},
+        {"$set": {"notes_log.$.text": text, "notes_log.$.edited_at": now},
+         "$push": {"notes_log.$.history": prior,
+                   "timeline": {"event": "note_edited", "by": _note_author(user), "at": now}}}
+    )
+    lead2 = await sdb.leads.find_one({"id": lead_id}, {"_id": 0, "notes_log": 1})
+    return next((n for n in (lead2.get("notes_log") or []) if n.get("id") == note_id), None)
+
+
+@api.delete("/leads/{lead_id}/notes/{note_id}")
+async def delete_lead_note(lead_id: str, note_id: str, request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None)):
+    """Soft-delete a note — kept in the document for history, hidden from the thread."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "leads.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: leads.update")
+    now = iso(now_utc())
+    res = await sdb.leads.update_one(
+        {"id": lead_id, "notes_log.id": note_id},
+        {"$set": {"notes_log.$.deleted": True,
+                  "notes_log.$.deleted_at": now,
+                  "notes_log.$.deleted_by": _note_author(user)},
+         "$push": {"timeline": {"event": "note_deleted", "by": _note_author(user), "at": now}}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Lead or note not found")
+    return {"ok": True}
+
+
+
 # ============================================================
 # Clients
 # ============================================================
@@ -1499,15 +1606,25 @@ async def delete_invoice(invoice_id: str, request: Request,
     inv = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Not found")
-    if inv.get("status") == "paid" and inv.get("doc_type", "invoice") == "invoice":
-        raise HTTPException(
-            status_code=409,
-            detail="This invoice is marked PAID and has a receipt in Accounting. "
-                   "Change its status to 'sent' first (this reverses the receipt), then delete.")
+    # Accounting safety: if this invoice has a linked payment/receipt entry,
+    # reverse it (balanced reversing JE — never hard-delete a posted entry) so
+    # the ledger can never be left with an orphan/negative balance. This runs
+    # regardless of the exact status, closing the orphan-JE gap.
+    payment_reversed = False
+    if inv.get("doc_type", "invoice") == "invoice":
+        from routes.accounting import reverse_receipt_je
+        rev = await reverse_receipt_je(
+            user, source="invoice_payment", source_id=invoice_id,
+            narration=(f"Invoice {inv.get('number') or invoice_id} deleted — payment reversed"
+                       + (f" · {inv.get('client_name')}" if inv.get("client_name") else "")),
+            reset_source=False)  # invoice is being deleted, no source to reset
+        payment_reversed = bool(rev)
     await sdb.invoices.delete_one({"id": invoice_id})
     await audit_log(user, "invoice.delete", target=invoice_id, target_type="invoice",
-                    meta={"number": inv.get("number"), "total": inv.get("total")})
-    return {"ok": True}
+                    meta={"number": inv.get("number"), "total": inv.get("total"),
+                          "was_paid": inv.get("status") == "paid",
+                          "payment_reversed": payment_reversed})
+    return {"ok": True, "payment_reversed": payment_reversed}
 
 
 def _safe(s) -> str:

@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import useMasterData from "../hooks/useMasterData";
-import { Plus, ArrowRight, Trash, DotsSixVertical, PencilSimple, X } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Trash, DotsSixVertical, PencilSimple, X, Check, ClockCounterClockwise, NotePencil } from "@phosphor-icons/react";
 import PageHero from "../components/PageHero";
+import { formatDateTime } from "../lib/format";
 
 const FALLBACK_STAGES = ["New", "Qualified", "Proposal", "Negotiation", "Won", "Lost"];
 const FALLBACK_SOURCES = ["Website", "Instagram", "Referral", "Marketplace", "Walk-in"];
@@ -31,6 +32,13 @@ export default function Leads() {
   const [editing, setEditing] = useState(null); // lead being edited
   const [dragId, setDragId] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  // Lead notes thread (editable + historically saved)
+  const [notes, setNotes] = useState([]);
+  const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [editNoteId, setEditNoteId] = useState(null);
+  const [editNoteText, setEditNoteText] = useState("");
+  const [showHistory, setShowHistory] = useState({});
 
   const load = async () => {
     const { data } = await api.get("/leads");
@@ -60,8 +68,69 @@ export default function Leads() {
     load();
   };
 
-  const startEdit = (l) => {
+  const startEdit = async (l) => {
     setEditing(l);
+    setNotes([]);
+    setNoteText("");
+    setEditNoteId(null);
+    setEditNoteText("");
+    setShowHistory({});
+    try {
+      const { data } = await api.get(`/leads/${l.id}/notes`);
+      setNotes(data || []);
+    } catch {
+      /* notes are non-blocking for editing */
+    }
+  };
+
+  const loadNotes = async (id) => {
+    const { data } = await api.get(`/leads/${id}/notes`);
+    setNotes(data || []);
+  };
+
+  const addNote = async () => {
+    const text = noteText.trim();
+    if (!text || !editing) return;
+    setSavingNote(true);
+    try {
+      await api.post(`/leads/${editing.id}/notes`, { text });
+      setNoteText("");
+      await loadNotes(editing.id);
+      toast.success("Note added");
+    } catch {
+      toast.error("Could not add note");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const startNoteEdit = (n) => {
+    setEditNoteId(n.id);
+    setEditNoteText(n.text);
+  };
+
+  const saveNoteEdit = async () => {
+    const text = editNoteText.trim();
+    if (!text || !editing) return;
+    try {
+      await api.patch(`/leads/${editing.id}/notes/${editNoteId}`, { text });
+      setEditNoteId(null);
+      setEditNoteText("");
+      await loadNotes(editing.id);
+      toast.success("Note updated");
+    } catch {
+      toast.error("Could not update note");
+    }
+  };
+
+  const deleteNote = async (noteId) => {
+    if (!editing || !window.confirm("Delete this note? It stays in history but is hidden from the thread.")) return;
+    try {
+      await api.delete(`/leads/${editing.id}/notes/${noteId}`);
+      await loadNotes(editing.id);
+    } catch {
+      toast.error("Could not delete note");
+    }
   };
 
   const saveEdit = async (e) => {
@@ -193,7 +262,7 @@ export default function Leads() {
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
-          <form onSubmit={saveEdit} className="bg-white border border-[#0A0A0A] w-full max-w-lg p-6 space-y-3" data-testid="lead-edit-modal">
+          <form onSubmit={saveEdit} className="bg-white border border-[#0A0A0A] w-full max-w-2xl p-6 space-y-3 max-h-[90vh] overflow-y-auto" data-testid="lead-edit-modal">
             <div className="flex items-center justify-between">
               <div className="overline">EDIT LEAD</div>
               <button type="button" onClick={() => setEditing(null)} className="btn-ghost p-1"><X size={14} /></button>
@@ -212,6 +281,104 @@ export default function Leads() {
               <input className="input-flat" placeholder="Location" value={editing.location || ""} onChange={(e) => setEditing({ ...editing, location: e.target.value })} />
             </div>
             <textarea className="input-flat w-full" rows="2" placeholder="Notes" value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />
+
+            {/* Notes & history thread — every note is timestamped and kept in history */}
+            <div className="border-t border-[#E5E5E5] pt-3 space-y-3" data-testid="lead-notes-section">
+              <div className="overline flex items-center gap-2">
+                <NotePencil size={13} /> Notes &amp; History
+                <span className="font-mono text-[10px] bg-[#F5F4F0] px-1.5 py-0.5 border border-[#E5E5E5]" data-testid="lead-notes-count">{notes.length}</span>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <textarea
+                  className="input-flat w-full"
+                  rows="2"
+                  placeholder="Add a note… (saved with your name & time)"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  data-testid="lead-note-input"
+                />
+                <button
+                  type="button"
+                  onClick={addNote}
+                  disabled={savingNote || !noteText.trim()}
+                  className="btn-primary shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  data-testid="lead-note-add-btn"
+                >
+                  <Plus size={13} /> Add
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1" data-testid="lead-notes-list">
+                {notes.length === 0 && (
+                  <div className="text-xs text-[#9A9A9A] py-3 text-center border border-dashed border-[#E5E5E5]">
+                    No notes yet — every note you add is timestamped and kept in history.
+                  </div>
+                )}
+                {notes.map((n) => (
+                  <div key={n.id} className="border border-[#E5E5E5] bg-[#FAFAFA] p-3" data-testid={`lead-note-${n.id}`}>
+                    {editNoteId === n.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          className="input-flat w-full"
+                          rows="2"
+                          value={editNoteText}
+                          onChange={(e) => setEditNoteText(e.target.value)}
+                          data-testid={`lead-note-edit-input-${n.id}`}
+                        />
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={saveNoteEdit} disabled={!editNoteText.trim()} className="btn-primary text-xs disabled:opacity-40" data-testid={`lead-note-save-${n.id}`}>
+                            <Check size={12} /> Save
+                          </button>
+                          <button type="button" onClick={() => { setEditNoteId(null); setEditNoteText(""); }} className="btn-ghost text-xs">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-sm whitespace-pre-wrap leading-snug text-[#0A0A0A]">{n.text}</div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#F0F0F0]">
+                          <div className="text-[11px] text-[#5C5C5C] min-w-0 truncate">
+                            <span className="font-semibold">{n.author_name}</span>
+                            <span className="mx-1">·</span>
+                            <span className="font-mono">{formatDateTime(n.created_at)}</span>
+                            {n.edited_at && <span className="ml-1 italic text-[#9A9A9A]">(edited)</span>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {n.history && n.history.length > 0 && (
+                              <button type="button" onClick={() => setShowHistory((s) => ({ ...s, [n.id]: !s[n.id] }))}
+                                      className="text-[#5C5C5C] hover:text-[#0A0A0A] transition" title="View edit history"
+                                      data-testid={`lead-note-history-toggle-${n.id}`}>
+                                <ClockCounterClockwise size={13} />
+                              </button>
+                            )}
+                            <button type="button" onClick={() => startNoteEdit(n)} className="text-[#5C5C5C] hover:text-[#0A0A0A] transition" title="Edit note" data-testid={`lead-note-edit-${n.id}`}>
+                              <PencilSimple size={12} />
+                            </button>
+                            <button type="button" onClick={() => deleteNote(n.id)} className="text-[#B4342B] hover:scale-110 transition" title="Delete note" data-testid={`lead-note-delete-${n.id}`}>
+                              <Trash size={12} />
+                            </button>
+                          </div>
+                        </div>
+                        {showHistory[n.id] && n.history && n.history.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-dashed border-[#E5E5E5] space-y-1.5" data-testid={`lead-note-history-${n.id}`}>
+                            <div className="overline text-[10px] text-[#9A9A9A]">Previous versions</div>
+                            {n.history.slice().reverse().map((h, i) => (
+                              <div key={i} className="text-[11px] text-[#5C5C5C]">
+                                <div className="whitespace-pre-wrap line-through decoration-[#CCCCCC]">{h.text}</div>
+                                <div className="font-mono text-[10px] text-[#9A9A9A]">{h.edited_by} · {formatDateTime(h.edited_at)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <button className="btn-primary w-full" data-testid="edit-lead-save">Save changes</button>
           </form>
         </div>

@@ -1,0 +1,49 @@
+{
+  "summary": "Completed comprehensive backend testing for Lead Notes (#1), Calendar Privacy (#7), Calendar Tagging (#8), and Calendar Reminders (#9). All 48 tests passed successfully. Features are working correctly with proper RBAC enforcement and tenant isolation.",
+  "backend_issues": {
+    "critical_bugs": [],
+    "flaky_endpoints": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Lead Notes CRUD: POST/GET/PATCH/DELETE with author_name, created_at, history tracking",
+    "Lead Notes RBAC: leads.update permission enforcement (403 without permission)",
+    "Lead Notes History: Previous text pushed to history on edit, edited_at set correctly",
+    "Lead Notes History: Editing to same text does NOT add history entry",
+    "Lead Notes Soft Delete: Deleted notes disappear from GET list but retained in DB",
+    "Lead Notes Sorting: Notes returned newest-first",
+    "Calendar Privacy: Admin private events NOT visible to non-admin users",
+    "Calendar Privacy: Org (shared) events visible to all users with calendar.read",
+    "Calendar Privacy: Private events visible to creator and attendees",
+    "Calendar Privacy: SuperAdmin sees ALL events including private",
+    "Calendar Privacy: Visibility filter applied to both /calendar/events and /calendar/feed",
+    "Calendar Tagging: Events accept and store employee_ids, vendor_id, client_id, attendee_ids",
+    "Calendar Tagging: Tagged employees with user_id receive notifications (verified in code)",
+    "Calendar Tagging: Creator NOT notified (verified in code)",
+    "Calendar Reminders: Events with reminder_minutes appear in /calendar/reminders/due",
+    "Calendar Reminders: minutes_until calculated correctly in IST timezone",
+    "Calendar Reminders: Reminders fire from -5 to +30 minutes of start_time",
+    "Calendar Reminders: Events with reminder_minutes=null do NOT appear",
+    "Calendar Reminders: Only creator and attendees see their reminders",
+    "Tenant Isolation: Lead notes scoped to tenant (uses sdb)",
+    "Tenant Isolation: Calendar events scoped to tenant (uses sdb)",
+    "Tenant Isolation: SuperAdmin has cross-tenant access"
+  ],
+  "test_report_links": [
+    "/app/backend/backend_test_lead_notes_calendar.py"
+  ],
+  "action_item_for_main_agent": "",
+  "updated_files": [
+    "/app/backend/backend_test_lead_notes_calendar.py"
+  ],
+  "success_percentage": {
+    "backend": "100% (48/48 tests passed)",
+    "frontend": "N/A (backend-only testing as requested)"
+  },
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_test_itself": false
+}

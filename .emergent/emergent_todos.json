@@ -1,18 +1,42 @@
 [
   {
-    "content": "Scope /rbac/users to caller's tenant (fix cross-tenant member leak)",
+    "content": "Tooling: ESLint v9 flat config to unblock linter engine",
     "status": "completed"
   },
   {
-    "content": "Scope /rbac/pending to caller's tenant",
+    "content": "#1 Lead Notes: editable + historically-saved notes thread (backend + frontend + verified)",
     "status": "completed"
   },
   {
-    "content": "Add cross-tenant mutation guards (role assign, approve/reject, unlock)",
+    "content": "#7 Calendar employee privacy (private vs shared visibility)",
     "status": "completed"
   },
   {
-    "content": "Verify with testing_agent: 2 tenants, isolated user lists + role permissions + no cross-tenant mutation",
+    "content": "#8 Calendar assign/tag events to employee/vendor/client",
     "status": "completed"
+  },
+  {
+    "content": "#9 Calendar reminders + optional sound (global poller)",
+    "status": "completed"
+  },
+  {
+    "content": "Testing agent verification (48/48 passed) + cleanup",
+    "status": "completed"
+  },
+  {
+    "content": "#2 Attendance monthly view + per-employee late calc (next batch)",
+    "status": "pending"
+  },
+  {
+    "content": "#3 Hide project financials from normal employees (next batch)",
+    "status": "pending"
+  },
+  {
+    "content": "#4 Salary history + effective-dated increments (next batch)",
+    "status": "pending"
+  },
+  {
+    "content": "#5 Employee -> optional linked login (next batch)",
+    "status": "pending"
   }
 ]
