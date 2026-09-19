@@ -162,11 +162,12 @@ tenant-isolation-safe, reuse existing components/services, minimum credits.
 - [x] **#9 Calendar reminders + optional sound** — event `reminder_minutes` + `GET /api/calendar/reminders/due` (IST-aware). Global `CalendarReminders` poller (mounted in Layout) shows a toast + optional WebAudio beep; sound on/off toggle in the calendar toolbar (localStorage). Verified via curl (minutes_until within window) + UI screenshot.
 
 ## Remaining
-- [ ] **#2 Attendance** — monthly per-employee day view + per-employee timing/policy late calc (preserve self-service privacy).
-- [ ] **#3 Project financials hidden** from normal project employees (keep for Admin/Finance) — use existing permissions, do not delete data.
-- [ ] **#4 Employee salary/payment history + effective-dated increments.**
-- [ ] **#5 Employee → optional linked login** (role/password/status, no dup, tenant-scoped). Note: `/employees/{eid}/account` GET/POST infra already exists — extend, don't duplicate.
+- [x] **#2 Attendance** — per-employee late calc (uses each employee's own `shift_start`/`grace_minutes`, falling back to common policy) + day-by-day monthly grid (employees × days) with Day-by-day/Summary toggle. Monthly projection enriched with names/shift.
+- [x] **#3 Project financials hidden** — `GET /projects/{id}` strips invoices/milestones/purchase_orders/vendor_bills/financials/budget and returns `can_view_financials=false` for non-finance users (finance.read / invoices.read / Admin keep full access). Frontend hides Milestones/Invoices tabs + financial stats for those users.
+- [x] **#4 Salary history + effective-dated increments** — `salary_history[]` on employee, `POST /employees/{id}/salary/increment` (delta tracking), `GET /employees/{id}/salary/history`; Salary Revisions card + history + Payment History (payroll_runs) in EmployeeDetail. Past payslips stay accurate (payroll_runs snapshot breakdown).
+- [x] **#5 Employee → linked login** — create/role/activate already existed; ADDED `POST /employees/{id}/account/reset-password` + UI, and fixed role-dropdown bug (`/rbac/roles` returns `{roles:[...]}`). Tenant-scoped (org from current admin).
 
 ## Verification
-- Testing agent to be run per batch. Focus: calendar privacy (non-admin cannot see others' private events), tenant isolation, and Lead Notes history integrity.
-- Test creds: Admin `admin@designsaga.com` / `Admin@123`; SuperAdmin `designsaga10@gmail.com` / `Admin@123`.
+- Testing agent per batch. Calendar batch: iteration_10 (48/48). Employee/Attendance/Project batch: pending testing.
+- Cleanup: 4 test-residue employees (Test Employee1/2/115049/115107) to purge after final test pass.
+

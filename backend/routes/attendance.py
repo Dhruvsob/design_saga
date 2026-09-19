@@ -242,6 +242,20 @@ def _late_minutes(office_start_hhmm: str, grace: int) -> int:
         return 0
 
 
+def _emp_shift_start(emp: dict, policy: dict) -> str:
+    """Each employee's own shift start wins over the common policy office start."""
+    return (emp or {}).get("shift_start") or policy.get("office_start") or "09:00"
+
+
+def _emp_grace(emp: dict, policy: dict) -> int:
+    """Per-employee grace override, else the common policy grace."""
+    g = (emp or {}).get("grace_minutes")
+    try:
+        return int(g) if g is not None else int(policy.get("grace_minutes") or 0)
+    except Exception:
+        return int(policy.get("grace_minutes") or 0)
+
+
 def _client_ip(request: Request) -> str:
     xff = request.headers.get("x-forwarded-for")
     if xff:
@@ -313,6 +327,8 @@ async def check_in(payload: CheckInIn, request: Request,
                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     emp_id = await _resolve_employee_id(user, payload.employee_id)
+    emp_doc = await sdb.employees.find_one(
+        {"id": emp_id}, {"_id": 0, "shift_start": 1, "grace_minutes": 1})
     today = _today()
 
     existing = await sdb.attendance.find_one({"employee_id": emp_id, "date": today}, {"_id": 0})
@@ -438,8 +454,8 @@ async def check_in(payload: CheckInIn, request: Request,
         status = "pending_approval"
         approval_status = "pending"
 
-    # Late arrival reason enforcement
-    late_min = _late_minutes(policy["office_start"], policy.get("grace_minutes", 0)) if is_office else None
+    # Late arrival reason enforcement (uses the employee's own shift + grace)
+    late_min = _late_minutes(_emp_shift_start(emp_doc, policy), _emp_grace(emp_doc, policy)) if is_office else None
     if (is_office and policy.get("require_late_reason") and late_min and late_min > 0
             and not (payload.late_reason and payload.late_reason.strip())
             and not (payload.late_category and payload.late_category.strip())):
@@ -625,9 +641,13 @@ async def monthly_sheet(request: Request, year: Optional[int] = None, month: Opt
     m = month or now_utc().month
     start, end = _month_bounds(y, m)
 
-    employees = await sdb.employees.find({}, {"_id": 0, "id": 1, "name": 1, "employee_id": 1, "designation": 1}).to_list(500)
+    employees = await sdb.employees.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "first_name": 1, "last_name": 1,
+             "employee_id": 1, "designation": 1, "department": 1,
+             "shift_start": 1, "shift_end": 1, "grace_minutes": 1}).to_list(500)
     rows = []
     for e in employees:
+        e["name"] = engine.emp_name(e)
         recs = await sdb.attendance.find(
             {"employee_id": e["id"], "date": {"$gte": start, "$lt": end}},
             {"_id": 0},

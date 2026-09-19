@@ -1,42 +1,22 @@
 [
   {
-    "content": "Tooling: ESLint v9 flat config to unblock linter engine",
+    "content": "#4 Salary history/increments + payment history — done + verified",
     "status": "completed"
   },
   {
-    "content": "#1 Lead Notes: editable + historically-saved notes thread (backend + frontend + verified)",
+    "content": "#5 Employee login: reset-password + role dropdown fix — done + verified",
     "status": "completed"
   },
   {
-    "content": "#7 Calendar employee privacy (private vs shared visibility)",
+    "content": "#2 Attendance: per-employee late calc + day-by-day monthly grid — done + verified",
     "status": "completed"
   },
   {
-    "content": "#8 Calendar assign/tag events to employee/vendor/client",
+    "content": "#3 Project financials hidden from non-finance staff — done + verified",
     "status": "completed"
   },
   {
-    "content": "#9 Calendar reminders + optional sound (global poller)",
+    "content": "Testing agent (24/24 pass) + full test-data cleanup",
     "status": "completed"
-  },
-  {
-    "content": "Testing agent verification (48/48 passed) + cleanup",
-    "status": "completed"
-  },
-  {
-    "content": "#2 Attendance monthly view + per-employee late calc (next batch)",
-    "status": "pending"
-  },
-  {
-    "content": "#3 Hide project financials from normal employees (next batch)",
-    "status": "pending"
-  },
-  {
-    "content": "#4 Salary history + effective-dated increments (next batch)",
-    "status": "pending"
-  },
-  {
-    "content": "#5 Employee -> optional linked login (next batch)",
-    "status": "pending"
   }
 ]

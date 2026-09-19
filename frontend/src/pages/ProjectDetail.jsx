@@ -151,7 +151,12 @@ export default function ProjectDetail() {
 
   const currentIdx = STAGES.indexOf(p.stage || STAGES[0]);
   const fin = p.financials || {};
-  const canFinance = hasPerm("finance.read");
+  // Backend decides financial visibility (finance.read / invoices.read / Admin).
+  // Fall back to client perms if the flag is absent.
+  const canSeeFinancials = (p.can_view_financials !== undefined)
+    ? !!p.can_view_financials
+    : (hasPerm("*.*") || hasPerm("finance.read") || hasPerm("invoices.read"));
+  const visibleTabs = TABS.filter((t) => canSeeFinancials || (t !== "Milestones" && t !== "Invoices"));
 
   return (
     <div className="space-y-8" data-testid="project-detail">
@@ -220,7 +225,7 @@ export default function ProjectDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[#E5E5E5] overflow-x-auto">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -241,16 +246,23 @@ export default function ProjectDetail() {
 
       {tab === "Overview" && (
         <div className="space-y-6">
-          {/* financials */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[#E5E5E5]">
-            <MiniStat label="Budget" value={inr(fin.budget)} />
-            <MiniStat label="Invoiced" value={inr(fin.invoiced)} />
-            <MiniStat label="Collected" value={inr(fin.collected)} accent="#1D633E" />
-            <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B22B22" : undefined} />
-            {canFinance
-              ? <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />
-              : <MiniStat label="Tasks" value={`${(p.tasks || []).length}`} />}
-          </div>
+          {/* financials — only for Admin / Finance / Accounting */}
+          {canSeeFinancials ? (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[#E5E5E5]" data-testid="project-financials">
+              <MiniStat label="Budget" value={inr(fin.budget)} />
+              <MiniStat label="Invoiced" value={inr(fin.invoiced)} />
+              <MiniStat label="Collected" value={inr(fin.collected)} accent="#1D633E" />
+              <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B22B22" : undefined} />
+              <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-t border-l border-[#E5E5E5]" data-testid="project-operational-stats">
+              <MiniStat label="Tasks" value={`${(p.tasks || []).length}`} />
+              <MiniStat label="Team" value={`${(p.team || []).length + (p.project_manager ? 1 : 0)}`} />
+              <MiniStat label="Files" value={`${(p.files || []).length}`} />
+              <MiniStat label="Stage" value={p.stage || "—"} />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* team */}
@@ -328,9 +340,9 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {tab === "Milestones" && (
+      {tab === "Milestones" && canSeeFinancials && (
         <div className="space-y-3">
-          {canFinance && (
+          {hasPerm("finance.read") && (
             <div className="flex justify-end">
               <button onClick={() => setShowMsForm(!showMsForm)} className="btn-primary" data-testid="add-milestone-btn">
                 <Plus size={14} /> {showMsForm ? "Cancel" : "Add milestone"}
@@ -437,7 +449,7 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {tab === "Invoices" && (
+      {tab === "Invoices" && canSeeFinancials && (
         <div className="space-y-2">
           {(p.invoices || []).length === 0 && <Empty text="No invoices yet." />}
           {(p.invoices || []).map((i) => (

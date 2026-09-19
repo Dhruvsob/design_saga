@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft, FloppyDisk, Plus, Trash, Warning, Trophy,
   FileText, ArrowSquareOut, ShieldWarning,
+  TrendUp, ClockCounterClockwise, Key, Receipt,
 } from "@phosphor-icons/react";
 
 const TABS = ["Overview", "Employment", "Salary & Bank", "Documents", "Performance", "ERP Access"];
@@ -392,6 +393,12 @@ export default function EmployeeDetail() {
           {hasPerm("payroll.create") && (
             <PaySalaryBlock employeeId={emp.id} netMonthly={s.net_monthly} />
           )}
+
+          <SalaryRevisionsBlock employeeId={emp.id} currentSalary={s} canEdit={canEdit} />
+
+          {hasPerm("payroll.read") && (
+            <PaymentHistoryBlock employeeId={emp.id} />
+          )}
         </div>
       )}
 
@@ -650,6 +657,8 @@ function ErpAccessTab({ employeeId, isAdmin }) {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", role: "Employee" });
   const [roles, setRoles] = useState(["Admin", "Director", "ProjectManager", "Accountant", "HR", "Employee"]);
+  const [newPass, setNewPass] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -664,7 +673,8 @@ function ErpAccessTab({ employeeId, isAdmin }) {
   useEffect(() => {
     load();
     api.get("/rbac/roles").then((r) => {
-      const names = Array.isArray(r.data) ? r.data.map((x) => x.name || x) : Object.keys(r.data?.roles || {});
+      const list = Array.isArray(r.data) ? r.data : (r.data?.roles || []);
+      const names = list.map((x) => (typeof x === "string" ? x : x?.name)).filter(Boolean);
       if (names.length) setRoles(names.filter((n) => n !== "SuperAdmin"));
     }).catch(() => {});
   }, [load]);
@@ -703,6 +713,18 @@ function ErpAccessTab({ employeeId, isAdmin }) {
     }
   };
 
+  const resetPassword = async () => {
+    if (!newPass || newPass.length < 8) { setPwMsg("Password must be at least 8 characters"); return; }
+    setPwMsg("");
+    try {
+      await api.post(`/employees/${employeeId}/account/reset-password`, { password: newPass });
+      setNewPass("");
+      setPwMsg("Password reset — the employee will need to sign in again.");
+    } catch (ex) {
+      setPwMsg(ex?.response?.data?.detail || "Reset failed");
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="emp-tab-erp-access">
       <Card title="ERP LOGIN" testid="erp-access-card">
@@ -731,6 +753,17 @@ function ErpAccessTab({ employeeId, isAdmin }) {
                 <button onClick={toggleActive} className="btn-ghost text-xs" data-testid="erp-toggle-active">
                   {acct.user.is_active !== false ? "Deactivate login" : "Reactivate login"}
                 </button>
+                <div className="border-t border-[#E5E5E5] pt-3 mt-1 space-y-2">
+                  <div className="overline flex items-center gap-1.5"><Key size={12} /> Reset password</div>
+                  <div className="flex items-center gap-2">
+                    <input type="text" className="input-flat flex-1" placeholder="New password (min 8 chars)"
+                           value={newPass} onChange={(e) => setNewPass(e.target.value)}
+                           data-testid="erp-reset-password-input" />
+                    <button type="button" onClick={resetPassword} disabled={newPass.length < 8}
+                            className="btn-ghost text-xs disabled:opacity-40" data-testid="erp-reset-password-btn">Set</button>
+                  </div>
+                  {pwMsg && <div className="text-[11px] text-[#8B7F6A]" data-testid="erp-reset-password-msg">{pwMsg}</div>}
+                </div>
               </>
             )}
           </div>
@@ -770,9 +803,234 @@ function ErpAccessTab({ employeeId, isAdmin }) {
           <li>Each employee can have one ERP login tied to their Employee ID.</li>
           <li>The role controls what they can see and do — enforced by the server on every request.</li>
           <li>Deactivating a login instantly ends all of that person's sessions.</li>
-          <li>Passwords can be reset from Team &amp; Roles by an Admin.</li>
+          <li>Passwords can be reset here by an Admin — the employee is signed out everywhere.</li>
         </ul>
       </Card>
+    </div>
+  );
+}
+
+
+const EARN_KEYS = ["basic", "hra", "conveyance", "medical", "other_allowances"];
+const DED_KEYS = ["pf_employee", "esi_employee", "professional_tax", "tds"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({ effective_date: today, reason: "", note: "", salary: {} });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get(`/employees/${employeeId}/salary/history`);
+      setHistory(data?.history || []);
+    } catch {
+      setHistory([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [employeeId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openForm = () => {
+    const base = {};
+    [...EARN_KEYS, ...DED_KEYS].forEach((k) => { base[k] = currentSalary?.[k] ?? 0; });
+    setForm({ effective_date: today, reason: "", note: "", salary: base });
+    setMsg("");
+    setOpen(true);
+  };
+
+  const setAmt = (k, v) => setForm((f) => ({ ...f, salary: { ...f.salary, [k]: v === "" ? 0 : Number(v) } }));
+  const previewGross = EARN_KEYS.reduce((a, k) => a + Number(form.salary[k] || 0), 0);
+  const previewDed = DED_KEYS.reduce((a, k) => a + Number(form.salary[k] || 0), 0);
+  const previewNet = previewGross - previewDed;
+  const deltaNet = previewNet - Number(currentSalary?.net_monthly || 0);
+
+  const save = async () => {
+    if (!form.effective_date) { setMsg("Effective date is required"); return; }
+    setBusy(true); setMsg("");
+    try {
+      await api.post(`/employees/${employeeId}/salary/increment`, {
+        effective_date: form.effective_date,
+        reason: form.reason,
+        note: form.note,
+        salary: form.salary,
+        apply_now: true,
+      });
+      setOpen(false);
+      await load();
+    } catch (ex) {
+      setMsg(ex?.response?.data?.detail || "Could not save the revision");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="card-flat" data-testid="salary-revisions-block">
+      <div className="flex items-center justify-between mb-4">
+        <div className="overline flex items-center gap-1.5"><TrendUp size={13} /> SALARY REVISIONS · effective-dated increments</div>
+        {canEdit && !open && (
+          <button onClick={openForm} className="btn-ghost text-xs" data-testid="salary-revision-add-btn">
+            <Plus size={13} /> Record increment
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="border border-[#0A0A0A] p-4 mb-4 space-y-3" data-testid="salary-revision-form">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="text-xs">
+              <div className="overline mb-1">Effective from</div>
+              <input type="date" className="input-flat w-full" value={form.effective_date}
+                     onChange={(e) => setForm({ ...form, effective_date: e.target.value })}
+                     data-testid="salary-revision-date" />
+            </label>
+            <label className="text-xs md:col-span-2">
+              <div className="overline mb-1">Reason</div>
+              <input className="input-flat w-full" placeholder="Annual increment, promotion…"
+                     value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                     data-testid="salary-revision-reason" />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            {EARN_KEYS.map((k) => (
+              <label key={k} className="text-xs">
+                <div className="overline mb-1">{k.replace(/_/g, " ")}</div>
+                <input type="number" className="input-flat w-full text-right font-mono" value={form.salary[k] ?? 0}
+                       onChange={(e) => setAmt(k, e.target.value)} data-testid={`salary-revision-${k}`} />
+              </label>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {DED_KEYS.map((k) => (
+              <label key={k} className="text-xs">
+                <div className="overline mb-1">{k.replace(/_/g, " ")}</div>
+                <input type="number" className="input-flat w-full text-right font-mono" value={form.salary[k] ?? 0}
+                       onChange={(e) => setAmt(k, e.target.value)} data-testid={`salary-revision-${k}`} />
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-4 border-t border-[#E5E5E5] pt-3">
+            <div><span className="overline">New gross</span> <span className="font-mono font-bold ml-1">{fmt(previewGross)}</span></div>
+            <div><span className="overline">New net</span> <span className="font-mono font-bold ml-1 accent-blue">{fmt(previewNet)}</span></div>
+            <div>
+              <span className="overline">Change</span>{" "}
+              <span className={`font-mono font-bold ml-1 ${deltaNet >= 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`} data-testid="salary-revision-delta">
+                {deltaNet >= 0 ? "+" : ""}{fmt(deltaNet)}
+              </span>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={() => setOpen(false)} className="btn-ghost text-xs">Cancel</button>
+              <button onClick={save} disabled={busy} className="btn-primary text-xs disabled:opacity-40" data-testid="salary-revision-save-btn">
+                {busy ? "Saving…" : "Save revision"}
+              </button>
+            </div>
+          </div>
+          {msg && <div className="text-xs text-[#B4001C]">{msg}</div>}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="skeleton h-16 w-full" />
+      ) : history.length === 0 ? (
+        <div className="text-xs text-[#9A9A9A] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="salary-history-empty">
+          No revisions recorded yet. Record an increment to start a history — past payslips remain unchanged.
+        </div>
+      ) : (
+        <div className="space-y-2" data-testid="salary-history-list">
+          {history.map((h) => (
+            <div key={h.id} className="flex items-center justify-between border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2" data-testid={`salary-history-${h.id}`}>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold flex items-center gap-2">
+                  <ClockCounterClockwise size={13} className="text-[#8B7F6A]" />
+                  {h.reason || "Salary revision"}
+                </div>
+                <div className="text-[11px] text-[#5C5C5C] font-mono">
+                  Effective {h.effective_date} · by {h.changed_by_name || "—"}
+                  {h.note ? ` · ${h.note}` : ""}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-mono font-bold">{fmt(h.net_monthly)}<span className="text-[10px] text-[#9A9A9A]"> net</span></div>
+                {typeof h.delta_net === "number" && (
+                  <div className={`text-[11px] font-mono ${h.delta_net >= 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
+                    {h.delta_net >= 0 ? "+" : ""}{fmt(h.delta_net)}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PaymentHistoryBlock({ employeeId }) {
+  const [runs, setRuns] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await api.get(`/payroll/runs?employee_id=${employeeId}`);
+        if (alive) setRuns(Array.isArray(data) ? data : []);
+      } catch {
+        if (alive) setRuns([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [employeeId]);
+
+  return (
+    <div className="card-flat" data-testid="payment-history-block">
+      <div className="overline flex items-center gap-1.5 mb-4"><Receipt size={13} /> SALARY PAYMENT HISTORY</div>
+      {loading ? (
+        <div className="skeleton h-16 w-full" />
+      ) : runs.length === 0 ? (
+        <div className="text-xs text-[#9A9A9A] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="payment-history-empty">
+          No salary payments recorded yet.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="payment-history-table">
+            <thead>
+              <tr className="text-left overline border-b border-[#E5E5E5]">
+                <th className="py-2 pr-3">Period</th>
+                <th className="py-2 pr-3 text-right">Net paid</th>
+                <th className="py-2 pr-3">Paid on</th>
+                <th className="py-2 pr-3">Method</th>
+                <th className="py-2 pr-3">Slip</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((r) => (
+                <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`payment-run-${r.id}`}>
+                  <td className="py-2 pr-3 font-mono">{MONTHS[(r.month || 1) - 1]} {r.year}</td>
+                  <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(r.net)}</td>
+                  <td className="py-2 pr-3 font-mono text-xs">{(r.paid_at || "").slice(0, 10)}</td>
+                  <td className="py-2 pr-3 text-xs">{(r.payment_method || "—").replace(/_/g, " ")}</td>
+                  <td className="py-2 pr-3">
+                    <a href={`${api.defaults.baseURL}/payroll/runs/${r.id}/slip.pdf`} target="_blank" rel="noreferrer"
+                       className="text-[#8B7F6A] hover:underline text-xs inline-flex items-center gap-1"
+                       data-testid={`payment-slip-${r.id}`}>
+                      <FileText size={12} /> PDF
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

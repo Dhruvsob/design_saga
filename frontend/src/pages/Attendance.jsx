@@ -54,6 +54,7 @@ export default function Attendance() {
   const [summary, setSummary] = useState(null);
   const [mySalary, setMySalary] = useState(null);
   const [monthly, setMonthly] = useState(null);
+  const [monthlyView, setMonthlyView] = useState("grid");   // grid (day-by-day) | summary
   const [leaves, setLeaves] = useState([]);
   const [myCorrections, setMyCorrections] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -584,38 +585,52 @@ export default function Attendance() {
 
       {tab === "monthly" && isHR && monthly && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <MonthPicker ym={ym} setYm={setYm} />
-            <div className="text-xs font-mono text-[#5C5C5C]">Ready for payroll</div>
-          </div>
-          <div className="border border-[#E5E5E5] overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
-                <tr>
-                  <th className="p-2 text-left">Employee</th>
-                  <th className="p-2 text-left">Designation</th>
-                  <th className="p-2">Present</th><th className="p-2">Late</th><th className="p-2">Absent</th>
-                  <th className="p-2">Half</th><th className="p-2">Leave</th>
-                  <th className="p-2">Week-off</th><th className="p-2">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthly.rows.map((r) => (
-                  <tr key={r.employee.id} className="border-t border-[#F0F0F0]" data-testid={`monthly-${r.employee.id}`}>
-                    <td className="p-2 font-semibold">{r.employee.name}</td>
-                    <td className="p-2 text-xs text-[#5C5C5C]">{r.employee.designation || "—"}</td>
-                    <td className="p-2 text-center font-mono text-[#1D633E]">{r.counts.present}</td>
-                    <td className="p-2 text-center font-mono text-[#B87500]">{r.counts.late || 0}</td>
-                    <td className="p-2 text-center font-mono text-[#B4001C]">{r.counts.absent}</td>
-                    <td className="p-2 text-center font-mono text-[#F0A93A]">{r.counts.half_day}</td>
-                    <td className="p-2 text-center font-mono text-[#8A6DFF]">{r.counts.leave}</td>
-                    <td className="p-2 text-center font-mono text-[#5C5C5C]">{r.counts.week_off}</td>
-                    <td className="p-2 text-center font-mono">{r.worked_hours}</td>
-                  </tr>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center border border-[#E5E5E5]" data-testid="monthly-view-toggle">
+                {[["grid", "Day-by-day"], ["summary", "Summary"]].map(([v, l]) => (
+                  <button key={v} onClick={() => setMonthlyView(v)}
+                    className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${monthlyView === v ? "bg-[#0A0A0A] text-white" : "text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
+                    data-testid={`monthly-view-${v}`}>{l}</button>
                 ))}
-              </tbody>
-            </table>
+              </div>
+              <div className="text-xs font-mono text-[#5C5C5C]">Ready for payroll</div>
+            </div>
           </div>
+
+          {monthlyView === "grid" ? (
+            <MonthlyGrid monthly={monthly} ym={ym} />
+          ) : (
+            <div className="border border-[#E5E5E5] overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+                  <tr>
+                    <th className="p-2 text-left">Employee</th>
+                    <th className="p-2 text-left">Designation</th>
+                    <th className="p-2">Present</th><th className="p-2">Late</th><th className="p-2">Absent</th>
+                    <th className="p-2">Half</th><th className="p-2">Leave</th>
+                    <th className="p-2">Week-off</th><th className="p-2">Hours</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthly.rows.map((r) => (
+                    <tr key={r.employee.id} className="border-t border-[#F0F0F0]" data-testid={`monthly-${r.employee.id}`}>
+                      <td className="p-2 font-semibold">{r.employee.name}</td>
+                      <td className="p-2 text-xs text-[#5C5C5C]">{r.employee.designation || "—"}</td>
+                      <td className="p-2 text-center font-mono text-[#1D633E]">{r.counts.present}</td>
+                      <td className="p-2 text-center font-mono text-[#B87500]">{r.counts.late || 0}</td>
+                      <td className="p-2 text-center font-mono text-[#B4001C]">{r.counts.absent}</td>
+                      <td className="p-2 text-center font-mono text-[#F0A93A]">{r.counts.half_day}</td>
+                      <td className="p-2 text-center font-mono text-[#8A6DFF]">{r.counts.leave}</td>
+                      <td className="p-2 text-center font-mono text-[#5C5C5C]">{r.counts.week_off}</td>
+                      <td className="p-2 text-center font-mono">{r.worked_hours}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -632,6 +647,94 @@ function SalRow({ k, v, sub, red }) {
     <div className="flex items-center justify-between border-b border-[#F0F0F0] py-1.5">
       <span className="text-[#5C5C5C] text-xs">{k}{sub ? <span className="text-[#9A9A9A]"> · {sub}</span> : null}</span>
       <span className={`font-mono text-xs ${red ? "text-[#B4001C]" : ""}`}>{v}</span>
+    </div>
+  );
+}
+
+const STATUS_LETTER = {
+  present: "P", late: "L", absent: "A", half_day: "H",
+  leave: "LV", paid_leave: "LV", unpaid_leave: "LV",
+  holiday: "H*", week_off: "W", pending_approval: "?", site_visit: "SV",
+};
+
+/* Day-by-day monthly attendance grid (employees × days) */
+function MonthlyGrid({ monthly, ym }) {
+  const daysInMonth = new Date(ym.y, ym.m, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const pad = (n) => String(n).padStart(2, "0");
+  const dow = (d) => new Date(ym.y, ym.m - 1, d).getDay(); // 0=Sun … 6=Sat
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono" data-testid="monthly-grid-legend">
+        {[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["half_day", "Half"], ["leave", "Leave"], ["holiday", "Holiday"], ["week_off", "Week-off"]].map(([k, l]) => (
+          <span key={k} className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3" style={{ background: STATUS_COLORS[k] }} /> {l}
+          </span>
+        ))}
+      </div>
+      <div className="border border-[#E5E5E5] overflow-x-auto" data-testid="monthly-grid">
+        <table className="text-xs border-collapse">
+          <thead>
+            <tr className="bg-[#FAFAFA]">
+              <th className="sticky left-0 z-10 bg-[#FAFAFA] p-2 text-left min-w-[180px] border-r border-[#E5E5E5]">Employee</th>
+              {days.map((d) => {
+                const wd = dow(d);
+                const weekend = wd === 0 || wd === 6;
+                return (
+                  <th key={d} className={`p-1 text-center font-mono text-[10px] ${weekend ? "text-[#B4001C]" : "text-[#5C5C5C]"}`} style={{ minWidth: 24 }}>
+                    {pad(d)}
+                  </th>
+                );
+              })}
+              <th className="p-2 text-center border-l border-[#E5E5E5]">Tot</th>
+            </tr>
+          </thead>
+          <tbody>
+            {monthly.rows.map((r) => {
+              const byDate = {};
+              (r.records || []).forEach((rec) => { byDate[(rec.date || "").slice(0, 10)] = rec; });
+              return (
+                <tr key={r.employee.id} className="border-t border-[#F0F0F0]" data-testid={`monthly-grid-${r.employee.id}`}>
+                  <td className="sticky left-0 z-10 bg-white p-2 border-r border-[#E5E5E5]">
+                    <div className="font-semibold truncate max-w-[170px]">{r.employee.name}</div>
+                    <div className="text-[10px] text-[#9A9A9A] font-mono">
+                      {r.employee.designation || "—"} · shift {r.employee.shift_start || "09:00"}
+                    </div>
+                  </td>
+                  {days.map((d) => {
+                    const dateStr = `${ym.y}-${pad(ym.m)}-${pad(d)}`;
+                    const rec = byDate[dateStr];
+                    const st = rec?.status;
+                    const color = st ? STATUS_COLORS[st] : null;
+                    const letter = st ? (STATUS_LETTER[st] || "•") : "·";
+                    const lateM = rec?.late_minutes;
+                    const title = rec ? `${dateStr}: ${st}${lateM ? ` · ${lateM} min late` : ""}` : `${dateStr}: no record`;
+                    return (
+                      <td key={d} className="p-0.5 text-center" title={title}>
+                        <span className="inline-flex items-center justify-center font-mono text-[9px] font-bold"
+                          style={{
+                            width: 20, height: 20,
+                            background: color ? color + "22" : "transparent",
+                            color: color || "#D0D0D0",
+                            border: color ? `1px solid ${color}` : "1px solid #F0F0F0",
+                          }}>
+                          {letter}
+                        </span>
+                      </td>
+                    );
+                  })}
+                  <td className="p-2 text-center font-mono border-l border-[#E5E5E5] whitespace-nowrap">
+                    <span className="text-[#1D633E]">{r.counts.present}P</span>
+                    {(r.counts.late || 0) > 0 && <span className="text-[#B87500]"> {r.counts.late}L</span>}
+                    {(r.counts.absent || 0) > 0 && <span className="text-[#B4001C]"> {r.counts.absent}A</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

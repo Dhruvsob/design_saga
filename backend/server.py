@@ -1229,7 +1229,7 @@ async def create_project(payload: ProjectIn, request: Request,
 async def get_project(project_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
     p = await sdb.projects.find_one({"id": project_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -1277,6 +1277,17 @@ async def get_project(project_id: str, request: Request,
         "milestones_collected": round(ms_paid, 2),
         "vendor_cost": round(vendor_cost, 2),
     }
+    # --- financial privacy: hide money items from non-finance project staff ---
+    # Admin/Finance/Accounting (finance.read or invoices.read) keep full visibility;
+    # regular project employees only see the operational project (tasks/files/team).
+    can_fin = (has_permission(user, "*.*")
+               or has_permission(user, "finance.read")
+               or has_permission(user, "invoices.read"))
+    p["can_view_financials"] = bool(can_fin)
+    if not can_fin:
+        for _k in ("invoices", "milestones", "purchase_orders", "vendor_bills", "financials"):
+            p.pop(_k, None)
+        p.pop("budget", None)
     return p
 
 
@@ -3704,6 +3715,7 @@ async def create_employee(payload: EmployeeIn, request: Request,
     data["bank"] = data.get("bank") or {}
     data["emergency_contact"] = data.get("emergency_contact") or {}
     data["documents"] = []
+    data["salary_history"] = []
     data["performance"] = {
         "current_kpi_score": 0,
         "last_review_at": None,
@@ -3866,6 +3878,104 @@ async def set_employee_account_status(eid: str, payload: EmployeeAccountStatusIn
     if not payload.active:
         await db.user_sessions.delete_many({"user_id": emp["user_id"]})
     return {"ok": True, "is_active": payload.active}
+
+
+class EmployeePasswordResetIn(BaseModel):
+    password: str = Field(min_length=8, max_length=128)
+    sign_out_everywhere: Optional[bool] = True
+
+
+@api.post("/employees/{eid}/account/reset-password")
+async def reset_employee_account_password(eid: str, payload: EmployeePasswordResetIn, request: Request,
+                                          session_token: Optional[str] = Cookie(default=None),
+                                          authorization: Optional[str] = Header(default=None)):
+    """Set a new password for the employee's linked ERP login (Admin only)."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    emp = await sdb.employees.find_one({"id": eid}, {"_id": 0})
+    if not emp or not emp.get("user_id"):
+        raise HTTPException(status_code=404, detail="No linked ERP account")
+    target = await db.users.find_one({"user_id": emp["user_id"]}, {"_id": 0, "user_id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Linked user not found")
+    from routes.auth import hash_password as _hash_pw
+    await db.users.update_one({"user_id": emp["user_id"]},
+                              {"$set": {"password_hash": _hash_pw(payload.password),
+                                        "password_reset_at": iso(now_utc()),
+                                        "password_reset_by": user["user_id"]}})
+    # Force re-login on all devices unless explicitly skipped, but keep the admin's own session.
+    if payload.sign_out_everywhere:
+        await db.user_sessions.delete_many({"user_id": emp["user_id"]})
+    return {"ok": True}
+
+
+# ---------------- Salary revisions / effective-dated increments ----------------
+class SalaryIncrementIn(BaseModel):
+    salary: SalaryStructure
+    effective_date: str                 # YYYY-MM-DD
+    reason: Optional[str] = ""          # e.g. "Annual increment", "Promotion"
+    note: Optional[str] = ""
+    apply_now: Optional[bool] = True    # set as the employee's current salary immediately
+
+
+@api.get("/employees/{eid}/salary/history")
+async def list_salary_history(eid: str, request: Request,
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.read")
+    emp = await sdb.employees.find_one({"id": eid}, {"_id": 0, "salary_history": 1, "salary": 1})
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    hist = list(emp.get("salary_history") or [])
+    hist.sort(key=lambda h: (h.get("effective_date") or "", h.get("changed_at") or ""), reverse=True)
+    return {"current": emp.get("salary") or {}, "history": hist}
+
+
+@api.post("/employees/{eid}/salary/increment")
+async def record_salary_increment(eid: str, payload: SalaryIncrementIn, request: Request,
+                                  session_token: Optional[str] = Cookie(default=None),
+                                  authorization: Optional[str] = Header(default=None)):
+    """Record an effective-dated salary revision. Keeps a full history; past
+    payslips are unaffected because each payroll run snapshots its own breakdown."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    try:
+        datetime.strptime((payload.effective_date or "")[:10], "%Y-%m-%d")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid effective_date (YYYY-MM-DD)")
+    emp = await sdb.employees.find_one({"id": eid}, {"_id": 0})
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    new_salary = _compute_salary(payload.salary.model_dump())
+    prev = emp.get("salary") or {}
+    entry = {
+        "id": new_id("sinc_"),
+        "effective_date": payload.effective_date[:10],
+        "reason": payload.reason or "",
+        "note": payload.note or "",
+        "salary": new_salary,
+        "gross_monthly": new_salary.get("gross_monthly"),
+        "net_monthly": new_salary.get("net_monthly"),
+        "ctc_annual": new_salary.get("ctc_annual"),
+        "previous_gross": prev.get("gross_monthly"),
+        "previous_net": prev.get("net_monthly"),
+        "delta_net": round(float(new_salary.get("net_monthly") or 0) - float(prev.get("net_monthly") or 0), 2),
+        "changed_at": iso(now_utc()),
+        "changed_by": user["user_id"],
+        "changed_by_name": user.get("name"),
+    }
+    update: dict = {"$push": {"salary_history": entry},
+                    "$set": {"updated_at": iso(now_utc()), "updated_by": user["user_id"]}}
+    if payload.apply_now:
+        update["$set"]["salary"] = new_salary
+    res = await sdb.employees.update_one({"id": eid}, update)
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return entry
 
 
 @api.post("/employees/{eid}/documents")
