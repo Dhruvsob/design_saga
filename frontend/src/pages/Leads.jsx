@@ -225,6 +225,20 @@ export default function Leads() {
                       <span>{l.location || "—"}</span>
                     </div>
                     <div className="font-mono text-sm mt-2 tabular-nums font-semibold">₹{(l.budget || 0).toLocaleString("en-IN")}</div>
+                    <button
+                      onClick={() => startEdit(l)}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs border border-[#E5E5E5] hover:border-[#0A0A0A] hover:bg-[#FAFAFA] py-1.5 transition text-[#5C5C5C] hover:text-[#0A0A0A]"
+                      title="View & add notes"
+                      data-testid={`lead-notes-btn-${l.id}`}
+                    >
+                      <NotePencil size={13} />
+                      Notes
+                      {(l.notes_log && l.notes_log.filter((n) => !n.deleted).length > 0) && (
+                        <span className="font-mono text-[10px] bg-[#0A0A0A] text-white px-1.5 py-0.5 leading-none">
+                          {l.notes_log.filter((n) => !n.deleted).length}
+                        </span>
+                      )}
+                    </button>
                     <div className="flex items-center flex-wrap gap-x-2 gap-y-2 mt-3 pt-3 border-t border-[#F0F0F0]">
                       <span className="overline text-[10px] truncate min-w-0 flex-1">{l.source}</span>
                       <div className="flex items-center gap-2 shrink-0">
