@@ -19,7 +19,11 @@ import io
 import httpx
 
 from fpdf import FPDF
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+except ImportError:
+    LlmChat = None
+    UserMessage = None
 
 # ============================================================
 # Setup
@@ -524,12 +528,13 @@ async def create_session(request: Request, response: Response):
     })
 
     # httpOnly cookie
+    cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     response.set_cookie(
         key="session_token",
         value=session_token,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=cookie_secure,
+        samesite="none" if cookie_secure else "lax",
         path="/",
         max_age=7 * 24 * 3600,
     )
@@ -2085,8 +2090,8 @@ async def ai_chat(payload: AIChatIn, request: Request,
                   session_token: Optional[str] = Cookie(default=None),
                   authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(status_code=500, detail="LLM key not configured")
+    if not EMERGENT_LLM_KEY or LlmChat is None:
+        raise HTTPException(status_code=503, detail="AI integration not configured")
 
     session_id = payload.session_id or f"ai_{user['user_id']}_{uuid.uuid4().hex[:6]}"
 
@@ -2990,8 +2995,8 @@ async def adv_cost_vs_actual(qid: str, request: Request, session_token: Optional
 async def adv_ai_suggest(qid: str, request: Request, session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(status_code=500, detail="LLM not configured")
+    if not EMERGENT_LLM_KEY or LlmChat is None:
+        raise HTTPException(status_code=503, detail="AI integration not configured")
     q = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
     if not q:
         raise HTTPException(status_code=404, detail="Not found")

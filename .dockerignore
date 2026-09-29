@@ -1,0 +1,12 @@
+.git
+.github
+.emergent
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+backend/tests
+backend/.env
+frontend/node_modules
+frontend/build
+frontend/.env
+*.log

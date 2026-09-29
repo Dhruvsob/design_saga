@@ -29,6 +29,7 @@ from datetime import datetime, timezone, timedelta
 from passlib.hash import bcrypt
 import uuid
 import re
+import os
 
 from core.db import db
 from core.helpers import iso_now, now_utc, new_id
@@ -104,9 +105,11 @@ async def _set_session_cookie(response: Response, user_id: str) -> str:
         "expires_at": now_utc() + timedelta(days=7),
         "created_at": now_utc(),
     })
+    cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     response.set_cookie(
         key="session_token", value=token,
-        httponly=True, secure=True, samesite="none",
+        httponly=True, secure=cookie_secure,
+        samesite="none" if cookie_secure else "lax",
         path="/", max_age=7 * 24 * 3600,
     )
     return token
