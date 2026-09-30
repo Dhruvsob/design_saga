@@ -9,7 +9,8 @@ the private Compose network.
 
 The Hostinger checkout is on the `production` branch. It keeps one local commit
 containing Docker, PostgreSQL, and HTTP compatibility changes on top of GitHub
-`main`. The checkout is configured to rebase that commit whenever it pulls.
+`main`. The checkout is configured to rebase its production commits whenever it
+pulls.
 
 ```bash
 cd /opt/design-saga-git
@@ -26,9 +27,13 @@ branch because that would discard the production layer.
 ```bash
 docker compose up -d --build
 docker compose ps
-curl -fsS http://127.0.0.1/api/
+curl -fsS https://gamaa.in/api/
 ```
 
-Keep `COOKIE_SECURE=false` while accessing the server by HTTP IP. Set it to
-`true` after a domain and HTTPS are configured. Never run
-`docker compose down -v`; the `-v` option deletes the PostgreSQL volume.
+Caddy serves `gamaa.in` and `www.gamaa.in`, redirects HTTP to HTTPS, and renews
+the TLS certificates automatically. The DNS A record for `gamaa.in` must point
+to `187.52.124.46`; `www` can be a CNAME to `gamaa.in`.
+
+Keep `COOKIE_SECURE=true` in production. Never run `docker compose down -v`;
+the `-v` option deletes both the PostgreSQL data volume and Caddy certificate
+state.
