@@ -1617,25 +1617,23 @@ async def delete_invoice(invoice_id: str, request: Request,
     inv = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Not found")
-    # Accounting safety: if this invoice has a linked payment/receipt entry,
-    # reverse it (balanced reversing JE — never hard-delete a posted entry) so
-    # the ledger can never be left with an orphan/negative balance. This runs
-    # regardless of the exact status, closing the orphan-JE gap.
-    payment_reversed = False
+    # Accounting: a deleted invoice must leave NO trace in the books. Remove its
+    # linked receipt entry (and any prior reversal) so a mistaken invoice does not
+    # leave a leftover negative/credit entry cluttering the Accounting section.
+    # (Deleting an invoice = it never existed; revenue and cash are removed
+    # together, so the books stay balanced with nothing left behind.)
+    je_removed = 0
     if inv.get("doc_type", "invoice") == "invoice":
-        from routes.accounting import reverse_receipt_je
-        rev = await reverse_receipt_je(
-            user, source="invoice_payment", source_id=invoice_id,
-            narration=(f"Invoice {inv.get('number') or invoice_id} deleted — payment reversed"
-                       + (f" · {inv.get('client_name')}" if inv.get("client_name") else "")),
-            reset_source=False)  # invoice is being deleted, no source to reset
-        payment_reversed = bool(rev)
+        res_je = await sdb.journal_entries.delete_many(
+            {"source_id": invoice_id,
+             "source": {"$in": ["invoice_payment", "invoice_payment_reversal"]}})
+        je_removed = res_je.deleted_count
     await sdb.invoices.delete_one({"id": invoice_id})
     await audit_log(user, "invoice.delete", target=invoice_id, target_type="invoice",
                     meta={"number": inv.get("number"), "total": inv.get("total"),
                           "was_paid": inv.get("status") == "paid",
-                          "payment_reversed": payment_reversed})
-    return {"ok": True, "payment_reversed": payment_reversed}
+                          "journal_entries_removed": je_removed})
+    return {"ok": True, "payment_reversed": je_removed > 0, "journal_entries_removed": je_removed}
 
 
 def _safe(s) -> str:
