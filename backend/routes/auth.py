@@ -109,7 +109,7 @@ async def _set_session_cookie(response: Response, user_id: str) -> str:
     response.set_cookie(
         key="session_token", value=token,
         httponly=True, secure=cookie_secure,
-        samesite="none" if cookie_secure else "lax",
+        samesite="lax",
         path="/", max_age=7 * 24 * 3600,
     )
     return token

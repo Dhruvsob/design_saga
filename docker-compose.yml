@@ -39,7 +39,7 @@ services:
       ENV: production
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
       SUPER_ADMIN_EMAILS: ${SUPER_ADMIN_EMAILS}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       ENABLE_SEED_DEMO: "false"
       EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
     depends_on:
