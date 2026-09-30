@@ -223,7 +223,7 @@ function EmptyState() {
       <div className="inline-block mb-4 dotted-bg" style={{ width: 80, height: 80 }} />
       <div className="overline mb-2">NO PROJECTS YET</div>
       <p className="text-[#5C5C5C] text-sm max-w-sm mx-auto">
-        Create a project from scratch or convert a lead from the CRM. You can also seed demo data from the dashboard.
+        Create a project from scratch or convert a qualified lead from the CRM.
       </p>
     </div>
   );

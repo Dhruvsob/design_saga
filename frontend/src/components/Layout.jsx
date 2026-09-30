@@ -79,7 +79,7 @@ export default function Layout({ children }) {
 
   const currentNav = visibleNav.find((n) => location.pathname.startsWith(n.to));
   const brandName = currentOrg?.display_name || currentOrg?.name || "DESIGN SAGA";
-  const brandTagline = currentOrg?.branding?.tagline || "STUDIO OS · v0.2";
+  const brandTagline = currentOrg?.branding?.tagline || "STUDIO MANAGEMENT";
   const brandColor = currentOrg?.branding?.primary_color || "#8B7F6A";
   const brandLogo = currentOrg?.branding?.logo_url;
   const brandInitials = (brandName || "DS").split(/\s+/).slice(0, 2)
@@ -174,14 +174,6 @@ export default function Layout({ children }) {
             </NavLink>
           ))}
         </nav>
-
-        {/* Pro tip card */}
-        <div className="mx-3 mb-3 p-4 rounded-xl border border-[#E8E6E1] bg-white hover:shadow-sm transition">
-          <div className="eyebrow text-[9px] text-[#8a6f24] mb-2">PRO TIP</div>
-          <p className="text-xs leading-relaxed text-[#4A4A4A]">
-            Press <kbd className="inline-block px-1.5 py-0.5 rounded bg-[#F5F4F0] border border-[#E8E6E1] font-mono text-[10px] text-[#2C2C2C]">⌘ K</kbd> anywhere for quick actions.
-          </p>
-        </div>
 
         <div className="p-4" style={{ borderTop: "1px solid #E8E6E1" }}>
           <div className="flex items-center gap-3 mb-3">

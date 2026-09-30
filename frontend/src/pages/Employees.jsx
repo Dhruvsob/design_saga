@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
-import { Plus, ArrowRight, Sparkle, MagnifyingGlass, Trash } from "@phosphor-icons/react";
+import { Plus, ArrowRight, MagnifyingGlass, Trash } from "@phosphor-icons/react";
 
 const STATUS_CHIP = {
   active: "chip-paid",
@@ -18,7 +18,6 @@ export default function Employees() {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ departments: [], employment_types: [], employment_statuses: [] });
   const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState({ q: "", department: "", status: "" });
@@ -60,11 +59,6 @@ export default function Employees() {
     }
   };
 
-  const seed = async () => {
-    setSeeding(true);
-    try { await api.post("/employees/seed"); await load(); } finally { setSeeding(false); }
-  };
-
   const remove = async (id, e) => {
     e.stopPropagation();
     if (!window.confirm("Delete this employee record permanently?")) return;
@@ -96,11 +90,6 @@ export default function Employees() {
         kicker="Complete HR record — payroll structure, documents, warnings, rewards, KPIs. All in one place."
         count={rows.length}
       >
-        {canCreate && rows.length === 0 && (
-          <button onClick={seed} disabled={seeding} className="btn-ghost" data-testid="seed-employees-btn">
-            <Sparkle size={14} /> {seeding ? "Seeding…" : "Seed sample team"}
-          </button>
-        )}
         {canCreate && (
           <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-employee-btn">
             <Plus size={14} /> {showForm ? "Cancel" : "New employee"}
@@ -216,7 +205,7 @@ export default function Employees() {
               ))}
               {filtered.length === 0 && (
                 <tr><td colSpan={8} className="p-10 text-center text-[#5C5C5C]">
-                  {rows.length === 0 ? "No employees yet. Create one or seed the sample team." : "No matches for these filters."}
+                  {rows.length === 0 ? "No employees yet. Create the first employee to get started." : "No matches for these filters."}
                 </td></tr>
               )}
             </tbody>

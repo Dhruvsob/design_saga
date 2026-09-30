@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
-import { Plus, ArrowRight, Trash, FilePdf, Sparkle } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
 
 const TYPE_LABELS = {
   turnkey: "Turnkey",
@@ -19,7 +19,6 @@ export default function QuotationsAdv() {
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [form, setForm] = useState({ type: "turnkey", project_title: "", client_id: "", project_id: "", project_location: "", area_sqft: "" });
   const navigate = useNavigate();
 
@@ -41,17 +40,6 @@ export default function QuotationsAdv() {
     navigate(`/quotations/${data.id}`);
   };
 
-  const seed = async () => {
-    setSeeding(true);
-    try {
-      const { data } = await api.post("/quotations-adv/seed");
-      await load();
-      navigate(`/quotations/${data.id}`);
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const del = async (id) => {
     if (!window.confirm("Delete quotation?")) return;
     await api.delete(`/quotations-adv/${id}`);
@@ -67,9 +55,6 @@ export default function QuotationsAdv() {
           <p className="text-[#5C5C5C] mt-2 max-w-xl">BOQ, room-wise costing, materials, payment plans, timeline, terms, versions and approval — all in one professional document.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={seed} disabled={seeding} className="btn-ghost" data-testid="seed-quotation-btn">
-            <Sparkle size={14} /> {seeding ? "Seeding…" : "Seed sample"}
-          </button>
           <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-quotation-btn">
             <Plus size={14} /> {showForm ? "Cancel" : "New quotation"}
           </button>
@@ -130,7 +115,7 @@ export default function QuotationsAdv() {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan="8" className="p-8 text-center text-[#5C5C5C]">No quotations yet. Create one or seed a sample.</td></tr>
+              <tr><td colSpan="8" className="p-8 text-center text-[#5C5C5C]">No quotations yet. Create the first quotation to get started.</td></tr>
             )}
           </tbody>
         </table></div>

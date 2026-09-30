@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import {
-  ArrowRight, GoogleLogo, Sparkle, ShieldCheck, LockKey, User, Warning,
-} from "@phosphor-icons/react";
+import { ArrowRight, GoogleLogo, LockKey, User, Warning } from "@phosphor-icons/react";
 
 function extractError(detail, fallback = "Something went wrong.") {
   if (!detail) return fallback;
@@ -154,22 +152,10 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Trust badges */}
-          <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-[#5C5C5C]">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck size={12} weight="duotone" className="text-[#1D633E]" />
-              <span className="font-mono tracking-wider uppercase">SOC-2 READY</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Sparkle size={12} weight="duotone" className="text-[#8B7F6A]" />
-              <span className="font-mono tracking-wider uppercase">AI-NATIVE</span>
-            </div>
-          </div>
         </div>
 
-        <div className="relative flex items-center justify-between text-xs text-[#5C5C5C] font-mono tracking-wider fade-up" style={{ animationDelay: "240ms" }}>
+        <div className="relative text-xs text-[#5C5C5C] font-mono tracking-wider fade-up" style={{ animationDelay: "240ms" }}>
           <span>© {new Date().getFullYear()} DESIGN SAGA</span>
-          <span>v2.2 — BETA</span>
         </div>
       </div>
 

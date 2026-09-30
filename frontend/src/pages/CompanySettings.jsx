@@ -164,7 +164,7 @@ export default function CompanySettings() {
               </div>
               <div className="mt-4">
                 <label className="block text-xs text-[#5C5C5C] mb-1">Tagline (shown in sidebar)</label>
-                <input className="input-flat w-full" placeholder="Studio OS · v0.2"
+                <input className="input-flat w-full" placeholder="Studio management"
                        value={branding.tagline || ""} onChange={(e) => setBranding({ tagline: e.target.value })}
                        data-testid="tagline-input" />
               </div>
