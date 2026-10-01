@@ -3848,6 +3848,7 @@ async def create_employee_account(eid: str, payload: EmployeeAccountIn, request:
         "password_hash": _hash_pw(payload.password),
         "is_active": True,
         "approval_status": "approved",
+        "auth_type": "password",
         "created_at": iso(now_utc()),
         "created_by": user["user_id"],
     }

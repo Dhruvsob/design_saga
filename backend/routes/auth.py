@@ -28,7 +28,6 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 from passlib.hash import bcrypt
 import uuid
-import re
 import os
 
 from core.db import db
@@ -45,7 +44,6 @@ router = APIRouter()
 
 MAX_FAILED = 5
 LOCKOUT_MINUTES = 15
-EMPLOYEE_ID_PATTERN = re.compile(r"^DS\d{4,}$", re.IGNORECASE)
 
 
 # ==================================================
@@ -153,6 +151,23 @@ async def _clear_lockout_for_user(user: dict):
         await db.login_attempts.delete_many({"identifier": {"$in": idents}})
 
 
+def _identifier_query(identifier: str) -> dict:
+    """Match every supported login identifier without assuming an ID format.
+
+    Employee IDs are tenant-configurable (for example DS0001 or
+    EMP-2026-0001), so classifying an identifier by a hard-coded prefix makes
+    valid accounts unreachable. Candidate password verification below safely
+    disambiguates tenant-local IDs that are reused by multiple organisations.
+    """
+    ident = identifier.strip()
+    variants = list(dict.fromkeys((ident, ident.upper(), ident.lower())))
+    return {"$or": [
+        {"email": ident.lower()},
+        {"employee_id": {"$in": variants}},
+        {"user_id": ident},
+    ]}
+
+
 # ==================================================
 # LOGIN (password)
 # ==================================================
@@ -173,12 +188,7 @@ async def login_password(payload: LoginPasswordIn, response: Response):
     # be rejected with "invalid credentials" even with the correct password.
     # Fix: fetch ALL candidates for the identifier and authenticate against the
     # one whose password actually matches.
-    query: dict
-    if EMPLOYEE_ID_PATTERN.match(ident):
-        query = {"employee_id": ident.upper()}
-    else:
-        query = {"email": ident.lower()}
-    candidates = await db.users.find(query, {"_id": 0}).to_list(50)
+    candidates = await db.users.find(_identifier_query(ident), {"_id": 0}).to_list(50)
 
     user = None
     for cand in candidates:
