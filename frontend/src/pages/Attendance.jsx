@@ -296,7 +296,7 @@ export default function Attendance() {
                   <input className="input-flat" placeholder="Reason / purpose" value={siteForm.reason}
                     onChange={(e) => setSiteForm({ ...siteForm, reason: e.target.value })} data-testid="site-reason" />
                   <div className="md:col-span-2 text-[11px] text-[#F0A93A] font-mono flex items-center gap-1">
-                    <Warning size={12} /> Non-office check-ins require HR / Admin approval before counting as present.
+                    <Warning size={12} /> Authorized site check-ins count immediately. Out-of-zone visits require HR / Admin approval.
                   </div>
                 </div>
               )}

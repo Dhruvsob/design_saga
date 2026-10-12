@@ -68,6 +68,18 @@ DEFAULT_POLICY = {
 GPS_TOLERANCE_CAP_M = 75.0
 
 
+def _initial_attendance_state(att_type: str, geo_needed: bool,
+                              geo_result: dict, force_outside: bool) -> tuple[str, str]:
+    """Choose the initial status without weakening out-of-fence approval."""
+    if geo_needed and not geo_result.get("inside", False) and force_outside:
+        return "pending_approval", "pending"
+    if att_type == "office":
+        return "present", "auto"
+    if geo_needed and geo_result.get("inside") and geo_result.get("matched_location"):
+        return "present", "auto"
+    return "pending_approval", "pending"
+
+
 async def _get_attendance_policy() -> dict:
     p = await sdb.attendance_policies.find_one({}, {"_id": 0})
     return {**DEFAULT_POLICY, **(p or {})}
@@ -467,17 +479,11 @@ async def check_in(payload: CheckInIn, request: Request,
             if not policy.get("approval_required_when_outside", True):
                 raise HTTPException(400, "Outside-location approval is disabled by policy")
 
-    # Determine final status
-    if geo_needed and not geo_result["inside"] and payload.force_outside:
-        status = "pending_approval"
-        approval_status = "pending"
-    elif is_office:
-        status = "present"
-        approval_status = "auto"
-    else:
-        # non-office types need HR approval per existing behaviour
-        status = "pending_approval"
-        approval_status = "pending"
+    # An active configured fence is itself the authorization for a site punch.
+    # Unmatched or explicitly out-of-fence non-office punches still need review.
+    status, approval_status = _initial_attendance_state(
+        att_type, geo_needed, geo_result, payload.force_outside,
+    )
 
     # Late arrival reason enforcement (uses the employee's own shift + grace)
     late_min = _late_minutes(_emp_shift_start(emp_doc, policy), _emp_grace(emp_doc, policy)) if is_office else None

@@ -36,3 +36,33 @@ def test_today_uses_india_business_date(monkeypatch):
         lambda: datetime(2026, 10, 13, 0, 15, tzinfo=ist),
     )
     assert attendance._today() == "2026-10-13"
+
+
+def test_authorized_site_check_in_is_present_immediately():
+    state = attendance._initial_attendance_state(
+        "site_visit",
+        True,
+        {"inside": True, "matched_location": {"id": "site_a"}},
+        False,
+    )
+    assert state == ("present", "auto")
+
+
+def test_outside_site_check_in_still_requires_approval():
+    geo = {"inside": False, "matched_location": {"id": "site_a"}}
+    assert attendance._initial_attendance_state("site_visit", True, geo, True) == (
+        "pending_approval", "pending",
+    )
+
+
+def test_unmatched_site_check_in_still_requires_approval():
+    state = attendance._initial_attendance_state(
+        "site_visit", True, {"inside": False, "matched_location": None}, True,
+    )
+    assert state == ("pending_approval", "pending")
+
+
+def test_office_check_in_behavior_is_unchanged():
+    assert attendance._initial_attendance_state(
+        "office", True, {"inside": True, "matched_location": {"id": "hq"}}, False,
+    ) == ("present", "auto")
