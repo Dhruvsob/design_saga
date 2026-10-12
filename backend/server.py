@@ -739,25 +739,37 @@ async def rbac_assign_role(user_id: str, payload: RoleAssignIn, request: Request
 @api.get("/dashboard/stats")
 async def dashboard_stats(request: Request, session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "dashboard.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: dashboard.read")
+
+    can_view_revenue = has_permission(user, "finance.read")
+    can_view_collections = can_view_revenue or has_permission(user, "invoices.read")
 
     active_projects = await sdb.projects.count_documents({"stage": {"$nin": ["Handover"]}, "archived": {"$ne": True}})
     total_projects = await sdb.projects.count_documents({"archived": {"$ne": True}})
 
     # Revenue: sum from ACCOUNTING journal entries (income line credits) — single source
     # of truth. Falls back to zero if no journal exists yet. This matches the P&L report.
-    revenue = 0.0
-    async for je in sdb.journal_entries.find({}, {"_id": 0, "lines": 1}):
-        for l in je.get("lines", []):
-            if l.get("account_type") == "income":
-                revenue += float(l.get("credit", 0)) - float(l.get("debit", 0))
-    revenue = round(revenue, 2)
+    revenue = None
+    if can_view_revenue:
+        revenue = 0.0
+        async for je in sdb.journal_entries.find({}, {"_id": 0, "lines": 1}):
+            for l in je.get("lines", []):
+                if l.get("account_type") == "income":
+                    revenue += float(l.get("credit", 0)) - float(l.get("debit", 0))
+        revenue = round(revenue, 2)
 
     # Collection due: sum of sent+overdue
-    due_cursor = sdb.invoices.find({"status": {"$in": ["sent", "overdue"]}, "doc_type": "invoice"}, {"_id": 0})
-    collection_due = 0.0
-    async for inv in due_cursor:
-        collection_due += float(inv.get("total", 0))
+    collection_due = None
+    if can_view_collections:
+        due_cursor = sdb.invoices.find(
+            {"status": {"$in": ["sent", "overdue"]}, "doc_type": "invoice"},
+            {"_id": 0, "total": 1},
+        )
+        collection_due = 0.0
+        async for inv in due_cursor:
+            collection_due += float(inv.get("total", 0))
 
     # Overdue tasks
     today = now_utc().date().isoformat()
@@ -783,7 +795,7 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
     alerts = []
     if overdue_tasks > 0:
         alerts.append({"level": "high", "message": f"{overdue_tasks} tasks overdue"})
-    if collection_due > 0:
+    if collection_due is not None and collection_due > 0:
         alerts.append({"level": "medium", "message": f"₹{collection_due:,.0f} pending collection"})
 
     # Team utilization — real signal: weighted open tasks (urgent=3, high=2, medium=1, low=1)
@@ -799,13 +811,21 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
         key=lambda x: -x["load"],
     )
 
+    kpis = {
+        "active_projects": active_projects,
+        "total_projects": total_projects,
+        "overdue_tasks": overdue_tasks,
+    }
+    if can_view_revenue:
+        kpis["revenue"] = revenue
+    if can_view_collections:
+        kpis["collection_due"] = collection_due
+
     return {
-        "kpis": {
-            "revenue": revenue,
-            "active_projects": active_projects,
-            "total_projects": total_projects,
-            "overdue_tasks": overdue_tasks,
-            "collection_due": collection_due,
+        "kpis": kpis,
+        "financial_visibility": {
+            "revenue": can_view_revenue,
+            "collections": can_view_collections,
         },
         "pipeline": pipeline,
         "sources": source_list,
@@ -1443,6 +1463,15 @@ async def delete_file(file_id: str, request: Request,
 # ============================================================
 # Invoices + Quotations
 # ============================================================
+def _can_read_invoices(user: dict) -> bool:
+    return has_permission(user, "invoices.read") or has_permission(user, "finance.read")
+
+
+def _ensure_invoice_read(user: dict):
+    if not _can_read_invoices(user):
+        raise HTTPException(status_code=403, detail="Missing permission: invoices.read")
+
+
 def compute_invoice_totals(doc: dict) -> dict:
     items = doc.get("items", []) or []
     subtotal = 0.0
@@ -1463,7 +1492,8 @@ def compute_invoice_totals(doc: dict) -> dict:
 async def list_invoices(request: Request, doc_type: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    _ensure_invoice_read(user)
     q = {}
     if doc_type:
         q["doc_type"] = doc_type
@@ -1525,7 +1555,8 @@ async def create_invoice(payload: InvoiceIn, request: Request,
 async def get_invoice(invoice_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    _ensure_invoice_read(user)
     doc = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
@@ -1993,7 +2024,10 @@ async def invoice_pdf(invoice_id: str, request: Request,
                        token: Optional[str] = None):
     # Allow either auth OR share token for PDF
     user = await get_current_user(request, session_token, authorization)
-    if not user:
+    if user:
+        user = await require_user(request, session_token, authorization)
+        _ensure_invoice_read(user)
+    else:
         # Check if shared via token: invoice must be attached to a project with this share_token
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import {
   ArrowUpRight, TrendUp, Warning, Clock, Money, Briefcase, Sparkle,
   CaretRight, ChartBar, Lightning,
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { hasPerm } = useAuth();
 
   const load = async () => {
     try {
@@ -38,6 +40,13 @@ export default function Dashboard() {
   const alerts = stats?.alerts || [];
   const util = stats?.utilization || [];
   const sources = stats?.sources || [];
+  const canSeeRevenue = hasPerm("finance.read") && stats?.financial_visibility?.revenue === true;
+  const canSeeCollections = (hasPerm("finance.read") || hasPerm("invoices.read"))
+    && stats?.financial_visibility?.collections === true;
+  const kpiCount = 2 + Number(canSeeRevenue) + Number(canSeeCollections);
+  const kpiGrid = kpiCount === 4
+    ? "lg:grid-cols-4"
+    : kpiCount === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2";
 
   const maxFunnel = Math.max(...pipeline.map((p) => p.count), 1);
   const maxUtil = Math.max(...util.map((u) => u.load), 1);
@@ -72,16 +81,18 @@ export default function Dashboard() {
 
       {/* ============== KPI ROW ============== */}
       <div className="fade-up">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 border-t border-l border-[#E5E5E5]">
-          <Kpi
-            label="Revenue collected"
-            value={compactMoney(kpis.revenue)}
-            sub={fmtMoney(kpis.revenue)}
-            Icon={Money}
-            accent="#1D633E"
-            onClick={() => navigate("/accounting")}
-            testid="kpi-revenue"
-          />
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${kpiGrid} border-t border-l border-[#E5E5E5]`}>
+          {canSeeRevenue && (
+            <Kpi
+              label="Revenue collected"
+              value={compactMoney(kpis.revenue)}
+              sub={fmtMoney(kpis.revenue)}
+              Icon={Money}
+              accent="#1D633E"
+              onClick={() => navigate("/accounting")}
+              testid="kpi-revenue"
+            />
+          )}
           <Kpi
             label="Active projects"
             value={kpis.active_projects || 0}
@@ -101,16 +112,18 @@ export default function Dashboard() {
             onClick={() => navigate("/tasks")}
             testid="kpi-overdue"
           />
-          <Kpi
-            label="Collection due"
-            value={compactMoney(kpis.collection_due)}
-            sub={fmtMoney(kpis.collection_due)}
-            Icon={Clock}
-            accent="#8B7F6A"
-            trend={kpis.collection_due > 0 ? "FOLLOW UP" : "—"}
-            onClick={() => navigate("/invoices")}
-            testid="kpi-collection"
-          />
+          {canSeeCollections && (
+            <Kpi
+              label="Collection due"
+              value={compactMoney(kpis.collection_due)}
+              sub={fmtMoney(kpis.collection_due)}
+              Icon={Clock}
+              accent="#8B7F6A"
+              trend={kpis.collection_due > 0 ? "FOLLOW UP" : "—"}
+              onClick={() => navigate("/invoices")}
+              testid="kpi-collection"
+            />
+          )}
         </div>
       </div>
 
