@@ -47,8 +47,8 @@ class PaySalaryIn(BaseModel):
     apply_attendance_deductions: Optional[bool] = True
 
 
-def _payroll_period_key(employee_id: str, year: int, month: int) -> str:
-    return f"{employee_id}:{year:04d}-{month:02d}"
+def _payroll_period_key(org_id: str, employee_id: str, year: int, month: int) -> str:
+    return f"{org_id}:{employee_id}:{year:04d}-{month:02d}"
 
 
 async def _assert_payroll_reviews_resolved(employee_id: str, year: int, month: int) -> None:
@@ -261,7 +261,8 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         "employee_name": emp_name,
         "year": payload.year,
         "month": payload.month,
-        "period_key": _payroll_period_key(eid, payload.year, payload.month),
+        "period_key": _payroll_period_key(
+            user.get("org_id") or "org_default", eid, payload.year, payload.month),
         "breakdown": breakdown,
         "extras": extras,
         "net": net,

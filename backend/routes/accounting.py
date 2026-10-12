@@ -24,6 +24,7 @@ from core.rbac import has_permission
 from core.tenancy import user_org_id
 from core.audit import audit
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 from core.finance import resolve_period, current_fy_label, fy_choices, fy_range
 from models.accounting import (
     AccountIn, JournalIn, IncomeIn, ExpenseIn,
@@ -45,6 +46,27 @@ async def _require_finance_read(
 
 
 router = APIRouter(dependencies=[Depends(_require_finance_read)])
+
+
+def _linked_journal_key(org_id: str, source: str, source_id: Optional[str]) -> Optional[str]:
+    if not source_id or source == "manual":
+        return None
+    return f"{org_id}:{source}:{source_id}"
+
+
+def _require_full_linked_payment(kind: str, actual: float, expected: float) -> None:
+    actual = round(float(actual), 2)
+    expected = round(float(expected), 2)
+    if actual != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Linked {kind} payment must equal the {kind} amount ({expected:.2f})",
+        )
+
+
+def _cash_collection_source(source: str) -> bool:
+    base = source[:-9] if source.endswith("_reversal") else source
+    return base in {"income", "invoice_payment", "milestone_payment", "commission_income"}
 
 
 # ==================================================
@@ -228,11 +250,13 @@ async def reverse_receipt_je(user: dict, *, source: str, source_id: str,
                               reference=orig.get("reference"),
                               project_id=orig.get("project_id"),
                               client_id=orig.get("client_id"),
-                              source=f"{source}_reversal", source_id=source_id)
+                              source=f"{source}_reversal", source_id=orig["id"])
     await sdb.journal_entries.update_one(
-        {"id": orig["id"]}, {"$set": {"reversed": True, "reversal_je_id": rev["id"],
-                                       "reversed_at": iso_now(),
-                                       "reversed_by": user["user_id"]}})
+        {"id": orig["id"]}, {
+            "$set": {"reversed": True, "reversal_je_id": rev["id"],
+                     "reversed_at": iso_now(), "reversed_by": user["user_id"]},
+            "$unset": {"idempotency_key": ""},
+        })
     if reset_source:
         await _reset_source_after_reversal(source, source_id)
     return rev
@@ -310,7 +334,17 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
         "created_by": user["user_id"],
         "created_by_name": user.get("name"),
     }
-    await sdb.journal_entries.insert_one(dict(doc))
+    idempotency_key = _linked_journal_key(
+        user_org_id(user) or "org_default", source, source_id)
+    if idempotency_key:
+        doc["idempotency_key"] = idempotency_key
+    try:
+        await sdb.journal_entries.insert_one(dict(doc))
+    except DuplicateKeyError:
+        raise HTTPException(
+            status_code=409,
+            detail="This linked transaction has already been posted.",
+        )
     return await sdb.journal_entries.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -551,8 +585,11 @@ async def reverse_journal(je_id: str, request: Request,
         source=f"{je.get('source') or 'manual'}_reversal", source_id=je_id,
     )
     await sdb.journal_entries.update_one(
-        {"id": je_id}, {"$set": {"reversed": True, "reversal_je_id": rev["id"],
-                                 "reversed_at": iso_now(), "reversed_by": user["user_id"]}})
+        {"id": je_id}, {
+            "$set": {"reversed": True, "reversal_je_id": rev["id"],
+                     "reversed_at": iso_now(), "reversed_by": user["user_id"]},
+            "$unset": {"idempotency_key": ""},
+        })
     # If this was a linked payment JE, roll back the source document too so
     # the source (invoice / milestone) matches the accounting.
     src = je.get("source") or ""
@@ -577,6 +614,55 @@ async def create_income(payload: IncomeIn, request: Request,
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be > 0")
+    if payload.invoice_id and payload.milestone_id:
+        raise HTTPException(status_code=400, detail="Link either an invoice or a milestone, not both")
+
+    bank = await sdb.accounts.find_one(
+        {"id": payload.bank_account_id}, {"_id": 0, "id": 1, "type": 1})
+    income = await sdb.accounts.find_one(
+        {"id": payload.income_account_id}, {"_id": 0, "id": 1, "type": 1})
+    if not bank or bank.get("type") != "asset":
+        raise HTTPException(status_code=400, detail="Received-into account must be a cash/bank asset account")
+    if not income or income.get("type") != "income":
+        raise HTTPException(status_code=400, detail="Income account must be an income account")
+    if bank["id"] == income["id"]:
+        raise HTTPException(status_code=400, detail="Bank and income accounts must be different")
+
+    source = "income"
+    source_id = None
+    project_id = payload.project_id
+    client_id = payload.client_id
+    linked = None
+    if payload.invoice_id:
+        linked = await sdb.invoices.find_one({"id": payload.invoice_id}, {"_id": 0})
+        if not linked or linked.get("doc_type", "invoice") == "quotation":
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        if linked.get("status") == "paid":
+            raise HTTPException(status_code=409, detail="Invoice is already paid")
+        expected = float(linked.get("total") or 0)
+        _require_full_linked_payment("invoice", payload.amount, expected)
+        source, source_id = "invoice_payment", payload.invoice_id
+        project_id = linked.get("project_id")
+        client_id = linked.get("client_id")
+    elif payload.milestone_id:
+        linked = await sdb.payment_milestones.find_one(
+            {"id": payload.milestone_id}, {"_id": 0})
+        if not linked:
+            raise HTTPException(status_code=404, detail="Milestone not found")
+        if linked.get("status") == "paid":
+            raise HTTPException(status_code=409, detail="Milestone is already paid")
+        expected = float(linked.get("amount") or 0)
+        _require_full_linked_payment("milestone", payload.amount, expected)
+        source, source_id = "milestone_payment", payload.milestone_id
+        project_id = linked.get("project_id")
+
+    if source_id:
+        existing = await sdb.journal_entries.find_one(
+            {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
+            {"_id": 0, "id": 1},
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="This linked payment has already been posted")
     narration = payload.notes or f"Payment received via {payload.payment_method}"
     lines = [
         {"account_id": payload.bank_account_id, "debit": payload.amount, "credit": 0,
@@ -586,11 +672,10 @@ async def create_income(payload: IncomeIn, request: Request,
     ]
     je = await _post_journal(
         user, payload.date, narration, lines,
-        reference=payload.reference, project_id=payload.project_id,
-        client_id=payload.client_id, vendor_id=payload.vendor_id,
+        reference=payload.reference, project_id=project_id,
+        client_id=client_id, vendor_id=payload.vendor_id,
         employee_id=payload.employee_id,
-        source="invoice_payment" if payload.invoice_id else "income",
-        source_id=payload.invoice_id or payload.milestone_id,
+        source=source, source_id=source_id,
     )
 
     # If linked to a milestone, mark it paid
@@ -623,6 +708,16 @@ async def create_expense(payload: ExpenseIn, request: Request,
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be > 0")
+    expense_account = await sdb.accounts.find_one(
+        {"id": payload.expense_account_id}, {"_id": 0, "id": 1, "type": 1})
+    paid_from = await sdb.accounts.find_one(
+        {"id": payload.paid_from_account_id}, {"_id": 0, "id": 1, "type": 1})
+    if not expense_account or expense_account.get("type") != "expense":
+        raise HTTPException(status_code=400, detail="Expense account must be an expense account")
+    if not paid_from or paid_from.get("type") != "asset":
+        raise HTTPException(status_code=400, detail="Paid-from account must be a cash/bank asset account")
+    if expense_account["id"] == paid_from["id"]:
+        raise HTTPException(status_code=400, detail="Expense and paid-from accounts must be different")
 
     narration = payload.notes or f"Expense — {payload.payment_method}"
     base_amt = float(payload.amount)
@@ -1052,19 +1147,18 @@ async def finance_dashboard(request: Request,
 
     # This month P&L (income & expense from journal source)
     entries_month = await sdb.journal_entries.find(
-        {"date": {"$gte": month_start}, "reversed": {"$ne": True}}, {"_id": 0}).to_list(5000)
+        {"date": {"$gte": month_start}}, {"_id": 0}).to_list(5000)
     income_month = 0.0
     expense_month = 0.0
     salary_month = 0.0
     today_collections = 0.0
     # Sources that represent a real payment received today (Money In).
-    _cash_in_sources = {"income", "invoice_payment", "milestone_payment", "commission_income"}
     for e in entries_month:
         src = e.get("source") or ""
         for l in e["lines"]:
             if l["account_type"] == "income":
                 income_month += l["credit"] - l["debit"]
-                if e["date"] == today and src in _cash_in_sources:
+                if e["date"] == today and _cash_collection_source(src):
                     today_collections += l["credit"] - l["debit"]
             elif l["account_type"] == "expense":
                 expense_month += l["debit"] - l["credit"]
@@ -1714,6 +1808,16 @@ async def update_milestone(ms_id: str, payload: MilestoneUpdate, request: Reques
     if not existing_ms:
         raise HTTPException(status_code=404, detail="Milestone not found")
     upd = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if "status" in upd and upd["status"] not in {"pending", "invoiced", "paid"}:
+        raise HTTPException(status_code=400, detail="Invalid milestone status")
+    if existing_ms.get("status") == "paid" and {"amount", "percent"}.intersection(upd):
+        raise HTTPException(status_code=409, detail="Reverse the payment before changing a paid milestone amount")
+    if upd.get("status") == "paid" and existing_ms.get("status") != "paid" \
+            and not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    if upd.get("status") and upd["status"] != "paid" and existing_ms.get("status") == "paid" \
+            and not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
     upd["updated_at"] = iso_now()
     # Milestone marked paid → accounting is the source of truth: auto-post
     # the receipt JE (idempotent) so books & dashboards stay reconciled.
@@ -1750,6 +1854,18 @@ async def delete_milestone(ms_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "projects.update"):
         raise HTTPException(status_code=403, detail="Missing permission")
+    milestone = await sdb.payment_milestones.find_one({"id": ms_id}, {"_id": 0})
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    active_receipt = await sdb.journal_entries.find_one(
+        {"source": "milestone_payment", "source_id": ms_id, "reversed": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    )
+    if milestone.get("status") == "paid" or active_receipt:
+        raise HTTPException(
+            status_code=409,
+            detail="Reverse the milestone payment before deleting this milestone",
+        )
     await sdb.payment_milestones.delete_one({"id": ms_id})
     return {"ok": True}
 

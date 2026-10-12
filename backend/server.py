@@ -1508,6 +1508,9 @@ async def create_invoice(payload: InvoiceIn, request: Request,
     doc = payload.model_dump()
     if not has_permission(user, "invoices.create"):
         raise HTTPException(status_code=403, detail="Missing permission: invoices.create")
+    if doc.get("status") == "paid" and doc.get("doc_type", "invoice") == "invoice" \
+            and not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
     doc["id"] = new_id("inv_")
     # number — atomic per-org counter (never reused after delete); prefix from Company Settings
     from core.helpers import next_sequence, max_trailing_number
@@ -1613,6 +1616,12 @@ async def update_invoice_status(invoice_id: str, payload: InvoiceStatusUpdate, r
     inv = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Not found")
+    if payload.status == "paid" and inv.get("status") != "paid" \
+            and not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    if inv.get("status") == "paid" and payload.status != "paid" \
+            and not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
     upd = {"status": payload.status, "updated_at": iso(now_utc())}
 
     # --- Accounting is the source of truth: keep books in sync ---
@@ -1653,23 +1662,20 @@ async def delete_invoice(invoice_id: str, request: Request,
     inv = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Not found")
-    # Accounting: a deleted invoice must leave NO trace in the books. Remove its
-    # linked receipt entry (and any prior reversal) so a mistaken invoice does not
-    # leave a leftover negative/credit entry cluttering the Accounting section.
-    # (Deleting an invoice = it never existed; revenue and cash are removed
-    # together, so the books stay balanced with nothing left behind.)
-    je_removed = 0
-    if inv.get("doc_type", "invoice") == "invoice":
-        res_je = await sdb.journal_entries.delete_many(
-            {"source_id": invoice_id,
-             "source": {"$in": ["invoice_payment", "invoice_payment_reversal"]}})
-        je_removed = res_je.deleted_count
+    active_receipt = await sdb.journal_entries.find_one(
+        {"source": "invoice_payment", "source_id": invoice_id, "reversed": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    )
+    if inv.get("status") == "paid" or active_receipt:
+        raise HTTPException(
+            status_code=409,
+            detail="Change the invoice from paid to sent before deleting it so the receipt is reversed",
+        )
     await sdb.invoices.delete_one({"id": invoice_id})
     await audit_log(user, "invoice.delete", target=invoice_id, target_type="invoice",
                     meta={"number": inv.get("number"), "total": inv.get("total"),
-                          "was_paid": inv.get("status") == "paid",
-                          "journal_entries_removed": je_removed})
-    return {"ok": True, "payment_reversed": je_removed > 0, "journal_entries_removed": je_removed}
+                          "was_paid": False})
+    return {"ok": True}
 
 
 def _safe(s) -> str:

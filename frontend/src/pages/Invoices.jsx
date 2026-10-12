@@ -101,14 +101,13 @@ export default function Invoices({ docType = "invoice" }) {
 
   const del = async (id, isPaid) => {
     const msg = isPaid
-      ? "This invoice is PAID. Deleting it will remove it and its linked payment entry from Accounting completely, so nothing negative is left behind. Continue?"
+      ? "Paid invoices cannot be deleted. Change the status to Sent first so Accounting records a reversal."
       : "Delete this invoice?";
+    if (isPaid) { window.alert(msg); return; }
     if (!window.confirm(msg)) return;
     try {
-      const { data } = await api.delete(`/invoices/${id}`);
-      toast.success(data?.payment_reversed
-        ? "Invoice deleted · linked payment entry removed from Accounting"
-        : "Invoice deleted");
+      await api.delete(`/invoices/${id}`);
+      toast.success("Invoice deleted");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not delete");
     }

@@ -50,11 +50,13 @@ _INDEXES = [
                             {"name": "attendance_org_employee_date_unique", "unique": True}),
     ("leave_applications", [("org_id", 1), ("employee_id", 1), ("status", 1)], {}),
     ("payroll_runs",       [("org_id", 1), ("employee_id", 1), ("year", -1), ("month", -1)], {}),
-    ("payroll_runs",       [("org_id", 1), ("period_key", 1)],
-                            {"name": "payroll_org_period_unique", "unique": True, "sparse": True}),
+    ("payroll_runs",       [("period_key", 1)],
+                            {"name": "payroll_period_key_unique_v2", "unique": True, "sparse": True}),
     # Accounting
     ("journal_entries",    [("org_id", 1), ("date", -1)], {}),
     ("journal_entries",    [("org_id", 1), ("source", 1), ("source_id", 1)], {}),
+    ("journal_entries",    [("idempotency_key", 1)],
+                            {"name": "journal_idempotency_unique", "unique": True, "sparse": True}),
     ("accounts",           [("org_id", 1), ("type", 1)], {}),
     # Notifications
     ("notifications",      [("user_id", 1), ("read", 1), ("created_at", -1)], {}),
