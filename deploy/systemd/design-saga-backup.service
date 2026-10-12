@@ -1,0 +1,17 @@
+[Unit]
+Description=Design Saga PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/design-saga-git/deploy/backup.sh
+TimeoutStartSec=20min
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/design-saga-git
+ReadWritePaths=/opt/design-saga-backups
