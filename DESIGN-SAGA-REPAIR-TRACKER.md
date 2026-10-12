@@ -4,13 +4,13 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; application checkpoint `bbb0442` is committed and pushed to GitHub `main` and `production`.
-- Production checkout: `/opt/design-saga-git`, `production` at `bbb0442`.
+- Local checkout: `production`; application checkpoint `8ca840d` is committed and pushed to GitHub `main` and `production`.
+- Production checkout: `/opt/design-saga-git`, `production` at `8ca840d`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
 - VPS baseline: 3.8 GiB RAM (2.5 GiB available), 2 GiB swap, root disk 45% used, low load at inspection.
-- Current action: DS-001, DS-002, DS-003, and DS-009 are deployed and verified live. Continue with DS-004 dashboard/accounting reconciliation.
+- Current action: DS-001 through DS-004 and DS-009 are deployed and verified live. Continue with DS-005 file/attachment security and persistence.
 
 ## System Inventory
 
@@ -38,7 +38,7 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 | Leads → quotations/BOQ → projects | Partial | Implemented and prior module tests exist; full current conversion chain unverified |
 | Projects → tasks/assignments | Previously tested, needs currency check | Historical task visibility and assignment evidence exists |
 | Vendors/procurement | Partial | Vendor, PO and accounting tests exist; current end-to-end flow unverified |
-| Invoices/receipts/accounting | Previously tested, targeted recheck needed | Posting/reversal and reporting fixes documented; current permission and reconciliation sweep pending |
+| Invoices/receipts/accounting | Focused critical-path verification complete | Payment permissions, exact settlement, idempotency, reversals, source deletion, account types, journal balance, and dashboard netting verified |
 | Payroll/expenses | Payroll critical path verified; expenses partial | Concurrent payroll posting, account types, unresolved-review blocking, permissions, and journal cardinality verified with synthetic data |
 | Notifications/calendar | Previously tested | Historical iteration evidence; scheduler runtime not reverified |
 | Files/documents/exports | Unverified | Access control, persistence, and cross-tenant guessing audit pending |
@@ -58,7 +58,7 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 | DS-001 | High | Server-side invoice/dashboard financial-read authorization bypass | Fixed, deployed, and verified live |
 | DS-002 | High | Verify attendance identity, idempotency, timezone boundary, approval audit, and payroll consistency end to end | Fixed, deployed, and verified live |
 | DS-003 | High | Establish a validated backup and restore path for Design Saga PostgreSQL/FerretDB data and deployment state | Fixed and active; offsite copy remains a follow-up |
-| DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Queued |
+| DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Fixed, deployed, and verified live |
 | DS-005 | Medium | Audit file/attachment persistence, upload validation, download authorization, and tenant isolation | Queued |
 | DS-006 | Medium | Verify Client role compatibility, then remove it from team-management choices without breaking dependent records | Queued |
 | DS-007 | Medium | Trace approved architecture workflow from lead through accounting with synthetic data | Queued |
@@ -196,6 +196,34 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 - Files changed: `backend/server.py`, `backend/routes/attendance.py`, `backend/routes/payroll.py`, `backend/tests/test_financial_read_permissions.py`, `frontend/src/pages/Attendance.jsx`, `frontend/src/pages/EmployeeDetail.jsx`, `frontend/src/pages/Employees.jsx`.
 - Current state: deployed at `bbb0442` and verified live.
 
+### DS-004: Linked financial posting integrity and dashboard reversals
+
+- Symptom/risk:
+  - Invoice and milestone status handlers could create or reverse accounting entries using document permissions without the matching `finance.create`/`finance.update` permission.
+  - The linked income endpoint accepted arbitrary partial/over-payments, wrong account types, both invoice and milestone IDs together, and concurrent duplicate receipts; it could mark the source paid even when the amount did not settle it.
+  - Milestone-linked income was mislabeled as generic income, so reversal did not reset the milestone.
+  - Paid invoices/milestones could be deleted with financial history removed or left orphaned.
+  - The finance dashboard excluded reversed originals but included reversal entries, showing negative monthly income instead of a net-zero reversal.
+- Production precondition audit: no current invoices or milestones, no duplicate active receipts, no reversal chains, and zero unbalanced journal entries. No production financial records required repair.
+- Correction:
+  - Payment transitions now require `finance.create`; reversals require `finance.update`.
+  - Linked payments require exactly one valid source, exact full settlement, correct asset/income accounts, and trusted project/client linkage from the source record.
+  - Journal entries use a tenant-embedded single-field idempotency key with a unique sparse index, preventing concurrent duplicates while allowing a later payment after a legitimate reversal.
+  - Payroll period keys were similarly upgraded to a tenant-embedded single-field unique key after a disposable FerretDB test exposed compound-sparse behavior.
+  - Paid sources must be reversed before deletion, and journal history is preserved.
+  - Dashboard month P&L and today's collections now include reversal pairs so they net correctly.
+- Verification:
+  - 20 focused backend tests passed; backend/frontend candidate images built successfully.
+  - Disposable integration blocked invoice/milestone payment transitions without finance write permissions, rejected partial settlement and wrong account types, preserved two-entry reversal history, netted dashboard income/collections to zero, and produced one receipt from eight concurrent submissions.
+  - A second payment after a full reversal succeeded with exactly one active receipt, confirming the idempotency lifecycle.
+  - Temporary QA database, containers, worktree, scripts, and candidate images were deleted.
+- Production deployment:
+  - Verified backup `/opt/design-saga-backups/20261012T143132Z`; prior images tagged `rollback-bbb0442`.
+  - Deployed backend/web at `8ca840d`; PostgreSQL, FerretDB, and Caddy remained running.
+  - All services are healthy; site/API return 200; unauthenticated accounting returns 401; both v2 unique indexes are active; production has zero unbalanced journals; recent logs show no critical errors.
+- Files changed: `backend/core/indexes.py`, `backend/routes/accounting.py`, `backend/routes/payroll.py`, `backend/server.py`, `backend/tests/test_accounting_safety.py`, `backend/tests/test_payroll_safety.py`, `frontend/src/pages/Invoices.jsx`.
+- Rollback: retag `design-saga-backend:rollback-bbb0442` and `design-saga-web:rollback-bbb0442`, recreate backend/web, and revert `8ca840d`. No production business row was rewritten.
+
 ## Deployment Safety
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
@@ -204,4 +232,4 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Next Action
 
-Continue DS-004 by reconciling dashboard revenue, collections, outstanding balances, and accounting reports against journal/invoice sources with synthetic tenant-isolated data. Do not alter real financial rows.
+Continue DS-005 by auditing file/attachment URL creation, persistence, download authorization, tenant isolation, and unsafe URL/content handling with synthetic data.
