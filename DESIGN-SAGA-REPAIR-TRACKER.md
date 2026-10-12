@@ -4,13 +4,13 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; repair implementation commit `1a1903c` plus this tracker checkpoint, eight commits ahead of `origin/main`.
-- Production checkout: `/opt/design-saga-git`, `production` at `dbf6595`.
+- Local checkout: `production`; DS-001 implementation `1a1903c`, verification checkpoint `a659939`, and backup implementation `1bafdea`.
+- Production checkout: `/opt/design-saga-git`, `production` at `1bafdea`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
 - VPS baseline: 3.8 GiB RAM (2.5 GiB available), 2 GiB swap, root disk 45% used, low load at inspection.
-- Current action: DS-001 is implemented and isolated-tested. No production change is authorized by this tracker entry; deployment awaits an approved maintenance window.
+- Current action: DS-001 is deployed and verified live. DS-003 dedicated backups and recovery validation are deployed. Continue with DS-002 attendance verification.
 
 ## System Inventory
 
@@ -26,7 +26,7 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 | File storage | URL metadata and local/generated documents; durable object storage remains unverified | Partial/unverified |
 | Reverse proxy/TLS | Caddy with automatic HTTPS; shared VPS routing file | Healthy; production file has protected external edits |
 | Deployment | Docker Compose; merge/rebase hooks invoke `deploy/redeploy.sh` | Confirmed from docs/history; automatic hook behavior must account for protected Caddy edits |
-| Backups | No current backup schedule or restore-test evidence found yet | High-priority verification gap |
+| Backups | Dedicated daily PostgreSQL/FerretDB archive with checksums, catalogue validation, seven-day retention, and tested isolated restore | Active on VPS; same-host storage remains a disaster-recovery limitation |
 
 ## Workflow Inventory
 
@@ -55,9 +55,9 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 | ID | Priority | Issue / verification target | State |
 |---|---|---|---|
-| DS-001 | High | Server-side invoice/dashboard financial-read authorization bypass | Implemented and isolated-tested; awaiting production deployment approval |
+| DS-001 | High | Server-side invoice/dashboard financial-read authorization bypass | Fixed, deployed, and verified live |
 | DS-002 | High | Verify attendance idempotency, timezone boundary, approval audit, and payroll consistency end to end | Queued |
-| DS-003 | High | Verify backup schedule, encrypted retention, and tested restore path for PostgreSQL/FerretDB data and Caddy state | Queued |
+| DS-003 | High | Establish a validated backup and restore path for Design Saga PostgreSQL/FerretDB data and deployment state | Fixed and active; offsite copy remains a follow-up |
 | DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Queued |
 | DS-005 | Medium | Audit file/attachment persistence, upload validation, download authorization, and tenant isolation | Queued |
 | DS-006 | Medium | Verify Client role compatibility, then remove it from team-management choices without breaking dependent records | Queued |
@@ -93,9 +93,31 @@ Last updated: 2026-10-12 (Asia/Calcutta)
   - Focused permission-helper assertions passed.
   - Candidate backend and frontend Docker images both built successfully. The frontend build completed with existing dependency/hook warnings and no errors.
 - Cleanup verification: the disposable database, candidate containers/images, temporary worktree, repair ref, and transfer bundle were removed after testing.
-- Current state: implemented and isolated-tested at `1a1903c`; awaiting production backup and deployment approval.
-- Production impact: none. Not deployed; live containers and database unchanged.
+- Production deployment:
+  - Captured a 22 MB custom-format PostgreSQL backup, globals, environment/Caddy snapshots, commit/image metadata, and checksums before deployment.
+  - Tagged the prior backend and web images as `rollback-dbf6595`.
+  - Deployed backend and web only; PostgreSQL, FerretDB, and Caddy were not restarted.
+  - Both new containers became healthy; site and API returned HTTP 200, protected unauthenticated endpoints returned 401, runtime permission assertions passed, and recent logs contained no critical errors.
+- Current state: deployed at `1a1903c` within production checkpoint `a659939` and verified live.
 - Rollback: revert the DS-001 commit. No database migration or data rewrite is involved.
+
+### DS-003: Dedicated Design Saga backup and restore path
+
+- Symptom/risk: Design Saga had no confirmed scheduled backup. Existing encrypted ERP timers pull Gamma and jewellery ERP payloads from another VPS; their manifests do not include this VPS's Design Saga PostgreSQL volume.
+- Severity: High. A host or volume failure could otherwise make current Design Saga data unrecoverable.
+- Root cause: Design Saga was deployed after the independent cross-server backup workflow and was never added to a dedicated backup schedule.
+- Correction:
+  - Added `deploy/backup.sh` with a non-overlapping lock, root-only permissions, atomic publication, custom PostgreSQL dump, role dump, Caddy/environment/Git/image metadata, archive listing validation, SHA-256 checksums, and seven-day retention.
+  - Added a hardened systemd oneshot service and daily persistent timer. It runs at 18:22 UTC with randomized delay and does not stop or write to application services.
+- Verification:
+  - Shell syntax and systemd unit validation passed.
+  - Manual systemd execution created `/opt/design-saga-backups/20261012T092326Z`; all checksums and the `pg_restore` catalogue validation passed.
+  - Restored that archive into a memory-limited temporary DocumentDB/PostgreSQL container using a filtered restore list for the two image-preseeded `pg_cron` rows. Restore completed with 76 non-system tables and 535 document rows.
+  - The restore container and temporary list were removed. `design-saga-backup.timer` is enabled and active; its next run was scheduled for 2026-10-12 18:22 UTC.
+- Files changed: `deploy/backup.sh`, `deploy/systemd/design-saga-backup.service`, `deploy/systemd/design-saga-backup.timer`.
+- Current state: deployed at `1bafdea` and verified. No application/database restart or data mutation was required.
+- Limitation: dedicated archives currently remain on the same VPS. Configure an independently controlled offsite destination before treating this as host-loss disaster recovery.
+- Rollback: disable/remove `design-saga-backup.timer` and its two units, then revert `1bafdea`. Existing archives can remain for recovery or be removed separately after explicit approval.
 
 ## Deployment Safety
 
@@ -105,4 +127,4 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Next Action
 
-With approval for a brief maintenance window, back up production data, preserve the protected Caddy changes, and deploy commit `1a1903c` using service-specific backend/web rebuilds and restarts. Run post-deployment permission and health checks, then continue with DS-002.
+Begin DS-002 with targeted attendance endpoint/test review: establish idempotency, configured business timezone/date behavior, approval audit fields, and payroll-input consistency before running isolated synthetic transactions.
