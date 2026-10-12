@@ -25,6 +25,7 @@ from core import attendance_engine as engine
 from core.audit import audit
 from core.tenancy import user_org_id
 from core.notifications import emit, emit_admins
+from pymongo.errors import DuplicateKeyError
 import math
 
 router = APIRouter()
@@ -233,9 +234,7 @@ def _late_minutes(office_start_hhmm: str, grace: int) -> int:
     try:
         h, m = office_start_hhmm.split(":")
         expected = int(h) * 60 + int(m) + int(grace or 0)
-        n = now_utc()
-        # Approximate local IST (UTC+5:30); adjust if needed via policy in future.
-        local = n + timedelta(hours=5, minutes=30)
+        local = engine.now_ist()
         actual = local.hour * 60 + local.minute
         return max(actual - expected, 0)
     except Exception:
@@ -263,23 +262,51 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
-async def _resolve_employee_id(user: dict, provided: Optional[str]) -> str:
-    """Fall back to employee mapping (by user_id or email) if not provided."""
-    if provided:
+def _can_manage_attendance(user: dict) -> bool:
+    return has_any_permission(user, "employees.update", "attendance.update", "attendance.approve")
+
+
+def _select_employee_id(user: dict, provided: Optional[str], own_id: Optional[str]) -> str:
+    if provided and _can_manage_attendance(user):
         return provided
-    # Try to find employee doc linked to this user
-    emp = await sdb.employees.find_one(
-        {"$or": [{"user_id": user["user_id"]}, {"email": user.get("email")}]},
-        {"_id": 0, "id": 1},
-    )
-    if emp:
-        return emp["id"]
-    # Otherwise use the user_id itself (still usable for solo admin dev)
-    return user["user_id"]
+    if provided and provided != own_id:
+        raise HTTPException(403, "You can only manage your own attendance")
+    if own_id:
+        return own_id
+    if _can_manage_attendance(user):
+        return provided or user["user_id"]
+    raise HTTPException(400, "No employee profile is linked to this account")
+
+
+async def _resolve_employee_id(user: dict, provided: Optional[str]) -> str:
+    """Resolve self-service calls to the authenticated employee.
+
+    Managers may explicitly target another employee; regular employees cannot
+    act on a client-supplied employee id.
+    """
+    links = [{"user_id": user["user_id"]}]
+    if user.get("email"):
+        links.append({"email": user["email"]})
+    emp = await sdb.employees.find_one({"$or": links}, {"_id": 0, "id": 1})
+    return _select_employee_id(user, provided, (emp or {}).get("id"))
 
 
 def _today() -> str:
-    return now_utc().date().isoformat()
+    return engine.now_ist().date().isoformat()
+
+
+async def _store_check_in(existing: Optional[dict], doc: dict):
+    """Persist exactly one punch for an employee/business-date key."""
+    try:
+        if existing:
+            result = await sdb.attendance.update_one(
+                {"id": existing["id"], "check_in": None}, {"$set": doc})
+            if result.matched_count == 0:
+                raise HTTPException(400, "Already checked in today")
+        else:
+            await sdb.attendance.insert_one(dict(doc))
+    except DuplicateKeyError:
+        raise HTTPException(400, "Already checked in today")
 
 
 async def _employee_name_map(ids: list) -> dict:
@@ -355,11 +382,9 @@ async def check_in(payload: CheckInIn, request: Request,
             "holiday_kind": (holiday_row or {}).get("kind") if is_holiday_today
                               else "weekly_off",
         }
-        if existing:
-            await sdb.attendance.update_one({"id": existing["id"]}, {"$set": holiday_doc})
-        else:
+        if not existing:
             holiday_doc["created_at"] = iso_now()
-            await sdb.attendance.insert_one(dict(holiday_doc))
+        await _store_check_in(existing, holiday_doc)
         return await sdb.attendance.find_one({"id": holiday_doc["id"]}, {"_id": 0})
 
     # ---- Geo-fence enforcement ----
@@ -519,11 +544,9 @@ async def check_in(payload: CheckInIn, request: Request,
         "status": status,
         "approval_status": approval_status,
     }
-    if existing:
-        await sdb.attendance.update_one({"id": existing["id"]}, {"$set": doc})
-    else:
+    if not existing:
         doc["created_at"] = iso_now()
-        await sdb.attendance.insert_one(dict(doc))
+    await _store_check_in(existing, doc)
     # Notify HR/Admins when an approval is needed (out-of-zone or non-office)
     if approval_status == "pending":
         where = doc.get("site_location") or doc.get("geo_location_matched") or ""
@@ -579,10 +602,10 @@ async def check_out(payload: CheckOutIn, request: Request,
     elif status == "present" and working_minutes < half_day_min:
         status = "half_day"
 
-    await sdb.attendance.update_one(
-        {"id": existing["id"]},
+    result = await sdb.attendance.update_one(
+        {"id": existing["id"], "check_out": None},
         {"$set": {
-            "check_out": iso_now(),
+            "check_out": now.isoformat(),
             "check_out_ip": _client_ip(request),
             "check_out_notes": payload.notes or "",
             "worked_hours": hours,
@@ -591,6 +614,8 @@ async def check_out(payload: CheckOutIn, request: Request,
             "updated_at": iso_now(),
         }},
     )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=400, detail="Already checked out today")
     return await sdb.attendance.find_one({"id": existing["id"]}, {"_id": 0})
 
 
@@ -613,8 +638,9 @@ async def my_summary(request: Request, year: Optional[int] = None, month: Option
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     emp_id = await _resolve_employee_id(user, None)
-    y = year or now_utc().year
-    m = month or now_utc().month
+    local_now = engine.now_ist()
+    y = year or local_now.year
+    m = month or local_now.month
     start, end = _month_bounds(y, m)
     rows = await sdb.attendance.find(
         {"employee_id": emp_id, "date": {"$gte": start, "$lt": end}},
@@ -637,8 +663,9 @@ async def monthly_sheet(request: Request, year: Optional[int] = None, month: Opt
     if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.read")
 
-    y = year or now_utc().year
-    m = month or now_utc().month
+    local_now = engine.now_ist()
+    y = year or local_now.year
+    m = month or local_now.month
     start, end = _month_bounds(y, m)
 
     employees = await sdb.employees.find(
@@ -791,7 +818,9 @@ async def list_leaves(request: Request, employee_id: Optional[str] = None,
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     q: dict = {}
-    if mine:
+    if not _can_manage_attendance(user):
+        q["employee_id"] = await _resolve_employee_id(user, employee_id)
+    elif mine:
         q["employee_id"] = await _resolve_employee_id(user, None)
     elif employee_id:
         q["employee_id"] = employee_id
@@ -881,8 +910,9 @@ async def leave_balance(employee_id: str, year: Optional[int] = None,
                         request: Request = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    y = year or now_utc().year
+    user = await require_user(request, session_token, authorization)
+    employee_id = await _resolve_employee_id(user, employee_id)
+    y = year or engine.now_ist().year
     year_start = f"{y}-01-01"
     year_end = f"{y+1}-01-01"
     rule = await _get_leave_rule()
@@ -1017,8 +1047,9 @@ async def attendance_summary(request: Request, employee_id: str,
     if not emp:
         # Solo-admin fallback: user without an employee record
         emp = {"id": employee_id, "first_name": user.get("name") or "", "last_name": ""}
-    y = year or now_utc().year
-    m = month or now_utc().month
+    local_now = engine.now_ist()
+    y = year or local_now.year
+    m = month or local_now.month
     policy = await _get_attendance_policy()
     return await engine.monthly_summary(emp, y, m, policy)
 
@@ -1033,8 +1064,9 @@ async def my_salary(request: Request, year: Optional[int] = None, month: Optiona
         {"$or": [{"user_id": user["user_id"]}, {"email": user.get("email")}]}, {"_id": 0})
     if not emp:
         return {"has_employee": False}
-    y = year or now_utc().year
-    m = month or now_utc().month
+    local_now = engine.now_ist()
+    y = year or local_now.year
+    m = month or local_now.month
     policy = await _get_attendance_policy()
     data = await engine.monthly_summary(emp, y, m, policy)
     data["has_employee"] = True

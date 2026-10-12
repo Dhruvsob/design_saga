@@ -46,7 +46,8 @@ _INDEXES = [
     # People
     ("employees",          [("org_id", 1), ("employee_id", 1)], {}),
     ("employees",          [("org_id", 1), ("department", 1)], {}),
-    ("attendance",         [("org_id", 1), ("employee_id", 1), ("date", 1)], {}),
+    ("attendance",         [("org_id", 1), ("employee_id", 1), ("date", 1)],
+                            {"name": "attendance_org_employee_date_unique", "unique": True}),
     ("leave_applications", [("org_id", 1), ("employee_id", 1), ("status", 1)], {}),
     ("payroll_runs",       [("org_id", 1), ("employee_id", 1), ("year", -1), ("month", -1)], {}),
     # Accounting
