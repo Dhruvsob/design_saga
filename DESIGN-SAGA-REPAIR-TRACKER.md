@@ -4,13 +4,13 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; DS-001 implementation `1a1903c`, verification checkpoint `a659939`, and backup implementation `1bafdea`.
-- Production checkout: `/opt/design-saga-git`, `production` at `1bafdea`.
+- Local checkout: `production`; DS-002A implementation commit `c836807` is the current application checkpoint before this tracker update.
+- Production checkout: `/opt/design-saga-git`, `production` at `c836807`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
 - VPS baseline: 3.8 GiB RAM (2.5 GiB available), 2 GiB swap, root disk 45% used, low load at inspection.
-- Current action: DS-001 is deployed and verified live. DS-003 dedicated backups and recovery validation are deployed. Continue with DS-002 attendance verification.
+- Current action: DS-001, DS-002A, and DS-003 are deployed and verified live. Continue DS-002 with approval atomicity and attendance-to-payroll reconciliation.
 
 ## System Inventory
 
@@ -56,7 +56,7 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 | ID | Priority | Issue / verification target | State |
 |---|---|---|---|
 | DS-001 | High | Server-side invoice/dashboard financial-read authorization bypass | Fixed, deployed, and verified live |
-| DS-002 | High | Verify attendance idempotency, timezone boundary, approval audit, and payroll consistency end to end | Queued |
+| DS-002 | High | Verify attendance identity, idempotency, timezone boundary, approval audit, and payroll consistency end to end | Identity/idempotency/timezone fixed; approval/payroll reconciliation pending |
 | DS-003 | High | Establish a validated backup and restore path for Design Saga PostgreSQL/FerretDB data and deployment state | Fixed and active; offsite copy remains a follow-up |
 | DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Queued |
 | DS-005 | Medium | Audit file/attachment persistence, upload validation, download authorization, and tenant isolation | Queued |
@@ -119,6 +119,39 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 - Limitation: dedicated archives currently remain on the same VPS. Configure an independently controlled offsite destination before treating this as host-loss disaster recovery.
 - Rollback: disable/remove `design-saga-backup.timer` and its two units, then revert `1bafdea`. Existing archives can remain for recovery or be removed separately after explicit approval.
 
+### DS-002A: Attendance identity, punch idempotency, and business date
+
+- Symptom/risk:
+  - Check-in, check-out, leave creation, and leave-balance endpoints trusted a client-supplied `employee_id`. A regular employee could act for a coworker in the same tenant.
+  - A regular employee could list tenant-wide leave requests when `mine=true` was omitted.
+  - Attendance day/month defaults used UTC, producing the previous business date between midnight and 05:29 IST.
+  - Check-in used a read-then-insert flow with a non-unique employee/date index, allowing concurrent requests to create duplicates.
+- Severity: High. This enabled within-tenant attendance/leave impersonation and could corrupt payroll inputs.
+- Production precondition audit: 33 attendance rows, zero duplicate `(org_id, employee_id, date)` groups, and zero rows missing `org_id`. An isolated FerretDB probe confirmed a unique index can coexist with the legacy index.
+- Pre-fix isolated reproduction against rollback image `dbf6595`:
+  - Employee check-in for a coworker returned 200.
+  - Employee leave creation for a coworker returned 200.
+  - Employee tenant-wide leave listing exposed the coworker's row.
+  - Employee coworker leave-balance request returned 200.
+- Correction:
+  - Resolve self-service attendance identity from the authenticated employee link; only attendance managers may target another employee.
+  - Enforce the same self-only boundary for leave lists and leave balances.
+  - Use the shared IST clock for attendance dates and default reporting periods.
+  - Add a unique `(org_id, employee_id, date)` index, atomic conditional punch updates, and duplicate-key handling.
+- Isolated post-fix verification:
+  - Coworker check-in, leave creation, and leave balance returned 403; own leave/list/balance paths remained available.
+  - Admin delegated attendance remained available.
+  - Eight concurrent check-ins produced one HTTP 200, seven HTTP 400 responses, and exactly one stored attendance row.
+  - Eight concurrent check-outs produced one HTTP 200 and seven HTTP 400 responses.
+  - Unique-index and IST midnight-boundary assertions passed. The disposable database and containers were deleted.
+- Production deployment:
+  - Created and verified pre-deploy backup `/opt/design-saga-backups/20261012T093311Z`.
+  - Deployed the already-tested backend image only; web, PostgreSQL, FerretDB, and Caddy were not restarted.
+  - Backend became healthy; site/API returned HTTP 200; production unique index is active; duplicate groups remain zero; recent backend logs contain no critical errors.
+- Files changed: `backend/routes/attendance.py`, `backend/core/indexes.py`, `backend/tests/test_attendance_safety.py`.
+- Current state: deployed at `c836807` and verified live.
+- Rollback: retag `design-saga-backend:rollback-a659939`, recreate only the backend service, and revert `c836807`. The added unique index is compatible with the prior code and need not be removed during an emergency rollback.
+
 ## Deployment Safety
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
@@ -127,4 +160,4 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Next Action
 
-Begin DS-002 with targeted attendance endpoint/test review: establish idempotency, configured business timezone/date behavior, approval audit fields, and payroll-input consistency before running isolated synthetic transactions.
+Continue DS-002 by testing leave/site-visit/correction approval failure atomicity and reconciling synthetic monthly attendance summaries against payroll preview/run deductions. Do not alter real attendance or payroll rows.
