@@ -4,13 +4,13 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production` at `dbf6595`, clean before tracker creation, six commits ahead of `origin/main`.
+- Local checkout: `production`; repair implementation commit `1a1903c` plus this tracker checkpoint, eight commits ahead of `origin/main`.
 - Production checkout: `/opt/design-saga-git`, `production` at `dbf6595`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
 - VPS baseline: 3.8 GiB RAM (2.5 GiB available), 2 GiB swap, root disk 45% used, low load at inspection.
-- Current action: read-only audit and isolated local changes only. No production change is authorized by this tracker entry.
+- Current action: DS-001 is implemented and isolated-tested. No production change is authorized by this tracker entry; deployment awaits an approved maintenance window.
 
 ## System Inventory
 
@@ -55,7 +55,7 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 | ID | Priority | Issue / verification target | State |
 |---|---|---|---|
-| DS-001 | Critical/High | Find any current server-side tenant or financial-permission bypass, starting with file/export/dashboard and direct unscoped DB access | Investigating |
+| DS-001 | High | Server-side invoice/dashboard financial-read authorization bypass | Implemented and isolated-tested; awaiting production deployment approval |
 | DS-002 | High | Verify attendance idempotency, timezone boundary, approval audit, and payroll consistency end to end | Queued |
 | DS-003 | High | Verify backup schedule, encrypted retention, and tested restore path for PostgreSQL/FerretDB data and Caddy state | Queued |
 | DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Queued |
@@ -81,7 +81,19 @@ Last updated: 2026-10-12 (Asia/Calcutta)
   - Require `dashboard.read`; query and return revenue only for `finance.read`, and collections only for `invoices.read` or `finance.read`.
   - Hide unauthorized dashboard finance cards and protect the `/invoices` frontend route.
 - Files changed: `backend/server.py`, `backend/tests/test_financial_read_permissions.py`, `frontend/src/App.js`, `frontend/src/pages/Dashboard.jsx`.
-- Current state: implemented locally; isolated pre-fix/post-fix verification pending.
+- Pre-fix isolated reproduction against the production backend image and a disposable database:
+  - Restricted Employee received HTTP 200 from invoice list, invoice detail, and authenticated invoice PDF endpoints.
+  - Restricted Employee dashboard exposed revenue `54321` and collections due `12345` from synthetic records.
+  - Cross-tenant invoice detail returned 404, confirming tenant scoping remained intact while role authorization was missing.
+- Post-fix isolated integration results against candidate commit `1a1903c`:
+  - Restricted Employee received 403 from invoice list, detail, and authenticated PDF; dashboard omitted revenue, collection totals, and collection alerts.
+  - Project Manager retained same-tenant invoice/collection visibility, did not receive revenue, and received 404 for another tenant's invoice.
+  - Accountant retained revenue, collection, and authenticated PDF access.
+  - A valid unauthenticated project share token still returned its invoice PDF with HTTP 200.
+  - Focused permission-helper assertions passed.
+  - Candidate backend and frontend Docker images both built successfully. The frontend build completed with existing dependency/hook warnings and no errors.
+- Cleanup verification: the disposable database, candidate containers/images, temporary worktree, repair ref, and transfer bundle were removed after testing.
+- Current state: implemented and isolated-tested at `1a1903c`; awaiting production backup and deployment approval.
 - Production impact: none. Not deployed; live containers and database unchanged.
 - Rollback: revert the DS-001 commit. No database migration or data rewrite is involved.
 
@@ -93,4 +105,4 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Next Action
 
-Run focused static and read-only production checks for DS-001. Confirm one concrete issue, document reproduction and blast radius, then implement and test the smallest correction locally before considering deployment.
+With approval for a brief maintenance window, back up production data, preserve the protected Caddy changes, and deploy commit `1a1903c` using service-specific backend/web rebuilds and restarts. Run post-deployment permission and health checks, then continue with DS-002.
