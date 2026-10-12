@@ -1178,6 +1178,8 @@ function SetupTab({ policy, onPolicySaved }) {
 }
 
 function EmployeeSetupCard() {
+  const { hasPerm } = useAuth();
+  const canPayroll = hasPerm("payroll.read") || hasPerm("payroll.create");
   const [emps, setEmps] = useState([]);
   const [sel, setSel] = useState("");
   const [cfg, setCfg] = useState(null);
@@ -1194,13 +1196,15 @@ function EmployeeSetupCard() {
       shift_end: r.data.shift_end || "19:00",
       grace_minutes: r.data.grace_minutes ?? "",
       weekly_offs: r.data.weekly_offs,
-      monthly_salary: r.data.monthly_salary || 0,
-      payroll_basis_days: r.data.payroll_basis_days || 26,
+      ...(canPayroll ? {
+        monthly_salary: r.data.monthly_salary || 0,
+        payroll_basis_days: r.data.payroll_basis_days || 26,
+      } : {}),
       net_monthly_structure: r.data.net_monthly_structure,
       effective_monthly_salary: r.data.effective_monthly_salary,
       name: r.data.name,
     })).catch(() => {});
-  }, [sel]);
+  }, [sel, canPayroll]);
 
   const toggleOff = (v) => setCfg((c) => {
     const cur = c.weekly_offs == null ? [] : c.weekly_offs;
@@ -1211,13 +1215,16 @@ function EmployeeSetupCard() {
     if (!sel) { alert("Select an employee"); return; }
     setBusy(true);
     try {
-      await api.put(`/attendance/employees/${sel}/config`, {
+      const payload = {
         shift_start: cfg.shift_start, shift_end: cfg.shift_end,
         grace_minutes: cfg.grace_minutes === "" ? null : Number(cfg.grace_minutes),
         weekly_offs: cfg.weekly_offs,
-        monthly_salary: Number(cfg.monthly_salary) || 0,
-        payroll_basis_days: Number(cfg.payroll_basis_days) || 26,
-      });
+      };
+      if (canPayroll) {
+        payload.monthly_salary = Number(cfg.monthly_salary) || 0;
+        payload.payroll_basis_days = Number(cfg.payroll_basis_days) || 26;
+      }
+      await api.put(`/attendance/employees/${sel}/config`, payload);
       setSavedAt(Date.now());
       setTimeout(() => setSavedAt(null), 2500);
     } catch (e) {
@@ -1230,7 +1237,7 @@ function EmployeeSetupCard() {
   return (
     <div className="card-flat space-y-3" data-testid="employee-setup-card">
       <div className="flex items-center justify-between">
-        <div className="overline">EMPLOYEE SHIFT, WEEKLY-OFF & SALARY</div>
+        <div className="overline">EMPLOYEE SHIFT, WEEKLY-OFF{canPayroll ? " & SALARY" : ""}</div>
         {savedAt && <span className="text-xs text-[#1D633E] font-mono">SAVED</span>}
       </div>
       <select className="input-flat w-full" value={sel} onChange={(e) => setSel(e.target.value)} data-testid="setup-employee-select">
@@ -1243,16 +1250,16 @@ function EmployeeSetupCard() {
             <Field label="Shift start"><input type="time" className="input-flat w-full" value={cfg.shift_start} onChange={(e) => setCfg({ ...cfg, shift_start: e.target.value })} data-testid="setup-shift-start" /></Field>
             <Field label="Shift end"><input type="time" className="input-flat w-full" value={cfg.shift_end} onChange={(e) => setCfg({ ...cfg, shift_end: e.target.value })} /></Field>
             <Field label="Grace (min · blank = policy)"><input type="number" className="input-flat w-full" value={cfg.grace_minutes} onChange={(e) => setCfg({ ...cfg, grace_minutes: e.target.value })} data-testid="setup-grace" /></Field>
-            <Field label="Payroll basis days"><input type="number" className="input-flat w-full" value={cfg.payroll_basis_days} onChange={(e) => setCfg({ ...cfg, payroll_basis_days: e.target.value })} data-testid="setup-basis" /></Field>
-            <Field label="Flat monthly salary (₹)"><input type="number" className="input-flat w-full" value={cfg.monthly_salary} onChange={(e) => setCfg({ ...cfg, monthly_salary: e.target.value })} data-testid="setup-monthly-salary" /></Field>
-            <Field label="Effective salary used">
+            {canPayroll && <Field label="Payroll basis days"><input type="number" className="input-flat w-full" value={cfg.payroll_basis_days} onChange={(e) => setCfg({ ...cfg, payroll_basis_days: e.target.value })} data-testid="setup-basis" /></Field>}
+            {canPayroll && <Field label="Flat monthly salary (₹)"><input type="number" className="input-flat w-full" value={cfg.monthly_salary} onChange={(e) => setCfg({ ...cfg, monthly_salary: e.target.value })} data-testid="setup-monthly-salary" /></Field>}
+            {canPayroll && <Field label="Effective salary used">
               <div className="input-flat w-full bg-[#FAFAFA] font-mono text-sm">{inr(cfg.net_monthly_structure > 0 ? cfg.net_monthly_structure : cfg.monthly_salary)}</div>
-            </Field>
+            </Field>}
           </div>
-          <div className="text-[11px] text-[#9A9A9A]">
+          {canPayroll && <div className="text-[11px] text-[#9A9A9A]">
             If a detailed salary structure exists on the employee profile, its net monthly is used;
             otherwise the flat monthly salary above applies.
-          </div>
+          </div>}
           <div>
             <div className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">
               Weekly offs <span className="text-[#9A9A9A] normal-case">(per-employee override · blank = org policy)</span>

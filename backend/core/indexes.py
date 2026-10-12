@@ -50,6 +50,8 @@ _INDEXES = [
                             {"name": "attendance_org_employee_date_unique", "unique": True}),
     ("leave_applications", [("org_id", 1), ("employee_id", 1), ("status", 1)], {}),
     ("payroll_runs",       [("org_id", 1), ("employee_id", 1), ("year", -1), ("month", -1)], {}),
+    ("payroll_runs",       [("org_id", 1), ("period_key", 1)],
+                            {"name": "payroll_org_period_unique", "unique": True, "sparse": True}),
     # Accounting
     ("journal_entries",    [("org_id", 1), ("date", -1)], {}),
     ("journal_entries",    [("org_id", 1), ("source", 1), ("source_id", 1)], {}),

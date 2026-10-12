@@ -14,6 +14,7 @@ from datetime import date as _date
 import io
 import calendar
 from fpdf import FPDF
+from pymongo.errors import DuplicateKeyError
 
 from core.db import db
 from core.scoped_db import sdb
@@ -44,6 +45,42 @@ class PaySalaryIn(BaseModel):
     # Jewellers logic — deduct LOP days, late fines and short-leave hours
     # computed from the attendance engine before posting the JE.
     apply_attendance_deductions: Optional[bool] = True
+
+
+def _payroll_period_key(employee_id: str, year: int, month: int) -> str:
+    return f"{employee_id}:{year:04d}-{month:02d}"
+
+
+async def _assert_payroll_reviews_resolved(employee_id: str, year: int, month: int) -> None:
+    start = _date(year, month, 1).isoformat()
+    end = _date(year + (1 if month == 12 else 0),
+                1 if month == 12 else month + 1, 1).isoformat()
+    pending_attendance = await sdb.attendance.count_documents({
+        "employee_id": employee_id,
+        "date": {"$gte": start, "$lt": end},
+        "$or": [
+            {"approval_status": "pending"},
+            {"late_approval_status": "pending"},
+        ],
+    })
+    pending_corrections = await sdb.attendance_corrections.count_documents({
+        "employee_id": employee_id,
+        "date": {"$gte": start, "$lt": end},
+        "status": "pending",
+    })
+    pending_leaves = await sdb.leaves.count_documents({
+        "employee_id": employee_id,
+        "status": "pending",
+        "from_date": {"$lt": end},
+        "to_date": {"$gte": start},
+    })
+    unresolved = pending_attendance + pending_corrections + pending_leaves
+    if unresolved:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"Resolve {unresolved} pending attendance/leave request(s) "
+                    "before paying this salary period."),
+        )
 
 
 def _compute_net(salary: dict, extras: dict) -> dict:
@@ -124,8 +161,8 @@ async def preview_salary(eid: str, year: int, month: int, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not (has_permission(user, "payroll.read") or has_permission(user, "employees.read")):
-        raise HTTPException(status_code=403, detail="Missing permission")
+    if not has_permission(user, "payroll.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: payroll.read")
     emp = await sdb.employees.find_one({"id": eid}, {"_id": 0})
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -165,6 +202,9 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
     emp = await sdb.employees.find_one({"id": eid}, {"_id": 0})
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
+    if payload.month < 1 or payload.month > 12:
+        raise HTTPException(status_code=400, detail="month must be 1..12")
+    await _assert_payroll_reviews_resolved(eid, payload.year, payload.month)
 
     # Idempotent guard
     exists = await sdb.payroll_runs.find_one(
@@ -190,10 +230,22 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
     # Resolve salary account
     salary_acc_id = payload.salary_account_id
     if not salary_acc_id:
-        acc = await sdb.accounts.find_one({"name": "Employee Salary"}, {"_id": 0, "id": 1})
+        acc = await sdb.accounts.find_one(
+            {"name": "Employee Salary"}, {"_id": 0, "id": 1, "type": 1})
         if not acc:
             raise HTTPException(status_code=500, detail="'Employee Salary' account missing — seed COA")
         salary_acc_id = acc["id"]
+    else:
+        acc = await sdb.accounts.find_one(
+            {"id": salary_acc_id}, {"_id": 0, "id": 1, "type": 1})
+    paid_from = await sdb.accounts.find_one(
+        {"id": payload.paid_from_account_id}, {"_id": 0, "id": 1, "type": 1})
+    if not acc or str(acc.get("type") or "").lower() != "expense":
+        raise HTTPException(status_code=400, detail="Salary account must be an expense account")
+    if not paid_from or str(paid_from.get("type") or "").lower() != "asset":
+        raise HTTPException(status_code=400, detail="Paid-from account must be a cash/bank asset account")
+    if salary_acc_id == payload.paid_from_account_id:
+        raise HTTPException(status_code=400, detail="Salary and paid-from accounts must be different")
 
     emp_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip() or emp.get("employee_id") or eid
     narration = f"Salary {payload.year}-{payload.month:02d} — {emp_name}"
@@ -202,18 +254,14 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         {"account_id": payload.paid_from_account_id, "debit": 0, "credit": net, "description": "Paid"},
     ]
     date_str = _date(payload.year, payload.month, 28).isoformat()   # end-of-month-ish
-    je = await _post_journal(
-        user, date_str, narration, lines,
-        reference=payload.reference or f"PAYROLL-{payload.year}-{payload.month:02d}",
-        source="payroll", source_id=eid,
-    )
-
+    run_id = new_id("pr_")
     run = {
-        "id": new_id("pr_"),
+        "id": run_id,
         "employee_id": eid,
         "employee_name": emp_name,
         "year": payload.year,
         "month": payload.month,
+        "period_key": _payroll_period_key(eid, payload.year, payload.month),
         "breakdown": breakdown,
         "extras": extras,
         "net": net,
@@ -222,13 +270,41 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         "payment_method": payload.payment_method,
         "reference": payload.reference,
         "notes": payload.notes,
-        "journal_id": je["id"],
-        "status": "paid",
-        "paid_at": iso_now(),
+        "journal_id": None,
+        "status": "processing",
+        "created_at": iso_now(),
         "paid_by": user["user_id"],
         "paid_by_name": user.get("name"),
     }
-    await sdb.payroll_runs.insert_one(dict(run))
+    try:
+        await sdb.payroll_runs.insert_one(dict(run))
+    except DuplicateKeyError:
+        prior = await sdb.payroll_runs.find_one(
+            {"period_key": run["period_key"]}, {"_id": 0, "status": 1})
+        if prior and prior.get("status") == "paid":
+            raise HTTPException(400, f"Salary already paid for {payload.year}-{payload.month:02d}")
+        raise HTTPException(409, "Salary payment for this period is already being processed")
+
+    try:
+        je = await _post_journal(
+            user, date_str, narration, lines,
+            reference=payload.reference or f"PAYROLL-{payload.year}-{payload.month:02d}",
+            employee_id=eid, source="payroll", source_id=run_id,
+        )
+    except Exception:
+        await sdb.payroll_runs.delete_one(
+            {"id": run_id, "status": "processing", "journal_id": None})
+        raise
+
+    paid_at = iso_now()
+    finalized = await sdb.payroll_runs.update_one(
+        {"id": run_id, "status": "processing", "journal_id": None},
+        {"$set": {"journal_id": je["id"], "status": "paid", "paid_at": paid_at}},
+    )
+    if finalized.modified_count != 1:
+        raise HTTPException(
+            500, "Salary journal posted but payroll finalization needs administrator review")
+    run.update({"journal_id": je["id"], "status": "paid", "paid_at": paid_at})
     return {"run": run, "journal": je}
 
 
@@ -497,8 +573,8 @@ async def payroll_preview_all(year: int, month: int, request: Request,
     """Attendance-linked monthly payroll preview across all employees.
     net = monthly - (LOP deduction + late fines + short-leave deduction)."""
     user = await require_user(request, session_token, authorization)
-    if not (has_permission(user, "payroll.read") or has_permission(user, "employees.read")):
-        raise HTTPException(status_code=403, detail="Missing permission")
+    if not has_permission(user, "payroll.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: payroll.read")
     if month < 1 or month > 12:
         raise HTTPException(400, "month must be 1..12")
     policy = await _get_attendance_policy()
@@ -627,15 +703,15 @@ async def attendance_payslip_pdf(employee_id: str, year: int, month: int, reques
                                  session_token: Optional[str] = Cookie(default=None),
                                  authorization: Optional[str] = Header(default=None)):
     """On-demand payslip from the attendance engine (no payment required).
-    Employees can always download their own; HR needs payroll/employees read."""
+    Employees can always download their own; other users need payroll.read."""
     user = await require_user(request, session_token, authorization)
     emp = await sdb.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
         raise HTTPException(404, "Employee not found")
     is_self = (emp.get("user_id") == user.get("user_id")) or \
               ((emp.get("email") or "").lower() == (user.get("email") or "").lower())
-    if not is_self and not (has_permission(user, "payroll.read") or has_permission(user, "employees.read")):
-        raise HTTPException(403, "Missing permission")
+    if not is_self and not has_permission(user, "payroll.read"):
+        raise HTTPException(403, "Missing permission: payroll.read")
     policy = await _get_attendance_policy()
     s = await engine.monthly_summary(emp, year, month, policy)
     org = await db.organizations.find_one(

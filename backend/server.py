@@ -3674,6 +3674,27 @@ def _compute_salary(s: dict) -> dict:
     return s
 
 
+_EMPLOYEE_COMPENSATION_FIELDS = {
+    "salary", "salary_history", "monthly_salary", "payroll_basis_days", "bank",
+}
+_EMPLOYEE_PRIVATE_HR_FIELDS = {
+    "aadhaar", "pan", "documents", "emergency_contact", "dob", "blood_group",
+    "address", "pincode", "performance", "gender",
+}
+
+
+def _employee_for_user(employee: dict, user: dict) -> dict:
+    """Project only the employee fields the caller is allowed to read."""
+    visible = dict(employee)
+    if not has_permission(user, "payroll.read"):
+        for key in _EMPLOYEE_COMPENSATION_FIELDS:
+            visible.pop(key, None)
+    if not has_permission(user, "employees.update"):
+        for key in _EMPLOYEE_PRIVATE_HR_FIELDS:
+            visible.pop(key, None)
+    return visible
+
+
 async def _next_employee_id() -> str:
     year = now_utc().year
     count = await sdb.employees.count_documents({"employee_id": {"$regex": f"^EMP-{year}-"}})
@@ -3695,7 +3716,7 @@ async def list_employees(request: Request,
     if status:
         q["employment_status"] = status
     rows = await sdb.employees.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return rows
+    return [_employee_for_user(row, user) for row in rows]
 
 
 @api.get("/employees/meta")
@@ -3733,7 +3754,7 @@ async def get_employee(eid: str, request: Request,
     doc = await sdb.employees.find_one({"id": eid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Employee not found")
-    return doc
+    return _employee_for_user(doc, user)
 
 
 @api.post("/employees")
@@ -3744,6 +3765,9 @@ async def create_employee(payload: EmployeeIn, request: Request,
     if not has_permission(user, "employees.create"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.create")
     data = payload.model_dump()
+    if ((data.get("salary") or data.get("bank") or data.get("monthly_salary") is not None)
+            and not has_permission(user, "payroll.create")):
+        raise HTTPException(status_code=403, detail="Missing permission: payroll.create")
     if data.get("employment_type") not in EMPLOYMENT_TYPES:
         data["employment_type"] = "full_time"
     if data.get("employment_status") not in EMPLOYMENT_STATUSES:
@@ -3764,7 +3788,8 @@ async def create_employee(payload: EmployeeIn, request: Request,
     data["created_at"] = iso(now_utc())
     data["created_by"] = user["user_id"]
     await sdb.employees.insert_one(dict(data))
-    return await sdb.employees.find_one({"id": data["id"]}, {"_id": 0})
+    created = await sdb.employees.find_one({"id": data["id"]}, {"_id": 0})
+    return _employee_for_user(created, user)
 
 
 @api.put("/employees/{eid}")
@@ -3778,6 +3803,8 @@ async def update_employee(eid: str, payload: EmployeeUpdate, request: Request,
     if not doc:
         raise HTTPException(status_code=404, detail="Employee not found")
     patch = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if _EMPLOYEE_COMPENSATION_FIELDS.intersection(patch) and not has_permission(user, "payroll.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: payroll.create")
     if "salary" in patch:
         patch["salary"] = _compute_salary(patch["salary"])
     if "current_kpi_score" in patch:
@@ -3791,7 +3818,8 @@ async def update_employee(eid: str, payload: EmployeeUpdate, request: Request,
     patch["updated_at"] = iso(now_utc())
     patch["updated_by"] = user["user_id"]
     await sdb.employees.update_one({"id": eid}, {"$set": patch})
-    return await sdb.employees.find_one({"id": eid}, {"_id": 0})
+    updated = await sdb.employees.find_one({"id": eid}, {"_id": 0})
+    return _employee_for_user(updated, user)
 
 
 @api.delete("/employees/{eid}")
@@ -3813,8 +3841,8 @@ async def get_employee_account(eid: str, request: Request,
                                authorization: Optional[str] = Header(default=None)):
     """ERP identity linked to this employee — login, role, status."""
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
-        raise HTTPException(status_code=403, detail="Missing permission: employees.read")
+    if not has_permission(user, "users.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: users.read")
     emp = await sdb.employees.find_one({"id": eid}, {"_id": 0})
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -3962,8 +3990,8 @@ async def list_salary_history(eid: str, request: Request,
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.read"):
-        raise HTTPException(status_code=403, detail="Missing permission: employees.read")
+    if not has_permission(user, "payroll.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: payroll.read")
     emp = await sdb.employees.find_one({"id": eid}, {"_id": 0, "salary_history": 1, "salary": 1})
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -3979,8 +4007,8 @@ async def record_salary_increment(eid: str, payload: SalaryIncrementIn, request:
     """Record an effective-dated salary revision. Keeps a full history; past
     payslips are unaffected because each payroll run snapshots its own breakdown."""
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "employees.update"):
-        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    if not has_permission(user, "payroll.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: payroll.create")
     try:
         datetime.strptime((payload.effective_date or "")[:10], "%Y-%m-%d")
     except Exception:

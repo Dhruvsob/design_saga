@@ -25,6 +25,7 @@ from core import attendance_engine as engine
 from core.audit import audit
 from core.tenancy import user_org_id
 from core.notifications import emit, emit_admins
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 import math
 
@@ -66,6 +67,7 @@ DEFAULT_POLICY = {
 # wrongly pushed in-office staff "outside" a 150m fence. Capped so a genuinely
 # remote location (home is typically >1km away) can never sneak in.
 GPS_TOLERANCE_CAP_M = 75.0
+REVIEW_CLAIM_TTL_MINUTES = 10
 
 
 def _initial_attendance_state(att_type: str, geo_needed: bool,
@@ -78,6 +80,96 @@ def _initial_attendance_state(att_type: str, geo_needed: bool,
     if geo_needed and geo_result.get("inside") and geo_result.get("matched_location"):
         return "present", "auto"
     return "pending_approval", "pending"
+
+
+def _parse_correction_datetime(value: str, label: str) -> datetime:
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, f"Corrected {label} must be a valid ISO datetime")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=engine.IST)
+    return dt
+
+
+def _validate_correction_request(date_str: str, check_in: Optional[str],
+                                 check_out: Optional[str]) -> None:
+    """Reject malformed or cross-day correction timestamps."""
+    try:
+        requested_date = _date.fromisoformat(date_str)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+    if not check_in and not check_out:
+        raise HTTPException(400, "At least one corrected punch time is required")
+
+    parsed = []
+    for label, value in (("check-in", check_in), ("check-out", check_out)):
+        if not value:
+            parsed.append(None)
+            continue
+        dt = _parse_correction_datetime(value, label)
+        if dt.astimezone(engine.IST).date() != requested_date:
+            raise HTTPException(400, f"Corrected {label} must be on {date_str}")
+        parsed.append(dt)
+    if parsed[0] and parsed[1] and parsed[1] <= parsed[0]:
+        raise HTTPException(400, "Corrected check-out must be after check-in")
+
+
+def _attendance_allows_leave(existing: Optional[dict]) -> bool:
+    return not existing or (
+        not existing.get("check_in")
+        and existing.get("status") in (None, "absent", "leave")
+    )
+
+
+def _without_compensation(summary: dict) -> dict:
+    """Return attendance detail without compensation amounts."""
+    hidden = {
+        "salary_configured", "late_fine", "hourly_rate",
+        "short_leave_deduction", "per_day_rate", "lop_deduction",
+        "deduction", "net_payable",
+    }
+    safe = {k: v for k, v in summary.items() if k not in hidden}
+    if isinstance(safe.get("employee"), dict):
+        safe["employee"] = {
+            k: v for k, v in safe["employee"].items() if k != "monthly_salary"
+        }
+    return safe
+
+
+async def _claim_pending_review(collection, record_id: str) -> tuple[dict, str]:
+    """Atomically claim a pending review; stale claims can be recovered."""
+    token = new_id("review_")
+    started = iso_now()
+    stale_before = (now_utc() - timedelta(minutes=REVIEW_CLAIM_TTL_MINUTES)).isoformat()
+    row = await collection.find_one_and_update(
+        {
+            "id": record_id,
+            "status": "pending",
+            "$or": [
+                {"review_token": {"$exists": False}},
+                {"review_started_at": {"$lt": stale_before}},
+            ],
+        },
+        {"$set": {"review_token": token, "review_started_at": started}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if row:
+        row.pop("_id", None)
+        return row, token
+    current = await collection.find_one({"id": record_id}, {"_id": 0})
+    if not current:
+        raise HTTPException(404, "Review record not found")
+    if current.get("status") != "pending":
+        raise HTTPException(400, f"Record already {current.get('status')}")
+    raise HTTPException(409, "This record is already being reviewed")
+
+
+async def _release_review_claim(collection, record_id: str, token: str) -> None:
+    await collection.update_one(
+        {"id": record_id, "status": "pending", "review_token": token},
+        {"$unset": {"review_token": "", "review_started_at": ""}},
+    )
 
 
 async def _get_attendance_policy() -> dict:
@@ -850,47 +942,55 @@ async def act_on_leave(leave_id: str, payload: LeaveActionIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.update")
-    lv = await sdb.leaves.find_one({"id": leave_id}, {"_id": 0})
-    if not lv:
-        raise HTTPException(status_code=404, detail="Leave not found")
-    if lv["status"] != "pending":
-        raise HTTPException(status_code=400, detail=f"Leave already {lv['status']}")
-
-    if payload.action == "approve":
-        new_status = "approved"
-    elif payload.action == "reject":
-        new_status = "rejected"
-    else:
+    if payload.action not in ("approve", "reject"):
         raise HTTPException(status_code=400, detail="Invalid action")
+    lv, review_token = await _claim_pending_review(sdb.leaves, leave_id)
+    new_status = "approved" if payload.action == "approve" else "rejected"
+    try:
+        # Approved leave fills only empty/absent days. A real punch, holiday, or
+        # other worked state is business evidence and must never be overwritten.
+        if new_status == "approved":
+            d1 = _date.fromisoformat(lv["from_date"])
+            d2 = _date.fromisoformat(lv["to_date"])
+            cur = d1
+            while cur <= d2:
+                ds = cur.isoformat()
+                existing = await sdb.attendance.find_one(
+                    {"employee_id": lv["employee_id"], "date": ds}, {"_id": 0})
+                if _attendance_allows_leave(existing):
+                    update = {"$set": {
+                        "employee_id": lv["employee_id"], "date": ds,
+                        "status": "leave", "leave_type": lv["leave_type"],
+                        "leave_id": lv["id"], "updated_at": iso_now(),
+                    }, "$setOnInsert": {"id": new_id("att_"), "created_at": iso_now()}}
+                    try:
+                        await sdb.attendance.update_one(
+                            {"employee_id": lv["employee_id"], "date": ds},
+                            update, upsert=True)
+                    except DuplicateKeyError:
+                        # A punch won the race with leave approval; preserve it.
+                        pass
+                cur += timedelta(days=1)
 
-    await sdb.leaves.update_one({"id": leave_id}, {"$set": {
-        "status": new_status,
-        "action_by": user["user_id"],
-        "action_by_name": user.get("name"),
-        "action_at": iso_now(),
-        "action_remarks": payload.remarks or "",
-    }})
+        decided_at = iso_now()
+        result = await sdb.leaves.update_one(
+            {"id": leave_id, "status": "pending", "review_token": review_token},
+            {"$set": {
+                "status": new_status, "action_by": user["user_id"],
+                "action_by_name": user.get("name"), "action_at": decided_at,
+                "action_remarks": payload.remarks or "",
+            }, "$unset": {"review_token": "", "review_started_at": ""}},
+        )
+        if result.modified_count != 1:
+            raise RuntimeError("Leave review claim was lost")
+    except Exception:
+        await _release_review_claim(sdb.leaves, leave_id, review_token)
+        raise
 
-    # If approved, back-fill attendance as leave for each date in range
-    if new_status == "approved":
-        d1 = _date.fromisoformat(lv["from_date"])
-        d2 = _date.fromisoformat(lv["to_date"])
-        cur = d1
-        while cur <= d2:
-            ds = cur.isoformat()
-            await sdb.attendance.update_one(
-                {"employee_id": lv["employee_id"], "date": ds},
-                {"$set": {
-                    "employee_id": lv["employee_id"],
-                    "date": ds,
-                    "status": "leave",
-                    "leave_type": lv["leave_type"],
-                    "leave_id": lv["id"],
-                    "updated_at": iso_now(),
-                }, "$setOnInsert": {"id": new_id("att_"), "created_at": iso_now()}},
-                upsert=True,
-            )
-            cur += timedelta(days=1)
+    await audit(user, f"leave.{payload.action}", target=leave_id,
+                target_type="leave", meta={"employee_id": lv.get("employee_id"),
+                                           "from_date": lv.get("from_date"),
+                                           "to_date": lv.get("to_date")})
 
     # Notify the requester of the decision
     try:
@@ -980,12 +1080,6 @@ async def approve_attendance(att_id: str, payload: ApproveAttendanceIn, request:
     user = await require_user(request, session_token, authorization)
     if not has_any_permission(user, "employees.update", "attendance.update", "attendance.approve"):
         raise HTTPException(status_code=403, detail="Missing permission")
-    row = await sdb.attendance.find_one({"id": att_id}, {"_id": 0})
-    if not row:
-        raise HTTPException(status_code=404, detail="Attendance record not found")
-    if row.get("approval_status") != "pending":
-        raise HTTPException(status_code=400, detail=f"Already {row.get('approval_status')}")
-
     if payload.action == "approve":
         new_status = "present"
         approval_status = "approved"
@@ -994,15 +1088,21 @@ async def approve_attendance(att_id: str, payload: ApproveAttendanceIn, request:
         approval_status = "rejected"
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
-
-    await sdb.attendance.update_one({"id": att_id}, {"$set": {
-        "status": new_status,
-        "approval_status": approval_status,
-        "approved_by": user["user_id"],
-        "approved_by_name": user.get("name"),
-        "approved_at": iso_now(),
-        "approval_remarks": payload.remarks or "",
-    }})
+    row = await sdb.attendance.find_one_and_update(
+        {"id": att_id, "approval_status": "pending"},
+        {"$set": {
+            "status": new_status, "approval_status": approval_status,
+            "approved_by": user["user_id"], "approved_by_name": user.get("name"),
+            "approved_at": iso_now(), "approval_remarks": payload.remarks or "",
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not row:
+        current = await sdb.attendance.find_one({"id": att_id}, {"_id": 0})
+        if not current:
+            raise HTTPException(status_code=404, detail="Attendance record not found")
+        raise HTTPException(status_code=400, detail=f"Already {current.get('approval_status')}")
+    row.pop("_id", None)
     await audit(user, f"attendance.{payload.action}", target=att_id, target_type="attendance",
                 meta={"employee_id": row.get("employee_id"), "date": row.get("date"),
                       "remarks": payload.remarks or ""})
@@ -1028,7 +1128,7 @@ async def approve_attendance(att_id: str, payload: ApproveAttendanceIn, request:
                    priority="normal",
                    meta={"attendance_id": att_id, "decision": verdict},
                    dedup_key=f"att_decided_{att_id}")
-    return await sdb.attendance.find_one({"id": att_id}, {"_id": 0})
+    return row
 
 
 # ==================================================================
@@ -1044,7 +1144,9 @@ async def attendance_summary(request: Request, employee_id: str,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
+    can_view_team = has_any_permission(
+        user, "employees.read", "attendance.update", "attendance.approve")
+    if not can_view_team:
         # Employees may only view their own summary
         own = await _resolve_employee_id(user, None)
         if own != employee_id:
@@ -1057,7 +1159,12 @@ async def attendance_summary(request: Request, employee_id: str,
     y = year or local_now.year
     m = month or local_now.month
     policy = await _get_attendance_policy()
-    return await engine.monthly_summary(emp, y, m, policy)
+    data = await engine.monthly_summary(emp, y, m, policy)
+    is_self = (emp.get("user_id") == user.get("user_id")) or \
+              ((emp.get("email") or "").lower() == (user.get("email") or "").lower())
+    if not is_self and not has_permission(user, "payroll.read"):
+        data = _without_compensation(data)
+    return data
 
 
 # ---------- Salary impact view (self-service) ----------
@@ -1352,6 +1459,9 @@ async def create_correction(payload: CorrectionIn, request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _validate_correction_request(
+        payload.date, payload.requested_check_in, payload.requested_check_out,
+    )
     emp_id = payload.employee_id if (payload.employee_id and has_any_permission(user, "employees.update", "attendance.update", "attendance.approve")) \
         else await _resolve_employee_id(user, None)
     nm = await _employee_name_map([emp_id])
@@ -1408,47 +1518,53 @@ async def review_correction(corr_id: str, payload: CorrectionReviewIn, request: 
         raise HTTPException(403, "Missing permission: employees.update")
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(400, "status must be approved or rejected")
-    c = await sdb.attendance_corrections.find_one({"id": corr_id}, {"_id": 0})
-    if not c:
-        raise HTTPException(404, "Correction not found")
-    if c.get("status") != "pending":
-        raise HTTPException(400, f"Correction already {c.get('status')}")
-    await sdb.attendance_corrections.update_one({"id": corr_id}, {"$set": {
-        "status": payload.status,
-        "review_notes": payload.review_notes or "",
-        "reviewed_by": user["user_id"],
-        "reviewed_by_name": user.get("name"),
-        "reviewed_at": iso_now(),
-    }})
-    if payload.status == "approved":
-        # Apply the requested times to the attendance row (upsert)
-        existing = await sdb.attendance.find_one(
-            {"employee_id": c["employee_id"], "date": c["date"]}, {"_id": 0})
-        updates = {"employee_id": c["employee_id"], "date": c["date"],
-                   "is_manual": True, "updated_at": iso_now(),
-                   "correction_id": corr_id}
-        if c.get("requested_check_in"):
-            updates["check_in"] = c["requested_check_in"]
-        if c.get("requested_check_out"):
-            updates["check_out"] = c["requested_check_out"]
-        ci = updates.get("check_in") or (existing or {}).get("check_in")
-        co = updates.get("check_out") or (existing or {}).get("check_out")
-        if ci and co:
-            try:
-                d1 = datetime.fromisoformat(str(ci).replace("Z", "+00:00"))
-                d2 = datetime.fromisoformat(str(co).replace("Z", "+00:00"))
-                wm = max(int((d2 - d1).total_seconds() // 60), 0)
+    c, review_token = await _claim_pending_review(sdb.attendance_corrections, corr_id)
+    try:
+        if payload.status == "approved":
+            # Apply the requested times before finalizing the review. The claim
+            # makes concurrent approve/reject requests mutually exclusive.
+            existing = await sdb.attendance.find_one(
+                {"employee_id": c["employee_id"], "date": c["date"]}, {"_id": 0})
+            updates = {"employee_id": c["employee_id"], "date": c["date"],
+                       "is_manual": True, "updated_at": iso_now(),
+                       "correction_id": corr_id}
+            if c.get("requested_check_in"):
+                updates["check_in"] = c["requested_check_in"]
+            if c.get("requested_check_out"):
+                updates["check_out"] = c["requested_check_out"]
+            ci = updates.get("check_in") or (existing or {}).get("check_in")
+            co = updates.get("check_out") or (existing or {}).get("check_out")
+            if ci and co:
+                d1 = _parse_correction_datetime(ci, "check-in")
+                d2 = _parse_correction_datetime(co, "check-out")
+                if d2 <= d1:
+                    raise HTTPException(400, "Corrected check-out must be after check-in")
+                wm = int((d2 - d1).total_seconds() // 60)
                 updates["working_minutes"] = wm
                 updates["worked_hours"] = round(wm / 60.0, 2)
                 updates["status"] = "present" if wm >= 240 else "half_day"
-            except Exception:
-                pass
-        if existing:
-            await sdb.attendance.update_one({"id": existing["id"]}, {"$set": updates})
-        else:
-            updates["id"] = new_id("att_")
-            updates["created_at"] = iso_now()
-            await sdb.attendance.insert_one(dict(updates))
+            elif ci:
+                updates["status"] = "present"
+            if existing:
+                await sdb.attendance.update_one({"id": existing["id"]}, {"$set": updates})
+            else:
+                updates["id"] = new_id("att_")
+                updates["created_at"] = iso_now()
+                await sdb.attendance.insert_one(dict(updates))
+
+        result = await sdb.attendance_corrections.update_one(
+            {"id": corr_id, "status": "pending", "review_token": review_token},
+            {"$set": {
+                "status": payload.status, "review_notes": payload.review_notes or "",
+                "reviewed_by": user["user_id"], "reviewed_by_name": user.get("name"),
+                "reviewed_at": iso_now(),
+            }, "$unset": {"review_token": "", "review_started_at": ""}},
+        )
+        if result.modified_count != 1:
+            raise RuntimeError("Correction review claim was lost")
+    except Exception:
+        await _release_review_claim(sdb.attendance_corrections, corr_id, review_token)
+        raise
     await audit(user, f"attendance.correction_{payload.status}", target=corr_id,
                 target_type="attendance_correction",
                 meta={"employee_id": c["employee_id"], "date": c["date"]})
@@ -1466,7 +1582,7 @@ async def get_employee_config(employee_id: str, request: Request,
     emp = await sdb.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
         raise HTTPException(404, "Employee not found")
-    return {
+    data = {
         "id": emp["id"],
         "name": engine.emp_name(emp),
         "department": emp.get("department"),
@@ -1476,11 +1592,15 @@ async def get_employee_config(employee_id: str, request: Request,
         "weekly_offs": emp.get("weekly_offs"),
         "half_day_min_minutes": emp.get("half_day_min_minutes"),
         "full_day_min_minutes": emp.get("full_day_min_minutes"),
-        "monthly_salary": float(emp.get("monthly_salary") or 0),
-        "net_monthly_structure": float((emp.get("salary") or {}).get("net_monthly") or 0),
-        "effective_monthly_salary": engine.effective_monthly_salary(emp),
-        "payroll_basis_days": emp.get("payroll_basis_days") or 26,
     }
+    if has_any_permission(user, "payroll.read", "payroll.create"):
+        data.update({
+            "monthly_salary": float(emp.get("monthly_salary") or 0),
+            "net_monthly_structure": float((emp.get("salary") or {}).get("net_monthly") or 0),
+            "effective_monthly_salary": engine.effective_monthly_salary(emp),
+            "payroll_basis_days": emp.get("payroll_basis_days") or 26,
+        })
+    return data
 
 
 @router.put("/attendance/employees/{employee_id}/config")
@@ -1497,6 +1617,9 @@ async def set_employee_config(employee_id: str, payload: EmployeeAttendanceConfi
     patch = {k: v for k, v in payload.model_dump(exclude_unset=True).items()}
     if not patch:
         raise HTTPException(400, "No fields to update")
+    compensation_fields = {"monthly_salary", "payroll_basis_days"}
+    if compensation_fields.intersection(patch) and not has_permission(user, "payroll.create"):
+        raise HTTPException(403, "Missing permission: payroll.create")
     patch["updated_at"] = iso_now()
     await sdb.employees.update_one({"id": employee_id}, {"$set": patch})
     await audit(user, "employee.attendance_config", target=employee_id, target_type="employee",

@@ -28,6 +28,15 @@ export default function EmployeeDetail() {
 
   const canEdit = hasPerm("employees.update");
   const canDelete = hasPerm("employees.delete") || user?.role === "Admin";
+  const canPayrollRead = hasPerm("payroll.read");
+  const canPayrollWrite = hasPerm("payroll.create");
+  const canReadUsers = hasPerm("users.read");
+  const visibleTabs = TABS.filter((name) => {
+    if (name === "Salary & Bank") return canPayrollRead;
+    if (name === "Documents" || name === "Performance") return canEdit;
+    if (name === "ERP Access") return canReadUsers;
+    return true;
+  });
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +78,11 @@ export default function EmployeeDetail() {
       delete payload.documents; delete payload.performance;
       delete payload.created_at; delete payload.created_by;
       delete payload._id;
+      if (!canPayrollWrite) {
+        delete payload.salary; delete payload.salary_history;
+        delete payload.monthly_salary; delete payload.payroll_basis_days;
+        delete payload.bank;
+      }
       const { data } = await api.put(`/employees/${id}`, payload);
       setEmp(data);
       setDirty(false);
@@ -160,11 +174,13 @@ export default function EmployeeDetail() {
             </div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="overline">NET / MONTH</div>
-          <div className="font-display font-bold text-3xl tracking-tighter accent-blue">{fmt(s.net_monthly)}</div>
-          <div className="overline mt-1">CTC {fmt(s.ctc_annual)}</div>
-        </div>
+        {canPayrollRead && (
+          <div className="text-right">
+            <div className="overline">NET / MONTH</div>
+            <div className="font-display font-bold text-3xl tracking-tighter accent-blue">{fmt(s.net_monthly)}</div>
+            <div className="overline mt-1">CTC {fmt(s.ctc_annual)}</div>
+          </div>
+        )}
       </div>
 
       {err && (
@@ -198,7 +214,7 @@ export default function EmployeeDetail() {
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 border-b border-[#E5E5E5]">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -231,34 +247,38 @@ export default function EmployeeDetail() {
             <Row label="Photo URL">
               <input disabled={!canEdit} className="input-flat" value={emp.photo || ""} onChange={(e) => patch(() => ({ photo: e.target.value }))} placeholder="https://…" />
             </Row>
-            <div className="grid grid-cols-2 gap-3">
-              <Row label="Date of birth">
-                <input disabled={!canEdit} type="date" className="input-flat" value={emp.dob || ""} onChange={(e) => patch(() => ({ dob: e.target.value }))} />
-              </Row>
-              <Row label="Gender">
-                <select disabled={!canEdit} className="input-flat" value={emp.gender || ""} onChange={(e) => patch(() => ({ gender: e.target.value }))}>
-                  <option value="">—</option>
-                  <option value="Female">Female</option>
-                  <option value="Male">Male</option>
-                  <option value="Other">Other</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
-                </select>
-              </Row>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Row label="Blood group">
-                <input disabled={!canEdit} className="input-flat" value={emp.blood_group || ""} onChange={(e) => patch(() => ({ blood_group: e.target.value }))} />
-              </Row>
-              <Row label="Aadhaar">
-                <input disabled={!canEdit} className="input-flat" value={emp.aadhaar || ""} onChange={(e) => patch(() => ({ aadhaar: e.target.value }))} />
-              </Row>
-            </div>
-            <Row label="PAN">
-              <input disabled={!canEdit} className="input-flat" value={emp.pan || ""} onChange={(e) => patch(() => ({ pan: e.target.value }))} />
-            </Row>
+            {canEdit && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Row label="Date of birth">
+                    <input type="date" className="input-flat" value={emp.dob || ""} onChange={(e) => patch(() => ({ dob: e.target.value }))} />
+                  </Row>
+                  <Row label="Gender">
+                    <select className="input-flat" value={emp.gender || ""} onChange={(e) => patch(() => ({ gender: e.target.value }))}>
+                      <option value="">—</option>
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
+                      <option value="Other">Other</option>
+                      <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                  </Row>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Row label="Blood group">
+                    <input className="input-flat" value={emp.blood_group || ""} onChange={(e) => patch(() => ({ blood_group: e.target.value }))} />
+                  </Row>
+                  <Row label="Aadhaar">
+                    <input className="input-flat" value={emp.aadhaar || ""} onChange={(e) => patch(() => ({ aadhaar: e.target.value }))} />
+                  </Row>
+                </div>
+                <Row label="PAN">
+                  <input className="input-flat" value={emp.pan || ""} onChange={(e) => patch(() => ({ pan: e.target.value }))} />
+                </Row>
+              </>
+            )}
           </Card>
 
-          <Card title="ADDRESS & EMERGENCY">
+          {canEdit && <Card title="ADDRESS & EMERGENCY">
             <Row label="Address">
               <textarea disabled={!canEdit} rows={2} className="input-flat" value={emp.address || ""} onChange={(e) => patch(() => ({ address: e.target.value }))} />
             </Row>
@@ -287,7 +307,7 @@ export default function EmployeeDetail() {
                 </Row>
               </div>
             </div>
-          </Card>
+          </Card>}
         </div>
       )}
 
@@ -339,13 +359,13 @@ export default function EmployeeDetail() {
         </div>
       )}
 
-      {tab === "Salary & Bank" && (
+      {tab === "Salary & Bank" && canPayrollRead && (
         <div className="space-y-6" data-testid="emp-tab-salary">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card title="EARNINGS (MONTHLY)" testid="salary-earnings">
             {["basic", "hra", "conveyance", "medical", "other_allowances"].map((k) => (
               <Row key={k} label={k.replace("_", " ").toUpperCase()}>
-                <input disabled={!canEdit} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
+                <input disabled={!canPayrollWrite} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
             <div className="border-t border-[#0A0A0A] mt-2 pt-3 flex items-center justify-between">
@@ -357,7 +377,7 @@ export default function EmployeeDetail() {
           <Card title="DEDUCTIONS (MONTHLY)" testid="salary-deductions">
             {["pf_employee", "esi_employee", "professional_tax", "tds"].map((k) => (
               <Row key={k} label={k.replace("_", " ").toUpperCase()}>
-                <input disabled={!canEdit} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
+                <input disabled={!canPayrollWrite} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
             <div className="border-t border-[#0A0A0A] mt-2 pt-3 flex items-center justify-between">
@@ -373,32 +393,30 @@ export default function EmployeeDetail() {
 
           <Card title="BANK DETAILS" testid="salary-bank">
             <Row label="Account holder">
-              <input disabled={!canEdit} className="input-flat" value={emp.bank?.account_holder || ""} onChange={(e) => patchBank("account_holder", e.target.value)} />
+              <input disabled={!canPayrollWrite} className="input-flat" value={emp.bank?.account_holder || ""} onChange={(e) => patchBank("account_holder", e.target.value)} />
             </Row>
             <Row label="Account number">
-              <input disabled={!canEdit} className="input-flat font-mono" value={emp.bank?.account_number || ""} onChange={(e) => patchBank("account_number", e.target.value)} />
+              <input disabled={!canPayrollWrite} className="input-flat font-mono" value={emp.bank?.account_number || ""} onChange={(e) => patchBank("account_number", e.target.value)} />
             </Row>
             <Row label="IFSC">
-              <input disabled={!canEdit} className="input-flat font-mono" value={emp.bank?.ifsc || ""} onChange={(e) => patchBank("ifsc", e.target.value)} />
+              <input disabled={!canPayrollWrite} className="input-flat font-mono" value={emp.bank?.ifsc || ""} onChange={(e) => patchBank("ifsc", e.target.value)} />
             </Row>
             <Row label="Bank name">
-              <input disabled={!canEdit} className="input-flat" value={emp.bank?.bank_name || ""} onChange={(e) => patchBank("bank_name", e.target.value)} />
+              <input disabled={!canPayrollWrite} className="input-flat" value={emp.bank?.bank_name || ""} onChange={(e) => patchBank("bank_name", e.target.value)} />
             </Row>
             <Row label="UPI">
-              <input disabled={!canEdit} className="input-flat font-mono" value={emp.bank?.upi || ""} onChange={(e) => patchBank("upi", e.target.value)} />
+              <input disabled={!canPayrollWrite} className="input-flat font-mono" value={emp.bank?.upi || ""} onChange={(e) => patchBank("upi", e.target.value)} />
             </Row>
           </Card>
           </div>
 
-          {hasPerm("payroll.create") && (
+          {canPayrollWrite && (
             <PaySalaryBlock employeeId={emp.id} netMonthly={s.net_monthly} />
           )}
 
-          <SalaryRevisionsBlock employeeId={emp.id} currentSalary={s} canEdit={canEdit} />
+          <SalaryRevisionsBlock employeeId={emp.id} currentSalary={s} canEdit={canPayrollWrite} />
 
-          {hasPerm("payroll.read") && (
-            <PaymentHistoryBlock employeeId={emp.id} />
-          )}
+          <PaymentHistoryBlock employeeId={emp.id} />
         </div>
       )}
 

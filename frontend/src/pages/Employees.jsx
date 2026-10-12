@@ -81,6 +81,7 @@ export default function Employees() {
 
   const canCreate = hasPerm("employees.create");
   const canDelete = hasPerm("employees.delete") || user?.role === "Admin";
+  const canPayrollRead = hasPerm("payroll.read");
 
   return (
     <div className="space-y-8" data-testid="employees-page">
@@ -156,7 +157,7 @@ export default function Employees() {
                 <Th>EMP-ID</Th>
                 <Th>Department</Th>
                 <Th>Designation</Th>
-                <Th className="text-right">Net / month</Th>
+                {canPayrollRead && <Th className="text-right">Net / month</Th>}
                 <Th>Status</Th>
                 <Th>Joined</Th>
                 <Th></Th>
@@ -188,7 +189,7 @@ export default function Employees() {
                   <Td className="font-mono text-xs">{r.employee_id}</Td>
                   <Td className="text-sm">{r.department}</Td>
                   <Td className="text-sm">{r.designation || "—"}</Td>
-                  <Td className="font-mono text-right font-semibold">₹{(r.salary?.net_monthly || 0).toLocaleString("en-IN")}</Td>
+                  {canPayrollRead && <Td className="font-mono text-right font-semibold">₹{(r.salary?.net_monthly || 0).toLocaleString("en-IN")}</Td>}
                   <Td><span className={`status-chip ${STATUS_CHIP[r.employment_status] || "chip-draft"}`}>{r.employment_status}</span></Td>
                   <Td className="font-mono text-xs">{r.joining_date || "—"}</Td>
                   <Td>
@@ -204,7 +205,7 @@ export default function Employees() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="p-10 text-center text-[#5C5C5C]">
+                <tr><td colSpan={canPayrollRead ? 8 : 7} className="p-10 text-center text-[#5C5C5C]">
                   {rows.length === 0 ? "No employees yet. Create the first employee to get started." : "No matches for these filters."}
                 </td></tr>
               )}

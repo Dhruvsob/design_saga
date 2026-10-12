@@ -66,3 +66,50 @@ def test_office_check_in_behavior_is_unchanged():
     assert attendance._initial_attendance_state(
         "office", True, {"inside": True, "matched_location": {"id": "hq"}}, False,
     ) == ("present", "auto")
+
+
+def test_leave_never_overwrites_a_real_punch_or_worked_status():
+    assert attendance._attendance_allows_leave(None) is True
+    assert attendance._attendance_allows_leave({"status": "absent"}) is True
+    assert attendance._attendance_allows_leave({"status": "leave"}) is True
+    assert attendance._attendance_allows_leave({"status": "present"}) is False
+    assert attendance._attendance_allows_leave({
+        "status": "absent", "check_in": "2026-10-12T09:00:00+05:30",
+    }) is False
+
+
+def test_correction_requires_valid_same_day_ordered_times():
+    attendance._validate_correction_request(
+        "2026-10-12",
+        "2026-10-12T09:00:00+05:30",
+        "2026-10-12T18:00:00+05:30",
+    )
+    with pytest.raises(HTTPException):
+        attendance._validate_correction_request("2026-10-12", None, None)
+    with pytest.raises(HTTPException):
+        attendance._validate_correction_request(
+            "2026-10-12", "2026-10-13T09:00:00+05:30", None,
+        )
+    with pytest.raises(HTTPException):
+        attendance._validate_correction_request(
+            "2026-10-12",
+            "2026-10-12T18:00:00+05:30",
+            "2026-10-12T09:00:00+05:30",
+        )
+
+
+def test_team_attendance_can_be_returned_without_compensation():
+    safe = attendance._without_compensation({
+        "employee": {"id": "emp_a", "monthly_salary": 50000},
+        "summary": {"present": 20},
+        "payable_days": 20,
+        "net_payable": 45000,
+        "deduction": 5000,
+        "late_fine": 100,
+        "daily": [],
+    })
+    assert safe["employee"] == {"id": "emp_a"}
+    assert safe["summary"] == {"present": 20}
+    assert "net_payable" not in safe
+    assert "deduction" not in safe
+    assert "late_fine" not in safe
