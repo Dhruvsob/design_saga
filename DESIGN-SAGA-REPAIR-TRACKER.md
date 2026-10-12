@@ -4,13 +4,13 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; DS-002A implementation commit `c836807` is the current application checkpoint before this tracker update.
-- Production checkout: `/opt/design-saga-git`, `production` at `c836807`.
+- Local checkout: `production`; application checkpoint `bbb0442` is committed and pushed to GitHub `main` and `production`.
+- Production checkout: `/opt/design-saga-git`, `production` at `bbb0442`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
 - VPS baseline: 3.8 GiB RAM (2.5 GiB available), 2 GiB swap, root disk 45% used, low load at inspection.
-- Current action: DS-001, DS-002A, and DS-003 are deployed and verified live. Continue DS-002 with approval atomicity and attendance-to-payroll reconciliation.
+- Current action: DS-001, DS-002, DS-003, and DS-009 are deployed and verified live. Continue with DS-004 dashboard/accounting reconciliation.
 
 ## System Inventory
 
@@ -34,12 +34,12 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 |---|---|---|
 | Tenant owner/user login | Previously verified | Live synthetic owner and employee login by email/ID; bcrypt and isolation checks passed at `dbf6595` |
 | Tenant isolation | Previously verified, audit continues | Prior two-tenant tests and live cross-tenant 404/RBAC 403 evidence |
-| Attendance | Partial verification | GPS, holidays, policy and monthly-grid tests exist; complete current check-in/out/payroll chain still needs focused verification |
+| Attendance | Focused critical-path verification complete | Identity, IST date, punch idempotency, authorized-site behavior, review concurrency, leave preservation, correction consistency, and payroll blocking verified |
 | Leads → quotations/BOQ → projects | Partial | Implemented and prior module tests exist; full current conversion chain unverified |
 | Projects → tasks/assignments | Previously tested, needs currency check | Historical task visibility and assignment evidence exists |
 | Vendors/procurement | Partial | Vendor, PO and accounting tests exist; current end-to-end flow unverified |
 | Invoices/receipts/accounting | Previously tested, targeted recheck needed | Posting/reversal and reporting fixes documented; current permission and reconciliation sweep pending |
-| Payroll/expenses | Partial | Implemented with prior tests; current attendance-to-payroll reconciliation unverified |
+| Payroll/expenses | Payroll critical path verified; expenses partial | Concurrent payroll posting, account types, unresolved-review blocking, permissions, and journal cardinality verified with synthetic data |
 | Notifications/calendar | Previously tested | Historical iteration evidence; scheduler runtime not reverified |
 | Files/documents/exports | Unverified | Access control, persistence, and cross-tenant guessing audit pending |
 
@@ -56,13 +56,14 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 | ID | Priority | Issue / verification target | State |
 |---|---|---|---|
 | DS-001 | High | Server-side invoice/dashboard financial-read authorization bypass | Fixed, deployed, and verified live |
-| DS-002 | High | Verify attendance identity, idempotency, timezone boundary, approval audit, and payroll consistency end to end | Identity/idempotency/timezone fixed; approval/payroll reconciliation pending |
+| DS-002 | High | Verify attendance identity, idempotency, timezone boundary, approval audit, and payroll consistency end to end | Fixed, deployed, and verified live |
 | DS-003 | High | Establish a validated backup and restore path for Design Saga PostgreSQL/FerretDB data and deployment state | Fixed and active; offsite copy remains a follow-up |
 | DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Queued |
 | DS-005 | Medium | Audit file/attachment persistence, upload validation, download authorization, and tenant isolation | Queued |
 | DS-006 | Medium | Verify Client role compatibility, then remove it from team-management choices without breaking dependent records | Queued |
 | DS-007 | Medium | Trace approved architecture workflow from lead through accounting with synthetic data | Queued |
 | DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | Queued |
+| DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
 
 ## Issue Log
 
@@ -152,6 +153,49 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 - Current state: deployed at `c836807` and verified live.
 - Rollback: retag `design-saga-backend:rollback-a659939`, recreate only the backend service, and revert `c836807`. The added unique index is compatible with the prior code and need not be removed during an emergency rollback.
 
+### DS-002B: Approval atomicity and attendance-to-payroll integrity
+
+- Symptom/risk:
+  - Attendance, leave, and correction reviews used read-then-write transitions, so concurrent reviewers could both succeed or overwrite each other.
+  - Leave approval could overwrite an existing worked/punched attendance day with `leave`.
+  - Correction review completed the request before safely applying attendance and accepted invalid, cross-day, or reversed timestamps.
+  - Concurrent salary submissions could post duplicate journals/runs, and payroll could proceed while attendance, leave, or correction reviews were unresolved.
+- Production precondition audit: no pending attendance/late/correction/leave reviews, no leave rows with a real punch, no duplicate payroll period groups, and no existing payroll runs requiring repair.
+- Correction:
+  - Added atomic review claims and conditional updates for attendance, leave, and correction decisions, with stale-claim recovery and audit preservation.
+  - Leave approval now fills only absent/missing/leave days and never overwrites a real punch, worked day, or holiday.
+  - Correction requests require valid ISO timestamps on the requested IST business date with checkout after check-in; review applies attendance before finalizing approval.
+  - Added a unique sparse `(org_id, period_key)` payroll index and a processing reservation before journal posting.
+  - Payroll now blocks unresolved attendance/late/leave/correction reviews and validates expense and cash/bank account types.
+- Verification:
+  - 17 focused backend tests passed.
+  - Candidate backend/frontend images built successfully; frontend emitted only the existing hook warnings.
+  - Disposable FerretDB/PostgreSQL integration: six concurrent attendance approvals and four concurrent leave approvals each produced exactly one winner; a worked punch was preserved; one missing leave day was created; correction conflicts remained coherent; eight concurrent salary submissions created exactly one payroll run and one journal; pending correction blocked payment.
+  - Temporary QA containers/database were deleted; no production business rows were written.
+- Production deployment:
+  - Verified backup `/opt/design-saga-backups/20261012T141305Z` and tagged prior images `rollback-c4df434`.
+  - Deployed backend/web at `bbb0442`; PostgreSQL, FerretDB, and Caddy remained running.
+  - All services are healthy, site/API return 200, the unique payroll index is active, duplicate period groups remain zero, pending review counts remain zero, and recent logs show no critical errors.
+- Files changed: `backend/core/indexes.py`, `backend/routes/attendance.py`, `backend/routes/payroll.py`, `backend/tests/test_attendance_safety.py`, `backend/tests/test_payroll_safety.py`, `frontend/src/pages/Attendance.jsx`.
+- Rollback: retag `design-saga-backend:rollback-c4df434` and `design-saga-web:rollback-c4df434`, recreate only backend/web, and revert `bbb0442`. No historical data rewrite occurred.
+
+### DS-009: Compensation and private employee data authorization
+
+- Symptom/risk: users with broad `employees.read` access, including Project Manager and Designer roles, received full employee documents containing salary history, bank details, government IDs, documents, emergency contacts, and performance data. Salary preview/history and another employee's generated payslip also accepted employee-read permission.
+- Severity: High. Tenant isolation was intact, but sensitive same-tenant HR/payroll data was exposed beyond intended roles.
+- Root cause: employee APIs returned raw database documents and payroll reads reused the broader employee permission.
+- Correction:
+  - Employee list/detail/create/update responses now project compensation fields by `payroll.read` and private HR fields by `employees.update`.
+  - Compensation writes require `payroll.create`; salary history/preview/all-payroll preview and another employee's payslip require `payroll.read`.
+  - Employee account metadata requires `users.read`.
+  - Attendance summaries/configuration omit compensation without payroll permission.
+  - Frontend salary columns, cards, tabs, bank controls, private HR tabs, and employee-account tab follow the corresponding permissions.
+- Verification:
+  - Project Manager synthetic API tests retained basic employee list/detail access while salary, salary history, bank, Aadhaar/PAN, gender, documents, and performance were absent; salary history/preview/payroll preview/other-user payslip returned 403.
+  - Runtime production projection assertion passed after deployment; unauthenticated employee endpoint returns 401.
+- Files changed: `backend/server.py`, `backend/routes/attendance.py`, `backend/routes/payroll.py`, `backend/tests/test_financial_read_permissions.py`, `frontend/src/pages/Attendance.jsx`, `frontend/src/pages/EmployeeDetail.jsx`, `frontend/src/pages/Employees.jsx`.
+- Current state: deployed at `bbb0442` and verified live.
+
 ## Deployment Safety
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
@@ -160,4 +204,4 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Next Action
 
-Continue DS-002 by testing leave/site-visit/correction approval failure atomicity and reconciling synthetic monthly attendance summaries against payroll preview/run deductions. Do not alter real attendance or payroll rows.
+Continue DS-004 by reconciling dashboard revenue, collections, outstanding balances, and accounting reports against journal/invoice sources with synthetic tenant-isolated data. Do not alter real financial rows.
