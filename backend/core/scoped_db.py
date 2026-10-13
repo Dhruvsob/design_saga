@@ -20,7 +20,7 @@ from .db import db
 DEFAULT_ORG_ID = "org_default"
 _SA_EMAILS = {
     e.strip().lower()
-    for e in os.environ.get("SUPER_ADMIN_EMAILS", "designsaga10@gmail.com").split(",")
+    for e in os.environ.get("SUPER_ADMIN_EMAILS", "").split(",")
     if e.strip()
 }
 
@@ -29,8 +29,6 @@ def _is_super_admin_local(user: Optional[dict]) -> bool:
     if not user:
         return False
     if user.get("is_super_admin") is True:
-        return True
-    if (user.get("role") or "").lower() in ("superadmin", "super_admin"):
         return True
     email = (user.get("email") or "").strip().lower()
     return email in _SA_EMAILS

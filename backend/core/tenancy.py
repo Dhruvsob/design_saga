@@ -32,7 +32,7 @@ DEFAULT_ORG_SLUG = "design-saga"
 
 SUPER_ADMIN_EMAILS = {
     e.strip().lower()
-    for e in os.environ.get("SUPER_ADMIN_EMAILS", "designsaga10@gmail.com").split(",")
+    for e in os.environ.get("SUPER_ADMIN_EMAILS", "").split(",")
     if e.strip()
 }
 

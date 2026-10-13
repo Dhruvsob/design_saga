@@ -53,7 +53,7 @@ EMERGENT_AUTH_BASE = "https://demobackend.emergentagent.com/auth/v1/env/oauth/se
 # sign-in and can never be demoted (RBAC endpoint also blocks demotion below).
 SUPER_ADMIN_EMAILS = {
     e.strip().lower()
-    for e in os.environ.get("SUPER_ADMIN_EMAILS", "designsaga10@gmail.com").split(",")
+    for e in os.environ.get("SUPER_ADMIN_EMAILS", "").split(",")
     if e.strip()
 }
 
@@ -488,14 +488,17 @@ async def create_session(request: Request, response: Response):
                 update_set["role"] = "SuperAdmin"
             update_set["approval_status"] = "approved"
             update_set["is_active"] = True
-        await db.users.update_one({"user_id": user_id}, {"$set": update_set})
+        update = {"$set": update_set}
+        if _is_super_admin(email):
+            update["$unset"] = {"org_id": ""}
+        await db.users.update_one({"user_id": user_id}, update)
         user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
-        user_count = await db.users.count_documents({})
-        # First-ever user OR whitelisted super-admin = auto-approved SuperAdmin.
-        # Every other Google sign-up lands in `pending` and must be approved.
-        is_privileged = _is_super_admin(email) or user_count == 0
+        # Only an explicitly configured platform identity may bootstrap as
+        # SuperAdmin. All other Google sign-ups require approval, even when the
+        # user collection is empty.
+        is_privileged = _is_super_admin(email)
         from core.tenancy import DEFAULT_ORG_ID
         # Try to match a company by email domain (@acme.com → Acme Interiors)
         assigned_org_id = None
@@ -565,9 +568,14 @@ async def auth_me(user=None, request: Request = None,
 
 
 @api.post("/auth/logout")
-async def logout(response: Response, session_token: Optional[str] = Cookie(default=None)):
-    if session_token:
-        await db.user_sessions.delete_many({"session_token": session_token})
+async def logout(response: Response,
+                 session_token: Optional[str] = Cookie(default=None),
+                 authorization: Optional[str] = Header(default=None)):
+    tokens = {session_token} if session_token else set()
+    if authorization and authorization.startswith("Bearer "):
+        tokens.add(authorization.split(" ", 1)[1])
+    if tokens:
+        await db.user_sessions.delete_many({"session_token": {"$in": list(tokens)}})
     response.delete_cookie("session_token", path="/")
     return {"ok": True}
 
@@ -711,6 +719,8 @@ async def rbac_assign_role(user_id: str, payload: RoleAssignIn, request: Request
         raise HTTPException(status_code=404, detail="User not found")
     # Tenant isolation: a non-super Admin can only manage users in their own org.
     from core.tenancy import user_org_id as _uoid, is_super_admin as _is_sa, DEFAULT_ORG_ID as _DEF
+    if new_role == "SuperAdmin" and not _is_sa(actor):
+        raise HTTPException(status_code=403, detail="Only the platform owner can assign SuperAdmin")
     if not _is_sa(actor) and (target.get("org_id") or _DEF) != _uoid(actor):
         raise HTTPException(status_code=404, detail="User not found")
     # Guard: super-admin emails can never be demoted.
@@ -3918,6 +3928,9 @@ async def create_employee_account(eid: str, payload: EmployeeAccountIn, request:
     from routes.auth import hash_password as _hash_pw
     from core.rbac import normalize_role as _norm_role
     role = _norm_role(payload.role)
+    from core.tenancy import is_super_admin as _is_sa
+    if role == "SuperAdmin" and not _is_sa(user):
+        raise HTTPException(status_code=403, detail="Only the platform owner can assign SuperAdmin")
     org_id = user.get("org_id") or emp.get("org_id") or "org_default"
     # Plan limit check
     _org = await db.organizations.find_one({"org_id": org_id}, {"_id": 0, "features": 1})
@@ -4348,14 +4361,15 @@ async def _bootstrap_default_org():
     # Elevate whitelisted super-admin users to the SuperAdmin role
     for sa_email in SUPER_ADMIN_EMAILS:
         u = await db.users.find_one({"email": sa_email}, {"_id": 0})
-        if u and _normalize_role(u.get("role")) != "SuperAdmin":
+        if u:
             await db.users.update_one(
                 {"user_id": u["user_id"]},
                 {"$set": {"role": "SuperAdmin", "is_active": True,
                           "approval_status": "approved"},
                  "$unset": {"org_id": ""}},
             )
-            logger.info("[Bootstrap] Elevated %s to SuperAdmin", sa_email)
+            if _normalize_role(u.get("role")) != "SuperAdmin" or u.get("org_id"):
+                logger.info("[Bootstrap] Reconciled platform owner %s", sa_email)
 
     if total:
         logger.info("[Bootstrap] Multi-tenant backfill complete: %d docs updated", total)
@@ -4373,14 +4387,9 @@ async def _bootstrap_default_org():
     # ==============================================
     # Production safety warning
     # ==============================================
-    if "designsaga10@gmail.com" in SUPER_ADMIN_EMAILS and len(SUPER_ADMIN_EMAILS) == 1:
-        env_flag = os.environ.get("ENV") or os.environ.get("EMERGENT_ENV") or ""
-        if env_flag.lower() in ("prod", "production"):
-            logger.warning(
-                "[SECURITY] SUPER_ADMIN_EMAILS is still the default in production. "
-                "Whoever registers %s becomes SuperAdmin — change this env var!",
-                "designsaga10@gmail.com",
-            )
+    env_flag = os.environ.get("ENV") or os.environ.get("EMERGENT_ENV") or ""
+    if env_flag.lower() in ("prod", "production") and not SUPER_ADMIN_EMAILS:
+        logger.warning("[SECURITY] SUPER_ADMIN_EMAILS is not configured in production")
 
     # ==============================================
     # Object storage (best-effort — no-op if key missing)

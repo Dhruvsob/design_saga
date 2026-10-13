@@ -373,9 +373,12 @@ async def reassign_org(user_id: str, payload: ReassignOrgIn, request: Request,
     org = await get_org(payload.org_id)
     if not org:
         raise HTTPException(404, "Target organisation not found")
+    role = normalize_role(payload.role or "Employee")
+    if role == "SuperAdmin":
+        raise HTTPException(400, "A tenant user cannot be assigned the SuperAdmin role")
     updates = {
         "org_id": payload.org_id,
-        "role": normalize_role(payload.role or "Employee"),
+        "role": role,
         "reassigned_at": iso_now(),
         "reassigned_by": sa["user_id"],
     }

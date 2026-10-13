@@ -168,6 +168,18 @@ def _identifier_query(identifier: str) -> dict:
     ]}
 
 
+def _ensure_target_in_actor_tenant(actor: dict, target: dict) -> None:
+    from core.tenancy import user_org_id, is_super_admin, DEFAULT_ORG_ID
+    if not is_super_admin(actor) and (target.get("org_id") or DEFAULT_ORG_ID) != user_org_id(actor):
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+def _ensure_assignable_role(actor: dict, role: str) -> None:
+    from core.tenancy import is_super_admin
+    if normalize_role(role) == "SuperAdmin" and not is_super_admin(actor):
+        raise HTTPException(status_code=403, detail="Only the platform owner can assign SuperAdmin")
+
+
 # ==================================================
 # LOGIN (password)
 # ==================================================
@@ -236,7 +248,7 @@ async def login_password(payload: LoginPasswordIn, response: Response):
 # CHANGE PASSWORD (self)
 # ==================================================
 @router.post("/auth/change-password")
-async def change_password(payload: ChangePasswordIn, request: Request,
+async def change_password(payload: ChangePasswordIn, request: Request, response: Response,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
@@ -251,7 +263,9 @@ async def change_password(payload: ChangePasswordIn, request: Request,
         {"$set": {"password_hash": hash_password(payload.new_password),
                   "password_updated_at": iso_now()}}
     )
-    return {"ok": True}
+    await db.user_sessions.delete_many({"user_id": user["user_id"]})
+    response.delete_cookie("session_token", path="/")
+    return {"ok": True, "reauthenticate": True}
 
 
 # ==================================================
@@ -283,6 +297,7 @@ async def admin_register(payload: RegisterIn, request: Request,
                                     detail=f"User limit reached ({_current}/{_max}). Upgrade your plan.")
 
     role = normalize_role(payload.role)
+    _ensure_assignable_role(admin, role)
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     employee_id = await _next_employee_id()
     # Multi-tenant: new users inherit the admin's org
@@ -319,6 +334,7 @@ async def admin_reset_password(user_id: str, payload: ResetPasswordIn, request: 
     target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_target_in_actor_tenant(admin, target)
     await db.users.update_one(
         {"user_id": user_id},
         {"$set": {"password_hash": hash_password(payload.new_password),
@@ -386,6 +402,7 @@ async def approve_user(user_id: str, payload: ApprovalDecisionIn, request: Reque
 
     if payload.decision == "approve":
         role = normalize_role(payload.role or target.get("role") or "Employee")
+        _ensure_assignable_role(admin, role)
         # Assign employee_id if missing
         emp_id = target.get("employee_id") or await _next_employee_id()
         await db.users.update_one({"user_id": user_id}, {"$set": {
