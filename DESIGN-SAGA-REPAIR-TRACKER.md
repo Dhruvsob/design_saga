@@ -272,10 +272,17 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Deployment Safety
 
+### DS-007: Safe Git-driven production updates
+
+- Symptom/risk: the VPS `post-merge` hook rebuilt backend and web and ran unrestricted `docker compose up -d` after every merge, including documentation-only changes. It performed no pre-deploy backup, changed-service detection, readiness rollback, or infrastructure-change gate.
+- Correction: added tracked `deploy/update-production.sh` with a deployment lock, revision diff classification, documentation-only skip, automatic refusal for Compose/Caddy infrastructure changes, verified pre-deploy backup, affected-service-only build/recreate, health wait, HTTP smoke checks, and automatic image rollback.
+- VPS configuration: replaced the ad-hoc hook with a minimal hook that executes the tracked updater. Existing VPS-only Caddy modifications remain untouched.
+- Verification: shell syntax passed; the installer merge and explicit updater run identified no runtime changes and skipped all container work. A docs-only end-to-end post-merge test is recorded in the following documentation commit.
+
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
 - Prefer service-specific rebuild/restart after testing. Do not run `docker compose down -v`.
 - Rollback baseline for this pass: Git commit `dbf6595` and current running backend/web image IDs recorded by `docker compose images` on 2026-10-12.
 
 ## Next Action
 
-Install the tracked safe-update script as the VPS post-merge hook, rotate the exposed external MongoDB/viewer credentials, then continue the route-by-route IDOR audit listed in `PRODUCTION-RISK-REGISTER.md`.
+Rotate the exposed external MongoDB/viewer credentials, then continue the route-by-route IDOR audit listed in `PRODUCTION-RISK-REGISTER.md`.

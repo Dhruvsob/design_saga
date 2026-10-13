@@ -65,7 +65,7 @@ yet received sufficient adversarial testing.
 | Container hardening | Non-root runtime, read-only filesystem where possible, dropped capabilities, resource limits and health checks | Partial: limits/health checks exist |
 | Dependency security | Automated Python/Node/container CVE scan, lockfiles, update policy and license review | Open |
 | CI/CD | Build, lint, unit, integration, migration, security scan, immutable artifact and approval gate before production | Open |
-| Deployment safety | Change-aware service replacement, pre-deploy backup, readiness gate, rollback on health failure, and no blanket Compose teardown | Fixed in tracked updater; VPS hook installation pending |
+| Deployment safety | Change-aware service replacement, pre-deploy backup, readiness gate, rollback on health failure, and no blanket Compose teardown | Fixed; tracked updater and VPS hook installed |
 | Log safety | Structured logs, request IDs, redaction of passwords/tokens/PII and retention/rotation | Audit |
 | Alerting/runbooks | Actionable alerts and written response steps for outage, full disk, DB failure, auth spike and certificate failure | Open |
 | Scheduled jobs | Single-run locks, retries, idempotency, missed-job recovery and visible failure state | Audit |
