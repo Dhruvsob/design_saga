@@ -16,7 +16,7 @@ yet received sufficient adversarial testing.
 | Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, pending deployment in DS-005 |
 | Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, pending deployment in DS-005 |
 | Exposed credentials | Rotate the MongoDB Atlas password previously pasted into chat and revoke the temporary Mongo viewer token; confirm neither is used by production | Open, external account action required |
-| Super Admin allowlist | Replace the repository-default `designsaga10@gmail.com` allowlist with an explicitly managed production identity and verify registration/password-reset cannot claim it | Open; production startup warning confirmed |
+| Super Admin allowlist | Require an explicit production identity, prevent tenant role escalation, and keep platform owners outside tenant scope | Fixed and deployed at `e086089` |
 | SSH access | Key-only login, disabled password/root remote login where operationally safe, restricted users, firewall, brute-force protection | Audit |
 | Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Open: deploy backups exist; automated restore evidence required |
 | Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Partially fixed; test a complete restore drill |
@@ -65,7 +65,7 @@ yet received sufficient adversarial testing.
 | Container hardening | Non-root runtime, read-only filesystem where possible, dropped capabilities, resource limits and health checks | Partial: limits/health checks exist |
 | Dependency security | Automated Python/Node/container CVE scan, lockfiles, update policy and license review | Open |
 | CI/CD | Build, lint, unit, integration, migration, security scan, immutable artifact and approval gate before production | Open |
-| Deployment safety | Zero/low-downtime backend replacement, readiness gate, rollback on health failure, no blanket Compose teardown | Partial/manual |
+| Deployment safety | Change-aware service replacement, pre-deploy backup, readiness gate, rollback on health failure, and no blanket Compose teardown | Fixed in tracked updater; VPS hook installation pending |
 | Log safety | Structured logs, request IDs, redaction of passwords/tokens/PII and retention/rotation | Audit |
 | Alerting/runbooks | Actionable alerts and written response steps for outage, full disk, DB failure, auth spike and certificate failure | Open |
 | Scheduled jobs | Single-run locks, retries, idempotency, missed-job recovery and visible failure state | Audit |

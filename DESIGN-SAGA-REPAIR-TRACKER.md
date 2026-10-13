@@ -246,6 +246,30 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 - Files changed: `backend/core/access_control.py`, `backend/core/url_security.py`, `backend/models/accounting.py`, `backend/models/expense.py`, `backend/models/task.py`, `backend/models/vendor.py`, `backend/routes/tasks.py`, `backend/server.py`, `backend/tests/test_access_and_url_safety.py`.
 - Rollback: retag `design-saga-backend:rollback-8ca840d`, recreate only the backend service, and revert `236d7c7`. No database schema or business records were changed.
 
+### DS-006: Account-management isolation and Super Admin escalation
+
+- Symptom/risk:
+  - A tenant Admin could reset another tenant user's password by guessing a global user ID.
+  - Tenant role-assignment, approval, registration, and employee-account paths accepted `SuperAdmin`, while the scoped database treated that role string as a global bypass.
+  - The first Google user in an empty database was implicitly promoted, and the repository contained a hard-coded Super Admin fallback email.
+  - Bearer-only logout did not revoke the server session; self-service password changes left existing sessions active.
+  - The legitimate production platform-owner row retained a legacy `org_id`, making tenant-route context ambiguous.
+- Production precondition audit: one explicitly allowlisted platform owner, zero unauthorized Super Admins, zero duplicate email groups, and one legacy tenant-scoped platform-owner row. Production uses local FerretDB, not the exposed Atlas connection.
+- Correction:
+  - Tenant ownership is verified before password reset; tenant admins cannot assign, create, or approve `SuperAdmin` through any tenant workflow.
+  - A role string alone no longer bypasses scoped storage; only an explicit flag or configured allowlist identity does.
+  - Removed first-user elevation and all hard-coded Super Admin defaults; production requires `SUPER_ADMIN_EMAILS` configuration.
+  - Allowlisted platform owners are reconciled without `org_id` during startup and Google sign-in.
+  - Logout revokes cookie and bearer sessions; password changes invalidate every active session.
+- Verification:
+  - 12 focused auth/permission tests passed.
+  - Disposable-database integration blocked cross-tenant reset/role changes and all tenant Super Admin creation paths, kept a forged role tenant-scoped, preserved legitimate platform access, and verified logout/password session revocation.
+  - Production post-deploy audit: one authorized platform owner, zero unauthorized or tenant-scoped Super Admins, explicit allowlist active, local FerretDB active.
+- Production deployment:
+  - Verified backup `/opt/design-saga-backups/20261013T131412Z`; prior backend tagged `rollback-236d7c7`.
+  - Deployed backend at `e086089`; backend is healthy, site/API return 200, protected auth/platform endpoints return 401 without authentication, and recent logs contain no application errors.
+- Rollback: retag `design-saga-backend:rollback-236d7c7`, recreate only backend, and revert `e086089`. The platform-owner `org_id` cleanup is correct under either version.
+
 ## Deployment Safety
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
@@ -254,4 +278,4 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Next Action
 
-Rotate the exposed external MongoDB/viewer credentials and explicitly configure the production Super Admin allowlist, then continue the route-by-route IDOR audit listed in `PRODUCTION-RISK-REGISTER.md`.
+Install the tracked safe-update script as the VPS post-merge hook, rotate the exposed external MongoDB/viewer credentials, then continue the route-by-route IDOR audit listed in `PRODUCTION-RISK-REGISTER.md`.
