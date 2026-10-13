@@ -1,16 +1,16 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-12 (Asia/Calcutta)
+Last updated: 2026-10-13 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; application checkpoint `8ca840d` is committed and pushed to GitHub `main` and `production`.
-- Production checkout: `/opt/design-saga-git`, `production` at `8ca840d`.
+- Local checkout: `production`; checkpoint `59b5de0` is committed and pushed to GitHub `main` and `production`.
+- Production checkout: `/opt/design-saga-git`, `production` at `59b5de0`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
-- VPS baseline: 3.8 GiB RAM (2.5 GiB available), 2 GiB swap, root disk 45% used, low load at inspection.
-- Current action: DS-001 through DS-004 and DS-009 are deployed and verified live. Continue with DS-005 file/attachment security and persistence.
+- VPS baseline: 3.8 GiB RAM, 2 GiB swap, root disk 56% used, low load at inspection. UFW default-deny and key-only SSH are active.
+- Current action: all high-severity findings recorded below are deployed and verified live. Next priorities are external credential rotation, off-server backups/alerts, and the remaining route-by-route IDOR audit.
 
 ## System Inventory
 
@@ -25,7 +25,7 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 | Background jobs | In-process notification due/overdue scheduler | Previously reported; runtime behavior not reverified in this pass |
 | File storage | URL metadata and local/generated documents; durable object storage remains unverified | Partial/unverified |
 | Reverse proxy/TLS | Caddy with automatic HTTPS; shared VPS routing file | Healthy; production file has protected external edits |
-| Deployment | Docker Compose; merge/rebase hooks invoke `deploy/redeploy.sh` | Confirmed from docs/history; automatic hook behavior must account for protected Caddy edits |
+| Deployment | Docker Compose; post-merge invokes tracked `deploy/update-production.sh` | Change-aware, backup-gated, health-checked, service-specific, and refuses automatic Compose/Caddy changes |
 | Backups | Dedicated daily PostgreSQL/FerretDB archive with checksums, catalogue validation, seven-day retention, and tested isolated restore | Active on VPS; same-host storage remains a disaster-recovery limitation |
 
 ## Workflow Inventory
@@ -59,9 +59,9 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 | DS-002 | High | Verify attendance identity, idempotency, timezone boundary, approval audit, and payroll consistency end to end | Fixed, deployed, and verified live |
 | DS-003 | High | Establish a validated backup and restore path for Design Saga PostgreSQL/FerretDB data and deployment state | Fixed and active; offsite copy remains a follow-up |
 | DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Fixed, deployed, and verified live |
-| DS-005 | Medium | Audit file/attachment persistence, upload validation, download authorization, and tenant isolation | Queued |
-| DS-006 | Medium | Verify Client role compatibility, then remove it from team-management choices without breaking dependent records | Queued |
-| DS-007 | Medium | Trace approved architecture workflow from lead through accounting with synthetic data | Queued |
+| DS-005 | High | Audit project/task/file authorization and unsafe attachment URLs | Fixed, deployed, and verified live |
+| DS-006 | High | Prevent cross-tenant account reset and tenant-to-SuperAdmin escalation | Fixed, deployed, and verified live |
+| DS-007 | High | Replace unsafe blanket Git redeploy hook with change-aware deployment | Fixed, installed, and verified live |
 | DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | Queued |
 | DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
 
@@ -279,9 +279,18 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 - VPS configuration: replaced the ad-hoc hook with a minimal hook that executes the tracked updater. Existing VPS-only Caddy modifications remain untouched.
 - Verification: shell syntax passed; the installer merge and explicit updater run identified no runtime changes and skipped all container work. A docs-only end-to-end post-merge test is recorded in the following documentation commit.
 
+### OPS-001: VPS access, firewall, and backup health
+
+- SSH: installed `/etc/ssh/sshd_config.d/00-design-saga-hardening.conf`; password and keyboard-interactive authentication are disabled, root is limited to public-key login, `MaxAuthTries` is 3, and `LoginGraceTime` is 30 seconds. `sshd -t`, daemon reload, and fresh key-only connections passed before and after firewall activation.
+- Firewall: enabled UFW with default deny inbound and only 22/tcp, 80/tcp, 443/tcp, and 443/udp allowed for IPv4 and IPv6. The public site and API remained HTTP 200 and every Compose service remained healthy.
+- Backup health: `design-saga-backup.timer` is enabled and its latest scheduled service run completed successfully. The newest archive `/opt/design-saga-backups/20261013T131412Z` passed every SHA-256 check and `pg_restore -l` parsed its 24.5 MB database dump successfully.
+- Service health: cleared the failed-state marker for the obsolete six-day-old transient `tanvika-clean-reset.service`; systemd now reports zero failed units. No application service or business data was changed.
+- Rollback evidence: original SSH configuration is retained under `/root/ssh-config-backup-20261013T131903Z`. Firewall rules can be inspected with `ufw status verbose`; keep an established SSH session open for any future SSH/firewall change.
+- Remaining operations risk: same-host backups do not protect against VPS loss. Add encrypted off-server replication, backup-failure/uptime/disk alerts, and a documented recovery-time/recovery-point target.
+
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
 - Prefer service-specific rebuild/restart after testing. Do not run `docker compose down -v`.
-- Rollback baseline for this pass: Git commit `dbf6595` and current running backend/web image IDs recorded by `docker compose images` on 2026-10-12.
+- Current rollback baseline: backend image `design-saga-backend:rollback-236d7c7`; the newest verified database/config archive is `/opt/design-saga-backups/20261013T131412Z`.
 
 ## Next Action
 

@@ -13,12 +13,13 @@ yet received sufficient adversarial testing.
 |---|---|---|
 | Tenant login | Super Admin, tenant owner, email, and employee ID must use one authentication system and resolve the correct tenant/role | Fixed and deployed |
 | Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Fixed in shared database scope; ongoing route-by-route audit |
-| Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, pending deployment in DS-005 |
-| Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, pending deployment in DS-005 |
+| Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, and deployed at `236d7c7` |
+| Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, and deployed at `236d7c7` |
 | Exposed credentials | Rotate the MongoDB Atlas password previously pasted into chat and revoke the temporary Mongo viewer token; confirm neither is used by production | Open, external account action required |
 | Super Admin allowlist | Require an explicit production identity, prevent tenant role escalation, and keep platform owners outside tenant scope | Fixed and deployed at `e086089` |
-| SSH access | Key-only login, disabled password/root remote login where operationally safe, restricted users, firewall, brute-force protection | Audit |
-| Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Open: deploy backups exist; automated restore evidence required |
+| SSH access | Key-only login, disabled password/root remote login where operationally safe, restricted users, firewall, brute-force protection | Fixed baseline: passwords and keyboard-interactive auth disabled, root is key-only, three-attempt/30-second limits active; dedicated non-root operator and fail2ban remain defense-in-depth follow-ups |
+| Host firewall | Deny unsolicited inbound traffic while preserving SSH, HTTP, HTTPS, and HTTP/3 | Fixed: UFW default-deny is active with only 22/tcp, 80/tcp, 443/tcp, and 443/udp allowed for IPv4/IPv6 |
+| Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Partial: daily checksummed archive and restore validation pass; off-server encrypted retention and documented RPO/RTO remain open |
 | Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Partially fixed; test a complete restore drill |
 | Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Open |
 
