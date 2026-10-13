@@ -4,8 +4,8 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; checkpoint `59b5de0` is committed and pushed to GitHub `main` and `production`.
-- Production checkout: `/opt/design-saga-git`, `production` at `59b5de0`.
+- Local checkout: `production`; application checkpoint `d14fc5d` is committed and pushed to GitHub `main` and `production`.
+- Production checkout: `/opt/design-saga-git`, `production` at `d14fc5d`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
@@ -64,7 +64,7 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 | DS-007 | High | Replace unsafe blanket Git redeploy hook with change-aware deployment | Fixed, installed, and verified live |
 | DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | Queued |
 | DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
-| DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, tested, pending deployment |
+| DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, deployed, and verified live |
 
 ## Issue Log
 
@@ -278,6 +278,8 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 - Verification: 8 focused auth tests passed in the candidate image. A disposable PostgreSQL/FerretDB/API stack returned 401 for 30 distinct failed identifiers and 429 for attempt 31, confirmed all identifier/source/TTL indexes, and confirmed stored rows contain only opaque source hashes. All temporary containers, network, database, and test script were removed.
 - Files changed: `backend/routes/auth.py`, `backend/models/user.py`, `backend/core/indexes.py`, `backend/tests/test_auth_tenant_safety.py`.
 - Database effect: startup creates two non-business indexes on `login_attempts`; no user or ERP business records are rewritten.
+- Production deployment: verified backup `/opt/design-saga-backups/20261013T133112Z`; prior backend tagged `rollback-bd3b796`; deployed only backend at `d14fc5d`. Site/API returned 200, unauthenticated auth returned 401, all services are healthy, recent logs contain no application errors, and the identifier/source/TTL indexes are active.
+- Rollback: retag `design-saga-backend:rollback-bd3b796`, recreate only backend, and revert `d14fc5d`. The new indexes are compatible with the prior application.
 
 ## Deployment Safety
 
