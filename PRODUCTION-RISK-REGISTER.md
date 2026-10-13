@@ -16,6 +16,7 @@ yet received sufficient adversarial testing.
 | Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, pending deployment in DS-005 |
 | Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, pending deployment in DS-005 |
 | Exposed credentials | Rotate the MongoDB Atlas password previously pasted into chat and revoke the temporary Mongo viewer token; confirm neither is used by production | Open, external account action required |
+| Super Admin allowlist | Replace the repository-default `designsaga10@gmail.com` allowlist with an explicitly managed production identity and verify registration/password-reset cannot claim it | Open; production startup warning confirmed |
 | SSH access | Key-only login, disabled password/root remote login where operationally safe, restricted users, firewall, brute-force protection | Audit |
 | Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Open: deploy backups exist; automated restore evidence required |
 | Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Partially fixed; test a complete restore drill |

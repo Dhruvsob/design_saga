@@ -224,6 +224,28 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 - Files changed: `backend/core/indexes.py`, `backend/routes/accounting.py`, `backend/routes/payroll.py`, `backend/server.py`, `backend/tests/test_accounting_safety.py`, `backend/tests/test_payroll_safety.py`, `frontend/src/pages/Invoices.jsx`.
 - Rollback: retag `design-saga-backend:rollback-bbb0442` and `design-saga-web:rollback-bbb0442`, recreate backend/web, and revert `8ca840d`. No production business row was rewritten.
 
+### DS-005: Project, task, file and attachment authorization
+
+- Symptom/risk:
+  - Several project, task, follow-up, reminder, project-setting, and file endpoints authenticated the caller but did not enforce module permissions or project membership.
+  - A same-tenant user could read or modify a guessed task/project/file identifier even when the frontend hid it.
+  - User-supplied attachment links accepted executable or local URL schemes such as `javascript:`, `data:`, and `file:`.
+- Production precondition audit: production contained zero files, zero tasks, zero vendors, zero expense claims, zero journal entries, and six employees; no unsafe legacy attachment URLs were found. No data rewrite was required.
+- Correction:
+  - Added one shared same-tenant visibility policy for projects/tasks, including linked employee identities and organization-wide finance/project roles.
+  - Enforced read/create/update permissions and visibility on project lists/details/stages, task CRUD/status/bulk/follow-ups/reminders/settings, and file list/create/delete.
+  - Added a shared external URL policy allowing only credential-free HTTP/HTTPS URLs and applied it to project files, task links/attachments, employee/vendor documents, expense receipts, and accounting bills.
+- Verification:
+  - 18 focused security/accounting tests passed in the candidate image.
+  - Disposable-database integration proved assigned staff access, same-tenant outsider denial, HR permission denial, cross-tenant denial, zero-row unauthorized bulk updates, unchanged protected task data, and unsafe URL rejection.
+  - Temporary QA database, container, scripts, image, and worktree were deleted.
+- Production deployment:
+  - Verified backup `/opt/design-saga-backups/20261013T092427Z`; prior backend tagged `rollback-8ca840d`.
+  - Deployed backend at `236d7c7`; web, PostgreSQL, FerretDB, and Caddy were not restarted.
+  - Backend and dependent services are healthy; site/API return 200; protected project/task/file endpoints return 401 without authentication; recent logs contain no application errors.
+- Files changed: `backend/core/access_control.py`, `backend/core/url_security.py`, `backend/models/accounting.py`, `backend/models/expense.py`, `backend/models/task.py`, `backend/models/vendor.py`, `backend/routes/tasks.py`, `backend/server.py`, `backend/tests/test_access_and_url_safety.py`.
+- Rollback: retag `design-saga-backend:rollback-8ca840d`, recreate only the backend service, and revert `236d7c7`. No database schema or business records were changed.
+
 ## Deployment Safety
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
@@ -232,4 +254,4 @@ Last updated: 2026-10-12 (Asia/Calcutta)
 
 ## Next Action
 
-Continue DS-005 by auditing file/attachment URL creation, persistence, download authorization, tenant isolation, and unsafe URL/content handling with synthetic data.
+Rotate the exposed external MongoDB/viewer credentials and explicitly configure the production Super Admin allowlist, then continue the route-by-route IDOR audit listed in `PRODUCTION-RISK-REGISTER.md`.
