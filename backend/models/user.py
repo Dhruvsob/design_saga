@@ -30,8 +30,8 @@ class RegisterIn(BaseModel):
 
 
 class LoginPasswordIn(BaseModel):
-    identifier: str        # email OR employee_id (e.g. DS0001)
-    password: str
+    identifier: str = Field(min_length=1, max_length=254)  # email OR employee_id
+    password: str = Field(min_length=1, max_length=128)
 
 
 class ChangePasswordIn(BaseModel):

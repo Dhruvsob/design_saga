@@ -16,6 +16,8 @@ _INDEXES = [
     ("user_sessions",      [("user_id", 1)], {}),
     ("user_sessions",      [("expires_at", 1)], {"expireAfterSeconds": 0}),
     ("login_attempts",     [("identifier", 1), ("at", -1)], {}),
+    ("login_attempts",     [("ip_hash", 1), ("at", -1)], {}),
+    ("login_attempts",     [("at", 1)], {"expireAfterSeconds": 86400}),
     # Tenancy
     ("organizations",      [("slug", 1)], {"unique": True}),
     ("organizations",      [("org_id", 1)], {"unique": True}),

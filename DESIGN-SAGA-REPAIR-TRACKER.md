@@ -64,6 +64,7 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 | DS-007 | High | Replace unsafe blanket Git redeploy hook with change-aware deployment | Fixed, installed, and verified live |
 | DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | Queued |
 | DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
+| DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, tested, pending deployment |
 
 ## Issue Log
 
@@ -269,6 +270,14 @@ Last updated: 2026-10-13 (Asia/Calcutta)
   - Verified backup `/opt/design-saga-backups/20261013T131412Z`; prior backend tagged `rollback-236d7c7`.
   - Deployed backend at `e086089`; backend is healthy, site/API return 200, protected auth/platform endpoints return 401 without authentication, and recent logs contain no application errors.
 - Rollback: retag `design-saga-backend:rollback-236d7c7`, recreate only backend, and revert `e086089`. The platform-owner `org_id` cleanup is correct under either version.
+
+### DS-010: Password-login source rate limiting
+
+- Symptom/risk: password login limited failures per identifier but not per network source. An attacker could rotate through many email or employee IDs and avoid the five-attempt account threshold.
+- Correction: hash the client address before storage, count failures per opaque source over the existing 15-minute window, block the thirty-first source failure, bound identifier/password request sizes, and expire attempt records after 24 hours. Existing email, employee-ID, tenant disambiguation, and account-lockout behavior remains unchanged.
+- Verification: 8 focused auth tests passed in the candidate image. A disposable PostgreSQL/FerretDB/API stack returned 401 for 30 distinct failed identifiers and 429 for attempt 31, confirmed all identifier/source/TTL indexes, and confirmed stored rows contain only opaque source hashes. All temporary containers, network, database, and test script were removed.
+- Files changed: `backend/routes/auth.py`, `backend/models/user.py`, `backend/core/indexes.py`, `backend/tests/test_auth_tenant_safety.py`.
+- Database effect: startup creates two non-business indexes on `login_attempts`; no user or ERP business records are rewritten.
 
 ## Deployment Safety
 

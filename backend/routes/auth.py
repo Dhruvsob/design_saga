@@ -27,6 +27,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 from passlib.hash import bcrypt
+import hashlib
 import uuid
 import os
 
@@ -43,6 +44,7 @@ from models.user import (
 router = APIRouter()
 
 MAX_FAILED = 5
+MAX_FAILED_PER_IP = 30
 LOCKOUT_MINUTES = 15
 
 
@@ -113,20 +115,39 @@ async def _set_session_cookie(response: Response, user_id: str) -> str:
     return token
 
 
-async def _register_failed_attempt(identifier: str):
+def _request_ip_hash(request: Request) -> str:
+    """Return an opaque source key; Caddy sanitizes X-Forwarded-For by default."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    address = forwarded.split(",", 1)[0].strip()
+    if not address and request.client:
+        address = request.client.host
+    return hashlib.sha256((address or "unknown").encode("utf-8")).hexdigest()
+
+
+async def _register_failed_attempt(identifier: str, ip_hash: str):
     await db.login_attempts.insert_one({
         "identifier": identifier.lower(),
+        "ip_hash": ip_hash,
         "at": now_utc(),
     })
 
 
-async def _check_lockout(identifier: str):
+async def _check_lockout(identifier: str, ip_hash: str):
     cutoff = now_utc() - timedelta(minutes=LOCKOUT_MINUTES)
     n = await db.login_attempts.count_documents({
         "identifier": identifier.lower(),
         "at": {"$gte": cutoff},
     })
     if n >= MAX_FAILED:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed attempts. Try again after {LOCKOUT_MINUTES} minutes.",
+        )
+    source_failures = await db.login_attempts.count_documents({
+        "ip_hash": ip_hash,
+        "at": {"$gte": cutoff},
+    })
+    if source_failures >= MAX_FAILED_PER_IP:
         raise HTTPException(
             status_code=429,
             detail=f"Too many failed attempts. Try again after {LOCKOUT_MINUTES} minutes.",
@@ -184,12 +205,13 @@ def _ensure_assignable_role(actor: dict, role: str) -> None:
 # LOGIN (password)
 # ==================================================
 @router.post("/auth/login-password")
-async def login_password(payload: LoginPasswordIn, response: Response):
+async def login_password(payload: LoginPasswordIn, response: Response, request: Request):
     ident = payload.identifier.strip()
     if not ident:
         raise HTTPException(status_code=400, detail="Identifier required")
 
-    await _check_lockout(ident)
+    ip_hash = _request_ip_hash(request)
+    await _check_lockout(ident, ip_hash)
 
     # Look up by email OR employee_id.
     # IMPORTANT (multi-tenant): employee_id is per-organisation — every org's
@@ -209,7 +231,7 @@ async def login_password(payload: LoginPasswordIn, response: Response):
             break
 
     if user is None:
-        await _register_failed_attempt(ident)
+        await _register_failed_attempt(ident, ip_hash)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Approval / active gates
