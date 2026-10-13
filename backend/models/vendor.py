@@ -8,8 +8,10 @@ seeded data (`db.vendors_acc`).
 All new schemas ship with an optional `org_id` — the app is single-org today
 but every new document is written multi-tenant ready.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
+
+from core.url_security import external_http_url
 
 
 AGENCY_TYPES = [
@@ -123,6 +125,8 @@ class VendorDocumentIn(BaseModel):
     url: str
     kind: Optional[str] = None                 # gst_certificate | pan | agreement | insurance | other
     expires_on: Optional[str] = None           # YYYY-MM-DD
+
+    _validate_url = field_validator("url")(external_http_url)
 
 
 # ---------- Update (partial edit of vendor master) ----------

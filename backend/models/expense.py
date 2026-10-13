@@ -1,6 +1,8 @@
 """Expense claim / approval models."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Literal
+
+from core.url_security import external_http_url
 
 
 class ExpenseLineIn(BaseModel):
@@ -10,6 +12,11 @@ class ExpenseLineIn(BaseModel):
     date: Optional[str] = None
     receipt_url: Optional[str] = None
     tax_rate: Optional[float] = 0
+
+    @field_validator("receipt_url")
+    @classmethod
+    def validate_receipt_url(cls, value):
+        return external_http_url(value) if value is not None else None
 
 
 class ExpenseCreateIn(BaseModel):

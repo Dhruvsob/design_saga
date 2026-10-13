@@ -4,8 +4,10 @@ Designed forward-compatible for procurement / PO / inventory / vendor
 payments integration (added task doc fields never mutate: `procurement_link`,
 `po_id`, `inventory_id`, `vendor_payment_status`).
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
+
+from core.url_security import external_http_url
 
 
 # ---------- Vocabulary ----------
@@ -96,6 +98,8 @@ class Attachment(BaseModel):
     url: str
     type: Optional[str] = "link"    # link | image | pdf | doc
 
+    _validate_url = field_validator("url")(external_http_url)
+
 
 class FollowUpIn(BaseModel):
     follow_up_date: Optional[str] = None
@@ -135,6 +139,11 @@ class TaskIn(BaseModel):
     reminder_date: Optional[str] = None
     reminder_time: Optional[str] = None
 
+    @field_validator("reference_links")
+    @classmethod
+    def validate_reference_links(cls, values):
+        return [external_http_url(value) for value in values] if values is not None else None
+
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -160,6 +169,11 @@ class TaskUpdate(BaseModel):
     follow_up_date: Optional[str] = None
     reminder_date: Optional[str] = None
     reminder_time: Optional[str] = None
+
+    @field_validator("reference_links")
+    @classmethod
+    def validate_reference_links(cls, values):
+        return [external_http_url(value) for value in values] if values is not None else None
 
 
 class TaskStatusUpdate(BaseModel):

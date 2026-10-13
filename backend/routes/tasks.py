@@ -14,6 +14,10 @@ from core.scoped_db import sdb
 from core.helpers import now_utc, iso, iso_now, new_id
 from core.deps import require_user
 from core.tenancy import user_org_id
+from core.access_control import (
+    get_visible_project, get_visible_task, merge_query, require_permission,
+    task_visibility_query, user_identity_ids,
+)
 
 from models.task import (
     TaskIn, TaskUpdate, TaskStatusUpdate, FollowUpIn, BulkUpdateIn,
@@ -59,6 +63,9 @@ async def tasks_meta(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    require_permission(user, "tasks.read")
+    if project_id:
+        await get_visible_project(user, project_id)
 
     # Tenant-level master data first (Settings → Master Data), then built-in
     # defaults, then per-project customisations.
@@ -124,6 +131,9 @@ async def list_tasks(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    require_permission(user, "tasks.read")
+    if project_id:
+        await get_visible_project(user, project_id)
     q: dict = {}
     if project_id: q["project_id"] = project_id
     if task_type: q["task_type"] = task_type
@@ -149,26 +159,14 @@ async def list_tasks(request: Request,
 
     # ---- Identity: map the logged-in user to their employee record so we can
     # match against project team membership and task assignment. ----
-    my_ids = await _user_identity_ids(user)
+    my_ids = await user_identity_ids(user)
     my_name = user.get("name")
 
     # ---- Visibility gate (Project Team → Tasks) ----
     # Privileged roles (permission `tasks.delete` → Admin/Director/PM/SuperAdmin)
     # see every task in the tenant. Regular staff (Designer/Employee/HR) only see
     # tasks for projects they're on (team member or PM) OR tasks assigned to them.
-    from core.rbac import has_permission
-    can_see_all = has_permission(user, "tasks.delete")
-    if not can_see_all:
-        my_project_ids = await _projects_for_member(my_ids)
-        visibility = {"$or": [
-            {"project_id": {"$in": my_project_ids}},
-            {"assignee_id": {"$in": list(my_ids)}},
-            {"assignees": {"$in": list(my_ids)}},
-            {"created_by": user["user_id"]},
-        ]}
-        if my_name:
-            visibility["$or"].append({"assignee_name": my_name})
-        q = {"$and": [q, visibility]} if q else visibility
+    q = merge_query(q, await task_visibility_query(user))
 
     rows = await sdb.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
 
@@ -185,26 +183,6 @@ async def list_tasks(request: Request,
     return rows
 
 
-async def _user_identity_ids(user: dict) -> set:
-    """All ids that can represent this user in task/team fields:
-    their user_id plus any linked employee id(s) (matched by user_id or email)."""
-    ids = {user["user_id"]}
-    async for e in sdb.employees.find(
-            {"$or": [{"user_id": user["user_id"]}, {"email": user.get("email")}]},
-            {"_id": 0, "id": 1}):
-        ids.add(e["id"])
-    return ids
-
-
-async def _projects_for_member(member_ids: set) -> list:
-    """Project ids where any of `member_ids` is a team member or the PM."""
-    ids = list(member_ids)
-    rows = await sdb.projects.find(
-        {"$or": [{"team_ids": {"$in": ids}}, {"project_manager_id": {"$in": ids}}]},
-        {"_id": 0, "id": 1}).to_list(1000)
-    return [r["id"] for r in rows]
-
-
 # ==================================================
 # Get one (with follow-ups + timeline)
 # ==================================================
@@ -213,14 +191,12 @@ async def get_task(task_id: str, request: Request,
                    session_token: Optional[str] = Cookie(default=None),
                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    t = await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
-    if not t:
-        raise HTTPException(status_code=404, detail="Task not found")
+    t = await get_visible_task(user, task_id)
     # Normalize list-shaped fields to [] so the frontend can use .length safely.
     for k in ("follow_ups", "timeline", "attachments", "reference_links", "assignees"):
         if not t.get(k):
             t[k] = []
-    my_ids = await _user_identity_ids(user)
+    my_ids = await user_identity_ids(user)
     my_name = user.get("name")
     t["assigned_to_me"] = bool(
         (t.get("assignee_id") and t["assignee_id"] in my_ids)
@@ -238,6 +214,7 @@ async def create_task(payload: TaskIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    require_permission(user, "tasks.create")
     doc = payload.model_dump()
     doc["id"] = new_id("tsk_")
     doc["created_at"] = iso_now()
@@ -248,9 +225,8 @@ async def create_task(payload: TaskIn, request: Request,
     if not doc.get("assignee_name") and doc.get("task_type") == "employee":
         doc["assignee_name"] = user.get("name")
     if doc.get("project_id"):
-        p = await sdb.projects.find_one({"id": doc["project_id"]}, {"_id": 0})
-        if p:
-            doc["project_name"] = p.get("name")
+        p = await get_visible_project(user, doc["project_id"])
+        doc["project_name"] = p.get("name")
     # If a vendor_id is provided, backfill vendor_contact from the master
     # so existing readers (list filters, ledger match) keep working.
     if doc.get("vendor_id"):
@@ -314,7 +290,7 @@ async def create_task(payload: TaskIn, request: Request,
     created = await sdb.tasks.find_one({"id": doc["id"]}, {"_id": 0})
     # Annotate assigned_to_me for parity with GET responses.
     if created is not None:
-        my_ids = await _user_identity_ids(user)
+        my_ids = await user_identity_ids(user)
         my_name = user.get("name")
         assignees = created.get("assignees") or []
         created["assigned_to_me"] = bool(
@@ -365,13 +341,14 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    existing = await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Task not found")
+    existing = await get_visible_task(user, task_id, "tasks.update")
 
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         return existing
+    if updates.get("project_id") and updates["project_id"] != existing.get("project_id"):
+        project = await get_visible_project(user, updates["project_id"])
+        updates["project_name"] = project.get("name")
 
     # Track material changes for the timeline audit
     events: List[dict] = []
@@ -457,9 +434,7 @@ async def update_task_status(task_id: str, payload: TaskStatusUpdate, request: R
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    existing = await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Task not found")
+    existing = await get_visible_task(user, task_id, "tasks.update")
 
     lane = payload.status
     detail = payload.status_detail
@@ -531,12 +506,16 @@ async def bulk_update(payload: BulkUpdateIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    require_permission(user, "tasks.update")
     if not payload.task_ids:
         raise HTTPException(status_code=400, detail="task_ids required")
 
     upd = {k: v for k, v in payload.model_dump().items() if v is not None and k != "task_ids"}
     if not upd:
         raise HTTPException(status_code=400, detail="no fields to update")
+    if upd.get("project_id"):
+        project = await get_visible_project(user, upd["project_id"])
+        upd["project_name"] = project.get("name")
 
     # If status_detail present, sync lane
     if upd.get("status_detail") in STATUS_TO_LANE:
@@ -550,11 +529,11 @@ async def bulk_update(payload: BulkUpdateIn, request: Request,
     ev = _timeline_entry(user, TIMELINE_EVENTS["UPDATED"],
                          "Bulk update: " + ", ".join(f"{k}={v}" for k, v in upd.items()
                                                      if k not in ("updated_at", "updated_by")))
-    await sdb.tasks.update_many(
-        {"id": {"$in": payload.task_ids}},
+    result = await sdb.tasks.update_many(
+        merge_query({"id": {"$in": payload.task_ids}}, await task_visibility_query(user)),
         {"$set": upd, "$push": {"timeline": ev}},
     )
-    return {"ok": True, "updated": len(payload.task_ids)}
+    return {"ok": True, "updated": result.modified_count}
 
 
 # ==================================================
@@ -565,9 +544,7 @@ async def add_follow_up(task_id: str, payload: FollowUpIn, request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    existing = await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Task not found")
+    existing = await get_visible_task(user, task_id, "tasks.update")
 
     fu = payload.model_dump()
     fu["id"] = new_id("fu_")
@@ -605,6 +582,7 @@ async def update_follow_up(task_id: str, fu_id: str, payload: FollowUpIn, reques
                            session_token: Optional[str] = Cookie(default=None),
                            authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    await get_visible_task(user, task_id, "tasks.update")
     updates = {f"follow_ups.$.{k}": v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="no fields to update")
@@ -626,6 +604,7 @@ async def delete_follow_up(task_id: str, fu_id: str, request: Request,
                            session_token: Optional[str] = Cookie(default=None),
                            authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    await get_visible_task(user, task_id, "tasks.update")
     ev = _timeline_entry(user, TIMELINE_EVENTS["FOLLOW_UP_UPDATED"],
                          f"Follow-up {fu_id} deleted")
     await sdb.tasks.update_one(
@@ -644,7 +623,8 @@ async def upcoming_reminders(request: Request,
                              days: int = 7,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    require_permission(user, "tasks.read")
     today = now_utc().date().isoformat()
     horizon = (now_utc() + timedelta(days=days)).date().isoformat()
 
@@ -656,6 +636,7 @@ async def upcoming_reminders(request: Request,
             {"due_date": {"$lte": horizon}},
         ],
     }
+    q = merge_query(q, await task_visibility_query(user))
     rows = await sdb.tasks.find(q, {
         "_id": 0, "id": 1, "title": 1, "task_type": 1, "project_name": 1,
         "assignee_name": 1, "area": 1, "category": 1, "priority": 1,
@@ -681,8 +662,8 @@ async def upcoming_reminders(request: Request,
 async def list_project_areas(project_id: str, request: Request,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    p = await sdb.projects.find_one({"id": project_id}, {"_id": 0, "custom_areas": 1})
+    user = await require_user(request, session_token, authorization)
+    p = await get_visible_project(user, project_id, projection={"_id": 0, "custom_areas": 1})
     custom = (p or {}).get("custom_areas") or []
     return {"default": DEFAULT_AREAS, "custom": custom,
             "all": DEFAULT_AREAS + [a for a in custom if a not in DEFAULT_AREAS]}
@@ -692,10 +673,8 @@ async def list_project_areas(project_id: str, request: Request,
 async def add_project_area(project_id: str, payload: CustomAreaIn, request: Request,
                            session_token: Optional[str] = Cookie(default=None),
                            authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    p = await sdb.projects.find_one({"id": project_id}, {"_id": 0})
-    if not p:
-        raise HTTPException(status_code=404, detail="Project not found")
+    user = await require_user(request, session_token, authorization)
+    await get_visible_project(user, project_id, "projects.update")
     await sdb.projects.update_one(
         {"id": project_id},
         {"$addToSet": {"custom_areas": payload.name}},
@@ -707,7 +686,8 @@ async def add_project_area(project_id: str, payload: CustomAreaIn, request: Requ
 async def delete_project_area(project_id: str, name: str, request: Request,
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    await get_visible_project(user, project_id, "projects.update")
     await sdb.projects.update_one(
         {"id": project_id},
         {"$pull": {"custom_areas": name}},
@@ -719,8 +699,8 @@ async def delete_project_area(project_id: str, name: str, request: Request,
 async def list_project_categories(project_id: str, request: Request,
                                   session_token: Optional[str] = Cookie(default=None),
                                   authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    p = await sdb.projects.find_one({"id": project_id}, {"_id": 0, "custom_categories": 1})
+    user = await require_user(request, session_token, authorization)
+    p = await get_visible_project(user, project_id, projection={"_id": 0, "custom_categories": 1})
     custom = (p or {}).get("custom_categories") or []
     return {"default": DEFAULT_CATEGORIES,
             "default_employee": DEFAULT_CATEGORIES_EMPLOYEE,
@@ -732,10 +712,8 @@ async def list_project_categories(project_id: str, request: Request,
 async def add_project_category(project_id: str, payload: CustomCategoryIn, request: Request,
                                session_token: Optional[str] = Cookie(default=None),
                                authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
-    p = await sdb.projects.find_one({"id": project_id}, {"_id": 0})
-    if not p:
-        raise HTTPException(status_code=404, detail="Project not found")
+    user = await require_user(request, session_token, authorization)
+    await get_visible_project(user, project_id, "projects.update")
     entry = {"name": payload.name, "task_type": payload.task_type}
     await sdb.projects.update_one(
         {"id": project_id},
@@ -748,7 +726,8 @@ async def add_project_category(project_id: str, payload: CustomCategoryIn, reque
 async def delete_project_category(project_id: str, name: str, request: Request,
                                   session_token: Optional[str] = Cookie(default=None),
                                   authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    await get_visible_project(user, project_id, "projects.update")
     await sdb.projects.update_one(
         {"id": project_id},
         {"$pull": {"custom_categories": {"name": name}}},

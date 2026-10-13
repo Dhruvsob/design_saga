@@ -40,6 +40,11 @@ db = client[db_name]
 # any business collection so reads/writes auto-filter by org_id.
 from core.scoped_db import sdb  # noqa: E402
 from core.audit import audit as audit_log  # noqa: E402
+from core.access_control import (  # noqa: E402
+    get_visible_project, merge_query, project_visibility_query,
+    require_permission as enforce_permission, visible_project_ids,
+)
+from core.url_security import external_http_url  # noqa: E402
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 EMERGENT_AUTH_BASE = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
@@ -1195,8 +1200,10 @@ async def delete_client(client_id: str, request: Request,
 async def list_projects(request: Request, include_archived: bool = False,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    enforce_permission(user, "projects.read")
     q = {} if include_archived else {"archived": {"$ne": True}}
+    q = merge_query(q, await project_visibility_query(user))
     projects = await sdb.projects.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return projects
 
@@ -1206,6 +1213,7 @@ async def create_project(payload: ProjectIn, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    enforce_permission(user, "projects.create")
     # Plan limit — max projects per tenant
     _org_id = user.get("org_id")
     if _org_id:
@@ -1255,11 +1263,11 @@ async def get_project(project_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    p = await sdb.projects.find_one({"id": project_id}, {"_id": 0})
-    if not p:
-        raise HTTPException(status_code=404, detail="Project not found")
-    p["tasks"] = await sdb.tasks.find({"project_id": project_id}, {"_id": 0}).to_list(500)
-    p["files"] = await sdb.files.find({"project_id": project_id}, {"_id": 0}).to_list(500)
+    p = await get_visible_project(user, project_id)
+    p["tasks"] = (await sdb.tasks.find({"project_id": project_id}, {"_id": 0}).to_list(500)
+                  if has_permission(user, "tasks.read") else [])
+    p["files"] = (await sdb.files.find({"project_id": project_id}, {"_id": 0}).to_list(500)
+                  if has_permission(user, "files.read") else [])
     p["invoices"] = await sdb.invoices.find({"project_id": project_id}, {"_id": 0}).to_list(500)
     p["milestones"] = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).to_list(200)
     # --- connected records: vendors / purchase orders / bills ---
@@ -1323,6 +1331,7 @@ async def update_project_stage(project_id: str, payload: ProjectStageUpdate, req
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "projects.update"):
         raise HTTPException(status_code=403, detail="Missing permission: projects.update")
+    await get_visible_project(user, project_id, "projects.update")
     from routes.master_data import get_values as _md_values
     valid_stages = await _md_values(user.get("org_id") or "org_default", "project_stage", PROJECT_STAGES)
     if payload.stage not in valid_stages and payload.stage not in PROJECT_STAGES:
@@ -1358,6 +1367,7 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "projects.update"):
         raise HTTPException(status_code=403, detail="Missing permission: projects.update")
+    await get_visible_project(user, project_id, "projects.update")
     upd = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
@@ -1384,6 +1394,7 @@ async def archive_project(project_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "projects.update"):
         raise HTTPException(status_code=403, detail="Missing permission: projects.update")
+    await get_visible_project(user, project_id, "projects.update")
     res = await sdb.projects.update_one(
         {"id": project_id},
         {"$set": {"archived": True, "archived_at": iso(now_utc()), "archived_by": user.get("name")}})
@@ -1400,6 +1411,7 @@ async def restore_project(project_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "projects.update"):
         raise HTTPException(status_code=403, detail="Missing permission: projects.update")
+    await get_visible_project(user, project_id, "projects.update")
     res = await sdb.projects.update_one(
         {"id": project_id}, {"$set": {"archived": False}, "$unset": {"archived_at": "", "archived_by": ""}})
     if res.matched_count == 0:
@@ -1422,10 +1434,14 @@ async def restore_project(project_id: str, request: Request,
 async def list_files(request: Request, project_id: Optional[str] = None,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    enforce_permission(user, "files.read")
     q = {}
     if project_id:
+        await get_visible_project(user, project_id)
         q["project_id"] = project_id
+    else:
+        q["project_id"] = {"$in": await visible_project_ids(user)}
     return await sdb.files.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
@@ -1436,7 +1452,12 @@ async def create_file(payload: FileIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "files.create"):
         raise HTTPException(status_code=403, detail="Missing permission: files.create")
+    await get_visible_project(user, payload.project_id)
     doc = payload.model_dump()
+    try:
+        doc["url"] = external_http_url(doc["url"])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     doc["id"] = new_id("fil_")
     doc["created_at"] = iso(now_utc())
     doc["created_by"] = user["user_id"]
@@ -1453,6 +1474,7 @@ async def delete_file(file_id: str, request: Request,
     f = await sdb.files.find_one({"id": file_id}, {"_id": 0})
     if not f:
         raise HTTPException(status_code=404, detail="File not found")
+    await get_visible_project(user, f.get("project_id"))
     # uploader can remove their own file; otherwise needs files.delete
     if f.get("created_by") != user.get("user_id") and not has_permission(user, "files.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: files.delete")
@@ -4057,7 +4079,11 @@ async def add_employee_doc(eid: str, payload: DocumentIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "employees.update"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.update")
-    entry = {"id": new_id("edoc_"), "label": payload.label, "url": payload.url,
+    try:
+        document_url = external_http_url(payload.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    entry = {"id": new_id("edoc_"), "label": payload.label, "url": document_url,
              "uploaded_at": iso(now_utc()), "uploaded_by": user.get("name")}
     res = await sdb.employees.update_one(
         {"id": eid},

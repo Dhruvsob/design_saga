@@ -1,6 +1,8 @@
 """Accounting models — double-entry compatible."""
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
+
+from core.url_security import external_http_url
 
 
 ACCOUNT_TYPES = ["asset", "liability", "income", "expense", "equity"]
@@ -103,6 +105,11 @@ class ExpenseIn(BaseModel):
     reference: Optional[str] = None
     bill_url: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("bill_url")
+    @classmethod
+    def validate_bill_url(cls, value):
+        return external_http_url(value) if value is not None else None
 
 
 class MilestoneIn(BaseModel):
