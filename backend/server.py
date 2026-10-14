@@ -133,14 +133,8 @@ async def require_user(request: Request, session_token: Optional[str] = Cookie(d
     user = await get_current_user(request, session_token, authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    # Approval / active gates — pending or rejected users cannot use protected routes.
-    status = user.get("approval_status")
-    if status == "pending":
-        raise HTTPException(status_code=403,
-                            detail="Your account is awaiting Admin approval.")
-    if status == "rejected" or user.get("is_active") is False:
-        raise HTTPException(status_code=403,
-                            detail="Your account has been deactivated. Contact an Admin.")
+    from core.deps import ensure_user_access
+    await ensure_user_access(user)
     return user
 
 
@@ -183,7 +177,7 @@ def _user_with_perms(user: dict) -> dict:
         return user
     out = {k: v for k, v in user.items() if k != "password_hash"}
     out["role"] = _normalize_role(user.get("role"))
-    if isinstance(user.get("permissions"), list) and user.get("permissions"):
+    if isinstance(user.get("permissions"), list):
         out["permissions"] = list(user["permissions"])
     else:
         out["permissions"] = _expand_permissions(out["role"])
@@ -542,7 +536,7 @@ async def create_session(request: Request, response: Response):
         value=session_token,
         httponly=True,
         secure=cookie_secure,
-        samesite="none" if cookie_secure else "lax",
+        samesite="lax",
         path="/",
         max_age=7 * 24 * 3600,
     )
@@ -561,9 +555,7 @@ async def create_session(request: Request, response: Response):
 async def auth_me(user=None, request: Request = None,
                   session_token: Optional[str] = Cookie(default=None),
                   authorization: Optional[str] = Header(default=None)):
-    user = await get_current_user(request, session_token, authorization)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = await require_user(request, session_token, authorization)
     return _user_with_perms(user)
 
 

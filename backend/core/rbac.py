@@ -108,7 +108,7 @@ def has_permission(user: dict, perm: str) -> bool:
     # per-tenant role overrides attached at request time). Fall back to the
     # static role defaults when nothing is attached.
     grants = user.get("permissions")
-    if not (isinstance(grants, list) and grants):
+    if not isinstance(grants, list):
         grants = ROLE_PERMISSIONS.get(role, [])
     if not grants:
         return False
@@ -177,5 +177,6 @@ def user_with_perms(user: dict) -> dict:
         return user
     out = {k: v for k, v in user.items() if k != "password_hash"}
     out["role"] = normalize_role(user.get("role"))
-    out["permissions"] = expand_permissions(out["role"])
+    grants = user.get("permissions")
+    out["permissions"] = list(grants) if isinstance(grants, list) else expand_permissions(out["role"])
     return out

@@ -33,7 +33,7 @@ import os
 
 from core.db import db
 from core.helpers import iso_now, now_utc, new_id
-from core.deps import require_user, get_current_user
+from core.deps import ensure_user_access, require_user, get_current_user
 from core.rbac import has_permission, ROLES, normalize_role, expand_permissions
 from models.user import (
     RegisterIn, LoginPasswordIn, ChangePasswordIn,
@@ -81,7 +81,7 @@ def _pack_user(u: dict) -> dict:
     out = {k: v for k, v in u.items() if k != "password_hash"}
     role = normalize_role(u.get("role"))
     out["role"] = role
-    if isinstance(u.get("permissions"), list) and u.get("permissions"):
+    if isinstance(u.get("permissions"), list):
         out["permissions"] = list(u["permissions"])
     else:
         out["permissions"] = expand_permissions(role)
@@ -234,21 +234,7 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
         await _register_failed_attempt(ident, ip_hash)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Approval / active gates
-    if user.get("approval_status") == "pending":
-        raise HTTPException(status_code=403,
-                            detail="Your account is awaiting Admin approval.")
-    if user.get("approval_status") == "rejected" or user.get("is_active") is False:
-        raise HTTPException(status_code=403,
-                            detail="Your account has been deactivated. Contact an Admin.")
-    # Org suspension gate — block login for suspended/deactivated tenants
-    if user.get("org_id") and not user.get("is_super_admin"):
-        _org = await db.organizations.find_one(
-            {"org_id": user["org_id"]},
-            {"_id": 0, "is_suspended": 1, "is_active": 1})
-        if _org and (_org.get("is_suspended") or _org.get("is_active") is False):
-            raise HTTPException(status_code=403,
-                                detail="Your organisation is suspended. Contact support.")
+    await ensure_user_access(user)
 
     await _clear_attempts(ident)
     await db.users.update_one(

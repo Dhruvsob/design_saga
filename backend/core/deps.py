@@ -67,6 +67,30 @@ async def get_current_user(
     return user
 
 
+async def ensure_user_access(user: dict) -> None:
+    """Apply account and tenant lifecycle gates to an authenticated user."""
+    status = user.get("approval_status")
+    if status == "pending":
+        raise HTTPException(status_code=403,
+                            detail="Your account is awaiting Admin approval.")
+    if status == "rejected" or user.get("is_active") is False:
+        raise HTTPException(status_code=403,
+                            detail="Your account has been deactivated. Contact an Admin.")
+
+    from .tenancy import is_super_admin
+    org_id = user.get("org_id")
+    if org_id and not is_super_admin(user):
+        org = await db.organizations.find_one(
+            {"org_id": org_id},
+            {"_id": 0, "is_suspended": 1, "is_active": 1})
+        if not org:
+            raise HTTPException(status_code=403,
+                                detail="Your organisation is unavailable. Contact support.")
+        if org.get("is_suspended") or org.get("is_active") is False:
+            raise HTTPException(status_code=403,
+                                detail="Your organisation is suspended. Contact support.")
+
+
 async def require_user(
     request: Request,
     session_token: Optional[str] = Cookie(default=None),
@@ -75,23 +99,7 @@ async def require_user(
     user = await get_current_user(request, session_token, authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    # Approval / active gates — pending or rejected users cannot use protected routes.
-    status = user.get("approval_status")
-    if status == "pending":
-        raise HTTPException(status_code=403,
-                            detail="Your account is awaiting Admin approval.")
-    if status == "rejected" or user.get("is_active") is False:
-        raise HTTPException(status_code=403,
-                            detail="Your account has been deactivated. Contact an Admin.")
-    # Org suspension gate — suspended/deactivated tenants are locked out
-    # (SuperAdmins are exempt so they can administer the platform).
-    if user.get("org_id") and not user.get("is_super_admin"):
-        org = await db.organizations.find_one(
-            {"org_id": user["org_id"]},
-            {"_id": 0, "is_suspended": 1, "is_active": 1})
-        if org and (org.get("is_suspended") or org.get("is_active") is False):
-            raise HTTPException(status_code=403,
-                                detail="Your organisation is suspended. Contact support.")
+    await ensure_user_access(user)
     # Tenant scope re-affirmed (get_current_user already set it)
     set_scope_from_user(user)
     return user
