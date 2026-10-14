@@ -34,8 +34,8 @@ yet received sufficient adversarial testing.
 | Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed and deployed |
 | Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed and deployed |
 | Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Audit |
-| Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Audit |
-| Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Audit |
+| Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides fixed and deployed; broader escalation audit continues |
+| Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Lifecycle gates fixed and deployed; stolen-token resistance audit continues |
 | CSRF and cookies | Confirm `Secure`, `HttpOnly`, appropriate `SameSite`, origin checks and no state-changing GET routes | Audit |
 | Rate limiting | Login, password reset, OTP, public portal, search, AI and expensive exports need per-IP/account limits | Partial: password login has account and opaque per-source limits; remaining endpoint classes are open |
 | Secrets management | No secrets in Git/images/logs; least-privilege environment access; rotation procedure and secret inventory | Audit |

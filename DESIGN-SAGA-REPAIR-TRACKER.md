@@ -4,8 +4,8 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; application checkpoint `35d07c6` is committed and pushed to GitHub `main` and `production`.
-- Production checkout: `/opt/design-saga-git`, `production` at `35d07c6`.
+- Local checkout: `production`; application checkpoint `767bfee` is committed and pushed to GitHub `main` and `production`.
+- Production checkout: `/opt/design-saga-git`, `production` at `767bfee`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
@@ -66,6 +66,7 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 | DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
 | DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, deployed, and verified live |
 | DS-011 | High | Rejected punch retry, late-review races, manual-time integrity, weekly offs, and overlapping leave | Fixed, deployed, and verified live |
+| DS-012 | High | Empty role overrides restored default privileges; legacy session routes missed tenant lifecycle gates | Fixed, deployed, and verified live |
 
 ## Issue Log
 
@@ -300,6 +301,23 @@ Last updated: 2026-10-14 (Asia/Calcutta)
   - Hiren Panchal successfully checked in on 2026-10-14 as `site_visit` with `present/auto` status. Production still has zero duplicate employee/date groups, zero checkout-without-check-in rows, and zero future-dated attendance rows.
   - Recent backend/web logs contain no application errors, systemd reports no failed units, protected VPS Caddy changes remain untouched, and disposable candidate images/worktrees were removed.
 
+### DS-012: RBAC override and session lifecycle enforcement
+
+- Root causes:
+  - Permission checks and user serializers treated an explicit empty permission list as if no override existed, restoring the role's static defaults. A tenant could not fully revoke a role even though the Team & Roles UI saved the empty override.
+  - Legacy routes in `server.py`, including `/auth/me`, used a duplicate account gate that did not check tenant suspension/deactivation. Missing tenant records were also allowed by login and request gates.
+- Correction: an attached permission list is now authoritative even when empty. Account approval/activation and secure SuperAdmin-aware tenant existence/status checks are centralized in `ensure_user_access` and reused by password login, modular routes, legacy routes, and `/auth/me`. The Google session cookie now uses `SameSite=Lax` for the same-origin deployment.
+- Verification:
+  - 37 focused RBAC/auth/attendance/payroll/accounting tests passed; the production backend image built successfully.
+  - Disposable PostgreSQL/FerretDB/API testing proved an empty Employee override blocks a default `projects.read` grant, serializers return `permissions: []`, and suspended or missing tenants receive 403. Disposable containers, network, database, image, and worktree were removed.
+  - Production had zero empty permission overrides before deployment, so no current user was unexpectedly locked out.
+- Production deployment:
+  - Verified backup `/opt/design-saga-backups/20261014T081519Z`; all SHA-256 checks passed. Prior backend remains tagged `rollback-b20cb9c`.
+  - Deployed backend only at `767bfee`; web, PostgreSQL, FerretDB, and Caddy were not restarted. Public site/API/auth smoke checks returned 200/200/401, backend is healthy, systemd has no failed units, and logs contain no application errors.
+  - A temporary production QA org/user/session/override proved active `/auth/me` 200 with an empty permission list, project access 403, suspended tenant 403, and missing tenant 403. Every QA row was deleted and a zero-row cleanup assertion passed.
+- Files changed: `backend/core/deps.py`, `backend/core/rbac.py`, `backend/routes/auth.py`, `backend/server.py`, `backend/tests/test_rbac_session_safety.py`.
+- Database effect: no migration or permanent business-data changes.
+
 ## Deployment Safety
 
 ### DS-007: Safe Git-driven production updates
@@ -320,7 +338,7 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
 - Prefer service-specific rebuild/restart after testing. Do not run `docker compose down -v`.
-- Current rollback baseline: backend/web images tagged `rollback-eae36f1`; the newest verified database/config archive is `/opt/design-saga-backups/20261014T080312Z`.
+- Current rollback baseline: backend image tagged `rollback-b20cb9c`; the newest verified database/config archive is `/opt/design-saga-backups/20261014T081519Z`.
 
 ## Next Action
 
