@@ -26,9 +26,14 @@ from core.scoped_db import sdb
 from core.helpers import iso_now, new_id
 from core.deps import require_user
 from core.rbac import has_permission
-from core.tenancy import user_org_id
+from core.tenancy import is_super_admin, user_org_id
 from core.notifications import emit
 from core.audit import audit
+from core.db import db
+from core.access_control import (
+    merge_query, project_visibility_query, task_visibility_query, user_identity_ids,
+    visible_project_ids,
+)
 
 router = APIRouter()
 
@@ -86,10 +91,22 @@ def _valid_date(s: str) -> bool:
 VISIBILITIES = ["private", "org"]
 
 
+def _date_window(start: str, end: str, max_days: int = 366) -> tuple[str, str]:
+    if not (_valid_date(start) and _valid_date(end)):
+        raise HTTPException(400, "start and end must be YYYY-MM-DD")
+    start, end = start[:10], end[:10]
+    start_date, end_date = _date.fromisoformat(start), _date.fromisoformat(end)
+    if start_date > end_date:
+        raise HTTPException(400, "start must be <= end")
+    if (end_date - start_date).days > max_days:
+        raise HTTPException(400, f"date range cannot exceed {max_days} days")
+    return start, end
+
+
 def _cal_can_see_all(user: dict) -> bool:
     """Admins / SuperAdmins see every event in the tenant; others see their own,
     events shared with the org, and events they're tagged/invited to."""
-    return bool(user.get("is_super_admin")) or has_permission(user, "*.*")
+    return is_super_admin(user) or has_permission(user, "*.*")
 
 
 def _visibility_filter(user: dict) -> dict:
@@ -108,7 +125,15 @@ def _visibility_filter(user: dict) -> dict:
 async def _resolve_notify_ids(user: dict, attendee_ids, employee_ids) -> list:
     """Union of directly-invited user_ids and the login user_ids of tagged
     employees, minus the creator (who doesn't need to notify themselves)."""
-    ids = {a for a in (attendee_ids or []) if a}
+    requested_ids = {a for a in (attendee_ids or []) if a}
+    ids = set()
+    if requested_ids:
+        org_id = user_org_id(user)
+        org_filter = ({"$or": [{"org_id": org_id}, {"org_id": {"$exists": False}}, {"org_id": None}]}
+                      if org_id == "org_default" else {"org_id": org_id})
+        query = {"$and": [{"user_id": {"$in": list(requested_ids)}}, org_filter]}
+        async for target in db.users.find(query, {"_id": 0, "user_id": 1}):
+            ids.add(target["user_id"])
     emp_ids = [e for e in (employee_ids or []) if e]
     if emp_ids:
         async for emp in sdb.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "user_id": 1}):
@@ -130,7 +155,10 @@ async def list_events(request: Request, start: Optional[str] = None, end: Option
         raise HTTPException(403, "Missing permission: calendar.read")
     q: dict = {}
     if start and end:
-        q["date"] = {"$gte": start[:10], "$lte": end[:10]}
+        start, end = _date_window(start, end)
+        q["date"] = {"$gte": start, "$lte": end}
+    elif start or end:
+        raise HTTPException(400, "start and end must be provided together")
     vis = _visibility_filter(user)
     if vis:
         q = {"$and": [q, vis]} if q else vis
@@ -232,21 +260,23 @@ async def calendar_feed(start: str, end: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "calendar.read"):
         raise HTTPException(403, "Missing permission: calendar.read")
-    if not (_valid_date(start) and _valid_date(end)):
-        raise HTTPException(400, "start and end must be YYYY-MM-DD")
-    start, end = start[:10], end[:10]
-    if start > end:
-        raise HTTPException(400, "start must be <= end")
+    start, end = _date_window(start, end)
     end_hi = end + "\uffff"     # include full-ISO datetimes on the end day
 
     items: List[dict] = []
 
     # ---- 1) Tasks (due dates) ----
-    tasks = await sdb.tasks.find(
-        {"due_date": {"$gte": start, "$lte": end_hi}},
-        {"_id": 0, "id": 1, "title": 1, "due_date": 1, "status": 1,
-         "priority": 1, "assignee_name": 1, "project_id": 1},
-    ).to_list(2000)
+    tasks = []
+    if has_permission(user, "tasks.read"):
+        task_query = merge_query(
+            {"due_date": {"$gte": start, "$lte": end_hi}},
+            await task_visibility_query(user),
+        )
+        tasks = await sdb.tasks.find(
+            task_query,
+            {"_id": 0, "id": 1, "title": 1, "due_date": 1, "status": 1,
+             "priority": 1, "assignee_name": 1, "project_id": 1},
+        ).to_list(2000)
     proj_ids = {t["project_id"] for t in tasks if t.get("project_id")}
     proj_names = {}
     if proj_ids:
@@ -264,10 +294,16 @@ async def calendar_feed(start: str, end: str, request: Request,
         })
 
     # ---- 2) Payment milestones ----
-    ms = await sdb.payment_milestones.find(
-        {"due_date": {"$gte": start, "$lte": end_hi}},
-        {"_id": 0, "id": 1, "name": 1, "due_date": 1, "amount": 1, "status": 1, "project_id": 1},
-    ).to_list(500)
+    ms = []
+    if has_permission(user, "finance.read") or has_permission(user, "invoices.read"):
+        milestone_query = merge_query(
+            {"due_date": {"$gte": start, "$lte": end_hi}},
+            {"project_id": {"$in": await visible_project_ids(user)}},
+        )
+        ms = await sdb.payment_milestones.find(
+            milestone_query,
+            {"_id": 0, "id": 1, "name": 1, "due_date": 1, "amount": 1, "status": 1, "project_id": 1},
+        ).to_list(500)
     ms_proj = {m["project_id"] for m in ms if m.get("project_id")}
     if ms_proj:
         async for p in sdb.projects.find({"id": {"$in": list(ms_proj)}}, {"_id": 0, "id": 1, "name": 1}):
@@ -284,10 +320,16 @@ async def calendar_feed(start: str, end: str, request: Request,
         })
 
     # ---- 3) Project deadlines ----
-    projs = await sdb.projects.find(
-        {"end_date": {"$gte": start, "$lte": end_hi}, "archived": {"$ne": True}},
-        {"_id": 0, "id": 1, "name": 1, "end_date": 1, "stage": 1},
-    ).to_list(500)
+    projs = []
+    if has_permission(user, "projects.read"):
+        project_query = merge_query(
+            {"end_date": {"$gte": start, "$lte": end_hi}, "archived": {"$ne": True}},
+            await project_visibility_query(user),
+        )
+        projs = await sdb.projects.find(
+            project_query,
+            {"_id": 0, "id": 1, "name": 1, "end_date": 1, "stage": 1},
+        ).to_list(500)
     for p in projs:
         items.append({
             "id": f"project:{p['id']}",
@@ -301,7 +343,10 @@ async def calendar_feed(start: str, end: str, request: Request,
 
     # ---- 4) Holidays (exact + recurring expansion) ----
     y0, y1 = int(start[:4]), int(end[:4])
-    async for h in sdb.holidays.find({"active": {"$ne": False}}, {"_id": 0}):
+    holiday_rows = (await sdb.holidays.find(
+        {"active": {"$ne": False}}, {"_id": 0}).to_list(1000)
+                    if has_permission(user, "holidays.read") else [])
+    for h in holiday_rows:
         hd = (h.get("date") or "")[:10]
         if not _valid_date(hd):
             continue
@@ -328,10 +373,18 @@ async def calendar_feed(start: str, end: str, request: Request,
                 })
 
     # ---- 5) Approved leaves overlapping window ----
-    leaves = await sdb.leaves.find(
-        {"status": "approved", "from_date": {"$lte": end}, "to_date": {"$gte": start}},
-        {"_id": 0, "id": 1, "employee_name": 1, "leave_type": 1, "from_date": 1, "to_date": 1},
-    ).to_list(500)
+    leaves = []
+    if has_permission(user, "attendance.read"):
+        leave_query = {"status": "approved", "from_date": {"$lte": end}, "to_date": {"$gte": start}}
+        if not (has_permission(user, "attendance.approve")
+                or has_permission(user, "attendance.update")
+                or has_permission(user, "*.*")):
+            leave_query["employee_id"] = {"$in": list(await user_identity_ids(user))}
+        leaves = await sdb.leaves.find(
+            leave_query,
+            {"_id": 0, "id": 1, "employee_name": 1, "leave_type": 1,
+             "from_date": 1, "to_date": 1},
+        ).to_list(500)
     for l in leaves:
         items.append({
             "id": f"leave:{l['id']}",

@@ -5,11 +5,12 @@ deeplink route so the frontend can navigate straight to the record.
 """
 import re
 from typing import Optional
-from fastapi import APIRouter, Request, Cookie, Header
+from fastapi import APIRouter, Request, Cookie, Header, Query
 
 from core.deps import require_user
 from core.scoped_db import sdb
 from core.rbac import has_permission
+from core.access_control import merge_query, project_visibility_query, task_visibility_query
 
 router = APIRouter()
 
@@ -19,14 +20,14 @@ def _rx(q: str):
 
 
 @router.get("/search")
-async def global_search(request: Request, q: str = "", limit: int = 5,
+async def global_search(request: Request, q: str = Query(default="", max_length=100),
+                        limit: int = Query(default=5, ge=1, le=10),
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     q = (q or "").strip()
     if len(q) < 2:
         return {"query": q, "results": []}
-    limit = max(1, min(limit, 10))
     rx = _rx(q)
     results = []
 
@@ -44,7 +45,11 @@ async def global_search(request: Request, q: str = "", limit: int = 5,
                 "route": route_fn(r),
             })
 
-    await push(sdb.projects, {"$or": [{"name": rx}, {"client_name": rx}]},
+    project_query = merge_query(
+        {"$or": [{"name": rx}, {"client_name": rx}]},
+        await project_visibility_query(user),
+    )
+    await push(sdb.projects, project_query,
                "project", "name",
                lambda r: f"/projects/{r.get('id')}",
                lambda r: " \u00b7 ".join(x for x in [r.get("client_name"), r.get("stage")] if x),
@@ -62,7 +67,11 @@ async def global_search(request: Request, q: str = "", limit: int = 5,
                lambda r: " \u00b7 ".join(x for x in [r.get("stage"), r.get("source")] if x),
                "leads.read")
 
-    await push(sdb.tasks, {"$or": [{"title": rx}, {"area": rx}, {"category": rx}]},
+    task_query = merge_query(
+        {"$or": [{"title": rx}, {"area": rx}, {"category": rx}]},
+        await task_visibility_query(user),
+    )
+    await push(sdb.tasks, task_query,
                "task", "title",
                lambda r: f"/tasks/{r.get('id')}",
                lambda r: " \u00b7 ".join(x for x in [r.get("status_detail") or r.get("status"), r.get("assignee_name")] if x),
@@ -90,7 +99,7 @@ async def global_search(request: Request, q: str = "", limit: int = 5,
                "purchase_order", "po_number",
                lambda r: "/purchase-orders",
                lambda r: " \u00b7 ".join(x for x in [r.get("vendor_name"), r.get("status")] if x),
-               "vendors.read")
+               "purchase_orders.read")
 
     # Accounting transactions (journal entries) — by description/reference, and
     # by amount when the query is numeric (e.g. "30000" or "₹30,000").
