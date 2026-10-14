@@ -200,8 +200,9 @@ export default function Attendance() {
   };
 
   const rec = today?.record;
-  const checkedIn = !!rec?.check_in;
-  const checkedOut = !!rec?.check_out;
+  const retryableRejected = rec?.approval_status === "rejected" && rec?.status === "absent";
+  const checkedIn = !!rec?.check_in && !retryableRejected;
+  const checkedOut = !!rec?.check_out && !retryableRejected;
 
   // Live late detection vs policy shift (shown before check-in) — Jewellers UX
   const lateInfo = useMemo(() => {
@@ -360,6 +361,13 @@ export default function Attendance() {
                   >
                     Submit & Check In
                   </button>
+                </div>
+              )}
+
+              {retryableRejected && (
+                <div className="border border-[#B4001C] bg-[#FFF1F3] p-3 mb-3 text-sm text-[#7A0013]" data-testid="rejected-retry-notice">
+                  <div className="flex items-center gap-2 font-semibold"><Warning size={14} /> Previous attendance was rejected</div>
+                  <div className="text-xs mt-1">You can check in again after reaching an authorized location.</div>
                 </div>
               )}
 

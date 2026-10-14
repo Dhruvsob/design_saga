@@ -1,11 +1,17 @@
 """Focused regression coverage for attendance identity and business dates."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from routes import attendance
+from models.attendance import (
+    AttendancePolicyIn, CheckInIn, EmployeeAttendanceConfigIn, GeoLocationIn,
+)
 
 
 def test_attendance_manager_permission_is_explicit():
@@ -113,3 +119,81 @@ def test_team_attendance_can_be_returned_without_compensation():
     assert "net_payable" not in safe
     assert "deduction" not in safe
     assert "late_fine" not in safe
+
+
+def test_rejected_attendance_can_be_retried_but_other_punches_cannot():
+    rejected = {"status": "absent", "approval_status": "rejected", "check_in": "old"}
+    assert attendance._retryable_rejected_punch(rejected) is True
+    assert attendance._retryable_rejected_punch({**rejected, "approval_status": "pending"}) is False
+    assert attendance._retryable_rejected_punch({**rejected, "status": "present"}) is False
+
+
+def test_rejected_retry_archives_prior_attempt(monkeypatch):
+    class Result:
+        matched_count = 1
+
+    class Collection:
+        args = None
+
+        async def update_one(self, query, update):
+            self.args = (query, update)
+            return Result()
+
+    collection = Collection()
+    monkeypatch.setattr(attendance, "sdb", SimpleNamespace(attendance=collection))
+    existing = {
+        "id": "att_1", "status": "absent", "approval_status": "rejected",
+        "check_in": "2026-10-13T09:00:00+05:30", "check_out": "2026-10-13T10:00:00+05:30",
+        "approval_remarks": "Outside authorized site",
+    }
+    replacement = {
+        "id": "att_1", "status": "present", "approval_status": "auto",
+        "check_in": "2026-10-13T11:00:00+05:30",
+    }
+    asyncio.run(attendance._store_check_in(existing, replacement, retry_rejected=True))
+    query, update = collection.args
+    assert query == {"id": "att_1", "approval_status": "rejected", "status": "absent"}
+    assert update["$set"] == replacement
+    assert update["$push"]["rejected_attempts"]["check_in"] == existing["check_in"]
+    assert update["$push"]["rejected_attempts"]["approval_remarks"] == "Outside authorized site"
+    assert "check_out" in update["$unset"]
+
+
+def test_employee_weekly_off_overrides_org_policy():
+    policy = {"weekly_off_days": [6]}
+    assert attendance._weekly_off_days({"weekly_offs": [2]}, policy) == [2]
+    assert attendance._weekly_off_days({"weekly_offs": []}, policy) == []
+    assert attendance._weekly_off_days({}, policy) == [6]
+
+
+def test_manual_attendance_rejects_invalid_cross_day_and_reversed_times():
+    attendance._validate_manual_attendance(
+        "2026-10-13", "2026-10-13T09:00:00+05:30", "2026-10-13T18:00:00+05:30",
+    )
+    with pytest.raises(HTTPException):
+        attendance._validate_manual_attendance("bad-date", None, None)
+    with pytest.raises(HTTPException):
+        attendance._validate_manual_attendance("2026-10-13", None, "2026-10-13T18:00:00+05:30")
+    with pytest.raises(HTTPException):
+        attendance._validate_manual_attendance(
+            "2026-10-13", "2026-10-14T09:00:00+05:30", None,
+        )
+    with pytest.raises(HTTPException):
+        attendance._validate_manual_attendance(
+            "2026-10-13", "2026-10-13T18:00:00+05:30", "2026-10-13T09:00:00+05:30",
+        )
+
+
+def test_attendance_models_reject_invalid_types_geo_and_schedules():
+    with pytest.raises(ValidationError):
+        CheckInIn(attendance_type="somewhere")
+    with pytest.raises(ValidationError):
+        CheckInIn(lat=91, lng=72)
+    with pytest.raises(ValidationError):
+        GeoLocationIn(name="HQ", kind="office", lat=23, lng=72, radius_m=-1)
+    with pytest.raises(ValidationError):
+        AttendancePolicyIn(office_start="25:00")
+    with pytest.raises(ValidationError):
+        AttendancePolicyIn(weekly_off_days=[7])
+    with pytest.raises(ValidationError):
+        EmployeeAttendanceConfigIn(shift_start="9am")

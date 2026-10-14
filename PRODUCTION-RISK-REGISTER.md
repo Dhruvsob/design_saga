@@ -28,8 +28,9 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Employee privacy | Salary, bank, government IDs, private documents, performance and payslips restricted by HR/payroll permissions | Fixed and deployed |
-| Attendance identity | Employees may check in/out only for themselves except explicit managers; geofence/site authorization enforced | Fixed and deployed |
-| Approval races | Concurrent attendance, leave and correction approvals must produce one final decision | Fixed and deployed |
+| Attendance identity | Employees may check in/out only for themselves except explicit managers; geofence/site authorization enforced; rejected punches can be retried without losing audit history | Fixed and deployed; retry enhancement tested pending deployment |
+| Attendance data integrity | Validate geo/type/schedule inputs, manual punch dates/order, employee references, overlapping leave, and employee-specific weekly offs | Fixed and tested, pending deployment |
+| Approval races | Concurrent attendance, leave, correction, and late-arrival approvals must produce one final decision | Fixed and deployed; atomic late review tested pending deployment |
 | Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed and deployed |
 | Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed and deployed |
 | Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Audit |

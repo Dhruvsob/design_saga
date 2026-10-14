@@ -65,6 +65,7 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 | DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | Queued |
 | DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
 | DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, deployed, and verified live |
+| DS-011 | High | Rejected punch retry, late-review races, manual-time integrity, weekly offs, and overlapping leave | Fixed and tested, pending deployment |
 
 ## Issue Log
 
@@ -280,6 +281,19 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 - Database effect: startup creates two non-business indexes on `login_attempts`; no user or ERP business records are rewritten.
 - Production deployment: verified backup `/opt/design-saga-backups/20261013T133112Z`; prior backend tagged `rollback-bd3b796`; deployed only backend at `d14fc5d`. Site/API returned 200, unauthenticated auth returned 401, all services are healthy, recent logs contain no application errors, and the identifier/source/TTL indexes are active.
 - Rollback: retag `design-saga-backend:rollback-bd3b796`, recreate only backend, and revert `d14fc5d`. The new indexes are compatible with the prior application.
+
+### DS-011: Attendance retry and integrity hardening
+
+- Production evidence: Hiren Panchal's account/employee linkage is valid. His 2026-10-13 site punch matched Oeuvre_2 at 23.2 m with 16.7 m GPS accuracy, was accepted automatically, and checked out successfully. Two older in-fence punches from before `c4df434` were rejected under the former approval behavior; no duplicate, missing-tenant, checkout-without-checkin, or future attendance rows exist.
+- Root causes:
+  - A rejected punch retained `check_in`, while backend and frontend treated any stored check-in as final for the day. Employees could not retry after reaching an authorized location.
+  - Late-arrival review used an unrestricted update, so later or concurrent reviewers could overwrite an earlier decision.
+  - Manual attendance silently accepted malformed, cross-day, or reversed timestamps and manager workflows could reference nonexistent employees.
+  - Check-in used organization weekly offs even when an employee had an explicit schedule; overlapping pending/approved leave requests were accepted.
+- Correction: allow exactly one atomic retry of a rejected/absent punch, archive the rejected attempt in the same attendance record, clear stale checkout/review fields, and show a clear retry state in the UI. Late review now changes only `pending` rows. Manual timestamps and employee references are validated, employee weekly offs take precedence, overlapping active leave is rejected, leave ranges are bounded, and attendance/geofence/config inputs have strict type/range validation.
+- Verification: 25 focused attendance/payroll/auth tests passed; backend and frontend production images built successfully. A disposable PostgreSQL/FerretDB/API workflow proved rejected-punch retry/history, duplicate-punch denial, overlapping-leave denial, reversed-time and unknown-employee denial, and exactly one winner from six concurrent late-review requests. Temporary database, containers, network, and scripts were removed.
+- Files changed: `backend/models/attendance.py`, `backend/routes/attendance.py`, `backend/tests/test_attendance_safety.py`, `frontend/src/pages/Attendance.jsx`.
+- Database effect: no migration or production business-data rewrite; future rejected retries append an embedded audit snapshot to the existing daily row.
 
 ## Deployment Safety
 

@@ -122,6 +122,40 @@ def _attendance_allows_leave(existing: Optional[dict]) -> bool:
     )
 
 
+def _retryable_rejected_punch(existing: Optional[dict]) -> bool:
+    return bool(
+        existing
+        and existing.get("approval_status") == "rejected"
+        and existing.get("status") == "absent"
+    )
+
+
+def _weekly_off_days(employee: Optional[dict], policy: dict) -> list[int]:
+    configured = (employee or {}).get("weekly_offs")
+    return configured if configured is not None else (policy.get("weekly_off_days") or [6])
+
+
+def _validate_manual_attendance(date_str: str, check_in: Optional[str],
+                                check_out: Optional[str]) -> None:
+    try:
+        requested_date = _date.fromisoformat(date_str)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+    if check_out and not check_in:
+        raise HTTPException(400, "Manual check-out requires a check-in")
+    parsed = []
+    for label, value in (("check-in", check_in), ("check-out", check_out)):
+        if not value:
+            parsed.append(None)
+            continue
+        dt = _parse_correction_datetime(value, label)
+        if dt.astimezone(engine.IST).date() != requested_date:
+            raise HTTPException(400, f"Manual {label} must be on {date_str}")
+        parsed.append(dt)
+    if parsed[0] and parsed[1] and parsed[1] <= parsed[0]:
+        raise HTTPException(400, "Manual check-out must be after check-in")
+
+
 def _without_compensation(summary: dict) -> dict:
     """Return attendance detail without compensation amounts."""
     hidden = {
@@ -392,17 +426,45 @@ async def _resolve_employee_id(user: dict, provided: Optional[str]) -> str:
     if user.get("email"):
         links.append({"email": user["email"]})
     emp = await sdb.employees.find_one({"$or": links}, {"_id": 0, "id": 1})
-    return _select_employee_id(user, provided, (emp or {}).get("id"))
+    resolved = _select_employee_id(user, provided, (emp or {}).get("id"))
+    if provided and _can_manage_attendance(user):
+        target = await sdb.employees.find_one({"id": resolved}, {"_id": 0, "id": 1})
+        if not target:
+            raise HTTPException(404, "Employee not found")
+    return resolved
 
 
 def _today() -> str:
     return engine.now_ist().date().isoformat()
 
 
-async def _store_check_in(existing: Optional[dict], doc: dict):
+async def _store_check_in(existing: Optional[dict], doc: dict,
+                          retry_rejected: bool = False):
     """Persist exactly one punch for an employee/business-date key."""
     try:
-        if existing:
+        if existing and retry_rejected:
+            prior = {key: existing.get(key) for key in (
+                "check_in", "check_out", "attendance_type", "project_id",
+                "site_location", "geo_inside", "geo_location_matched",
+                "geo_distance_m", "approval_status", "approval_remarks",
+                "approved_by", "approved_at",
+            ) if existing.get(key) is not None}
+            prior["archived_at"] = iso_now()
+            result = await sdb.attendance.update_one(
+                {"id": existing["id"], "approval_status": "rejected", "status": "absent"},
+                {
+                    "$set": doc,
+                    "$push": {"rejected_attempts": prior},
+                    "$unset": {
+                        "check_out": "", "check_out_ip": "", "check_out_notes": "",
+                        "worked_hours": "", "working_minutes": "", "approved_by": "",
+                        "approved_by_name": "", "approved_at": "", "approval_remarks": "",
+                    },
+                },
+            )
+            if result.matched_count == 0:
+                raise HTTPException(400, "Attendance has already been updated; refresh and retry")
+        elif existing:
             result = await sdb.attendance.update_one(
                 {"id": existing["id"], "check_in": None}, {"$set": doc})
             if result.matched_count == 0:
@@ -459,11 +521,13 @@ async def check_in(payload: CheckInIn, request: Request,
     user = await require_user(request, session_token, authorization)
     emp_id = await _resolve_employee_id(user, payload.employee_id)
     emp_doc = await sdb.employees.find_one(
-        {"id": emp_id}, {"_id": 0, "shift_start": 1, "grace_minutes": 1})
+        {"id": emp_id}, {"_id": 0, "shift_start": 1, "grace_minutes": 1,
+                         "weekly_offs": 1})
     today = _today()
 
     existing = await sdb.attendance.find_one({"employee_id": emp_id, "date": today}, {"_id": 0})
-    if existing and existing.get("check_in"):
+    retry_rejected = _retryable_rejected_punch(existing)
+    if existing and existing.get("check_in") and not retry_rejected:
         raise HTTPException(status_code=400, detail="Already checked in today")
 
     att_type = payload.attendance_type or "office"
@@ -473,7 +537,7 @@ async def check_in(payload: CheckInIn, request: Request,
     # If today is a company holiday or weekly-off, mark the day accordingly
     # and skip the geo-fence + late-mark logic entirely.
     is_holiday_today, holiday_row = await _is_holiday(today)
-    is_weekly_off = datetime.strptime(today, "%Y-%m-%d").weekday() in (policy.get("weekly_off_days") or [])
+    is_weekly_off = datetime.strptime(today, "%Y-%m-%d").weekday() in _weekly_off_days(emp_doc, policy)
     if (is_holiday_today or is_weekly_off) and att_type == "office":
         holiday_doc = {
             "id": existing["id"] if existing else new_id("att_"),
@@ -488,7 +552,7 @@ async def check_in(payload: CheckInIn, request: Request,
         }
         if not existing:
             holiday_doc["created_at"] = iso_now()
-        await _store_check_in(existing, holiday_doc)
+        await _store_check_in(existing, holiday_doc, retry_rejected)
         return await sdb.attendance.find_one({"id": holiday_doc["id"]}, {"_id": 0})
 
     # ---- Geo-fence enforcement ----
@@ -644,7 +708,7 @@ async def check_in(payload: CheckInIn, request: Request,
     }
     if not existing:
         doc["created_at"] = iso_now()
-    await _store_check_in(existing, doc)
+    await _store_check_in(existing, doc, retry_rejected)
     # Notify HR/Admins when an approval is needed (out-of-zone or non-office)
     if approval_status == "pending":
         where = doc.get("site_location") or doc.get("geo_location_matched") or ""
@@ -804,6 +868,9 @@ async def override_attendance(payload: AttendanceOverrideIn, request: Request,
         raise HTTPException(status_code=403, detail="Missing permission: employees.update")
     if payload.status not in ATTENDANCE_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
+    _validate_manual_attendance(payload.date, None, None)
+    if not await sdb.employees.find_one({"id": payload.employee_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(404, "Employee not found")
 
     existing = await sdb.attendance.find_one(
         {"employee_id": payload.employee_id, "date": payload.date},
@@ -865,11 +932,24 @@ async def create_leave(payload: LeaveRequestIn, request: Request,
     emp_id = await _resolve_employee_id(user, payload.employee_id)
 
     # Compute days between (inclusive)
-    d1 = _date.fromisoformat(payload.from_date)
-    d2 = _date.fromisoformat(payload.to_date)
+    try:
+        d1 = _date.fromisoformat(payload.from_date)
+        d2 = _date.fromisoformat(payload.to_date)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Leave dates must be YYYY-MM-DD")
     if d2 < d1:
         raise HTTPException(status_code=400, detail="to_date before from_date")
     days = (d2 - d1).days + 1
+    if days > 366:
+        raise HTTPException(status_code=400, detail="A leave request cannot exceed 366 days")
+    overlap = await sdb.leaves.find_one({
+        "employee_id": emp_id,
+        "status": {"$in": ["pending", "approved"]},
+        "from_date": {"$lte": payload.to_date},
+        "to_date": {"$gte": payload.from_date},
+    }, {"_id": 0, "id": 1})
+    if overlap:
+        raise HTTPException(status_code=409, detail="An active leave request already overlaps these dates")
 
     # Resolve the employee's display name explicitly (leave permissions
     # must always show WHO the leave is for).
@@ -1316,6 +1396,9 @@ async def manual_attendance(payload: ManualAttendanceIn, request: Request,
         raise HTTPException(403, "Missing permission: employees.update")
     if payload.status not in ATTENDANCE_STATUSES:
         raise HTTPException(400, "Invalid status")
+    _validate_manual_attendance(payload.date, payload.check_in, payload.check_out)
+    if not await sdb.employees.find_one({"id": payload.employee_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(404, "Employee not found")
     existing = await sdb.attendance.find_one(
         {"employee_id": payload.employee_id, "date": payload.date}, {"_id": 0})
     updates = {
@@ -1332,14 +1415,11 @@ async def manual_attendance(payload: ManualAttendanceIn, request: Request,
         "updated_at": iso_now(),
     }
     if payload.check_in and payload.check_out:
-        try:
-            ci = datetime.fromisoformat(payload.check_in.replace("Z", "+00:00"))
-            co = datetime.fromisoformat(payload.check_out.replace("Z", "+00:00"))
-            wm = max(int((co - ci).total_seconds() // 60), 0)
-            updates["working_minutes"] = wm
-            updates["worked_hours"] = round(wm / 60.0, 2)
-        except Exception:
-            pass
+        ci = _parse_correction_datetime(payload.check_in, "check-in")
+        co = _parse_correction_datetime(payload.check_out, "check-out")
+        wm = int((co - ci).total_seconds() // 60)
+        updates["working_minutes"] = wm
+        updates["worked_hours"] = round(wm / 60.0, 2)
     if existing:
         await sdb.attendance.update_one({"id": existing["id"]}, {"$set": updates})
         row_id = existing["id"]
@@ -1364,6 +1444,9 @@ async def short_leave(payload: ShortLeaveIn, request: Request,
         raise HTTPException(403, "Missing permission: employees.update")
     if not payload.hours or payload.hours <= 0 or payload.hours > 12:
         raise HTTPException(400, "Hours must be between 0 and 12")
+    _validate_manual_attendance(payload.date, None, None)
+    if not await sdb.employees.find_one({"id": payload.employee_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(404, "Employee not found")
     existing = await sdb.attendance.find_one(
         {"employee_id": payload.employee_id, "date": payload.date}, {"_id": 0})
     note = f"Short/hourly leave: {payload.hours}h" + (f" — {payload.reason}" if payload.reason else "")
@@ -1418,20 +1501,28 @@ async def review_late(record_id: str, payload: LateReviewIn, request: Request,
         raise HTTPException(403, "Missing permission: employees.update")
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(400, "status must be approved or rejected")
-    row = await sdb.attendance.find_one({"id": record_id}, {"_id": 0})
-    if not row:
-        raise HTTPException(404, "Attendance record not found")
-    if not row.get("late_approval_status") or row.get("late_approval_status") == "not_required":
-        raise HTTPException(400, "This record is not a late arrival awaiting review")
     # Approving/excusing a late arrival waives its fine; rejecting keeps it.
-    await sdb.attendance.update_one({"id": record_id}, {"$set": {
-        "late_approval_status": payload.status,
-        "late_fine_waived": payload.status == "approved",
-        "late_reviewed_by": user["user_id"],
-        "late_reviewed_by_name": user.get("name"),
-        "late_reviewed_at": iso_now(),
-        "late_review_notes": payload.review_notes or "",
-    }})
+    row = await sdb.attendance.find_one_and_update(
+        {"id": record_id, "late_approval_status": "pending"},
+        {"$set": {
+            "late_approval_status": payload.status,
+            "late_fine_waived": payload.status == "approved",
+            "late_reviewed_by": user["user_id"],
+            "late_reviewed_by_name": user.get("name"),
+            "late_reviewed_at": iso_now(),
+            "late_review_notes": payload.review_notes or "",
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not row:
+        current = await sdb.attendance.find_one({"id": record_id}, {"_id": 0})
+        if not current:
+            raise HTTPException(404, "Attendance record not found")
+        raise HTTPException(
+            409,
+            f"Late arrival already {current.get('late_approval_status') or 'not reviewable'}",
+        )
+    row.pop("_id", None)
     await audit(user, f"attendance.late_{payload.status}", target=record_id,
                 target_type="attendance",
                 meta={"employee_id": row.get("employee_id"), "date": row.get("date")})
