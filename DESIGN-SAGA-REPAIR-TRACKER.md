@@ -4,8 +4,8 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; application checkpoint `767bfee` is committed and pushed to GitHub `main` and `production`.
-- Production checkout: `/opt/design-saga-git`, `production` at `767bfee`.
+- Local checkout: `production`; application checkpoint `cf82c92` is committed and pushed to GitHub `main` and `production`.
+- Production checkout: `/opt/design-saga-git`, `production` at `cf82c92`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
@@ -67,6 +67,7 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 | DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, deployed, and verified live |
 | DS-011 | High | Rejected punch retry, late-review races, manual-time integrity, weekly offs, and overlapping leave | Fixed, deployed, and verified live |
 | DS-012 | High | Empty role overrides restored default privileges; legacy session routes missed tenant lifecycle gates | Fixed, deployed, and verified live |
+| DS-013 | High | Search, comments, calendar, and event notifications bypassed primary visibility boundaries | Fixed, deployed, and verified live |
 
 ## Issue Log
 
@@ -318,6 +319,24 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 - Files changed: `backend/core/deps.py`, `backend/core/rbac.py`, `backend/routes/auth.py`, `backend/server.py`, `backend/tests/test_rbac_session_safety.py`.
 - Database effect: no migration or permanent business-data changes.
 
+### DS-013: Secondary-surface visibility enforcement
+
+- Root causes:
+  - Global search applied tenant and module permission checks but skipped the assignment/team visibility rules used by project and task endpoints.
+  - Comments required authentication only, so a user could list or add comments against a guessed hidden project/task/entity ID.
+  - The calendar feed exposed all tenant tasks, project deadlines, approved employee leave names, and payment milestone amounts to any role with `calendar.read`.
+  - Calendar attendee IDs were not tenant-validated before notification fan-out, and unbounded search/date inputs allowed unnecessarily expensive requests.
+- Correction: search now merges the shared project/task visibility queries and uses the correct purchase-order permission. Comment list/create/delete validates the target entity, module read permission, and project/task visibility. Calendar sources are independently permission-gated; tasks/projects use shared visibility, ordinary employees see only their own approved leave, milestone amounts require invoice/finance access, and direct notification recipients must belong to the creator's tenant. Search and calendar ranges are bounded and validated.
+- Verification:
+  - 50 focused visibility/RBAC/auth/attendance/payroll/accounting tests passed; the production backend image built successfully.
+  - A disposable two-tenant PostgreSQL/FerretDB/API workflow proved hidden project/task search results are absent, hidden comments return 404, calendar returns only the employee's visible task/project and own leave, milestones remain hidden without financial permission, oversized ranges return 400, a foreign-tenant attendee receives zero notifications, and vendor-only search cannot reveal purchase orders.
+  - The disposable database, containers, network, candidate image, and worktree were removed; production business data was not used or changed.
+- Production deployment:
+  - Verified backup `/opt/design-saga-backups/20261014T082426Z`; all SHA-256 checks passed. Prior backend remains tagged `rollback-1f891dc`.
+  - Deployed backend only at `cf82c92`; web, PostgreSQL, FerretDB, and Caddy were not restarted. Public site/API/auth smoke checks returned 200/200/401, backend is healthy, systemd has no failed units, protected Caddy changes remain untouched, and recent logs contain no application errors.
+- Files changed: `backend/routes/calendar.py`, `backend/routes/comments.py`, `backend/routes/search.py`, `backend/tests/test_visibility_surfaces.py`.
+- Database effect: no migration or business-data rewrite.
+
 ## Deployment Safety
 
 ### DS-007: Safe Git-driven production updates
@@ -338,7 +357,7 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
 - Prefer service-specific rebuild/restart after testing. Do not run `docker compose down -v`.
-- Current rollback baseline: backend image tagged `rollback-b20cb9c`; the newest verified database/config archive is `/opt/design-saga-backups/20261014T081519Z`.
+- Current rollback baseline: backend image tagged `rollback-1f891dc`; the newest verified database/config archive is `/opt/design-saga-backups/20261014T082426Z`.
 
 ## Next Action
 
