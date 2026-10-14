@@ -150,7 +150,7 @@ export default function CompanySettings() {
                     </button>
                   )}
                 </div>
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onLogoPick} />
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onLogoPick} />
               </div>
             </div>
 

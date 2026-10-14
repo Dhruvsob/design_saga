@@ -24,6 +24,8 @@ from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
 from core.audit import audit
+from core.locks import doc_lock
+from core.finance import require_asset_account
 from models.loan import LoanCreateIn, LoanUpdateIn, PayEMIIn, PrepayIn
 from routes.accounting import _post_journal
 
@@ -289,9 +291,17 @@ async def pay_emi(loan_id: str, payload: PayEMIIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_any_permission(user, "finance.create", "loans.create"):
         raise HTTPException(403, "Missing permission: finance.create")
+    await require_asset_account(payload.paid_from_account_id)
+    async with doc_lock(sdb.loans, loan_id):
+        return await _pay_emi_locked(user, loan_id, payload)
+
+
+async def _pay_emi_locked(user: dict, loan_id: str, payload: PayEMIIn):
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
         raise HTTPException(404, "Loan not found")
+    if loan.get("status") != "active":
+        raise HTTPException(400, f"Loan is {loan.get('status')} — payments are not allowed")
     schedule = loan.get("schedule", [])
     idx = payload.schedule_index
     if idx < 0 or idx >= len(schedule):
@@ -304,6 +314,12 @@ async def pay_emi(loan_id: str, payload: PayEMIIn, request: Request,
     principal_amt = float(row["principal"])
     interest_amt = float(row["interest"])
     extra = round(float(payload.extra_principal or 0), 2)
+    if extra < 0:
+        raise HTTPException(400, "Extra principal cannot be negative")
+    future_principal = round(sum(float(r["principal"]) for r in schedule[idx + 1:]
+                                 if not r.get("paid")), 2)
+    if extra > future_principal + 0.005:
+        raise HTTPException(400, f"Extra principal exceeds remaining principal ({future_principal:.2f})")
     total_amt = round(principal_amt + interest_amt + extra, 2)
 
     # Post JE: DR Loan Liability (principal + extra) · DR Interest Expense · CR Bank
@@ -329,6 +345,7 @@ async def pay_emi(loan_id: str, payload: PayEMIIn, request: Request,
         lines,
         reference=payload.reference or f"EMI-{loan_id}-{idx+1}",
         source="loan_emi", source_id=loan_id,
+        idempotency_suffix=f"emi{idx}",
     )
 
     # Mark row paid + apply extra principal reduction on the next row's balance
@@ -381,10 +398,25 @@ async def prepay(loan_id: str, payload: PrepayIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_any_permission(user, "finance.create", "loans.create"):
         raise HTTPException(403, "Missing permission: finance.create")
+    await require_asset_account(payload.paid_from_account_id)
+    async with doc_lock(sdb.loans, loan_id):
+        return await _prepay_locked(user, loan_id, payload)
+
+
+async def _prepay_locked(user: dict, loan_id: str, payload: PrepayIn):
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
         raise HTTPException(404, "Loan not found")
+    if loan.get("status") != "active":
+        raise HTTPException(400, f"Loan is {loan.get('status')} — prepayment is not allowed")
     schedule = loan.get("schedule", [])
+    amount = round(float(payload.amount or 0), 2)
+    unpaid_principal = round(sum(float(r["principal"]) for r in schedule if not r.get("paid")), 2)
+    if amount <= 0:
+        raise HTTPException(400, "Prepayment amount must be positive")
+    if amount > unpaid_principal + 0.005:
+        raise HTTPException(400, f"Prepayment exceeds outstanding principal ({unpaid_principal:.2f})")
+    prepay_no = int(loan.get("prepayment_count") or 0) + 1
 
     paid_on = payload.paid_on or _date.today().isoformat()
     # Post JE: DR Loan Liability / CR Bank
@@ -397,8 +429,9 @@ async def prepay(loan_id: str, payload: PrepayIn, request: Request,
             {"account_id": payload.paid_from_account_id, "debit": 0, "credit": payload.amount,
              "description": "Prepayment"},
         ],
-        reference=f"PREPAY-{loan_id}",
+        reference=f"PREPAY-{loan_id}-{prepay_no}",
         source="loan_prepay", source_id=loan_id,
+        idempotency_suffix=f"prepay{prepay_no}",
     )
 
     # Reduce upcoming principal
@@ -422,7 +455,8 @@ async def prepay(loan_id: str, payload: PrepayIn, request: Request,
     await sdb.loans.update_one(
         {"id": loan_id},
         {"$set": {"schedule": schedule, "status": status,
-                  "last_prepayment_at": iso_now()}},
+                  "last_prepayment_at": iso_now(),
+                  "prepayment_count": prepay_no}},
     )
     await audit(user, "loan.prepay", target=loan_id, target_type="loan",
                 meta={"amount": payload.amount, "journal_id": je["id"]})
@@ -448,9 +482,18 @@ async def delete_loan(loan_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_any_permission(user, "finance.delete", "loans.delete"):
         raise HTTPException(403, "Missing permission: finance.delete")
+    async with doc_lock(sdb.loans, loan_id):
+        return await _archive_loan_locked(user, loan_id)
+
+
+async def _archive_loan_locked(user: dict, loan_id: str):
     loan = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
     if not loan:
         raise HTTPException(404, "Loan not found")
+    if loan.get("status") == "archived":
+        return {"ok": True, "archived": True}
+    if loan.get("last_prepayment_at") or loan.get("prepayment_count"):
+        raise HTTPException(400, "Loan has posted prepayment journal entries — reverse them in Accounting before archiving.")
     if any(r.get("paid") for r in loan.get("schedule", [])):
         raise HTTPException(400, "Loan has posted EMI journal entries — reverse each EMI first from Accounting → Journal Entries, then archive the loan.")
 

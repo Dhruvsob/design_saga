@@ -70,7 +70,7 @@
     }
   },
   "test_environment": {
-    "base_url": "https://finance-corrections.preview.emergentagent.com/api",
+    "base_url": "https://gamaa-preview.preview.emergentagent.com/api",
     "admin_credentials": "admin@designsaga.com / Admin@123",
     "test_date": "2025-01-XX",
     "total_tests": 24,

@@ -1,5 +1,5 @@
 """Accounting models — double-entry compatible."""
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 
 from core.url_security import external_http_url
@@ -161,4 +161,4 @@ class VendorIn(BaseModel):
     active: Optional[bool] = True
     notes: Optional[str] = None
     # Multi-tenant ready (not enforced yet — see PRD)
-    org_id: Optional[str] = None
+    org_id: Optional[str] = Field(default=None, exclude=True)  # server-assigned; client value ignored

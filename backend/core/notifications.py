@@ -62,9 +62,17 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
     async for u in db.users.find({"user_id": {"$in": [x for x in set(user_ids) if x]}},
                                  {"_id": 0, "user_id": 1, "org_id": 1}):
         org_by_uid[u["user_id"]] = u.get("org_id")
+    # Tenant isolation: inside a tenant request, recipients from any other
+    # organisation (or unknown users) are silently dropped.
+    from core.scoped_db import current_org_id
+    scope_org = current_org_id()
     docs = []
     for uid in set(user_ids):
         if not uid:
+            continue
+        if uid not in org_by_uid:
+            continue
+        if scope_org and (org_by_uid.get(uid) or "org_default") != scope_org:
             continue
         # Dedup — if a doc with the same key already exists for this user, skip.
         if dedup_key:
@@ -100,6 +108,9 @@ async def emit_admins(kind: str, title: str, body: str = "",
     """Broadcast to active Admin / Director users. Pass `org_id` to keep the
     fan-out tenant-scoped (REQUIRED for anything triggered inside an org)."""
     q = {"role": {"$in": ["Admin", "Director"]}, "is_active": {"$ne": False}}
+    if not org_id:
+        from core.scoped_db import current_org_id
+        org_id = current_org_id()
     if org_id:
         q["org_id"] = org_id
     ids = []
@@ -114,6 +125,9 @@ async def emit_finance(kind: str, title: str, body: str = "",
                        org_id: Optional[str] = None) -> int:
     """Broadcast to Admin / Director / Accountant (tenant-scoped via org_id)."""
     q = {"role": {"$in": ["Admin", "Director", "Accountant"]}, "is_active": {"$ne": False}}
+    if not org_id:
+        from core.scoped_db import current_org_id
+        org_id = current_org_id()
     if org_id:
         q["org_id"] = org_id
     ids = []

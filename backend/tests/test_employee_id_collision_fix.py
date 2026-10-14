@@ -24,7 +24,7 @@ import requests
 import sys
 from typing import Optional, Dict, Any
 
-BASE_URL = "https://erp-audit-polish.preview.emergentagent.com/api"
+BASE_URL = "https://gamaa-preview.preview.emergentagent.com/api"
 
 class Colors:
     GREEN = '\033[92m'

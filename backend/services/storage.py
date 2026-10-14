@@ -40,7 +40,33 @@ MIME_TO_EXT = {
 }
 
 MAX_LOGO_BYTES = 2 * 1024 * 1024   # 2MB decoded
-ALLOWED_LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"}
+# SVG is intentionally excluded: it is an active document format (script,
+# external references) and cannot be safely sanitised server-side here.
+ALLOWED_LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+LOGO_PATH_RE = re.compile(r"^" + re.escape("designsaga-erp") + r"/org-logos/[A-Za-z0-9_-]{1,64}/[a-f0-9]{32}\.(png|jpg|webp|gif|svg)$")
+
+
+def sniff_image_mime(raw: bytes) -> Optional[str]:
+    """Return the real image type from magic bytes (None if not a raster image)."""
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if raw[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def validate_logo_bytes(raw: bytes, declared_mime: str) -> str:
+    if not raw:
+        raise ValueError("Empty file")
+    if len(raw) > MAX_LOGO_BYTES:
+        raise ValueError(f"File too large: {len(raw)}B > {MAX_LOGO_BYTES}B")
+    real = sniff_image_mime(raw)
+    declared = "image/jpeg" if declared_mime == "image/jpg" else declared_mime
+    if not real or real != declared:
+        raise ValueError("File content does not match an allowed image type (PNG, JPEG, WebP)")
+    return real
 
 
 def init_storage(force: bool = False) -> Optional[str]:
@@ -138,6 +164,8 @@ def upload_data_url(data_url: str, folder: str, owner_id: str,
         raise ValueError(f"Content type {mime} not allowed")
     if len(raw) > max_bytes:
         raise ValueError(f"File too large: {len(raw)}B > {max_bytes}B")
+    if allowed_mimes is ALLOWED_LOGO_MIME:
+        mime = validate_logo_bytes(raw, mime)
 
     ext = MIME_TO_EXT.get(mime, "bin")
     path = f"{APP_NAME}/{folder}/{owner_id}/{uuid.uuid4().hex}.{ext}"

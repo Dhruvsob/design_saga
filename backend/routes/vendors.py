@@ -36,6 +36,9 @@ from core.helpers import iso_now, new_id
 from core.deps import require_user
 from core.tenancy import user_org_id
 from core.rbac import has_permission
+from core.locks import doc_lock
+from core.finance import require_asset_account
+import re as _re_mod
 from models.accounting import VendorIn
 from models.vendor import (
     VendorUpdate, VendorBillIn, VendorBillUpdate, VendorPaymentIn,
@@ -168,6 +171,24 @@ async def list_vendors(
     return rows
 
 
+
+async def _ensure_unique_gstin(gstin, exclude_id: Optional[str] = None):
+    """GSTIN identifies one registration; it must be unique (case-insensitive)
+    among active vendors of the tenant. PAN may legitimately repeat across a
+    company's state-wise GSTINs, so it is not forced unique."""
+    g = (gstin or "").strip().upper()
+    if not g:
+        return None
+    if not _re_mod.fullmatch(r"[0-9]{2}[A-Z0-9]{13}", g):
+        raise HTTPException(status_code=400, detail="GSTIN must be 15 characters (e.g. 27ABCDE1234F1Z5)")
+    q = {"gstin": {"$regex": f"^{_re_mod.escape(g)}$", "$options": "i"}, "active": {"$ne": False}}
+    if exclude_id:
+        q["id"] = {"$ne": exclude_id}
+    if await sdb.vendors_acc.find_one(q, {"_id": 1}):
+        raise HTTPException(status_code=409, detail="Another active vendor already uses this GSTIN")
+    return g
+
+
 @router.post("/vendors")
 async def create_vendor(
     payload: VendorIn, request: Request,
@@ -180,6 +201,10 @@ async def create_vendor(
     if doc.get("agency_type") and doc["agency_type"] not in AGENCY_TYPES:
         raise HTTPException(status_code=400,
                             detail=f"agency_type must be one of {AGENCY_TYPES}")
+    if doc.get("gstin"):
+        doc["gstin"] = await _ensure_unique_gstin(doc["gstin"])
+    if doc.get("pan"):
+        doc["pan"] = doc["pan"].strip().upper()
     doc["id"] = new_id("vnd_")
     doc["created_at"] = iso_now()
     doc["created_by"] = user["user_id"]
@@ -264,6 +289,10 @@ async def update_vendor(vendor_id: str, payload: VendorUpdate, request: Request,
         raise HTTPException(status_code=400, detail="No fields to update")
     if patch.get("agency_type") and patch["agency_type"] not in AGENCY_TYPES:
         raise HTTPException(status_code=400, detail=f"agency_type must be one of {AGENCY_TYPES}")
+    if patch.get("gstin"):
+        patch["gstin"] = await _ensure_unique_gstin(patch["gstin"], exclude_id=vendor_id)
+    if patch.get("pan"):
+        patch["pan"] = patch["pan"].strip().upper()
     patch["updated_at"] = iso_now()
     patch["updated_by"] = user["user_id"]
     res = await sdb.vendors_acc.update_one({"id": vendor_id}, {"$set": patch})
@@ -385,6 +414,20 @@ async def create_vendor_bill(payload: VendorBillIn, request: Request,
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     doc = payload.model_dump()
+    if doc.get("bill_number"):
+        doc["bill_number"] = doc["bill_number"].strip()
+        dup = await sdb.vendor_bills.find_one({
+            "vendor_id": payload.vendor_id,
+            "bill_number": {"$regex": f"^{_re_mod.escape(doc['bill_number'])}$", "$options": "i"},
+            "status": {"$ne": "cancelled"},
+        }, {"_id": 0, "id": 1})
+        if dup:
+            raise HTTPException(status_code=409,
+                                detail="A bill with this number already exists for this vendor")
+    if doc.get("project_id") and not await sdb.projects.find_one({"id": doc["project_id"]}, {"_id": 1}):
+        raise HTTPException(status_code=400, detail="Project not found")
+    if doc.get("status") not in (None, "draft", "received"):
+        doc["status"] = "received"   # paid/partial states are derived from payments
     doc["id"] = new_id("vbill_")
     # Auto-generate a sequential bill number if the vendor didn't provide one.
     if not doc.get("bill_number"):
@@ -457,6 +500,21 @@ async def update_vendor_bill(bill_id: str, payload: VendorBillUpdate, request: R
     if patch.get("status") and patch["status"] not in VENDOR_BILL_STATUSES:
         raise HTTPException(status_code=400,
                             detail=f"status must be one of {VENDOR_BILL_STATUSES}")
+    if patch.get("status") in ("paid", "partially_paid"):
+        raise HTTPException(status_code=400, detail="Paid status is derived from recorded payments")
+    if bill.get("status") == "cancelled" and patch.get("status") not in (None, "cancelled"):
+        raise HTTPException(status_code=400, detail="Cancelled bills cannot be reopened")
+    if ("items" in patch or "tax_rate" in patch or "tds_rate" in patch) and float(bill.get("paid_amount") or 0) > 0:
+        raise HTTPException(status_code=400, detail="Bill amounts cannot change after payments are recorded; reverse the payments first")
+    if patch.get("bill_number"):
+        patch["bill_number"] = patch["bill_number"].strip()
+        dup = await sdb.vendor_bills.find_one({
+            "vendor_id": bill.get("vendor_id"), "id": {"$ne": bill_id},
+            "bill_number": {"$regex": f"^{_re_mod.escape(patch['bill_number'])}$", "$options": "i"},
+            "status": {"$ne": "cancelled"},
+        }, {"_id": 1})
+        if dup:
+            raise HTTPException(status_code=409, detail="A bill with this number already exists for this vendor")
     if "items" in patch or "tax_rate" in patch or "tds_rate" in patch:
         merged = {**bill, **patch}
         merged["items"] = [i if isinstance(i, dict) else i.model_dump()
@@ -517,13 +575,21 @@ async def create_vendor_payment(payload: VendorPaymentIn, request: Request,
 
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    bank_acc = await require_asset_account(payload.paid_from_account_id, "Bank/cash account")
+    idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
+    async with doc_lock(sdb.vendors_acc, payload.vendor_id):
+        if idem:
+            prior = await sdb.vendor_payments.find_one({"client_request_id": idem}, {"_id": 0})
+            if prior:
+                return prior
+        return await _create_vendor_payment_locked(user, payload, bank_acc, idem)
 
+
+async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, bank_acc: dict,
+                                        idem: Optional[str]):
     vendor = await sdb.vendors_acc.find_one({"id": payload.vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
-    bank_acc = await sdb.accounts.find_one({"id": payload.paid_from_account_id}, {"_id": 0})
-    if not bank_acc:
-        raise HTTPException(status_code=404, detail="Bank/cash account not found")
     ap_acc = await sdb.accounts.find_one({"name": "Accounts Payable"}, {"_id": 0})
     if not ap_acc:
         raise HTTPException(status_code=500, detail="Accounts Payable account missing – seed COA first")
@@ -589,6 +655,8 @@ async def create_vendor_payment(payload: VendorPaymentIn, request: Request,
     pmt["bill_splits"] = bill_splits
     pmt["unallocated"] = round(remaining, 2)         # excess advance (on-account)
     pmt["journal_entry_id"] = je_id
+    if idem:
+        pmt["client_request_id"] = idem
     pmt["created_at"] = iso_now()
     pmt["created_by"] = user["user_id"]
     await sdb.vendor_payments.insert_one(dict(pmt))
@@ -1126,13 +1194,18 @@ async def receive_commission(vendor_id: str, payload: CommissionReceiveIn, reque
     _require(user, "finance.create")
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
+    if payload.commission_ids and len(set(payload.commission_ids)) != len(payload.commission_ids):
+        raise HTTPException(status_code=400, detail="Duplicate commission IDs in request")
+    async with doc_lock(sdb.vendors_acc, vendor_id):
+        return await _receive_commission_locked(user, vendor_id, payload, bank)
 
+
+async def _receive_commission_locked(user: dict, vendor_id: str, payload: CommissionReceiveIn,
+                                     bank: dict):
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
-    bank = await sdb.accounts.find_one({"id": payload.bank_account_id}, {"_id": 0})
-    if not bank:
-        raise HTTPException(status_code=404, detail="Bank/cash account not found")
 
     income_label = ((vendor.get("commission") or {}).get("income_label")
                     or "Vendor Commission Income")
@@ -1355,7 +1428,8 @@ async def commissions_report_csv(request: Request,
     data = await commissions_report(request, vendor_id, project_id, status,
                                     from_date, to_date, session_token, authorization)
     buf = io.StringIO()
-    w = csv.writer(buf)
+    from core.csv_safe import SafeWriter
+    w = SafeWriter(buf)
     w.writerow(["bill_date", "vendor", "bill_number", "project_id", "purchase_amount",
                 "commission_type", "amount", "received_amount", "status",
                 "received_date", "reference"])

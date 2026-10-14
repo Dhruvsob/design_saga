@@ -173,10 +173,17 @@ async def update_holiday(holiday_id: str, payload: HolidayUpdate, request: Reque
         raise HTTPException(400, "No fields to update")
     if patch.get("kind") and patch["kind"] not in HOLIDAY_KINDS:
         raise HTTPException(400, f"kind must be one of {HOLIDAY_KINDS}")
+    if patch.get("date"):
+        _validate_date(patch["date"])
+    if not await sdb.holidays.find_one({"id": holiday_id}, {"_id": 1}):
+        raise HTTPException(404, "Holiday not found")
     patch["updated_at"] = iso_now()
+    patch["updated_by"] = user["user_id"]
     r = await sdb.holidays.update_one({"id": holiday_id}, {"$set": patch})
     if not r.matched_count:
         raise HTTPException(404, "Holiday not found")
+    await audit(user, "holiday.update", target=holiday_id, target_type="holiday",
+                meta={"fields": sorted(k for k in patch if k not in ("updated_at", "updated_by"))})
     return await sdb.holidays.find_one({"id": holiday_id}, {"_id": 0})
 
 

@@ -6,7 +6,7 @@ Tests only the 3 critical backend APIs mentioned in review request.
 import requests
 import sys
 
-BASE_URL = "https://erp-audit-polish.preview.emergentagent.com/api"
+BASE_URL = "https://gamaa-preview.preview.emergentagent.com/api"
 
 def test_login_password():
     """Test POST /api/auth/login-password for all 4 accounts"""

@@ -40,7 +40,9 @@ async def get_current_user(
         clear_scope()
         return None
 
-    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    from .helpers import session_lookup_values
+    session = await db.user_sessions.find_one(
+        {"session_token": {"$in": session_lookup_values(token)}}, {"_id": 0})
     if not session:
         clear_scope()
         return None

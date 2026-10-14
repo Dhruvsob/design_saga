@@ -604,7 +604,9 @@ async def upload_bank_statement(account_id: str, request: Request,
     if not (acc.get("is_bank") or acc.get("name") in ("Cash", "Petty Cash")):
         raise HTTPException(400, "This account is not a bank / cash account")
 
-    raw = await file.read()
+    raw = await file.read(5 * 1024 * 1024 + 1)
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Bank statement too large (max 5 MB)")
     try:
         text = raw.decode("utf-8-sig", errors="replace")
     except Exception:

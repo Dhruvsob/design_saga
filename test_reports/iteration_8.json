@@ -98,7 +98,7 @@
     "superadmin_access": "SuperAdmin correctly bypasses tenant filters and can act across all tenants by design."
   },
   "test_environment": {
-    "base_url": "https://finance-corrections.preview.emergentagent.com/api",
+    "base_url": "https://gamaa-preview.preview.emergentagent.com/api",
     "test_credentials": {
       "super_admin": "designsaga10@gmail.com / Admin@123",
       "org_default_admin": "admin@designsaga.com / Admin@123",

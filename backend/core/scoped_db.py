@@ -97,6 +97,19 @@ def _merge(scope: Optional[dict], q: Optional[dict]) -> dict:
     return out
 
 
+def _guard_update(u):
+    """Scoped callers may not move a record into another tenant."""
+    if _scope.get() and isinstance(u, dict):
+        for op in ("$set", "$setOnInsert"):
+            if isinstance(u.get(op), dict) and "org_id" in u[op]:
+                oid = current_org_id()
+                u = {**u, op: {**u[op], "org_id": oid}} if oid else {
+                    **u, op: {k: v for k, v in u[op].items() if k != "org_id"}}
+        if isinstance(u.get("$unset"), dict) and "org_id" in u["$unset"]:
+            u = {**u, "$unset": {k: v for k, v in u["$unset"].items() if k != "org_id"}}
+    return u
+
+
 class _ScopedColl:
     def __init__(self, coll):
         self._c = coll
@@ -111,16 +124,31 @@ class _ScopedColl:
         return self._c.find_one(_merge(self._s(), q), *a, **kw)
 
     def find_one_and_update(self, q, u, *a, **kw):
-        return self._c.find_one_and_update(_merge(self._s(), q), u, *a, **kw)
+        return self._c.find_one_and_update(_merge(self._s(), q), _guard_update(u), *a, **kw)
 
     def count_documents(self, q=None, *a, **kw):
         return self._c.count_documents(_merge(self._s(), q or {}), *a, **kw)
 
     def update_one(self, q, u, *a, **kw):
-        return self._c.update_one(_merge(self._s(), q), u, *a, **kw)
+        return self._c.update_one(_merge(self._s(), q), _guard_update(u), *a, **kw)
 
     def update_many(self, q, u, *a, **kw):
-        return self._c.update_many(_merge(self._s(), q), u, *a, **kw)
+        return self._c.update_many(_merge(self._s(), q), _guard_update(u), *a, **kw)
+
+    def replace_one(self, q, doc, *a, **kw):
+        oid = current_org_id()
+        if oid and isinstance(doc, dict):
+            doc = {**doc, "org_id": oid}
+        return self._c.replace_one(_merge(self._s(), q), doc, *a, **kw)
+
+    def find_one_and_delete(self, q, *a, **kw):
+        return self._c.find_one_and_delete(_merge(self._s(), q), *a, **kw)
+
+    def find_one_and_replace(self, q, doc, *a, **kw):
+        oid = current_org_id()
+        if oid and isinstance(doc, dict):
+            doc = {**doc, "org_id": oid}
+        return self._c.find_one_and_replace(_merge(self._s(), q), doc, *a, **kw)
 
     def delete_one(self, q, *a, **kw):
         return self._c.delete_one(_merge(self._s(), q), *a, **kw)
@@ -129,15 +157,17 @@ class _ScopedColl:
         return self._c.delete_many(_merge(self._s(), q), *a, **kw)
 
     def insert_one(self, doc, *a, **kw):
+        # A scoped caller can only ever write into its own tenant; any
+        # client-supplied org_id is overwritten (cross-tenant write guard).
         oid = current_org_id()
-        if oid and isinstance(doc, dict) and not doc.get("org_id"):
+        if oid and isinstance(doc, dict):
             doc = {**doc, "org_id": oid}
         return self._c.insert_one(doc, *a, **kw)
 
     def insert_many(self, docs, *a, **kw):
         oid = current_org_id()
         if oid:
-            docs = [({**d, "org_id": oid} if isinstance(d, dict) and not d.get("org_id") else d) for d in docs]
+            docs = [({**d, "org_id": oid} if isinstance(d, dict) else d) for d in docs]
         return self._c.insert_many(docs, *a, **kw)
 
     def aggregate(self, pipeline, *a, **kw):

@@ -290,7 +290,8 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
                         reference: str = None, project_id: str = None,
                         client_id: str = None, vendor_id: str = None,
                         employee_id: str = None,
-                        source: str = "manual", source_id: str = None) -> dict:
+                        source: str = "manual", source_id: str = None,
+                        idempotency_suffix: str = None) -> dict:
     """Persist a balanced journal entry. `lines` = [{account_id, debit, credit, description}, ...]"""
     total_debit = sum(float(l.get("debit") or 0) for l in lines)
     total_credit = sum(float(l.get("credit") or 0) for l in lines)
@@ -336,6 +337,10 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
     }
     idempotency_key = _linked_journal_key(
         user_org_id(user) or "org_default", source, source_id)
+    if idempotency_key and idempotency_suffix:
+        # Parent records with many legitimate postings (loan EMIs) key each
+        # posting individually while keeping source_id = parent id.
+        idempotency_key = f"{idempotency_key}:{idempotency_suffix}"
     if idempotency_key:
         doc["idempotency_key"] = idempotency_key
     try:
@@ -1627,7 +1632,8 @@ import csv, io
 
 def _csv_response(filename: str, rows: list, headers: list) -> FastAPIResponse:
     buf = io.StringIO()
-    w = csv.writer(buf)
+    from core.csv_safe import SafeWriter
+    w = SafeWriter(buf)
     w.writerow(headers)
     for r in rows:
         w.writerow([r.get(h, "") for h in headers])

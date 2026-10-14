@@ -152,7 +152,12 @@ async def upload_logo(request: Request,
         except Exception as e:  # noqa: BLE001
             _log.warning(f"Object-storage upload failed – falling back to inline: {e}")
             stored_logo_value = logo  # inline fallback
-    # else: external URL was supplied directly
+    else:
+        from core.url_security import external_http_url
+        try:
+            stored_logo_value = external_http_url(logo)
+        except ValueError as e:
+            raise HTTPException(400, f"Invalid logo URL: {e}")
 
     update = {"branding.logo_url": stored_logo_value,
               "updated_at": iso_now(),
@@ -177,9 +182,13 @@ async def upload_logo_multipart(request: Request,
         raise HTTPException(400, "No organisation context")
     if file.content_type not in _storage.ALLOWED_LOGO_MIME:
         raise HTTPException(415, f"Unsupported content type: {file.content_type}")
-    data = await file.read()
+    data = await file.read(_storage.MAX_LOGO_BYTES + 1)
     if len(data) > _storage.MAX_LOGO_BYTES:
         raise HTTPException(413, "Logo too large (>2MB).")
+    try:
+        _storage.validate_logo_bytes(data, file.content_type)
+    except ValueError as e:
+        raise HTTPException(415, str(e))
     import uuid as _uuid
     ext = _storage.MIME_TO_EXT.get(file.content_type, "bin")
     path = f"{_storage.APP_NAME}/org-logos/{oid}/{_uuid.uuid4().hex}.{ext}"
@@ -214,12 +223,25 @@ async def download_logo(full_path: str):
     auth check is enforced here. The `full_path` is opaque (UUID under
     a per-org prefix) so it cannot be guessed.
     """
+    # Only logo objects written by this app may be proxied; anything else in
+    # the shared object store (other folders/apps, traversal) is refused.
+    if not _storage.LOGO_PATH_RE.match(full_path or ""):
+        raise HTTPException(404, "Logo not found")
     try:
         data, ctype = _storage.get_object(full_path)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(404, f"Logo not found: {e}")
-    return FastAPIResponse(content=data, media_type=ctype,
-                           headers={"Cache-Control": "public, max-age=3600"})
+    except Exception:  # noqa: BLE001
+        raise HTTPException(404, "Logo not found")
+    headers = {
+        "Cache-Control": "public, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+        # Legacy SVG logos cannot execute script when opened directly.
+        "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+    }
+    if (ctype or "").split(";")[0].strip().lower() not in (
+            "image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"):
+        ctype = "application/octet-stream"
+        headers["Content-Disposition"] = "attachment"
+    return FastAPIResponse(content=data, media_type=ctype, headers=headers)
 
 
 # ------------------------------------------------------------------

@@ -78,3 +78,17 @@ def fy_choices(back: int = 5, forward: int = 1) -> List[dict]:
         out.append({"label": label, "from": s, "to": e,
                     "is_current": label == curr})
     return out
+
+
+async def require_asset_account(account_id, label: str = "Paid-from account") -> dict:
+    """Payments must come from an active same-tenant asset (bank/cash) account."""
+    from fastapi import HTTPException
+    from .scoped_db import sdb
+    if not account_id:
+        raise HTTPException(400, f"{label} is required")
+    acc = await sdb.accounts.find_one({"id": account_id}, {"_id": 0})
+    if not acc or acc.get("active") is False:
+        raise HTTPException(400, f"{label} not found")
+    if acc.get("type") != "asset":
+        raise HTTPException(400, f"{label} must be a bank/cash asset account")
+    return acc

@@ -33,6 +33,7 @@ import os
 
 from core.db import db
 from core.helpers import iso_now, now_utc, new_id
+from core.audit import audit
 from core.deps import ensure_user_access, require_user, get_current_user
 from core.rbac import has_permission, ROLES, normalize_role, expand_permissions
 from models.user import (
@@ -98,10 +99,12 @@ def _pack_user(u: dict) -> dict:
 
 async def _set_session_cookie(response: Response, user_id: str) -> str:
     """Create a session row and set the httpOnly cookie. Returns token."""
-    token = uuid.uuid4().hex
+    import secrets
+    from core.helpers import session_digest
+    token = secrets.token_hex(32)
     await db.user_sessions.insert_one({
         "user_id": user_id,
-        "session_token": token,
+        "session_token": session_digest(token),
         "expires_at": now_utc() + timedelta(days=7),
         "created_at": now_utc(),
     })
@@ -232,6 +235,10 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
 
     if user is None:
         await _register_failed_attempt(ident, ip_hash)
+        await audit(None, "auth.login_failed", target_type="auth",
+                    meta={"identifier_hash": hashlib.sha256(ident.lower().encode()).hexdigest()[:16],
+                          "src": ip_hash[:12]},
+                    org_id=(candidates[0].get("org_id") if len(candidates) == 1 else None))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     await ensure_user_access(user)
@@ -242,6 +249,8 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
         {"$set": {"last_login": iso_now()}},
     )
     token = await _set_session_cookie(response, user["user_id"])
+    await audit(user, "auth.login", target=user["user_id"], target_type="user",
+                meta={"method": "password", "src": ip_hash[:12]})
     fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     try:
         from core.deps import resolve_permissions
@@ -272,6 +281,8 @@ async def change_password(payload: ChangePasswordIn, request: Request, response:
                   "password_updated_at": iso_now()}}
     )
     await db.user_sessions.delete_many({"user_id": user["user_id"]})
+    await audit(user, "auth.password_change", target=user["user_id"], target_type="user",
+                meta={"sessions_revoked": True})
     response.delete_cookie("session_token", path="/")
     return {"ok": True, "reauthenticate": True}
 

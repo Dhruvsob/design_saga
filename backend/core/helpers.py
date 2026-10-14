@@ -50,3 +50,15 @@ async def next_sequence(org_id: str, kind: str, seed: int = 1000) -> int:
     doc = await db.counters.find_one_and_update(
         key, {"$inc": {"seq": 1}}, return_document=ReturnDocument.AFTER)
     return int(doc["seq"])
+
+
+def session_digest(token: str) -> str:
+    """Sessions are stored as SHA-256 digests so a leaked database/backup does
+    not yield usable bearer tokens. Lookups accept the legacy plaintext form
+    until those 7-day sessions expire naturally."""
+    import hashlib
+    return "sha256:" + hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+
+def session_lookup_values(token: str) -> list:
+    return [session_digest(token), token]

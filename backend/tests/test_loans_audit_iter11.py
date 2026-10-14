@@ -12,7 +12,7 @@ import requests
 from datetime import date
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or \
-    "https://competent-matsumoto-5.preview.emergentagent.com"
+    "https://gamaa-preview.preview.emergentagent.com"
 API = f"{BASE_URL}/api"
 
 ADMIN_TOK = "stable_testtok_do_not_delete"

@@ -21,6 +21,7 @@ from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
 from core.features import require_module
 from core.audit import audit
+from core.locks import doc_lock
 from models.purchase import POCreateIn, POUpdateIn, GRNCreateIn
 
 
@@ -168,10 +169,25 @@ async def update_po(po_id: str, payload: POUpdateIn, request: Request,
     po = await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
     if not po:
         raise HTTPException(404, "PO not found")
-    if po["status"] in ("received", "closed", "cancelled") and payload.status not in ("closed", "cancelled"):
+    if po["status"] in ("closed", "cancelled"):
         raise HTTPException(400, f"Cannot edit PO in status: {po['status']}")
-
     up = {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None}
+    # Status is derived from the workflow (send / GRN / cancel). PATCH may only
+    # close a PO that has started receiving; it can never fabricate
+    # sent/partial/received states or bypass the GRN-aware cancel route.
+    if "status" in up:
+        target = up["status"]
+        if target == po["status"]:
+            up.pop("status")
+        elif target == "closed" and po["status"] in ("partial", "received", "sent"):
+            up["closed_at"] = iso_now()
+            up["closed_by"] = user["user_id"]
+        elif target == "cancelled":
+            raise HTTPException(400, "Use the Cancel action to cancel a purchase order")
+        else:
+            raise HTTPException(400, f"Cannot change PO status from {po['status']} to {target}")
+    if "lines" in up and po["status"] != "draft":
+        raise HTTPException(400, "Line items can only be edited while the PO is a draft")
     if "lines" in up:
         # Preserve line IDs where possible
         new_lines = []
@@ -184,7 +200,11 @@ async def update_po(po_id: str, payload: POUpdateIn, request: Request,
         up["lines"] = new_lines
         up.update(_po_totals(new_lines))
     up["updated_at"] = iso_now()
-    await sdb.purchase_orders.update_one({"id": po_id}, {"$set": up})
+    res = await sdb.purchase_orders.update_one({"id": po_id, "status": po["status"]}, {"$set": up})
+    if res.matched_count != 1:
+        raise HTTPException(409, "PO changed while you were editing. Refresh and retry.")
+    await audit(user, "po.update", target=po_id, target_type="po",
+                meta={"fields": sorted(k for k in up if k != "updated_at")})
     return await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
 
 
@@ -201,10 +221,12 @@ async def send_po(po_id: str, request: Request,
         raise HTTPException(404, "PO not found")
     if po["status"] != "draft":
         raise HTTPException(400, f"PO already {po['status']}")
-    await sdb.purchase_orders.update_one(
-        {"id": po_id},
+    res = await sdb.purchase_orders.update_one(
+        {"id": po_id, "status": "draft"},
         {"$set": {"status": "sent", "sent_at": iso_now(), "sent_by": user["user_id"]}},
     )
+    if res.modified_count != 1:
+        raise HTTPException(409, "PO was already sent")
     await audit(user, "po.send", target=po_id, target_type="po",
                 meta={"po_number": po["po_number"]})
     return await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
@@ -218,9 +240,18 @@ async def cancel_po(po_id: str, request: Request,
     await require_module(user, "purchase_orders")
     if not has_any_permission(user, "vendors.update", "purchase_orders.update"):
         raise HTTPException(403, "Missing permission")
+    async with doc_lock(sdb.purchase_orders, po_id):
+        return await _cancel_po_locked(user, po_id)
+
+
+async def _cancel_po_locked(user: dict, po_id: str):
     po = await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
     if not po:
         raise HTTPException(404, "PO not found")
+    if po["status"] in ("cancelled", "closed"):
+        raise HTTPException(400, f"PO is already {po['status']}")
+    if await sdb.vendor_bills.count_documents({"po_id": po_id, "status": {"$nin": ["cancelled", "void"]}}):
+        raise HTTPException(400, "PO has vendor bills — cancel the bills first.")
     # Reject if any GRN exists
     grn_count = await sdb.goods_receipts.count_documents({"po_id": po_id})
     if grn_count > 0:
@@ -277,11 +308,30 @@ async def create_grn(payload: GRNCreateIn, request: Request,
     await require_module(user, "purchase_orders")
     if not has_any_permission(user, "vendors.create", "purchase_orders.create"):
         raise HTTPException(403, "Missing permission")
+    async with doc_lock(sdb.purchase_orders, payload.po_id):
+        return await _create_grn_locked(user, payload)
+
+
+async def _create_grn_locked(user: dict, payload: GRNCreateIn):
     po = await sdb.purchase_orders.find_one({"id": payload.po_id}, {"_id": 0})
     if not po:
         raise HTTPException(404, "PO not found")
-    if po["status"] in ("cancelled", "closed"):
-        raise HTTPException(400, f"PO is {po['status']} — cannot record GRN")
+    if po["status"] in ("cancelled", "closed", "draft"):
+        raise HTTPException(400, f"PO is {po['status']} — send it before recording a GRN" if po["status"] == "draft"
+                            else f"PO is {po['status']} — cannot record GRN")
+    seen_lines = set()
+    for gl in payload.lines:
+        if gl.po_line_id in seen_lines:
+            raise HTTPException(400, "Each PO line may appear only once per GRN")
+        seen_lines.add(gl.po_line_id)
+        if (gl.rejected_qty or 0) < 0:
+            raise HTTPException(400, "Rejected quantity cannot be negative")
+    if not any(gl.received_qty > 0 for gl in payload.lines):
+        raise HTTPException(400, "GRN must receive a positive quantity")
+    if payload.inventory_account_id:
+        inv = await sdb.accounts.find_one({"id": payload.inventory_account_id}, {"_id": 0})
+        if not inv or inv.get("type") not in ("asset", "expense"):
+            raise HTTPException(400, "Inventory account must be an asset or expense account")
 
     # Validate every GRN line points at a valid PO line + doesn't over-receive
     po_lines_by_id = {l["id"]: l for l in po.get("lines", [])}

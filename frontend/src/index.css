@@ -345,6 +345,7 @@ code, .font-mono {
 .chip-paid::before { animation: pulse-dot 1.8s ease-in-out infinite; }
 .chip-overdue { border-color: #F1CFCF; color: #992B2B; background: #FCEAEA; }
 .chip-overdue::before { animation: pulse-dot 1.2s ease-in-out infinite; }
+.chip-cancelled { border-color: #E5E5E5; color: #5C5C5C; background: #F3F3F3; text-decoration: line-through; }
 
 .chip-low    { border-color: var(--border); color: var(--ink-2); background: var(--hover); }
 .chip-medium { border-color: #EADFB9; color: var(--gold-600); background: var(--gold-100); }

@@ -26,6 +26,8 @@ from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
 from core.audit import audit
+from core.locks import doc_lock
+from core.finance import require_asset_account
 from models.expense import (
     ExpenseCreateIn, ApprovalDecisionIn, ReimburseIn, ExpensePolicyIn,
 )
@@ -145,9 +147,8 @@ async def list_expenses(request: Request, status: Optional[str] = None,
     # Non-managers can only see their own + those they need to approve.
     # `expenses.read` is a self-service perm (all staff have it), so team-wide
     # visibility requires a manager perm (finance.read / expenses.update|approve).
-    if not has_any_permission(user, "*.*", "finance.read", "expenses.update", "expenses.approve"):
-        q = {"$or": [{"claimant_id": user["user_id"]},
-                     {"pending_approver_role": user.get("role")}]}
+    if not _can_view_all_expenses(user):
+        q = {"$and": [q, _own_or_pending_query(user)]} if q else _own_or_pending_query(user)
     rows = await sdb.expenses.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return rows
 
@@ -157,10 +158,25 @@ async def get_expense(exp_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    e = await sdb.expenses.find_one({"id": exp_id}, {"_id": 0})
+    q = {"id": exp_id}
+    if not _can_view_all_expenses(user):
+        q = {"$and": [q, _own_or_pending_query(user)]}
+    e = await sdb.expenses.find_one(q, {"_id": 0, "_lock": 0, "_lock_at": 0})
     if not e:
         raise HTTPException(404, "Expense not found")
     return e
+
+
+def _can_view_all_expenses(user: dict) -> bool:
+    return has_any_permission(user, "*.*", "finance.read", "expenses.update", "expenses.approve")
+
+
+def _own_or_pending_query(user: dict) -> dict:
+    # `expenses.read` is self-service: own claims plus claims routed to the
+    # caller's role for approval. Guessed IDs outside this set return 404.
+    return {"$or": [{"claimant_id": user["user_id"]},
+                    {"pending_approver_role": user.get("role"),
+                     "status": {"$in": ["pending_l1", "pending_l2"]}}]}
 
 
 def _decide_route(amount: float, has_receipt: bool, policy: dict) -> dict:
@@ -184,6 +200,20 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
     user = await require_user(request, session_token, authorization)
     policy = await _get_policy(user)
 
+    idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
+    if idem:
+        prior = await sdb.expenses.find_one(
+            {"claimant_id": user["user_id"], "client_request_id": idem}, {"_id": 0})
+        if prior:
+            return prior
+    if payload.project_id and not await sdb.projects.find_one({"id": payload.project_id}, {"_id": 1}):
+        raise HTTPException(400, "Project not found")
+    if payload.vendor_id and not await sdb.vendors_acc.find_one({"id": payload.vendor_id}, {"_id": 1}):
+        raise HTTPException(400, "Vendor not found")
+    if payload.reimburse_to_account_id and not await sdb.accounts.find_one(
+            {"id": payload.reimburse_to_account_id}, {"_id": 1}):
+        raise HTTPException(400, "Reimbursement account not found")
+
     # Category validation
     allowed = policy.get("allowed_categories") or DEFAULT_POLICY["allowed_categories"]
     for l in payload.lines:
@@ -204,6 +234,17 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
         d["id"] = new_id("expl_")
         lines_out.append(d)
     total = round(subtotal + tax, 2)
+    if total <= 0:
+        raise HTTPException(400, "Expense total must be greater than zero")
+    # Double-click / retry guard: identical claim from the same user within 30s.
+    from datetime import timedelta
+    from core.helpers import now_utc, iso
+    recent = await sdb.expenses.find_one({
+        "claimant_id": user["user_id"], "title": payload.title.strip(), "total": total,
+        "created_at": {"$gte": iso(now_utc() - timedelta(seconds=30))},
+    }, {"_id": 0})
+    if recent:
+        raise HTTPException(409, "An identical expense was just submitted. Check your claims before resubmitting.")
     route = _decide_route(total, has_receipt, policy)
     exp_id = new_id("exp_")
     doc = {
@@ -230,6 +271,8 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
         "created_at": iso_now(),
         "submitted_at": iso_now(),
     }
+    if idem:
+        doc["client_request_id"] = idem
     if route.get("auto_approved"):
         doc["approved_at"] = iso_now()
         doc["approval_trail"].append({
@@ -261,6 +304,13 @@ async def decide(exp_id: str, payload: ApprovalDecisionIn, request: Request,
         raise HTTPException(
             403, f"Only {exp['pending_approver_role']} can approve this expense",
         )
+    is_owner_admin = has_any_permission(user, "*.*")
+    if exp.get("claimant_id") == user["user_id"] and not is_owner_admin:
+        raise HTTPException(403, "You cannot approve or reject your own expense claim")
+    if payload.decision != "reject" and exp["status"] == "pending_l2" and not is_owner_admin and any(
+            t.get("actor_id") == user["user_id"] and t.get("decision") == "approve"
+            for t in exp.get("approval_trail", [])):
+        raise HTTPException(403, "Level-2 approval must be given by a different approver")
 
     trail_entry = {
         "at": iso_now(), "actor_id": user["user_id"], "actor_name": user.get("name"),
@@ -286,7 +336,12 @@ async def decide(exp_id: str, payload: ApprovalDecisionIn, request: Request,
             updates = {"status": "approved", "pending_approver_role": None,
                        "approval_trail": trail, "approved_at": iso_now()}
             new_status = "approved"
-    await sdb.expenses.update_one({"id": exp_id}, {"$set": updates})
+    res = await sdb.expenses.update_one(
+        {"id": exp_id, "status": exp["status"],
+         "approval_trail": {"$size": len(exp.get("approval_trail", []))}},
+        {"$set": updates})
+    if res.modified_count != 1:
+        raise HTTPException(409, "This expense was decided by someone else. Refresh and retry.")
     await audit(user, f"expense.{payload.decision}", target=exp_id, target_type="expense",
                 meta={"comment": payload.comment, "new_status": new_status})
     return await sdb.expenses.find_one({"id": exp_id}, {"_id": 0})
@@ -302,6 +357,12 @@ async def reimburse(exp_id: str, payload: ReimburseIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not (has_permission(user, "finance.create") or has_permission(user, "*.*")):
         raise HTTPException(403, "Missing permission: finance.create")
+    await require_asset_account(payload.paid_from_account_id)
+    async with doc_lock(sdb.expenses, exp_id):
+        return await _reimburse_locked(user, exp_id, payload)
+
+
+async def _reimburse_locked(user: dict, exp_id: str, payload: ReimburseIn):
     exp = await sdb.expenses.find_one({"id": exp_id}, {"_id": 0})
     if not exp:
         raise HTTPException(404, "Expense not found")
@@ -347,7 +408,7 @@ async def reimburse(exp_id: str, payload: ReimburseIn, request: Request,
     )
     await audit(user, "expense.reimburse", target=exp_id, target_type="expense",
                 meta={"amount": total, "journal_id": je["id"]})
-    return {"expense": await sdb.expenses.find_one({"id": exp_id}, {"_id": 0}),
+    return {"expense": await sdb.expenses.find_one({"id": exp_id}, {"_id": 0, "_lock": 0, "_lock_at": 0}),
             "journal": je}
 
 

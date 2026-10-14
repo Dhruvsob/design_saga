@@ -6,7 +6,7 @@ import requests
 import sys
 from datetime import datetime
 
-BASE_URL = "https://finance-corrections.preview.emergentagent.com/api"
+BASE_URL = "https://gamaa-preview.preview.emergentagent.com/api"
 
 # Test credentials from /app/memory/test_credentials.md
 ADMIN_CREDS = {"identifier": "admin@designsaga.com", "password": "Admin@123"}

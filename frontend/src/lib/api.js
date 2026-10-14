@@ -8,22 +8,32 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Bearer-token fallback: some browsers/proxies drop the httpOnly session
-// cookie (e.g. Partitioned-cookie policies). We mirror the session token in
-// localStorage and always send it as an Authorization header — the backend
-// accepts either.
+// Sessions live only in the HttpOnly, Secure, SameSite cookie so injected
+// script cannot read them. A localStorage Bearer mirror is available only as
+// an explicit opt-in (REACT_APP_BEARER_FALLBACK=true) for split-origin setups.
+const BEARER_FALLBACK = process.env.REACT_APP_BEARER_FALLBACK === "true";
+const STORAGE_KEY = "ds_session_token";
+
+try {
+  if (!BEARER_FALLBACK) localStorage.removeItem(STORAGE_KEY); // purge legacy copies
+} catch {
+  /* storage unavailable */
+}
+
 export function setSessionToken(token) {
+  if (!BEARER_FALLBACK) return;
   try {
-    if (token) localStorage.setItem("ds_session_token", token);
-    else localStorage.removeItem("ds_session_token");
+    if (token) localStorage.setItem(STORAGE_KEY, token);
+    else localStorage.removeItem(STORAGE_KEY);
   } catch {
     /* storage unavailable — cookie-only mode */
   }
 }
 
 export function getSessionToken() {
+  if (!BEARER_FALLBACK) return null;
   try {
-    return localStorage.getItem("ds_session_token");
+    return localStorage.getItem(STORAGE_KEY);
   } catch {
     return null;
   }

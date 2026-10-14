@@ -57,10 +57,28 @@ class CommissionReceiveIn(BaseModel):
 
 
 # ---------- Bills ----------
+
+def _validate_attachments(value):
+    if value is None:
+        return value
+    if len(value) > 50:
+        raise ValueError("Too many attachments")
+    out = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid attachment")
+        clean = {k: (str(item[k])[:300] if item.get(k) is not None else None)
+                 for k in ("label", "type", "name") if k in item}
+        if item.get("url"):
+            clean["url"] = external_http_url(item["url"])
+        out.append(clean)
+    return out
+
+
 class VendorBillItem(BaseModel):
-    description: str
-    quantity: float = 1
-    rate: float = 0
+    description: str = Field(max_length=500)
+    quantity: float = Field(default=1, ge=0)
+    rate: float = Field(default=0, ge=0)
     amount: float = 0                          # server-computed = qty * rate
 
 
@@ -72,12 +90,13 @@ class VendorBillIn(BaseModel):
     project_id: Optional[str] = None
     task_id: Optional[str] = None
     items: List[VendorBillItem] = []
-    tax_rate: Optional[float] = 0.0            # GST %
-    tds_rate: Optional[float] = 0.0            # TDS %
+    tax_rate: Optional[float] = Field(default=0.0, ge=0, le=100)   # GST %
+    tds_rate: Optional[float] = Field(default=0.0, ge=0, le=100)   # TDS %
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None   # [{label, url, type}]
     status: Optional[str] = "received"
-    org_id: Optional[str] = None
+    _validate_attachments = field_validator("attachments")(_validate_attachments)
+    org_id: Optional[str] = Field(default=None, exclude=True)  # server-assigned; client value ignored
 
 
 class VendorBillUpdate(BaseModel):
@@ -87,17 +106,18 @@ class VendorBillUpdate(BaseModel):
     project_id: Optional[str] = None
     task_id: Optional[str] = None
     items: Optional[List[VendorBillItem]] = None
-    tax_rate: Optional[float] = None
-    tds_rate: Optional[float] = None
+    tax_rate: Optional[float] = Field(default=None, ge=0, le=100)
+    tds_rate: Optional[float] = Field(default=None, ge=0, le=100)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
     status: Optional[str] = None
+    _validate_attachments = field_validator("attachments")(_validate_attachments)
 
 
 # ---------- Payments ----------
 class VendorPaymentIn(BaseModel):
     vendor_id: str
-    amount: float
+    amount: float = Field(gt=0)
     payment_date: str                          # YYYY-MM-DD
     paid_from_account_id: str                  # which cash/bank account
     payment_method: Optional[str] = "bank_transfer"
@@ -105,7 +125,7 @@ class VendorPaymentIn(BaseModel):
     bill_ids: Optional[List[str]] = None       # settle these bills (FIFO if omitted)
     reference: Optional[str] = None
     notes: Optional[str] = None
-    org_id: Optional[str] = None
+    org_id: Optional[str] = Field(default=None, exclude=True)  # server-assigned; client value ignored
 
 
 # ---------- Rating ----------

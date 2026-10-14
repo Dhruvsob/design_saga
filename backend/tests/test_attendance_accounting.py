@@ -10,7 +10,7 @@ from datetime import date, timedelta
 import pytest
 import requests
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://design-track-4.preview.emergentagent.com").rstrip("/")
+BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://gamaa-preview.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 TOKEN = "test_session_admin_001"
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}

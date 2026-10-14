@@ -8,7 +8,7 @@ import requests
 import sys
 from datetime import datetime
 
-BASE_URL = "https://finance-corrections.preview.emergentagent.com/api"
+BASE_URL = "https://gamaa-preview.preview.emergentagent.com/api"
 
 class Colors:
     GREEN = '\033[92m'

@@ -225,6 +225,7 @@ export default function Invoices({ docType = "invoice" }) {
                     <option value="sent">sent</option>
                     <option value="paid">paid</option>
                     <option value="overdue">overdue</option>
+                    <option value="cancelled">cancelled</option>
                   </select>
                 </Td>
                 <Td>
