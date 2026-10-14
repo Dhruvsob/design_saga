@@ -1,11 +1,11 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-13 (Asia/Calcutta)
+Last updated: 2026-10-14 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; application checkpoint `d14fc5d` is committed and pushed to GitHub `main` and `production`.
-- Production checkout: `/opt/design-saga-git`, `production` at `d14fc5d`.
+- Local checkout: `production`; application checkpoint `35d07c6` is committed and pushed to GitHub `main` and `production`.
+- Production checkout: `/opt/design-saga-git`, `production` at `35d07c6`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
@@ -65,7 +65,7 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 | DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | Queued |
 | DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
 | DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, deployed, and verified live |
-| DS-011 | High | Rejected punch retry, late-review races, manual-time integrity, weekly offs, and overlapping leave | Fixed and tested, pending deployment |
+| DS-011 | High | Rejected punch retry, late-review races, manual-time integrity, weekly offs, and overlapping leave | Fixed, deployed, and verified live |
 
 ## Issue Log
 
@@ -294,6 +294,11 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 - Verification: 25 focused attendance/payroll/auth tests passed; backend and frontend production images built successfully. A disposable PostgreSQL/FerretDB/API workflow proved rejected-punch retry/history, duplicate-punch denial, overlapping-leave denial, reversed-time and unknown-employee denial, and exactly one winner from six concurrent late-review requests. Temporary database, containers, network, and scripts were removed.
 - Files changed: `backend/models/attendance.py`, `backend/routes/attendance.py`, `backend/tests/test_attendance_safety.py`, `frontend/src/pages/Attendance.jsx`.
 - Database effect: no migration or production business-data rewrite; future rejected retries append an embedded audit snapshot to the existing daily row.
+- Production deployment:
+  - Verified pre-deploy backup `/opt/design-saga-backups/20261014T080312Z`; all SHA-256 checks passed. Prior backend/web images remain tagged `rollback-eae36f1`.
+  - Deployed backend and web at `35d07c6`; PostgreSQL, FerretDB, and Caddy were not restarted. Both rebuilt services became healthy and public site/API/auth smoke checks returned 200/200/401 as expected.
+  - Hiren Panchal successfully checked in on 2026-10-14 as `site_visit` with `present/auto` status. Production still has zero duplicate employee/date groups, zero checkout-without-check-in rows, and zero future-dated attendance rows.
+  - Recent backend/web logs contain no application errors, systemd reports no failed units, protected VPS Caddy changes remain untouched, and disposable candidate images/worktrees were removed.
 
 ## Deployment Safety
 
@@ -315,7 +320,7 @@ Last updated: 2026-10-13 (Asia/Calcutta)
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
 - Prefer service-specific rebuild/restart after testing. Do not run `docker compose down -v`.
-- Current rollback baseline: backend image `design-saga-backend:rollback-236d7c7`; the newest verified database/config archive is `/opt/design-saga-backups/20261013T131412Z`.
+- Current rollback baseline: backend/web images tagged `rollback-eae36f1`; the newest verified database/config archive is `/opt/design-saga-backups/20261014T080312Z`.
 
 ## Next Action
 
