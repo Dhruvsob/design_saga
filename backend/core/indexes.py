@@ -21,6 +21,8 @@ _INDEXES = [
     # Tenancy
     ("organizations",      [("slug", 1)], {"unique": True}),
     ("organizations",      [("org_id", 1)], {"unique": True}),
+    ("counters",           [("org_id", 1), ("kind", 1)],
+                            {"name": "counter_org_kind_unique", "unique": True}),
     # CRM
     ("leads",              [("org_id", 1), ("stage", 1)], {}),
     ("clients",            [("org_id", 1), ("name", 1)], {}),
