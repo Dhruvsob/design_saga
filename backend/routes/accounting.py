@@ -20,6 +20,7 @@ from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, now_utc, iso_now, new_id
 from core.deps import require_user
+from core.downloads import content_disposition
 from core.rbac import has_permission
 from core.tenancy import user_org_id
 from core.audit import audit
@@ -1640,7 +1641,8 @@ def _csv_response(filename: str, rows: list, headers: list) -> FastAPIResponse:
     return FastAPIResponse(
         content=buf.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": content_disposition(
+            "attachment", filename, "report.csv")},
     )
 
 

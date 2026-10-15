@@ -16,7 +16,7 @@ Endpoints
 
 Design decisions
 ----------------
-* bcrypt via `passlib` (already in requirements.txt).
+* bcrypt password hashes compatible with existing stored credentials.
 * Brute-force: `login_attempts` collection keyed by identifier; 5 fails / 15 min
   → 429 with lockout timer.
 * Session tokens are UUID hex — same shape as Google flow — stored in
@@ -26,7 +26,7 @@ Design decisions
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from passlib.hash import bcrypt
+import bcrypt
 import hashlib
 import uuid
 import os
@@ -53,13 +53,13 @@ LOCKOUT_MINUTES = 15
 # helpers
 # ==================================================
 def hash_password(pw: str) -> str:
-    return bcrypt.hash(pw)
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(pw: str, hashed: str) -> bool:
     try:
-        return bcrypt.verify(pw, hashed)
-    except Exception:
+        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("ascii"))
+    except (TypeError, ValueError):
         return False
 
 

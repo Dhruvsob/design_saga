@@ -27,7 +27,7 @@ from models.organization import (
     OrgCreateIn, OrgUpdateIn, OrgStatusIn, DEFAULT_FEATURES, features_for_mode,
 )
 from models.user import RegisterIn, ResetPasswordIn
-from passlib.hash import bcrypt
+import bcrypt
 
 
 router = APIRouter(prefix="/platform")
@@ -42,7 +42,7 @@ def _slugify(name: str) -> str:
 
 
 def _hash(pw: str) -> str:
-    return bcrypt.hash(pw)
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
 
 
 async def _unique_slug(base: str) -> str:

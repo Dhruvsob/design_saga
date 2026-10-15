@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from core.audit import audit
 from core.db import db  # noqa: F401  (kept for future use)
 from core.deps import require_user
+from core.downloads import content_disposition
 from core.helpers import business_today, iso_now, new_id, now_utc
 from core.rbac import has_permission
 from core.scoped_db import sdb
@@ -519,7 +520,8 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     return FastAPIResponse(
         content=body,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": content_disposition(
+            "attachment", filename, "commission-statement.pdf")},
     )
 
 
@@ -786,7 +788,12 @@ async def download_bank_batch(batch_id: str, request: Request,
     return FastAPIResponse(
         content=body,
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": content_disposition(
+                "attachment", filename, "bank-statement.csv"),
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
     )
 
 

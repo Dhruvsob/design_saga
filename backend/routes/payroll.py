@@ -20,6 +20,7 @@ from core.db import db
 from core.scoped_db import sdb
 from core.helpers import now_utc, iso_now, new_id
 from core.deps import require_user
+from core.downloads import content_disposition
 from core.rbac import has_permission
 from core.tenancy import DEFAULT_ORG_ID
 from core import attendance_engine as engine
@@ -560,7 +561,8 @@ async def salary_slip_pdf(run_id: str, request: Request,
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{fname}"'},
+        headers={"Content-Disposition": content_disposition(
+            "inline", fname, "salary-slip.pdf")},
     )
 
 
@@ -722,5 +724,6 @@ async def attendance_payslip_pdf(employee_id: str, year: int, month: int, reques
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{fname}"'},
+        headers={"Content-Disposition": content_disposition(
+            "inline", fname, "payslip.pdf")},
     )

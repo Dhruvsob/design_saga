@@ -1,0 +1,16 @@
+[Unit]
+Description=Design Saga production health monitor
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/design-saga-monitor.env
+ExecStart=/opt/design-saga-git/deploy/monitor.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/design-saga-git /opt/design-saga-backups
+StateDirectory=design-saga-monitor

@@ -42,6 +42,7 @@ db = client[db_name]
 # any business collection so reads/writes auto-filter by org_id.
 from core.scoped_db import sdb  # noqa: E402
 from core.audit import audit as audit_log  # noqa: E402
+from core.downloads import content_disposition  # noqa: E402
 from core.access_control import (  # noqa: E402
     get_visible_project, merge_query, project_visibility_query,
     require_permission as enforce_permission, visible_project_ids,
@@ -2190,7 +2191,8 @@ async def invoice_pdf(invoice_id: str, request: Request,
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{doc.get("number", invoice_id)}.pdf"'}
+        headers={"Content-Disposition": content_disposition(
+            "inline", f'{doc.get("number", invoice_id)}.pdf', "invoice.pdf")}
     )
 
 
@@ -3624,7 +3626,8 @@ async def adv_pdf(qid: str, request: Request, session_token: Optional[str] = Coo
         _org = await db.organizations.find_one({"org_id": doc["org_id"]}, {"_id": 0})
     pdf_bytes = generate_quotation_pdf_adv(doc, _org)
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf",
-                             headers={"Content-Disposition": f'inline; filename="{doc.get("number", qid)}.pdf"'})
+                             headers={"Content-Disposition": content_disposition(
+                                 "inline", f'{doc.get("number", qid)}.pdf', "quotation.pdf")})
 
 
 # ---------- Seed an advanced quotation example ----------
