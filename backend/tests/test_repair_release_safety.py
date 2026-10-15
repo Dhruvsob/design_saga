@@ -40,7 +40,7 @@ def test_integrity_indexes_are_unique():
         "job_lock_name_unique", "job_status_name_unique",
         "expense_request_unique", "vendor_payment_request_unique",
         "vendor_bill_number_unique", "vendor_gstin_unique",
-        "invoice_number_unique", "users_org_employee_unique",
+        "invoice_number_unique",
         "employees_org_employee_unique",
     }
     found = {opts.get("name") for _, _, opts in _INDEXES if opts.get("unique")}

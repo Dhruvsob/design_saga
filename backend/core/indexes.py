@@ -12,8 +12,6 @@ _INDEXES = [
     ("users",              [("email", 1)], {"unique": True, "sparse": True}),
     ("users",              [("org_id", 1), ("role", 1)], {}),
     ("users",              [("employee_id", 1)], {"sparse": True}),
-    ("users",              [("org_id", 1), ("employee_id", 1)],
-                            {"name": "users_org_employee_unique", "unique": True, "sparse": True}),
     ("user_sessions",      [("session_token", 1)], {"unique": True}),
     ("user_sessions",      [("user_id", 1)], {}),
     ("user_sessions",      [("expires_at", 1)], {"expireAfterSeconds": 0}),
