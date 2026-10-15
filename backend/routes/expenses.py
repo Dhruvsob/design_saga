@@ -16,12 +16,13 @@ Workflow
          Auto JE:  DR Expense category    CR Bank/Cash
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import date as _date
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import iso_now, new_id
+from core.helpers import business_today, iso_now, new_id
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
@@ -279,7 +280,15 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
             "at": iso_now(), "actor": "system", "decision": "auto_approve",
             "comment": f"Auto-approved (below ₹{policy['auto_approve_below']})",
         })
-    await sdb.expenses.insert_one(dict(doc))
+    try:
+        await sdb.expenses.insert_one(dict(doc))
+    except DuplicateKeyError:
+        if idem:
+            prior = await sdb.expenses.find_one(
+                {"claimant_id": user["user_id"], "client_request_id": idem}, {"_id": 0})
+            if prior:
+                return prior
+        raise HTTPException(409, "This expense request was already submitted")
     await audit(user, "expense.submit", target=exp_id, target_type="expense",
                 meta={"title": doc["title"], "total": total, "status": doc["status"]})
     return doc
@@ -394,7 +403,7 @@ async def _reimburse_locked(user: dict, exp_id: str, payload: ReimburseIn):
     })
 
     je = await _post_journal(
-        user, payload.paid_on or _date.today().isoformat(),
+        user, payload.paid_on or business_today().isoformat(),
         f"Expense reimbursement – {exp['title']}",
         lines, reference=payload.reference or f"EXP-{exp_id}",
         source="expense", source_id=exp_id,
@@ -421,7 +430,7 @@ async def summary(request: Request,
     approved = await sdb.expenses.count_documents({"status": "approved"})
     reimbursed_month = await sdb.expenses.count_documents({
         "status": "reimbursed",
-        "reimbursed_at": {"$gte": _date.today().replace(day=1).isoformat()},
+        "reimbursed_at": {"$gte": business_today().replace(day=1).isoformat()},
     })
     my_pending = await sdb.expenses.count_documents({
         "claimant_id": user["user_id"],

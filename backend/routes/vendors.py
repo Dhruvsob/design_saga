@@ -27,12 +27,13 @@ RBAC
 * `finance.create` – required for bills & payments (Admin, Director, Accountant)
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import datetime, timezone
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import iso_now, new_id
+from core.helpers import business_today, iso_now, new_id
 from core.deps import require_user
 from core.tenancy import user_org_id
 from core.rbac import has_permission
@@ -109,7 +110,7 @@ async def _refresh_bill_status(bill_id: str):
         due = bill.get("due_date")
         if due:
             try:
-                if datetime.fromisoformat(due).date() < datetime.now(timezone.utc).date():
+                if datetime.fromisoformat(due).date() < business_today():
                     new_status = "overdue" if new_status == "received" else new_status
             except Exception:
                 pass
@@ -211,7 +212,10 @@ async def create_vendor(
     doc["documents"] = []
     doc["rating"] = float(doc.get("rating") or 0)
     doc.setdefault("active", True)
-    await sdb.vendors_acc.insert_one(dict(doc))
+    try:
+        await sdb.vendors_acc.insert_one(dict(doc))
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="A vendor with this GSTIN already exists")
     return await sdb.vendors_acc.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -445,7 +449,11 @@ async def create_vendor_bill(payload: VendorBillIn, request: Request,
     doc["vendor_name"] = vendor.get("name")
     doc["created_at"] = iso_now()
     doc["created_by"] = user["user_id"]
-    await sdb.vendor_bills.insert_one(dict(doc))
+    try:
+        await sdb.vendor_bills.insert_one(dict(doc))
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409,
+                            detail="A bill with this number already exists for this vendor")
     await _refresh_bill_status(doc["id"])
     # Auto-compute commission for this bill (if vendor has commission enabled).
     await _compute_commission_for_bill(doc["id"])
@@ -579,7 +587,8 @@ async def create_vendor_payment(payload: VendorPaymentIn, request: Request,
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
     async with doc_lock(sdb.vendors_acc, payload.vendor_id):
         if idem:
-            prior = await sdb.vendor_payments.find_one({"client_request_id": idem}, {"_id": 0})
+            prior = await sdb.vendor_payments.find_one(
+                {"vendor_id": payload.vendor_id, "client_request_id": idem}, {"_id": 0})
             if prior:
                 return prior
         return await _create_vendor_payment_locked(user, payload, bank_acc, idem)
@@ -802,7 +811,7 @@ async def vendor_performance(vendor_id: str, request: Request,
     completion_rate = round((done_tasks / total_tasks) * 100, 1) if total_tasks else 0.0
 
     # Delay proxy: tasks past due & not done
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = business_today().isoformat()
     delayed = sum(1 for t in tasks
                   if (t.get("due_date") or "") and t.get("due_date") < today
                   and t.get("status") != "done")
@@ -978,7 +987,7 @@ async def _reverse_commission_je(commission_row: dict) -> Optional[str]:
     _user = {"user_id": commission_row.get("_reverser_user_id") or "system",
              "name": "System (bill cancellation)"}
     rev = await _post_journal(
-        _user, datetime.now(timezone.utc).date().isoformat(), narration, rev_lines,
+        _user, business_today().isoformat(), narration, rev_lines,
         reference=f"REV-{original_je_id or commission_row.get('id')}",
         project_id=commission_row.get("project_id"),
         vendor_id=commission_row.get("vendor_id"),
@@ -1325,7 +1334,7 @@ async def commissions_dashboard(request: Request,
     user = await require_user(request, session_token, authorization)
     _require(user, "vendors.read")
     from datetime import datetime, timezone
-    today = datetime.now(timezone.utc).date()
+    today = business_today()
     month_start = f"{today.year:04d}-{today.month:02d}-01"
 
     totals = {"total_earned": 0.0, "total_received": 0.0, "pending": 0.0,

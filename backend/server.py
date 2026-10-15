@@ -9,6 +9,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pathlib import Path
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
 import os
@@ -814,7 +815,8 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
             collection_due += float(inv.get("total", 0))
 
     # Overdue tasks
-    today = now_utc().date().isoformat()
+    from core.helpers import business_today
+    today = business_today().isoformat()
     overdue_tasks = await sdb.tasks.count_documents({
         "status": {"$ne": "done"},
         "due_date": {"$lt": today, "$ne": None}
@@ -1619,7 +1621,8 @@ async def create_invoice(payload: InvoiceIn, request: Request,
     seq = await next_sequence(user.get("org_id"), f"invoice:{_dtype}", seed)
     doc["number"] = f"{prefix}-{seq}"
     doc["created_at"] = iso(now_utc())
-    doc["issue_date"] = now_utc().date().isoformat()
+    from core.helpers import business_today
+    doc["issue_date"] = business_today().isoformat()
     doc["created_by"] = user["user_id"]
     if doc.get("client_id") and not doc.get("client_name"):
         c = await sdb.clients.find_one({"id": doc["client_id"]}, {"_id": 0})
@@ -1631,8 +1634,11 @@ async def create_invoice(payload: InvoiceIn, request: Request,
             doc["project_name"] = p.get("name")
     doc = compute_invoice_totals(doc)
     if doc.get("status") == "paid" and doc.get("doc_type", "invoice") == "invoice":
-        doc["paid_date"] = now_utc().date().isoformat()
-    await sdb.invoices.insert_one(dict(doc))
+        doc["paid_date"] = business_today().isoformat()
+    try:
+        await sdb.invoices.insert_one(dict(doc))
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="Invoice number already exists; retry creation")
     # Invoice created directly as paid → post the receipt JE so the books match.
     if doc.get("status") == "paid" and doc.get("doc_type", "invoice") == "invoice" \
             and float(doc.get("total") or 0) > 0:
@@ -1750,7 +1756,8 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
     from routes.accounting import post_receipt_je, reverse_receipt_je
     if payload.status == "paid" and inv.get("status") != "paid" \
             and inv.get("doc_type", "invoice") == "invoice":
-        upd["paid_date"] = now_utc().date().isoformat()
+        from core.helpers import business_today
+        upd["paid_date"] = business_today().isoformat()
         amount = float(inv.get("total") or 0)
         if amount > 0:
             je = await post_receipt_je(
@@ -3121,7 +3128,8 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
     await sdb.projects.insert_one(dict(project))
 
     # Auto-create tasks from BOQ categories + timeline phases
-    today = now_utc().date()
+    from core.helpers import business_today
+    today = business_today()
     for i, cat in enumerate(q.get("boq", []) or []):
         due = (today + timedelta(days=14 + i * 7)).isoformat()
         await sdb.tasks.insert_one({

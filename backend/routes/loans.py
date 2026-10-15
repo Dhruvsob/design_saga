@@ -19,7 +19,7 @@ from calendar import monthrange
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import iso_now, now_utc, new_id
+from core.helpers import business_today, iso_now, now_utc, new_id
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
@@ -310,7 +310,7 @@ async def _pay_emi_locked(user: dict, loan_id: str, payload: PayEMIIn):
     if row.get("paid"):
         raise HTTPException(400, "This EMI is already paid")
 
-    paid_on = payload.paid_on or _date.today().isoformat()
+    paid_on = payload.paid_on or business_today().isoformat()
     principal_amt = float(row["principal"])
     interest_amt = float(row["interest"])
     extra = round(float(payload.extra_principal or 0), 2)
@@ -418,7 +418,7 @@ async def _prepay_locked(user: dict, loan_id: str, payload: PrepayIn):
         raise HTTPException(400, f"Prepayment exceeds outstanding principal ({unpaid_principal:.2f})")
     prepay_no = int(loan.get("prepayment_count") or 0) + 1
 
-    paid_on = payload.paid_on or _date.today().isoformat()
+    paid_on = payload.paid_on or business_today().isoformat()
     # Post JE: DR Loan Liability / CR Bank
     je = await _post_journal(
         user, paid_on,
@@ -510,7 +510,7 @@ async def _archive_loan_locked(user: dict, loan_id: str):
                 for l in orig["lines"]
             ]
             rev = await _post_journal(
-                user, now_utc().date().isoformat(),
+                user, business_today().isoformat(),
                 f"Reversal of loan disbursement – {loan.get('lender_name')}",
                 rev_lines,
                 reference=orig.get("reference"),

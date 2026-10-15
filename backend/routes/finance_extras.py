@@ -286,7 +286,7 @@ async def run_recurring_now(rec_id: str, request: Request,
     if not rule:
         raise HTTPException(404, "Recurring rule not found")
     # Force the run_date to today (so admins can catch up) — idempotent.
-    rule["next_run_date"] = now_utc().date().isoformat()
+    rule["next_run_date"] = business_today().isoformat()
     je = await _post_recurring_rule(rule, user)
     return {"ok": True, "journal": je,
             "rule": await sdb.recurring_expenses.find_one({"id": rec_id}, {"_id": 0})}
@@ -468,7 +468,7 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     if vendor.get("gstin"):      pdf.cell(0, 4, _s(f"GSTIN: {vendor['gstin']}"), ln=1)
     if vendor.get("email"):      pdf.cell(0, 4, _s(f"Email: {vendor['email']}"), ln=1)
     if vendor.get("phone"):      pdf.cell(0, 4, _s(f"Phone: {vendor['phone']}"), ln=1)
-    period = f"Period: {from_date or 'inception'}  to  {to_date or now_utc().date().isoformat()}"
+    period = f"Period: {from_date or 'inception'}  to  {to_date or business_today().isoformat()}"
     pdf.cell(0, 4, _s(period), ln=1)
     pdf.ln(3)
 
@@ -510,7 +510,7 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 4, _s(f"Generated {now_utc().date().isoformat()} · {org_name}"), ln=1)
+    pdf.cell(0, 4, _s(f"Generated {business_today().isoformat()} · {org_name}"), ln=1)
 
     output = pdf.output(dest="S")
     # fpdf2 >= 2.5 returns bytearray; older returns str.

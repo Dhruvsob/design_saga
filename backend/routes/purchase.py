@@ -15,7 +15,7 @@ from datetime import date as _date
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import iso_now, new_id
+from core.helpers import business_today, iso_now, new_id
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
@@ -33,7 +33,7 @@ router = APIRouter()
 # ------------------------------------------------------------
 async def _next_po_number() -> str:
     """Per-org PO sequence like PO-2026-0001."""
-    year = _date.today().year
+    year = business_today().year
     prefix = f"PO-{year}-"
     latest = await sdb.purchase_orders.find(
         {"po_number": {"$regex": f"^{prefix}"}}, {"_id": 0, "po_number": 1},
@@ -48,7 +48,7 @@ async def _next_po_number() -> str:
 
 
 async def _next_grn_number() -> str:
-    year = _date.today().year
+    year = business_today().year
     prefix = f"GRN-{year}-"
     latest = await sdb.goods_receipts.find(
         {"grn_number": {"$regex": f"^{prefix}"}}, {"_id": 0, "grn_number": 1},
@@ -139,7 +139,7 @@ async def create_po(payload: POCreateIn, request: Request,
         "vendor_id": payload.vendor_id,
         "vendor_name": vendor.get("name"),
         "project_id": payload.project_id,
-        "order_date": payload.order_date or _date.today().isoformat(),
+        "order_date": payload.order_date or business_today().isoformat(),
         "expected_delivery": payload.expected_delivery,
         "delivery_address": payload.delivery_address,
         "payment_terms": payload.payment_terms,
@@ -374,7 +374,7 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn):
         float(l["received_qty"]) * float(l["unit_price"]) for l in grn_lines_out
     )
     grn_id = new_id("grn_")
-    received_date = payload.received_date or _date.today().isoformat()
+    received_date = payload.received_date or business_today().isoformat()
     je = None
     if value > 0:
         je = await _post_journal(

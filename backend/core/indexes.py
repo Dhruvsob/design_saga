@@ -78,7 +78,7 @@ _INDEXES = [
     ("job_status",         [("name", 1)], {"name": "job_status_name_unique", "unique": True}),
     ("expenses",           [("org_id", 1), ("claimant_id", 1), ("client_request_id", 1)],
                             {"name": "expense_request_unique", "unique": True, "sparse": True}),
-    ("vendor_payments",    [("org_id", 1), ("client_request_id", 1)],
+    ("vendor_payments",    [("org_id", 1), ("vendor_id", 1), ("client_request_id", 1)],
                             {"name": "vendor_payment_request_unique", "unique": True, "sparse": True}),
     ("vendor_bills",       [("org_id", 1), ("vendor_id", 1), ("bill_number", 1)],
                             {"name": "vendor_bill_number_unique", "unique": True, "sparse": True}),

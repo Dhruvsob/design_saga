@@ -18,7 +18,7 @@ from datetime import date as _date, timedelta
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import now_utc, iso_now, new_id
+from core.helpers import business_today, now_utc, iso_now, new_id
 from core.deps import require_user
 from core.rbac import has_permission
 from core.tenancy import user_org_id
@@ -246,7 +246,7 @@ async def reverse_receipt_je(user: dict, *, source: str, source_id: str,
          "description": f"Reversal · {l.get('description') or ''}".strip()}
         for l in orig["lines"]
     ]
-    rev = await _post_journal(user, now_utc().date().isoformat(), narration, rev_lines,
+    rev = await _post_journal(user, business_today().isoformat(), narration, rev_lines,
                               reference=orig.get("reference"),
                               project_id=orig.get("project_id"),
                               client_id=orig.get("client_id"),
@@ -583,7 +583,7 @@ async def reverse_journal(je_id: str, request: Request,
     ]
     narration = f"Reversal of: {je.get('narration') or je_id}"
     rev = await _post_journal(
-        user, now_utc().date().isoformat(), narration, rev_lines,
+        user, business_today().isoformat(), narration, rev_lines,
         reference=je.get("reference"),
         project_id=je.get("project_id"), client_id=je.get("client_id"),
         vendor_id=je.get("vendor_id"), employee_id=je.get("employee_id"),
@@ -1127,7 +1127,7 @@ async def finance_dashboard(request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
-    today = now_utc().date().isoformat()
+    today = business_today().isoformat()
     month_start = f"{now_utc().year}-{now_utc().month:02d}-01"
 
     # Cash / Bank balances (asset accounts flagged as is_bank OR Cash)
@@ -1189,7 +1189,7 @@ async def finance_dashboard(request: Request,
                        if (m.get("due_date") or "") < today), 2)
 
     # Upcoming payments (next 30 days)
-    horizon = (now_utc().date() + timedelta(days=30)).isoformat()
+    horizon = (business_today() + timedelta(days=30)).isoformat()
     upcoming = [m for m in ms if today <= (m.get("due_date") or "") <= horizon]
 
     # Recent transactions
@@ -1549,7 +1549,7 @@ async def finance_dashboard_extended(request: Request,
     # Receivables = unpaid invoices
     receivables_total = 0.0
     receivables_overdue = 0.0
-    today = now_utc().date().isoformat()
+    today = business_today().isoformat()
     async for inv in sdb.invoices.find({"status": {"$in": ["sent", "overdue", "partially_paid"]},
                                        "doc_type": {"$ne": "quotation"}},
                                       {"_id": 0}):
@@ -1569,7 +1569,7 @@ async def finance_dashboard_extended(request: Request,
             payables_overdue += out
 
     # 12-month trend (income + expense per month)
-    now = now_utc().date()
+    now = business_today()
     year_start_month = now.replace(day=1)
     months = []
     for i in range(11, -1, -1):
@@ -1833,7 +1833,7 @@ async def update_milestone(ms_id: str, payload: MilestoneUpdate, request: Reques
             proj = await sdb.projects.find_one(
                 {"id": existing_ms.get("project_id")}, {"_id": 0, "client_id": 1, "name": 1})
             je = await post_receipt_je(
-                user, amount=amount, date=now_utc().date().isoformat(),
+                user, amount=amount, date=business_today().isoformat(),
                 narration=f"Milestone payment · {existing_ms.get('name') or ms_id}"
                           + (f" · {proj.get('name')}" if proj else ""),
                 source="milestone_payment", source_id=ms_id,
@@ -1909,7 +1909,7 @@ async def repair_orphan_invoices(request: Request,
             skipped.append({"invoice_id": inv["id"], "reason": "zero total"})
             continue
         pay_date = (inv.get("paid_date") or (inv.get("created_at") or "")[:10]
-                    or now_utc().date().isoformat())
+                    or business_today().isoformat())
         je = await post_receipt_je(
             user, amount=amount, date=pay_date,
             narration=f"Invoice {inv.get('number') or inv['id']} payment received (repair)"

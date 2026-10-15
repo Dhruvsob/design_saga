@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import now_utc, iso, iso_now, new_id
+from core.helpers import business_today, now_utc, iso, iso_now, new_id
 from core.deps import require_user
 from core.tenancy import user_org_id
 from core.access_control import (
@@ -625,7 +625,7 @@ async def upcoming_reminders(request: Request,
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     require_permission(user, "tasks.read")
-    today = now_utc().date().isoformat()
+    today = business_today().isoformat()
     horizon = (now_utc() + timedelta(days=days)).date().isoformat()
 
     q = {
