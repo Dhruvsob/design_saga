@@ -76,7 +76,7 @@ def install_log_redaction():
 # (method or "*", path regex, bucket, limit, window seconds)
 RATE_RULES = [
     ("POST", re.compile(r"^/api/auth/(login|session|password-login)"), "auth", 30, 60),
-    ("*", re.compile(r"/reset-password$"), "password_reset", 10, 900),
+    ("*", re.compile(r"/reset-password(?:/[^/]+)?$"), "password_reset", 10, 900),
     ("POST", re.compile(r"/account/password$|/auth/change-password$"), "password_change", 10, 900),
     ("POST", re.compile(r"^/api/portal/[^/]+/message$"), "portal_write", 10, 60),
     ("*", re.compile(r"^/api/portal/"), "portal", 60, 60),

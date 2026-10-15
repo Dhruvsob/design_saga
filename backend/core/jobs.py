@@ -18,6 +18,7 @@ from .helpers import iso, now_utc
 
 _log = logging.getLogger("jobs")
 _OWNER = f"{socket.gethostname()}:{os.getpid()}"
+EXPECTED_JOBS = ("notification_scan", "recurring_expense_scan")
 
 
 async def _acquire(name: str, lease_seconds: int) -> bool:
@@ -71,7 +72,10 @@ async def run_job(name: str, fn, *, lease_seconds: int = 1800, retries: int = 3)
 async def job_health(max_age_hours: int = 13) -> dict:
     rows = await db.job_status.find({}, {"_id": 0}).to_list(50)
     cutoff = iso(now_utc() - timedelta(hours=max_age_hours))
-    unhealthy = [r["name"] for r in rows
-                 if (r.get("consecutive_failures") or 0) > 0
-                 or (r.get("last_success_at") or "") < cutoff]
+    by_name = {r.get("name"): r for r in rows}
+    unhealthy = [name for name in EXPECTED_JOBS if name not in by_name]
+    unhealthy.extend(r["name"] for r in rows
+                     if (r.get("consecutive_failures") or 0) > 0
+                     or (r.get("last_success_at") or "") < cutoff)
+    unhealthy = sorted(set(unhealthy))
     return {"ok": not unhealthy, "unhealthy": unhealthy, "jobs": rows}

@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from core.audit import audit
 from core.db import db  # noqa: F401  (kept for future use)
 from core.deps import require_user
-from core.helpers import iso_now, new_id, now_utc
+from core.helpers import business_today, iso_now, new_id, now_utc
 from core.rbac import has_permission
 from core.scoped_db import sdb
 from core.tenancy import user_org_id
@@ -114,7 +114,7 @@ def _next_run(from_date: _date, freq: str, day_of_month: Optional[int],
 def _initial_run_date(payload_start: Optional[str], freq: str,
                       day_of_month: Optional[int], day_of_week: Optional[int]) -> str:
     """Pick the first `next_run_date` when the rule is created."""
-    today = now_utc().date()
+    today = business_today()
     start = _date.fromisoformat(payload_start) if payload_start else today
     # If start is in the future, use it directly; else compute the next occurrence.
     if start > today:
@@ -301,7 +301,7 @@ async def scan_recurring(request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.create"):
         raise HTTPException(403, "Missing permission: finance.create")
-    today = now_utc().date().isoformat()
+    today = business_today().isoformat()
     posted = []
     async for r in sdb.recurring_expenses.find(
             {"active": True, "next_run_date": {"$lte": today}}, {"_id": 0}):

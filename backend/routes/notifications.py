@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import iso_now, now_utc
+from core.helpers import business_today, iso_now, now_utc
 from core.deps import require_user
 from core.notifications import emit, emit_admins, emit_finance
 from core.tenancy import user_org_id
@@ -97,7 +97,7 @@ async def run_scan(caller_org):
     """Scan due/overdue bills, invoices, milestones and tasks for ONE org and
     emit idempotent notifications. Callers must have already set the tenant
     scope (request dependency or scheduler's set_scope_from_user)."""
-    today = now_utc().date().isoformat()
+    today = business_today().isoformat()
     counts = {
         "vendor_bill_due": 0, "vendor_bill_overdue": 0,
         "invoice_due": 0, "invoice_overdue": 0,

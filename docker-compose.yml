@@ -40,6 +40,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
       SUPER_ADMIN_EMAILS: ${SUPER_ADMIN_EMAILS}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      AUDIT_HMAC_KEY: ${AUDIT_HMAC_KEY}
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Asia/Kolkata}
       ENABLE_SEED_DEMO: "false"
       EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
     depends_on:

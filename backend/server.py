@@ -3692,6 +3692,17 @@ async def root():
     return {"service": "Design Saga API", "status": "ok"}
 
 
+@api.get("/health/jobs")
+async def scheduled_job_health(request: Request,
+                               session_token: Optional[str] = Cookie(default=None),
+                               authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    from core.jobs import job_health
+    return await job_health()
+
+
 # ============================================================
 # MODULE 2 — Employee Management
 # HR records (separate from `users` which is auth). Optional 1:1 link
@@ -4523,8 +4534,11 @@ async def _bootstrap_default_org():
     # Production safety warning
     # ==============================================
     env_flag = os.environ.get("ENV") or os.environ.get("EMERGENT_ENV") or ""
-    if env_flag.lower() in ("prod", "production") and not SUPER_ADMIN_EMAILS:
-        logger.warning("[SECURITY] SUPER_ADMIN_EMAILS is not configured in production")
+    if env_flag.lower() in ("prod", "production"):
+        if not SUPER_ADMIN_EMAILS:
+            logger.warning("[SECURITY] SUPER_ADMIN_EMAILS is not configured in production")
+        if not os.environ.get("AUDIT_HMAC_KEY"):
+            raise RuntimeError("AUDIT_HMAC_KEY is required in production")
 
     # ==============================================
     # Object storage (best-effort — no-op if key missing)
@@ -4546,14 +4560,21 @@ async def _bootstrap_default_org():
         while True:
             try:
                 from routes.notifications import scheduled_scan_all_orgs
-                results = await scheduled_scan_all_orgs()
-                logger.info("[Scheduler] notification scan complete: %s",
-                            {k: v for k, v in list(results.items())[:5]})
+                from core.jobs import run_job
+                results = await run_job(
+                    "notification_scan", scheduled_scan_all_orgs,
+                    lease_seconds=5 * 3600)
+                if results is not None:
+                    logger.info("[Scheduler] notification scan complete: %s",
+                                {k: v for k, v in list(results.items())[:5]})
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[Scheduler] scan failed: %s", exc)
             # Recurring-expense poster: run once per loop across all orgs.
             try:
-                await _run_recurring_expense_scan()
+                from core.jobs import run_job
+                await run_job(
+                    "recurring_expense_scan", _run_recurring_expense_scan,
+                    lease_seconds=5 * 3600)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[Scheduler] recurring-expense scan failed: %s", exc)
             await asyncio.sleep(6 * 3600)
@@ -4567,10 +4588,11 @@ async def _run_recurring_expense_scan():
     from routes.finance_extras import _post_recurring_rule
     from core.scoped_db import _scope
 
-    today = datetime.now(timezone.utc).date().isoformat()
+    from core.helpers import business_today
+    today = business_today().isoformat()
     total_posted = 0
-    async for org in db.organizations.find({}, {"_id": 0, "id": 1}):
-        oid = org.get("id")
+    async for org in db.organizations.find({}, {"_id": 0, "org_id": 1}):
+        oid = org.get("org_id")
         if not oid:
             continue
         _scope.set({"org_id": oid})

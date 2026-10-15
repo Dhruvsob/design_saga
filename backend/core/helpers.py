@@ -1,5 +1,7 @@
 """Tiny helpers shared across routes."""
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+import os
 import uuid
 
 
@@ -13,6 +15,12 @@ def iso(dt: datetime) -> str:
 
 def iso_now() -> str:
     return iso(now_utc())
+
+
+def business_today():
+    """Current business date. Timestamps remain UTC; date workflows use IST."""
+    tz = ZoneInfo(os.environ.get("BUSINESS_TIMEZONE", "Asia/Kolkata"))
+    return now_utc().astimezone(tz).date()
 
 
 def new_id(prefix: str = "") -> str:

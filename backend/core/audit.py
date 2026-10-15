@@ -7,7 +7,7 @@ Usage:
 
 Tamper evidence: every row carries a per-organisation sequence number,
 the previous row's hash and its own HMAC-SHA256 digest (keyed with
-`AUDIT_HMAC_KEY` when configured, plain SHA-256 otherwise). Editing,
+`AUDIT_HMAC_KEY`; production startup requires this key). Editing,
 deleting or re-ordering rows breaks the chain, which
 `GET /api/audit-log/verify` reports. No API route updates or deletes rows.
 
@@ -103,7 +103,26 @@ async def verify_chain(chain_key: str, limit: int = 20000) -> dict:
             problems.append({"seq": r["seq"], "issue": "content hash mismatch (row altered)"})
         prev = r.get("hash")
         expected = r["seq"] + 1
-    legacy = await db.audit_log.count_documents({"org_id": None if chain_key == "platform" else chain_key,
-                                                 "seq": {"$exists": False}})
+    total_chained = await db.audit_log.count_documents(
+        {"chain": chain_key, "seq": {"$ne": None}})
+    unchained = await db.audit_log.count_documents(
+        {"chain": chain_key, "seq": None})
+    head = await db.audit_chain.find_one({"chain": chain_key}, {"_id": 0})
+    if total_chained > limit:
+        problems.append({"seq": None, "issue": f"verification limit exceeded: {total_chained} rows"})
+    elif rows:
+        if not head:
+            problems.append({"seq": rows[-1]["seq"], "issue": "chain head missing"})
+        elif int(head.get("seq") or 0) != rows[-1]["seq"] or head.get("head") != prev:
+            problems.append({"seq": rows[-1]["seq"], "issue": "stored chain head mismatch"})
+    elif head and (int(head.get("seq") or 0) != 0 or head.get("head") != "genesis"):
+        problems.append({"seq": None, "issue": "chain head exists without matching rows"})
+    if unchained:
+        problems.append({"seq": None, "issue": f"{unchained} unchained row(s)"})
+    legacy = await db.audit_log.count_documents({
+        "org_id": None if chain_key == "platform" else chain_key,
+        "seq": {"$exists": False},
+    })
     return {"chain": chain_key, "rows_checked": len(rows), "ok": not problems,
-            "problems": problems[:100], "legacy_unchained_rows": legacy}
+            "problems": problems[:100], "legacy_unchained_rows": legacy,
+            "unchained_rows": unchained}
