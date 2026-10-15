@@ -3881,10 +3881,17 @@ def _employee_for_user(employee: dict, user: dict) -> dict:
     return visible
 
 
-async def _next_employee_id() -> str:
-    year = now_utc().year
-    count = await sdb.employees.count_documents({"employee_id": {"$regex": f"^EMP-{year}-"}})
-    return f"EMP-{year}-{count + 1:04d}"
+async def _next_employee_id(org_id: str) -> str:
+    from core.helpers import business_today, max_trailing_number, next_sequence
+    year = business_today().year
+    prefix = f"EMP-{year}-"
+    seed = await max_trailing_number(
+        sdb.employees.find({"employee_id": {"$regex": f"^{prefix}"}},
+                           {"_id": 0, "employee_id": 1}),
+        field="employee_id",
+    )
+    number = await next_sequence(org_id, f"employee:{year}", seed)
+    return f"{prefix}{number:04d}"
 
 
 @api.get("/employees")
@@ -3970,7 +3977,8 @@ async def create_employee(payload: EmployeeIn, request: Request,
         "rewards": [],
     }
     data["id"] = new_id("emp_")
-    data["employee_id"] = await _next_employee_id()
+    from core.tenancy import user_org_id
+    data["employee_id"] = await _next_employee_id(user_org_id(user))
     data["created_at"] = iso(now_utc())
     data["created_by"] = user["user_id"]
     await sdb.employees.insert_one(dict(data))
@@ -4338,7 +4346,8 @@ async def seed_employees(request: Request,
     created = []
     for fn, ln, dept, desig, salary in samples:
         eid = new_id("emp_")
-        emp_no = await _next_employee_id()
+        from core.tenancy import user_org_id
+        emp_no = await _next_employee_id(user_org_id(user))
         doc = {
             "id": eid,
             "employee_id": emp_no,
