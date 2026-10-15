@@ -202,9 +202,12 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
     policy = await _get_policy(user)
 
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
+    request_key = f"{user_org_id(user)}:{user['user_id']}:{idem}" if idem else None
     if idem:
         prior = await sdb.expenses.find_one(
-            {"claimant_id": user["user_id"], "client_request_id": idem}, {"_id": 0})
+            {"$or": [{"request_key": request_key},
+                     {"claimant_id": user["user_id"], "client_request_id": idem}]},
+            {"_id": 0})
         if prior:
             return prior
     if payload.project_id and not await sdb.projects.find_one({"id": payload.project_id}, {"_id": 1}):
@@ -274,6 +277,7 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
     }
     if idem:
         doc["client_request_id"] = idem
+        doc["request_key"] = request_key
     if route.get("auto_approved"):
         doc["approved_at"] = iso_now()
         doc["approval_trail"].append({
@@ -285,7 +289,9 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
     except DuplicateKeyError:
         if idem:
             prior = await sdb.expenses.find_one(
-                {"claimant_id": user["user_id"], "client_request_id": idem}, {"_id": 0})
+                {"$or": [{"request_key": request_key},
+                         {"claimant_id": user["user_id"], "client_request_id": idem}]},
+                {"_id": 0})
             if prior:
                 return prior
         raise HTTPException(409, "This expense request was already submitted")

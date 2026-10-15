@@ -204,6 +204,7 @@ async def create_vendor(
                             detail=f"agency_type must be one of {AGENCY_TYPES}")
     if doc.get("gstin"):
         doc["gstin"] = await _ensure_unique_gstin(doc["gstin"])
+        doc["gstin_key"] = f"{user_org_id(user)}:{doc['gstin']}"
     if doc.get("pan"):
         doc["pan"] = doc["pan"].strip().upper()
     doc["id"] = new_id("vnd_")
@@ -295,6 +296,7 @@ async def update_vendor(vendor_id: str, payload: VendorUpdate, request: Request,
         raise HTTPException(status_code=400, detail=f"agency_type must be one of {AGENCY_TYPES}")
     if patch.get("gstin"):
         patch["gstin"] = await _ensure_unique_gstin(patch["gstin"], exclude_id=vendor_id)
+        patch["gstin_key"] = f"{user_org_id(user)}:{patch['gstin']}"
     if patch.get("pan"):
         patch["pan"] = patch["pan"].strip().upper()
     patch["updated_at"] = iso_now()
@@ -440,6 +442,9 @@ async def create_vendor_bill(payload: VendorBillIn, request: Request,
             sdb.vendor_bills.find({"bill_number": {"$regex": "^VB-"}}, {"_id": 0, "bill_number": 1}),
             field="bill_number")
         doc["bill_number"] = f"VB-{await next_sequence(user.get('org_id'), 'vendor_bill', _seed)}"
+    doc["bill_key"] = (
+        f"{user_org_id(user)}:{payload.vendor_id}:{doc['bill_number'].casefold()}"
+    )
     doc["items"] = [i if isinstance(i, dict) else i.model_dump()
                     for i in (doc.get("items") or [])]
     _bill_total(doc)
@@ -523,6 +528,9 @@ async def update_vendor_bill(bill_id: str, payload: VendorBillUpdate, request: R
         }, {"_id": 1})
         if dup:
             raise HTTPException(status_code=409, detail="A bill with this number already exists for this vendor")
+        patch["bill_key"] = (
+            f"{user_org_id(user)}:{bill['vendor_id']}:{patch['bill_number'].casefold()}"
+        )
     if "items" in patch or "tax_rate" in patch or "tds_rate" in patch:
         merged = {**bill, **patch}
         merged["items"] = [i if isinstance(i, dict) else i.model_dump()
@@ -585,17 +593,20 @@ async def create_vendor_payment(payload: VendorPaymentIn, request: Request,
         raise HTTPException(status_code=400, detail="Amount must be positive")
     bank_acc = await require_asset_account(payload.paid_from_account_id, "Bank/cash account")
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
+    request_key = f"{user_org_id(user)}:{payload.vendor_id}:{idem}" if idem else None
     async with doc_lock(sdb.vendors_acc, payload.vendor_id):
         if idem:
             prior = await sdb.vendor_payments.find_one(
-                {"vendor_id": payload.vendor_id, "client_request_id": idem}, {"_id": 0})
+                {"$or": [{"request_key": request_key},
+                         {"vendor_id": payload.vendor_id, "client_request_id": idem}]},
+                {"_id": 0})
             if prior:
                 return prior
-        return await _create_vendor_payment_locked(user, payload, bank_acc, idem)
+        return await _create_vendor_payment_locked(user, payload, bank_acc, idem, request_key)
 
 
 async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, bank_acc: dict,
-                                        idem: Optional[str]):
+                                        idem: Optional[str], request_key: Optional[str]):
     vendor = await sdb.vendors_acc.find_one({"id": payload.vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -666,6 +677,7 @@ async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, ba
     pmt["journal_entry_id"] = je_id
     if idem:
         pmt["client_request_id"] = idem
+        pmt["request_key"] = request_key
     pmt["created_at"] = iso_now()
     pmt["created_by"] = user["user_id"]
     await sdb.vendor_payments.insert_one(dict(pmt))

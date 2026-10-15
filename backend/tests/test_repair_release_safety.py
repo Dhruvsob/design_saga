@@ -47,6 +47,16 @@ def test_integrity_indexes_are_unique():
     assert required <= found
 
 
+def test_optional_unique_indexes_use_single_sparse_keys():
+    keys_by_name = {
+        opts.get("name"): keys for _, keys, opts in _INDEXES if opts.get("unique")
+    }
+    assert keys_by_name["expense_request_unique"] == [("request_key", 1)]
+    assert keys_by_name["vendor_payment_request_unique"] == [("request_key", 1)]
+    assert keys_by_name["vendor_bill_number_unique"] == [("bill_key", 1)]
+    assert keys_by_name["vendor_gstin_unique"] == [("gstin_key", 1)]
+
+
 def test_business_date_uses_configured_timezone(monkeypatch):
     monkeypatch.setenv("BUSINESS_TIMEZONE", "Asia/Kolkata")
     monkeypatch.setattr(
