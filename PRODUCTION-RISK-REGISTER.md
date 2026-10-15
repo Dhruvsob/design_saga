@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-10-13 (Asia/Kolkata)
+Last updated: 2026-10-15 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -49,20 +49,20 @@ yet received sufficient adversarial testing.
 |---|---|---|
 | Employee/user link | Employee creation must create/link exactly one active authentication user where requested | Fixed for reported login path; uniqueness audit required |
 | Invoice lifecycle | Draft/issued/paid/reversed/deleted transitions and permissions | Fixed for linked payment path; full lifecycle audit required |
-| Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Audit |
-| Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Audit |
-| Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | Audit |
+| Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Idempotency and duplicate submission fixed/tested; remaining approval/receipt audit continues |
+| Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Over-receipt and bill/payment idempotency fixed/tested; remaining lifecycle audit continues |
+| Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | Concurrent EMI posting and journal cardinality fixed/tested; prepayment/deletion audit continues |
 | Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Audit |
 | Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Partially fixed; dependency matrix audit required |
-| Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | Audit |
-| Time zones | All business dates use Asia/Kolkata while stored timestamps remain UTC; test midnight/month/year boundaries | Fixed for attendance; audit remaining modules |
+| Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | Employee/document counters and key finance identifiers protected; broader normalization audit continues |
+| Time zones | All business dates use Asia/Kolkata while stored timestamps remain UTC; test midnight/month/year boundaries | Shared IST business-date helper applied to audited modules; boundary regression test passes |
 | Money precision | Decimal-safe calculations, rounding policy, GST/TDS, currency and reconciliation | Audit |
 
 ## P2 - Reliability, DevOps and Operations
 
 | Area | Risk / required evidence | Status |
 |---|---|---|
-| Database indexes | Index every tenant/filter/uniqueness path; monitor slow queries and index build failures | Partial |
+| Database indexes | Index every tenant/filter/uniqueness path; monitor slow queries and index build failures | Integrity indexes fixed/tested; performance/slow-query audit remains open |
 | Database capacity | Connection limits, timeouts, pool sizing, storage growth, vacuum/maintenance and corruption alerts | Audit |
 | Container hardening | Non-root runtime, read-only filesystem where possible, dropped capabilities, resource limits and health checks | Partial: limits/health checks exist |
 | Dependency security | Automated Python/Node/container CVE scan, lockfiles, update policy and license review | Open |
@@ -70,7 +70,7 @@ yet received sufficient adversarial testing.
 | Deployment safety | Change-aware service replacement, pre-deploy backup, readiness gate, rollback on health failure, and no blanket Compose teardown | Fixed; tracked updater and VPS hook installed |
 | Log safety | Structured logs, request IDs, redaction of passwords/tokens/PII and retention/rotation | Audit |
 | Alerting/runbooks | Actionable alerts and written response steps for outage, full disk, DB failure, auth spike and certificate failure | Open |
-| Scheduled jobs | Single-run locks, retries, idempotency, missed-job recovery and visible failure state | Audit |
+| Scheduled jobs | Single-run locks, retries, idempotency, missed-job recovery and visible failure state | Single-run locks and visible health fixed/tested; retry/alert policy remains open |
 | Data exports | Permission checks, tenant scoping, formula injection protection, memory limits and audit records | Audit |
 | Email/notifications | No cross-tenant recipient resolution, retries without duplicates, bounce/error handling | Audit |
 | AI features | No secret/PII leakage, tenant context boundaries, prompt injection controls, cost/rate limits and graceful key absence | Audit |

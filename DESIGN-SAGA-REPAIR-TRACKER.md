@@ -1,6 +1,6 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-14 (Asia/Calcutta)
+Last updated: 2026-10-15 (Asia/Calcutta)
 
 ## Current Checkpoint
 
@@ -10,7 +10,7 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 - Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
 - VPS baseline: 3.8 GiB RAM, 2 GiB swap, root disk 56% used, low load at inspection. UFW default-deny and key-only SSH are active.
-- Current action: all high-severity findings recorded below are deployed and verified live. Next priorities are external credential rotation, off-server backups/alerts, and the remaining route-by-route IDOR audit.
+- Current action: repair release `b28a373` passed isolated candidate testing and the production duplicate-data preflight. Deployment is pending a fresh verified backup and backend/web service-only rollout.
 
 ## System Inventory
 
@@ -68,6 +68,7 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 | DS-011 | High | Rejected punch retry, late-review races, manual-time integrity, weekly offs, and overlapping leave | Fixed, deployed, and verified live |
 | DS-012 | High | Empty role overrides restored default privileges; legacy session routes missed tenant lifecycle gates | Fixed, deployed, and verified live |
 | DS-013 | High | Search, comments, calendar, and event notifications bypassed primary visibility boundaries | Fixed, deployed, and verified live |
+| DS-014 | High | Repair-branch scheduler, audit-chain, business-date, idempotency, numbering, and workflow integrity gaps | Fixed and candidate-verified; production deployment pending |
 
 ## Issue Log
 
@@ -337,6 +338,16 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 - Files changed: `backend/routes/calendar.py`, `backend/routes/comments.py`, `backend/routes/search.py`, `backend/tests/test_visibility_surfaces.py`.
 - Database effect: no migration or business-data rewrite.
 
+### DS-014: Repair release integrity and concurrency gates
+
+- Root causes: scheduled work bypassed the shared job lock and used the wrong tenant field; audit verification could miss a deleted tail and did not require a production HMAC key; password-reset throttling missed the direct user route; several finance workflows used UTC calendar dates; optional compound sparse indexes could reject normal records without idempotency/GSTIN values; and employee numbering used a racy count-based allocator without a unique counter invariant.
+- Correction: route both recurring jobs through persisted single-run locks and health state; require an audit HMAC key in production and verify stored chain head/count; cover every reset-password route; centralize business dates on `BUSINESS_TIMEZONE`; use normalized single-field sparse keys for optional uniqueness; add unique scheduler/audit/business indexes; and allocate employee/document numbers through a unique per-tenant atomic counter.
+- Candidate verification at `b28a373`: 62 deterministic backend tests passed; backend and frontend production images built; a disposable PostgreSQL/FerretDB workflow passed tenant-admin and employee-ID login, first-attempt authorized site attendance, expense retry, invoice terminal-state guards, PO/GRN over-receipt rejection, concurrent EMI protection, and cross-tenant 404 checks. Eight concurrent employee creates produced eight unique IDs and one counter row. Optional-key tests proved multiple keyless expenses/vendors/bills/payments remain valid while keyed retries remain single-write.
+- Production preflight: six employee rows have IDs; zero duplicate groups were found for employee IDs, counters, audit chains, job state, expense/payment request IDs, vendor bill numbers, GSTINs, or invoice numbers, including case-folded identity checks.
+- Files changed: `backend/core/audit.py`, `backend/core/helpers.py`, `backend/core/http_security.py`, `backend/core/indexes.py`, `backend/core/jobs.py`, `backend/server.py`, finance/notification route modules, `backend/tests/test_repair_release_safety.py`, `.env.example`, and `docker-compose.yml`.
+- Database effect: startup creates/promotes indexes and initializes job state. No historical business rows are rewritten.
+- Deployment state: pending fresh backup, rollback image tags, production HMAC configuration, and backend/web replacement.
+
 ## Deployment Safety
 
 ### DS-007: Safe Git-driven production updates
@@ -361,4 +372,4 @@ Last updated: 2026-10-14 (Asia/Calcutta)
 
 ## Next Action
 
-Rotate the exposed external MongoDB/viewer credentials, then continue the route-by-route IDOR audit listed in `PRODUCTION-RISK-REGISTER.md`.
+Deploy and live-verify DS-014. Afterward, rotate the exposed external MongoDB/viewer credentials, configure encrypted off-server backups/alerts, and continue the route-by-route IDOR and dependency-security audits in `PRODUCTION-RISK-REGISTER.md`.
