@@ -349,6 +349,15 @@ Last updated: 2026-10-15 (Asia/Calcutta)
 - Production deployment: verified backup `/opt/design-saga-backups/20261015T132809Z`; rollback images tagged `rollback-831bb19`; production audit HMAC and IST business timezone configured; backend/web replaced while PostgreSQL, FerretDB, and Caddy remained running. Site/API returned 200, unauthenticated `/api/auth/me` returned 401, all services became healthy, all 11 required unique indexes are active, and both scheduled jobs completed successfully on their first attempt with zero failures. Protected VPS Caddy changes remain untouched.
 - Credential hygiene: removed obsolete test scripts containing historical login strings. The named demo tenant accounts do not exist in production and the historical Super Admin string does not match the live password. Previously exposed external MongoDB/viewer credentials still require rotation at their provider.
 
+### DS-015: Runtime dependency, container and monitoring hardening
+
+- Root causes: production dependency pins included known-vulnerable FastAPI/Starlette, PyMongo/Motor and multipart versions; the frontend build was not lockfile-reproducible; the Nginx 1.27 runtime contained 43 fixed high/critical OS findings; backend ran without a non-root/read-only boundary; download filenames were assembled inconsistently; and production had no recurring local health/backup/disk monitor.
+- Correction: upgraded the Python runtime dependencies and replaced Passlib with bcrypt's compatible native API; committed the npm lockfile and switched builds to `npm ci`; upgraded the final Nginx runtime to 1.31 Alpine; centralized safe RFC 5987 download headers; ran backend as UID/GID 10001 with a read-only root filesystem, writable `/tmp`, dropped capabilities and no-new-privileges; and installed a deduplicating five-minute systemd monitor for all five containers, public HTTP, disk usage, backup age and backup checksums.
+- Verification: 53 focused backend tests passed. A disposable two-tenant workflow passed Super Admin, tenant-owner and employee-ID login, first-attempt authorized attendance for Hiren Panchal, duplicate-punch rejection and cross-tenant denial. Exact candidate containers passed startup and read-only/non-root checks. `pip-audit` and both final runtime-image Trivy scans report zero known high/critical findings; the production npm runtime tree reports zero vulnerabilities. The legacy CRA build-only tree still reports findings and remains a modernization item.
+- Production deployment: verified backup `/opt/design-saga-backups/20261015T190147Z` passed every SHA-256 check and `pg_restore -l`; deployed commit `bad2f103ce3c47df5b21608e5ca62191b06fcf17` to backend/web only; PostgreSQL, FerretDB and Caddy retained their uptime. Site/API/auth checks returned 200/200/401, all containers are healthy, both scheduled jobs succeeded with zero failures, the audit chain verifies, systemd has zero failed units, and the protected VPS Caddy changes remain untouched.
+- Database effect: startup reconciled one existing platform-owner/user document and ensured indexes; no ERP business records were migrated or deleted. Rollback images are `design-saga-backend:rollback-bf9745c-hardening` and `design-saga-web:rollback-bf9745c-hardening`.
+- Remaining external operations: configure `DESIGN_SAGA_ALERT_WEBHOOK_URL` for off-host notifications, add encrypted off-server backup replication, and rotate the previously exposed Atlas/viewer credentials at their providers.
+
 ## Deployment Safety
 
 ### DS-007: Safe Git-driven production updates
@@ -369,8 +378,8 @@ Last updated: 2026-10-15 (Asia/Calcutta)
 
 - Before any production repair: capture database backup, record image/commit rollback target, verify the exact Compose service affected, and preserve the VPS Caddy modifications.
 - Prefer service-specific rebuild/restart after testing. Do not run `docker compose down -v`.
-- Current rollback baseline: backend image tagged `rollback-1f891dc`; the newest verified database/config archive is `/opt/design-saga-backups/20261014T082426Z`.
+- Current rollback baseline: backend/web images tagged `rollback-bf9745c-hardening`; the newest verified database/config archive is `/opt/design-saga-backups/20261015T190147Z`.
 
 ## Next Action
 
-Rotate the exposed external MongoDB/viewer credentials, configure encrypted off-server backups/alerts, and continue the route-by-route IDOR and dependency-security audits in `PRODUCTION-RISK-REGISTER.md`.
+Rotate the exposed external MongoDB/viewer credentials, configure an external alert webhook and encrypted off-server backups, modernize the legacy CRA build toolchain, and continue the remaining route-by-route business/security audits in `PRODUCTION-RISK-REGISTER.md`.

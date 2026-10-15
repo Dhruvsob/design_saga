@@ -21,7 +21,7 @@ yet received sufficient adversarial testing.
 | Host firewall | Deny unsolicited inbound traffic while preserving SSH, HTTP, HTTPS, and HTTP/3 | Fixed: UFW default-deny is active with only 22/tcp, 80/tcp, 443/tcp, and 443/udp allowed for IPv4/IPv6 |
 | Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Partial: daily checksummed archive and restore validation pass; off-server encrypted retention and documented RPO/RTO remain open |
 | Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Partially fixed; test a complete restore drill |
-| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Open |
+| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/backup monitor is active; external webhook, capacity/TLS/5xx alerting remain open |
 
 ## P1 - Authorization and Data Protection
 
@@ -64,12 +64,12 @@ yet received sufficient adversarial testing.
 |---|---|---|
 | Database indexes | Index every tenant/filter/uniqueness path; monitor slow queries and index build failures | Integrity indexes fixed/tested; performance/slow-query audit remains open |
 | Database capacity | Connection limits, timeouts, pool sizing, storage growth, vacuum/maintenance and corruption alerts | Audit |
-| Container hardening | Non-root runtime, read-only filesystem where possible, dropped capabilities, resource limits and health checks | Partial: limits/health checks exist |
-| Dependency security | Automated Python/Node/container CVE scan, lockfiles, update policy and license review | Open |
+| Container hardening | Non-root runtime, read-only filesystem where possible, dropped capabilities, resource limits and health checks | Fixed baseline: backend is non-root/read-only with all capabilities dropped; backend/web use no-new-privileges, init and health checks |
+| Dependency security | Automated Python/Node/container CVE scan, lockfiles, update policy and license review | Partial: Python/runtime npm and final images scan clean; npm lockfile is committed; CRA build-only findings, automation and license review remain open |
 | CI/CD | Build, lint, unit, integration, migration, security scan, immutable artifact and approval gate before production | Open |
 | Deployment safety | Change-aware service replacement, pre-deploy backup, readiness gate, rollback on health failure, and no blanket Compose teardown | Fixed; tracked updater and VPS hook installed |
 | Log safety | Structured logs, request IDs, redaction of passwords/tokens/PII and retention/rotation | Audit |
-| Alerting/runbooks | Actionable alerts and written response steps for outage, full disk, DB failure, auth spike and certificate failure | Open |
+| Alerting/runbooks | Actionable alerts and written response steps for outage, full disk, DB failure, auth spike and certificate failure | Partial: local systemd monitor and deduplicated journal alerts are active; external webhook and broader incident runbooks remain open |
 | Scheduled jobs | Single-run locks, retries, idempotency, missed-job recovery and visible failure state | Single-run locks and visible health fixed/tested; retry/alert policy remains open |
 | Data exports | Permission checks, tenant scoping, formula injection protection, memory limits and audit records | Audit |
 | Email/notifications | No cross-tenant recipient resolution, retries without duplicates, bounce/error handling | Audit |
