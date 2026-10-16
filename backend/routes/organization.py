@@ -254,7 +254,11 @@ async def download_logo(full_path: str):
 # ------------------------------------------------------------------
 @router.get("/public/{slug}")
 async def public_branding(slug: str):
-    o = await db.organizations.find_one({"slug": slug}, {"_id": 0})
+    o = await db.organizations.find_one({
+        "slug": slug,
+        "is_active": {"$ne": False},
+        "is_suspended": {"$ne": True},
+    }, {"_id": 0})
     if not o:
         raise HTTPException(404, "Org not found")
     return {

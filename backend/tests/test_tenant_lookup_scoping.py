@@ -96,3 +96,20 @@ def test_logo_for_missing_or_inactive_org_is_not_fetched(monkeypatch):
     assert organizations.find_one_queries == [{
         "org_id": "org_a", "is_active": {"$ne": False},
     }]
+
+
+def test_public_branding_hides_suspended_or_inactive_org(monkeypatch):
+    organizations = _Collection([])
+    monkeypatch.setattr(
+        organization, "db", SimpleNamespace(organizations=organizations),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(organization.public_branding("tenant-a"))
+
+    assert exc.value.status_code == 404
+    assert organizations.find_one_queries == [{
+        "slug": "tenant-a",
+        "is_active": {"$ne": False},
+        "is_suspended": {"$ne": True},
+    }]
