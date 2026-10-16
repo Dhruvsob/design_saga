@@ -33,11 +33,11 @@ yet received sufficient adversarial testing.
 | Approval races | Concurrent attendance, leave, correction, and late-arrival approvals must produce one final decision | Fixed, deployed, and verified live |
 | Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed and deployed |
 | Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed and deployed |
-| Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Search/comments/calendar/notification-recipient leaks fixed; remaining modules continue |
+| Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Search/comments/calendar/notification/public-share leaks fixed; remaining modules continue |
 | Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides fixed and deployed; broader escalation audit continues |
 | Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Lifecycle gates fixed and deployed; stolen-token resistance audit continues |
-| CSRF and cookies | Confirm `Secure`, `HttpOnly`, appropriate `SameSite`, origin checks and no state-changing GET routes | Audit |
-| Rate limiting | Login, password reset, OTP, public portal, search, AI and expensive exports need per-IP/account limits | Partial: password login has account and opaque per-source limits; remaining endpoint classes are open |
+| CSRF and cookies | Confirm `Secure`, `HttpOnly`, appropriate `SameSite`, origin checks and no state-changing GET routes | Fixed baseline: secure HttpOnly SameSite=Lax cookies plus unsafe-method Origin/Referer enforcement; ongoing route audit remains |
+| Rate limiting | Login, password reset, OTP, public portal, search, AI and expensive exports need per-IP/account limits | Fixed single-worker baseline for auth/reset, portal, branding, search, AI, exports and uploads; move buckets to shared storage before adding workers |
 | Secrets management | No secrets in Git/images/logs; least-privilege environment access; rotation procedure and secret inventory | Audit |
 | Stored XSS | Validate/sanitize notes, descriptions, comments, names, SVG/media and any rich-text rendering | Audit |
 | File handling | Authenticated object access, signed expiry, ownership, size/type limits, filename safety, malware scanning and deletion lifecycle | Open; URL scheme protection alone is complete |

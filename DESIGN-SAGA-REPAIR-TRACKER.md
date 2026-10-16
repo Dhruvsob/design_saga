@@ -376,6 +376,14 @@ Last updated: 2026-10-17 (Asia/Calcutta)
 - Production deployment: backup `/opt/design-saga-backups/20261016T211613Z` passed every SHA-256 check; prior backend is tagged `rollback-be360c8`; only backend was recreated. Site/API returned 200, protected auth/platform endpoints returned 401, all services and the local monitor passed, affected collections retained zero missing/unknown tenant ownership, indexes are active, and recent backend logs contain no errors. VPS-only Caddy changes remain untouched.
 - Files changed: tenant scope/index modules, attendance/master-data/organization/platform/task/vendor routes, legacy server message handling, focused tests, and planning evidence under `docs/planning`.
 
+### DS-017: Public share-link tenant isolation
+
+- Root cause: public client-portal and shared-invoice routes resolved a random project token globally, but then loaded child records through an unscoped context using only `project_id` or invoice `id`. Globally random IDs made collision unlikely but did not provide a tenant-isolation guarantee. Suspended tenant share links also remained available.
+- Correction: share tokens must match the application-generated format and resolve to an active, unsuspended tenant; every public task, file, invoice, milestone, PDF and message operation is bound to both project and owner `org_id`.
+- Verification: all 15 production project share tokens were format-compatible. Ninety-two local-safe backend tests passed. A disposable two-tenant HTTP workflow deliberately reused project and invoice IDs and proved the token exposed only its tenant, wrote its message to that tenant, rendered its invoice, and returned 404 after tenant suspension. Temporary containers, volume, image and worktree were removed.
+- Production deployment: backup `/opt/design-saga-backups/20261016T212145Z` passed all checksums; prior backend remains available as a rollback image; backend-only deployment completed at `56e465b`. An existing production share link returned its expected 200 response, site/API/auth smoke checks passed, every service and the local monitor are healthy, and recent logs contain no errors. Caddy changes remain untouched.
+- Files changed: `backend/server.py`, `backend/tests/test_public_share_safety.py`.
+
 ### OPS-001: VPS access, firewall, and backup health
 
 - SSH: installed `/etc/ssh/sshd_config.d/00-design-saga-hardening.conf`; password and keyboard-interactive authentication are disabled, root is limited to public-key login, `MaxAuthTries` is 3, and `LoginGraceTime` is 30 seconds. `sshd -t`, daemon reload, and fresh key-only connections passed before and after firewall activation.
