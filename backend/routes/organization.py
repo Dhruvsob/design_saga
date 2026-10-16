@@ -227,6 +227,11 @@ async def download_logo(full_path: str):
     # the shared object store (other folders/apps, traversal) is refused.
     if not _storage.LOGO_PATH_RE.match(full_path or ""):
         raise HTTPException(404, "Logo not found")
+    owner_org_id = full_path.split("/", 3)[2]
+    owner = await db.organizations.find_one(
+        {"org_id": owner_org_id, "is_active": {"$ne": False}}, {"_id": 0, "org_id": 1})
+    if not owner:
+        raise HTTPException(404, "Logo not found")
     try:
         data, ctype = _storage.get_object(full_path)
     except Exception:  # noqa: BLE001

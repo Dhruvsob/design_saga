@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from core.scoped_db import _is_super_admin_local
+from core.scoped_db import _is_super_admin_local, _merge
 from core.tenancy import is_super_admin
 from models.user import LoginPasswordIn
 import routes.auth as auth_routes
@@ -44,6 +44,22 @@ def test_role_string_alone_never_bypasses_tenant_scope():
               "email": "forged@test.invalid"}
     assert is_super_admin(forged) is False
     assert _is_super_admin_local(forged) is False
+
+
+def test_scoped_query_cannot_override_tenant_org_id():
+    query = {"org_id": "org_b", "id": "record_1"}
+    assert _merge({"org_id": "org_a"}, query) == {
+        "org_id": "org_a", "id": "record_1",
+    }
+    assert query["org_id"] == "org_b"
+
+
+def test_default_tenant_scope_is_anded_with_conflicting_org_query():
+    scope = {"$or": [{"org_id": "org_default"},
+                     {"org_id": {"$exists": False}}, {"org_id": None}]}
+    merged = _merge(scope, {"org_id": "org_other", "id": "record_1"})
+    assert merged["org_id"] == "org_other"
+    assert merged["$or"] == scope["$or"]
 
 
 def _request(forwarded_for: str) -> Request:

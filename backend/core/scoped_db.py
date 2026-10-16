@@ -90,10 +90,12 @@ def _merge(scope: Optional[dict], q: Optional[dict]) -> dict:
         return {"$and": [scope, q]}
     if "$and" in q:
         return {**q, "$and": q["$and"] + [scope]}
-    # Field-level merge; scope takes precedence for org_id
+    # Field-level merge.  The trusted request scope must win over every
+    # caller-supplied field, especially org_id.  Using setdefault here would
+    # let a query such as {"org_id": "another-org"} escape its tenant.
     out = dict(q)
     for k, v in scope.items():
-        out.setdefault(k, v)
+        out[k] = v
     return out
 
 

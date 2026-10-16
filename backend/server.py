@@ -2238,8 +2238,8 @@ async def portal_view(token: str):
 
 
 class PortalMessageIn(BaseModel):
-    from_name: str
-    message: str
+    from_name: str = Field(min_length=1, max_length=120)
+    message: str = Field(min_length=1, max_length=4000)
 
 
 @api.post("/portal/{token}/message")
@@ -2247,11 +2247,16 @@ async def portal_message(token: str, payload: PortalMessageIn):
     project = await sdb.projects.find_one({"share_token": token}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Invalid link")
+    from_name = payload.from_name.strip()
+    message = payload.message.strip()
+    if not from_name or not message:
+        raise HTTPException(status_code=400, detail="Name and message are required")
     doc = {
         "id": new_id("msg_"),
+        "org_id": project.get("org_id") or "org_default",
         "project_id": project["id"],
-        "from_name": payload.from_name,
-        "message": payload.message,
+        "from_name": from_name,
+        "message": message,
         "created_at": iso(now_utc()),
         "channel": "client_portal",
     }
@@ -2321,7 +2326,7 @@ async def ai_chat(payload: AIChatIn, request: Request,
     # Persist
     await db.ai_messages.insert_one({
         "session_id": session_id,
-        "org_id": user.get("org_id"),
+        "org_id": user.get("org_id") or "org_default",
         "user_id": user["user_id"],
         "role": "user",
         "content": payload.message,
@@ -2329,6 +2334,7 @@ async def ai_chat(payload: AIChatIn, request: Request,
     })
     await db.ai_messages.insert_one({
         "session_id": session_id,
+        "org_id": user.get("org_id") or "org_default",
         "user_id": user["user_id"],
         "role": "assistant",
         "content": response,
@@ -4500,6 +4506,25 @@ async def _bootstrap_default_org():
             await db.organizations.update_one({"org_id": DEFAULT_ORG_ID}, {"$set": updates})
             logger.info("[Bootstrap] Retro-fit default org: %s", list(updates.keys()))
 
+    # Infer message ownership before the generic legacy backfill. This keeps
+    # messages created by non-default tenants with their actual tenant.
+    async for msg in db.chat_messages.find(
+            {"org_id": {"$exists": False}, "project_id": {"$exists": True}},
+            {"_id": 1, "project_id": 1}):
+        project = await db.projects.find_one(
+            {"id": msg["project_id"]}, {"_id": 0, "org_id": 1})
+        if project and project.get("org_id"):
+            await db.chat_messages.update_one(
+                {"_id": msg["_id"]}, {"$set": {"org_id": project["org_id"]}})
+    async for msg in db.ai_messages.find(
+            {"org_id": {"$exists": False}, "user_id": {"$exists": True}},
+            {"_id": 1, "user_id": 1}):
+        owner = await db.users.find_one(
+            {"user_id": msg["user_id"]}, {"_id": 0, "org_id": 1})
+        if owner and owner.get("org_id"):
+            await db.ai_messages.update_one(
+                {"_id": msg["_id"]}, {"$set": {"org_id": owner["org_id"]}})
+
     # Backfill org_id on all legacy collections (only where missing)
     collections = [
         "users", "leads", "clients", "projects", "tasks", "invoices",
@@ -4511,7 +4536,7 @@ async def _bootstrap_default_org():
         "payment_milestones", "calendar_events", "holidays", "office_locations",
         "expenses", "purchase_orders", "goods_receipts", "loans",
         "vendor_ratings", "commission_settlements", "attendance_corrections",
-        "leaves", "comments",
+        "leaves", "comments", "chat_messages", "ai_messages",
     ]
     total = 0
     for coll in collections:

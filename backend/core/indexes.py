@@ -47,6 +47,7 @@ _INDEXES = [
     ("vendor_bills",       [("org_id", 1), ("due_date", 1)], {}),
     ("vendor_payments",    [("org_id", 1), ("vendor_id", 1)], {}),
     ("vendor_commissions", [("org_id", 1), ("vendor_id", 1), ("status", 1)], {}),
+    ("vendor_ratings",     [("org_id", 1), ("vendor_id", 1), ("created_at", -1)], {}),
     # People
     ("employees",          [("org_id", 1), ("employee_id", 1)],
                             {"name": "employees_org_employee_unique", "unique": True, "sparse": True}),
@@ -66,6 +67,8 @@ _INDEXES = [
     # Notifications
     ("notifications",      [("user_id", 1), ("read", 1), ("created_at", -1)], {}),
     ("notifications",      [("org_id", 1), ("kind", 1)], {}),
+    ("chat_messages",      [("org_id", 1), ("project_id", 1), ("created_at", -1)], {}),
+    ("ai_messages",        [("org_id", 1), ("user_id", 1), ("session_id", 1)], {}),
     ("google_calendar_connections", [("org_id", 1), ("user_id", 1)],
                             {"name": "google_calendar_org_user_unique", "unique": True}),
     ("google_calendar_connections", [("org_id", 1), ("connected_email", 1)],

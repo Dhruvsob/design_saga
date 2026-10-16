@@ -239,7 +239,7 @@ async def update_item(item_id: str, payload: ItemUpdate, request: Request,
         return item
     upd["updated_at"] = iso_now()
     await db.master_data.update_one({"id": item_id, "org_id": org_id}, {"$set": upd})
-    return await db.master_data.find_one({"id": item_id}, {"_id": 0})
+    return await db.master_data.find_one({"id": item_id, "org_id": org_id}, {"_id": 0})
 
 
 @router.post("/master-data/{kind}/reorder")
@@ -278,7 +278,7 @@ async def delete_item(item_id: str, request: Request,
             # legacy docs without org stamp
             n = await db[coll].count_documents({"org_id": {"$exists": False}, field: item["label"]})
         if n:
-            await db.master_data.update_one({"id": item_id},
+            await db.master_data.update_one({"id": item_id, "org_id": org_id},
                                             {"$set": {"is_active": False, "updated_at": iso_now()}})
             return {"ok": True, "deactivated": True,
                     "detail": f"Value is referenced by {n} record(s) — deactivated instead of deleted"}

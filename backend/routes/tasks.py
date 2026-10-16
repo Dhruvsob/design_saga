@@ -314,7 +314,8 @@ async def _assignee_user_ids(user: dict, assignee_id, assignees, assignee_name) 
     uids = set()
     if candidate_ids:
         # direct user_id match
-        async for u in db.users.find({"user_id": {"$in": list(candidate_ids)}},
+        async for u in db.users.find({"user_id": {"$in": list(candidate_ids)},
+                                      "org_id": user_org_id(user)},
                                      {"_id": 0, "user_id": 1}):
             uids.add(u["user_id"])
         # employee id → linked user_id / email

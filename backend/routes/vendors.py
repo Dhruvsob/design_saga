@@ -378,11 +378,11 @@ async def rate_vendor(vendor_id: str, payload: VendorRatingIn, request: Request,
     dims = [doc.get(k) for k in ("quality", "timeliness", "cost", "communication")
             if doc.get(k) is not None]
     doc["overall"] = round(sum(dims) / len(dims), 2) if dims else None
-    await db.vendor_ratings.insert_one(dict(doc))
+    await sdb.vendor_ratings.insert_one(dict(doc))
 
     # Refresh aggregate rating on vendor master.
     agg = []
-    async for r in db.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0, "overall": 1}):
+    async for r in sdb.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0, "overall": 1}):
         if r.get("overall") is not None:
             agg.append(float(r["overall"]))
     new_avg = round(sum(agg) / len(agg), 2) if agg else 0.0
@@ -401,7 +401,7 @@ async def list_vendor_ratings(vendor_id: str, request: Request,
     # Verify the vendor belongs to the caller's org before exposing ratings.
     if not await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=404, detail="Vendor not found")
-    return await db.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0}) \
+    return await sdb.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0}) \
                                   .sort("created_at", -1).to_list(500)
 
 
@@ -839,7 +839,7 @@ async def vendor_performance(vendor_id: str, request: Request,
             outstanding += float(b.get("outstanding") or 0)
 
     # Rating-based
-    ratings = await db.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(500)
+    ratings = await sdb.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(500)
     def _avg(k):
         vals = [float(r[k]) for r in ratings if r.get(k) is not None]
         return round(sum(vals) / len(vals), 2) if vals else None

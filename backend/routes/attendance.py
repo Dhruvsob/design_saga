@@ -484,8 +484,8 @@ async def _employee_name_map(ids: list) -> dict:
         out[e["id"]] = engine.emp_name(e)
     remaining = [i for i in ids if i not in out]
     if remaining:
-        async for u in db.users.find({"user_id": {"$in": remaining}},
-                                     {"_id": 0, "user_id": 1, "name": 1, "email": 1}):
+        async for u in sdb.users.find({"user_id": {"$in": remaining}},
+                                      {"_id": 0, "user_id": 1, "name": 1, "email": 1}):
             out[u["user_id"]] = u.get("name") or u.get("email") or u["user_id"]
     return out
 
@@ -1193,11 +1193,11 @@ async def approve_attendance(att_id: str, payload: ApproveAttendanceIn, request:
     if emp and emp.get("user_id"):
         target_user_id = emp["user_id"]
     elif emp and emp.get("email"):
-        u = await db.users.find_one({"email": emp["email"].lower()}, {"_id": 0, "user_id": 1})
+        u = await sdb.users.find_one({"email": emp["email"].lower()}, {"_id": 0, "user_id": 1})
         target_user_id = (u or {}).get("user_id")
     else:
         # solo-admin fallback: employee_id may be the user_id itself
-        u = await db.users.find_one({"user_id": row.get("employee_id")}, {"_id": 0, "user_id": 1})
+        u = await sdb.users.find_one({"user_id": row.get("employee_id")}, {"_id": 0, "user_id": 1})
         target_user_id = (u or {}).get("user_id")
     if target_user_id:
         verdict = "approved" if payload.action == "approve" else "rejected"
@@ -1531,7 +1531,7 @@ async def review_late(record_id: str, payload: LateReviewIn, request: Request,
                                        {"_id": 0, "user_id": 1, "email": 1})
     target_uid = (emp or {}).get("user_id")
     if not target_uid:
-        u = await db.users.find_one({"user_id": row.get("employee_id")}, {"_id": 0, "user_id": 1})
+        u = await sdb.users.find_one({"user_id": row.get("employee_id")}, {"_id": 0, "user_id": 1})
         target_uid = (u or {}).get("user_id")
     if target_uid:
         verdict = "approved (fine waived)" if payload.status == "approved" else "rejected (fine applies)"

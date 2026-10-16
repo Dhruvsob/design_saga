@@ -33,6 +33,23 @@ import bcrypt
 router = APIRouter(prefix="/platform")
 
 
+TENANT_PURGE_COLLECTIONS = (
+    "users", "leads", "clients", "projects", "tasks", "vendors_acc",
+    "vendor_bills", "vendor_payments", "vendor_commissions", "vendor_ratings",
+    "commission_settlements", "invoices", "quotations", "quotations_adv",
+    "employees", "attendance", "attendance_corrections", "attendance_policies",
+    "leave_applications", "leave_rules", "leaves", "office_locations",
+    "journal_entries", "accounts", "payroll_runs", "notifications", "files",
+    "documents", "milestones", "payment_milestones", "calendar_events",
+    "holidays", "comments", "expenses", "expense_policies", "purchase_orders",
+    "goods_receipts", "loans", "recurring_expenses", "user_favorite_accounts",
+    "bank_statement_rows", "bank_statement_batches", "master_data",
+    "chat_messages", "ai_messages", "role_permissions", "counters",
+    "google_calendar_connections", "google_oauth_states",
+    "google_calendar_sync_queue", "google_calendar_synced_events", "audit_log",
+)
+
+
 # ------------------------------------------------------------------
 # helpers
 # ------------------------------------------------------------------
@@ -262,17 +279,30 @@ async def delete_org(org_id: str, request: Request,
                     meta={"org_name": org.get("name")})
         return {"ok": True, "purged": False}
 
-    # Purge — drop every scoped collection's docs for this org
-    scoped = [
-        "users", "user_sessions", "leads", "clients", "projects", "tasks",
-        "vendors_acc", "vendor_bills", "vendor_payments", "vendor_commissions",
-        "invoices", "quotations", "quotations_adv", "employees",
-        "attendance", "leave_applications", "leave_rules",
-        "journal_entries", "accounts", "payroll_runs",
-        "notifications", "files", "documents", "milestones",
-    ]
-    for coll in scoped:
+    # Sessions and login-attempt rows do not carry org_id, so remove them via
+    # the tenant's user identities before deleting the users themselves.
+    tenant_users = await db.users.find(
+        {"org_id": org_id},
+        {"_id": 0, "user_id": 1, "email": 1, "employee_id": 1},
+    ).to_list(10000)
+    user_ids = [u["user_id"] for u in tenant_users if u.get("user_id")]
+    login_identifiers = {
+        str(value).strip().lower()
+        for user in tenant_users
+        for value in (user.get("email"), user.get("employee_id"), user.get("user_id"))
+        if value and str(value).strip()
+    }
+    if user_ids:
+        await db.user_sessions.delete_many({"user_id": {"$in": user_ids}})
+    if login_identifiers:
+        await db.login_attempts.delete_many(
+            {"identifier": {"$in": sorted(login_identifiers)}})
+
+    # Purge every collection that owns tenant-scoped records. Keep this list
+    # explicit so global scheduler/config collections cannot be erased.
+    for coll in TENANT_PURGE_COLLECTIONS:
         await db[coll].delete_many({"org_id": org_id})
+    await db.audit_chain.delete_one({"chain": org_id})
     await db.organizations.delete_one({"org_id": org_id})
     await audit({"user_id": "sa", "email": "sa", "role": "SuperAdmin"},
                 "org.purge", target=org_id, target_type="org",
