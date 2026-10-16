@@ -114,3 +114,19 @@ def test_remote_delete_treats_missing_event_as_success(monkeypatch):
 
     monkeypatch.setattr(gc, "_google_request", AsyncMock(return_value=Response()))
     asyncio.run(gc._delete_remote({"org_id": "org_a"}, "ds123"))
+
+
+def test_batch_sync_queues_all_sources_but_processes_once(monkeypatch):
+    monkeypatch.setattr(gc, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        gc, "connection_for", AsyncMock(return_value={"status": "connected"})
+    )
+    enqueue = AsyncMock()
+    process = AsyncMock()
+    monkeypatch.setattr(gc, "enqueue_sync", enqueue)
+    monkeypatch.setattr(gc, "process_sync_queue", process)
+
+    asyncio.run(gc.sync_sources("org_a", "task", ["tsk_1", "tsk_2", "tsk_3"]))
+
+    assert enqueue.await_count == 3
+    process.assert_awaited_once_with(20)

@@ -15,7 +15,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from email_validator import EmailNotValidError, validate_email
 
 from .db import db
-from .helpers import iso_now, now_utc
+from .helpers import business_today, iso_now, now_utc
 
 log = logging.getLogger("google_calendar")
 
@@ -336,6 +336,19 @@ async def sync_source(org_id: str, source_type: str, source_id: str,
     await process_sync_queue(20)
 
 
+async def sync_sources(org_id: str, source_type: str, source_ids: list[str],
+                       operation: str = "upsert") -> None:
+    """Queue a batch and make only one bounded immediate sync attempt."""
+    if not source_ids or not is_configured():
+        return
+    connection = await connection_for(org_id)
+    if not connection:
+        return
+    for source_id in source_ids[:200]:
+        await enqueue_sync(org_id, source_type, source_id, operation)
+    await process_sync_queue(20)
+
+
 async def _google_request(connection: dict, method: str, event_id: str,
                           body: dict | None = None) -> httpx.Response:
     token = await _access_token(connection)
@@ -438,7 +451,7 @@ async def process_sync_queue(limit: int = 50) -> dict:
 
 
 async def enqueue_org_sources(org_id: str) -> int:
-    today = date.today().isoformat()
+    today = business_today().isoformat()
     count = 0
     async for event in db.calendar_events.find(
         {"org_id": org_id, "date": {"$gte": today}}, {"_id": 0, "id": 1}

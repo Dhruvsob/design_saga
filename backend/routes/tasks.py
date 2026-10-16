@@ -14,7 +14,7 @@ from core.scoped_db import sdb
 from core.helpers import business_today, now_utc, iso, iso_now, new_id
 from core.deps import require_user
 from core.tenancy import user_org_id
-from core.google_calendar import sync_source
+from core.google_calendar import sync_source, sync_sources
 from core.access_control import (
     get_visible_project, get_visible_task, merge_query, require_permission,
     task_visibility_query, user_identity_ids,
@@ -538,8 +538,7 @@ async def bulk_update(payload: BulkUpdateIn, request: Request,
         merge_query({"id": {"$in": payload.task_ids}}, await task_visibility_query(user)),
         {"$set": upd, "$push": {"timeline": ev}},
     )
-    for task_id in payload.task_ids[:200]:
-        await sync_source(user_org_id(user), "task", task_id)
+    await sync_sources(user_org_id(user), "task", payload.task_ids)
     return {"ok": True, "updated": result.modified_count}
 
 
