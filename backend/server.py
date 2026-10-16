@@ -2159,6 +2159,25 @@ def generate_invoice_pdf(doc: dict, org: Optional[dict] = None) -> bytes:
     return bytes(output)
 
 
+async def _public_project_by_token(token: str) -> tuple[dict, str]:
+    """Resolve a share token to one active tenant without request scope."""
+    if not re.fullmatch(r"[a-f0-9]{12}", token or ""):
+        raise HTTPException(status_code=404, detail="Invalid link")
+    project = await db.projects.find_one({"share_token": token}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Invalid link")
+    from core.tenancy import DEFAULT_ORG_ID
+    org_id = project.get("org_id") or DEFAULT_ORG_ID
+    owner = await db.organizations.find_one({
+        "org_id": org_id,
+        "is_active": {"$ne": False},
+        "is_suspended": {"$ne": True},
+    }, {"_id": 0, "org_id": 1})
+    if not owner:
+        raise HTTPException(status_code=404, detail="Invalid link")
+    return project, org_id
+
+
 @api.get("/invoices/{invoice_id}/pdf")
 async def invoice_pdf(invoice_id: str, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
@@ -2169,17 +2188,15 @@ async def invoice_pdf(invoice_id: str, request: Request,
     if user:
         user = await require_user(request, session_token, authorization)
         _ensure_invoice_read(user)
+        doc = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
     else:
         # Check if shared via token: invoice must be attached to a project with this share_token
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
-        inv = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
-        if not inv:
-            raise HTTPException(status_code=404, detail="Not found")
-        project = await sdb.projects.find_one({"id": inv.get("project_id"), "share_token": token}, {"_id": 0})
-        if not project:
-            raise HTTPException(status_code=401, detail="Invalid share token")
-    doc = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
+        project, org_id = await _public_project_by_token(token)
+        doc = await db.invoices.find_one({
+            "id": invoice_id, "project_id": project["id"], "org_id": org_id,
+        }, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     # Load org branding for this invoice (falls back to default org)
@@ -2201,13 +2218,12 @@ async def invoice_pdf(invoice_id: str, request: Request,
 # ============================================================
 @api.get("/portal/{token}")
 async def portal_view(token: str):
-    project = await sdb.projects.find_one({"share_token": token}, {"_id": 0})
-    if not project:
-        raise HTTPException(status_code=404, detail="Invalid link")
-    tasks = await sdb.tasks.find({"project_id": project["id"]}, {"_id": 0}).to_list(200)
-    files = await sdb.files.find({"project_id": project["id"]}, {"_id": 0}).to_list(200)
-    invoices = await sdb.invoices.find({"project_id": project["id"]}, {"_id": 0}).to_list(200)
-    milestones = await sdb.payment_milestones.find({"project_id": project["id"]}, {"_id": 0}).to_list(100)
+    project, org_id = await _public_project_by_token(token)
+    owned_project = {"project_id": project["id"], "org_id": org_id}
+    tasks = await db.tasks.find(owned_project, {"_id": 0}).to_list(200)
+    files = await db.files.find(owned_project, {"_id": 0}).to_list(200)
+    invoices = await db.invoices.find(owned_project, {"_id": 0}).to_list(200)
+    milestones = await db.payment_milestones.find(owned_project, {"_id": 0}).to_list(100)
 
     stage_index = PROJECT_STAGES.index(project.get("stage", "Requirement")) if project.get("stage") in PROJECT_STAGES else 0
     progress = round(((stage_index + 1) / len(PROJECT_STAGES)) * 100)
@@ -2244,16 +2260,14 @@ class PortalMessageIn(BaseModel):
 
 @api.post("/portal/{token}/message")
 async def portal_message(token: str, payload: PortalMessageIn):
-    project = await sdb.projects.find_one({"share_token": token}, {"_id": 0})
-    if not project:
-        raise HTTPException(status_code=404, detail="Invalid link")
+    project, org_id = await _public_project_by_token(token)
     from_name = payload.from_name.strip()
     message = payload.message.strip()
     if not from_name or not message:
         raise HTTPException(status_code=400, detail="Name and message are required")
     doc = {
         "id": new_id("msg_"),
-        "org_id": project.get("org_id") or "org_default",
+        "org_id": org_id,
         "project_id": project["id"],
         "from_name": from_name,
         "message": message,
