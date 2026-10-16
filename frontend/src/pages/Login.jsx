@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ArrowRight, GoogleLogo, LockKey, User, Warning } from "@phosphor-icons/react";
 
@@ -154,8 +155,9 @@ export default function Login() {
 
         </div>
 
-        <div className="relative text-xs text-[#5C5C5C] font-mono tracking-wider fade-up" style={{ animationDelay: "240ms" }}>
+        <div className="relative flex items-center gap-4 text-xs text-[#5C5C5C] font-mono tracking-wider fade-up" style={{ animationDelay: "240ms" }}>
           <span>© {new Date().getFullYear()} DESIGN SAGA</span>
+          <Link to="/privacy" className="underline-offset-4 hover:underline">PRIVACY</Link>
         </div>
       </div>
 

@@ -31,6 +31,7 @@ import Expenses from "./pages/Expenses";
 import SuperAdminPanel from "./pages/SuperAdminPanel";
 import CalendarPage from "./pages/Calendar";
 import CompanySettings from "./pages/CompanySettings";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Layout from "./components/Layout";
 
 function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
@@ -103,6 +104,7 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<PublicRoot />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/portal/:token" element={<ClientPortal />} />
       <Route path="/dashboard" element={<ProtectedShell><Dashboard /></ProtectedShell>} />
       <Route path="/crm" element={<ProtectedShell><Leads /></ProtectedShell>} />
