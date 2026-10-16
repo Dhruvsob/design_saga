@@ -1,6 +1,6 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-15 (Asia/Calcutta)
+Last updated: 2026-10-17 (Asia/Calcutta)
 
 ## Current Checkpoint
 
@@ -366,6 +366,15 @@ Last updated: 2026-10-15 (Asia/Calcutta)
 - Correction: added tracked `deploy/update-production.sh` with a deployment lock, revision diff classification, documentation-only skip, automatic refusal for Compose/Caddy infrastructure changes, verified pre-deploy backup, affected-service-only build/recreate, health wait, HTTP smoke checks, and automatic image rollback.
 - VPS configuration: replaced the ad-hoc hook with a minimal hook that executes the tracked updater. Existing VPS-only Caddy modifications remain untouched.
 - Verification: shell syntax passed; the installer merge and explicit updater run identified no runtime changes and skipped all container work. A docs-only end-to-end post-merge test is recorded in the following documentation commit.
+
+### DS-016: Tenant scope and lifecycle completion
+
+- Root causes: the scoped database merge allowed a caller-supplied `org_id` to win over the trusted request scope; several secondary attendance, task, master-data and vendor-rating lookups used global queries; portal/chat/AI message ownership was incomplete; tenant purge omitted business, integration, session, login-attempt and audit-chain records; and orphaned organization logos remained retrievable.
+- Correction: trusted scope now overwrites conflicting tenant fields; affected lookup/update paths are tenant-bound; new portal/chat/AI records carry ownership with legacy ownership inferred safely at startup; tenant purge covers 52 explicit tenant-owned collections plus sessions, normalized login identities and audit-chain state; deleted/inactive tenant logos return 404; supporting indexes were added.
+- Verification: 88 local-safe backend tests and Python compilation passed. The exact `7cf22c1` image started against disposable PostgreSQL/FerretDB; a two-tenant workflow proved scope override resistance, all 52 purge collection classes, session/login cleanup and the three new indexes. Temporary containers, volume, image and worktree were deleted.
+- Production precondition: 46 attendance, 420 master-data and 20 notification records all had valid tenant ownership; tasks, ratings, chat and AI collections were empty. No production business-data rewrite was required.
+- Production deployment: backup `/opt/design-saga-backups/20261016T211613Z` passed every SHA-256 check; prior backend is tagged `rollback-be360c8`; only backend was recreated. Site/API returned 200, protected auth/platform endpoints returned 401, all services and the local monitor passed, affected collections retained zero missing/unknown tenant ownership, indexes are active, and recent backend logs contain no errors. VPS-only Caddy changes remain untouched.
+- Files changed: tenant scope/index modules, attendance/master-data/organization/platform/task/vendor routes, legacy server message handling, focused tests, and planning evidence under `docs/planning`.
 
 ### OPS-001: VPS access, firewall, and backup health
 

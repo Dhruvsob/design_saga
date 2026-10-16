@@ -14,7 +14,7 @@ Last updated: 2026-10-17
 - [x] Define measurable workflow gates instead of unsupported coverage percentages.
 - [x] Product owner authorized continuation of the highest-priority repairs on 2026-10-17.
 - [x] Review and locally verify the preserved tenant-scope/lifecycle repair set.
-- [ ] Deploy the verified repair set and record production evidence below.
+- [x] Deploy the verified repair set and record production evidence below.
 - [ ] Paid-service activation remains outside this code release.
 
 ## Baseline
@@ -41,7 +41,15 @@ The following ten files were already modified before the master brief switched t
 - `backend/server.py`
 - `backend/tests/test_auth_tenant_safety.py`
 
-The diff contains tenant-scope, deletion-cleanup, notification, legacy-record, and index hardening. After the user authorized continuation, it was reviewed and expanded with focused regression coverage. On 2026-10-17, 88 local-safe backend tests passed and Python compilation succeeded. Production preflight found no unknown-tenant rows in the affected business collections and no chat/AI rows requiring ownership backfill. It remains **verified locally, pending candidate deployment** until production evidence is recorded.
+The diff contains tenant-scope, deletion-cleanup, notification, legacy-record, and index hardening. After the user authorized continuation, it was reviewed and expanded with focused regression coverage. On 2026-10-17, 88 local-safe backend tests passed and Python compilation succeeded. Production preflight found no unknown-tenant rows in the affected business collections and no chat/AI rows requiring ownership backfill. It was subsequently candidate-tested and deployed as recorded below.
+
+## Implementation checkpoint
+
+- Commit `7cf22c1` passed an isolated VPS image build and disposable PostgreSQL/FerretDB workflow.
+- The workflow proved tenant-scope override resistance, all 52 registered purge collection classes, session/login-identity cleanup and the new tenant indexes.
+- Backup `/opt/design-saga-backups/20261016T211613Z` passed all checksums.
+- Backend-only production deployment completed at `7cf22c1`; site/API/protected-endpoint smoke tests, ownership invariants, logs and the local monitor passed.
+- The disposable stack, volume, image and worktree were removed. Protected VPS-only Caddy changes were preserved.
 
 ## Verified history to preserve
 

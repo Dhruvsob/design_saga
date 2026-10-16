@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-10-15 (Asia/Kolkata)
+Last updated: 2026-10-17 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -12,7 +12,7 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Tenant login | Super Admin, tenant owner, email, and employee ID must use one authentication system and resolve the correct tenant/role | Fixed and deployed |
-| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Fixed in shared database scope; ongoing route-by-route audit |
+| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Trusted-scope override and audited secondary lookups fixed/deployed at `7cf22c1`; route-by-route audit continues |
 | Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, and deployed at `236d7c7` |
 | Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, and deployed at `236d7c7` |
 | Exposed credentials | Rotate the MongoDB Atlas password previously pasted into chat and revoke the temporary Mongo viewer token; confirm neither is used by production | Open, external account action required |
@@ -41,6 +41,7 @@ yet received sufficient adversarial testing.
 | Secrets management | No secrets in Git/images/logs; least-privilege environment access; rotation procedure and secret inventory | Audit |
 | Stored XSS | Validate/sanitize notes, descriptions, comments, names, SVG/media and any rich-text rendering | Audit |
 | File handling | Authenticated object access, signed expiry, ownership, size/type limits, filename safety, malware scanning and deletion lifecycle | Open; URL scheme protection alone is complete |
+| Tenant deletion lifecycle | Purge all tenant business/integration data, sessions, login identifiers and per-tenant audit state without touching global records | Fixed, disposable-database tested and deployed at `7cf22c1`; physical object-store garbage collection remains an operations follow-up |
 | Audit logs | Tamper-resistant records for auth, permissions, payroll, finance, approvals, exports and destructive actions | Audit |
 
 ## P1 - Business Integrity and Concurrency
@@ -62,7 +63,7 @@ yet received sufficient adversarial testing.
 
 | Area | Risk / required evidence | Status |
 |---|---|---|
-| Database indexes | Index every tenant/filter/uniqueness path; monitor slow queries and index build failures | Integrity indexes fixed/tested; performance/slow-query audit remains open |
+| Database indexes | Index every tenant/filter/uniqueness path; monitor slow queries and index build failures | Integrity plus vendor-rating/chat/AI tenant indexes fixed/tested; performance/slow-query audit remains open |
 | Database capacity | Connection limits, timeouts, pool sizing, storage growth, vacuum/maintenance and corruption alerts | Audit |
 | Container hardening | Non-root runtime, read-only filesystem where possible, dropped capabilities, resource limits and health checks | Fixed baseline: backend is non-root/read-only with all capabilities dropped; backend/web use no-new-privileges, init and health checks |
 | Dependency security | Automated Python/Node/container CVE scan, lockfiles, update policy and license review | Partial: Python/runtime npm and final images scan clean; npm lockfile is committed; CRA build-only findings, automation and license review remain open |
@@ -72,8 +73,8 @@ yet received sufficient adversarial testing.
 | Alerting/runbooks | Actionable alerts and written response steps for outage, full disk, DB failure, auth spike and certificate failure | Partial: local systemd monitor and deduplicated journal alerts are active; external webhook and broader incident runbooks remain open |
 | Scheduled jobs | Single-run locks, retries, idempotency, missed-job recovery and visible failure state | Single-run locks and visible health fixed/tested; retry/alert policy remains open |
 | Data exports | Permission checks, tenant scoping, formula injection protection, memory limits and audit records | Audit |
-| Email/notifications | No cross-tenant recipient resolution, retries without duplicates, bounce/error handling | Audit |
-| AI features | No secret/PII leakage, tenant context boundaries, prompt injection controls, cost/rate limits and graceful key absence | Audit |
+| Email/notifications | No cross-tenant recipient resolution, retries without duplicates, bounce/error handling | Task recipient and stored portal-message ownership fixed; retry/deduplication/bounce handling audit remains open |
+| AI features | No secret/PII leakage, tenant context boundaries, prompt injection controls, cost/rate limits and graceful key absence | Stored message tenant ownership fixed; prompt-injection, PII, rate and cost controls remain open |
 
 ## P2 - Frontend and Product QA
 
