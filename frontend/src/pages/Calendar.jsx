@@ -8,6 +8,7 @@ import { empName } from "../lib/format";
 import {
   CaretLeft, CaretRight, Plus, X, Trash, MapPin, Clock as ClockIcon,
   Bell, Users, Lock, Globe, HardHat, UserCircle, SpeakerHigh, SpeakerSlash,
+  GoogleLogo, ArrowsClockwise, CheckCircle,
 } from "@phosphor-icons/react";
 
 /* ---------- constants ---------- */
@@ -49,6 +50,8 @@ export default function CalendarPage() {
   const [hiddenKinds, setHiddenKinds] = useState({});   // kind -> true (hidden)
   const [selectedDay, setSelectedDay] = useState(null); // YYYY-MM-DD
   const [modal, setModal] = useState(null);             // null | {mode:"create"|"edit", data}
+  const [google, setGoogle] = useState(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [soundOn, setSoundOn] = useState(() => {
     try { return (localStorage.getItem("cal_reminder_sound") ?? "on") !== "off"; } catch { return true; }
   });
@@ -86,6 +89,54 @@ export default function CalendarPage() {
     } finally { setLoading(false); }
   }, [range.start, range.end]);
   useEffect(() => { load(); }, [load]);
+
+  const loadGoogle = useCallback(async () => {
+    try {
+      const { data } = await api.get("/calendar/google/status");
+      setGoogle(data);
+    } catch { setGoogle(null); }
+  }, []);
+  useEffect(() => { loadGoogle(); }, [loadGoogle]);
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get("google");
+    if (!outcome) return;
+    if (outcome === "connected") toast.success("Google Calendar connected");
+    else toast.error(outcome === "invalid_state" ? "Google connection expired. Please try again." : "Google Calendar could not be connected");
+    window.history.replaceState({}, "", window.location.pathname);
+    loadGoogle();
+  }, [loadGoogle]);
+
+  const connectGoogle = async () => {
+    setGoogleBusy(true);
+    try {
+      const { data } = await api.post("/calendar/google/connect");
+      window.location.assign(data.authorization_url);
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not start Google connection");
+      setGoogleBusy(false);
+    }
+  };
+  const syncGoogle = async () => {
+    setGoogleBusy(true);
+    try {
+      const { data } = await api.post("/calendar/google/sync");
+      toast.success(`${data.synced || 0} calendar item(s) synced`);
+      await loadGoogle();
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Google Calendar sync failed");
+    } finally { setGoogleBusy(false); }
+  };
+  const disconnectGoogle = async () => {
+    if (!window.confirm("Disconnect Google Calendar? Existing Google events will remain.")) return;
+    setGoogleBusy(true);
+    try {
+      await api.delete("/calendar/google/connection");
+      toast.success("Google Calendar disconnected");
+      await loadGoogle();
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not disconnect Google Calendar");
+    } finally { setGoogleBusy(false); }
+  };
 
   const visible = useMemo(
     () => items.filter((i) => !hiddenKinds[i.kind === "deadline" ? "project_deadline" : i.kind]),
@@ -145,6 +196,43 @@ export default function CalendarPage() {
           <Plus size={14} /> New event
         </button>
       </PageHero>
+
+      {google?.can_manage && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-y border-[#E5E5E5] py-3" data-testid="google-calendar-status">
+          <div className="flex min-w-0 items-center gap-3">
+            <GoogleLogo size={22} weight="bold" className={google.connected ? "text-[#1D633E]" : "text-[#5C5C5C]"} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                Google Calendar
+                {google.connected && <CheckCircle size={14} weight="fill" className="text-[#1D633E]" />}
+              </div>
+              <div className="truncate text-xs text-[#5C5C5C]">
+                {google.connected
+                  ? `${google.email || "Connected"}${google.pending ? ` · ${google.pending} pending` : ""}`
+                  : google.configured ? "Connect the tenant calendar for phone and watch reminders" : "OAuth setup is required on the server"}
+              </div>
+              {google.last_error && <div className="text-xs text-[#B4001C]">{google.last_error}</div>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {google.connected ? (
+              <>
+                <button type="button" className="btn-ghost text-xs" onClick={syncGoogle} disabled={googleBusy} data-testid="google-calendar-sync">
+                  <ArrowsClockwise size={14} className={googleBusy ? "animate-spin" : ""} /> Sync now
+                </button>
+                <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={disconnectGoogle} disabled={googleBusy} data-testid="google-calendar-disconnect">
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn-primary text-xs" onClick={connectGoogle}
+                      disabled={googleBusy || !google.configured} data-testid="google-calendar-connect">
+                <GoogleLogo size={14} weight="bold" /> Connect Google
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 justify-between">

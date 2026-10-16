@@ -14,6 +14,7 @@ from core.scoped_db import sdb
 from core.helpers import business_today, now_utc, iso, iso_now, new_id
 from core.deps import require_user
 from core.tenancy import user_org_id
+from core.google_calendar import sync_source
 from core.access_control import (
     get_visible_project, get_visible_task, merge_query, require_permission,
     task_visibility_query, user_identity_ids,
@@ -298,6 +299,7 @@ async def create_task(payload: TaskIn, request: Request,
             or any(a in my_ids for a in assignees)
             or (my_name and created.get("assignee_name") == my_name)
         )
+    await sync_source(user_org_id(user), "task", doc["id"])
     return created
 
 
@@ -423,6 +425,7 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
         except Exception:
             pass
 
+    await sync_source(user_org_id(user), "task", task_id)
     return await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
 
 
@@ -471,6 +474,7 @@ async def update_task_status(task_id: str, payload: TaskStatusUpdate, request: R
     )
     await sdb.tasks.update_one({"id": task_id},
                               {"$set": updates, "$push": {"timeline": evt}})
+    await sync_source(user_org_id(user), "task", task_id)
     return await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
 
 
@@ -489,6 +493,7 @@ async def delete_task(task_id: str, request: Request,
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
     await sdb.tasks.delete_one({"id": task_id})
+    await sync_source(user_org_id(user), "task", task_id, "delete")
     try:
         from core.audit import audit as _audit
         await _audit(user, "task.delete", target=task_id, target_type="task",
@@ -533,6 +538,8 @@ async def bulk_update(payload: BulkUpdateIn, request: Request,
         merge_query({"id": {"$in": payload.task_ids}}, await task_visibility_query(user)),
         {"$set": upd, "$push": {"timeline": ev}},
     )
+    for task_id in payload.task_ids[:200]:
+        await sync_source(user_org_id(user), "task", task_id)
     return {"ok": True, "updated": result.modified_count}
 
 
@@ -574,6 +581,7 @@ async def add_follow_up(task_id: str, payload: FollowUpIn, request: Request,
         {"id": task_id},
         {"$push": {"follow_ups": fu, "timeline": ev}, "$set": parent_updates},
     )
+    await sync_source(user_org_id(user), "task", task_id)
     return await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
 
 
@@ -596,6 +604,7 @@ async def update_follow_up(task_id: str, fu_id: str, payload: FollowUpIn, reques
     )
     if r.matched_count == 0:
         raise HTTPException(status_code=404, detail="Follow-up not found")
+    await sync_source(user_org_id(user), "task", task_id)
     return await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
 
 
@@ -612,6 +621,7 @@ async def delete_follow_up(task_id: str, fu_id: str, request: Request,
         {"$pull": {"follow_ups": {"id": fu_id}}, "$push": {"timeline": ev},
          "$set": {"updated_at": iso_now()}},
     )
+    await sync_source(user_org_id(user), "task", task_id)
     return {"ok": True}
 
 

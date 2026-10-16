@@ -66,6 +66,14 @@ _INDEXES = [
     # Notifications
     ("notifications",      [("user_id", 1), ("read", 1), ("created_at", -1)], {}),
     ("notifications",      [("org_id", 1), ("kind", 1)], {}),
+    ("google_calendar_connections", [("org_id", 1)],
+                            {"name": "google_calendar_org_unique", "unique": True}),
+    ("google_oauth_states", [("state_hash", 1)],
+                            {"name": "google_oauth_state_unique", "unique": True}),
+    ("google_oauth_states", [("expires_at", 1)], {"expireAfterSeconds": 0}),
+    ("google_calendar_sync_queue", [("sync_key", 1)],
+                            {"name": "google_calendar_sync_unique", "unique": True}),
+    ("google_calendar_sync_queue", [("status", 1), ("next_attempt_at", 1)], {}),
     # NEW modules
     ("loans",              [("org_id", 1), ("status", 1)], {}),
     ("loans",              [("org_id", 1), ("next_due_date", 1)], {}),

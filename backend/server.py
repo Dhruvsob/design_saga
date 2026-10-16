@@ -4406,6 +4406,7 @@ from routes.master_data import router as master_data_router  # noqa: E402
 from routes.search import router as search_router  # noqa: E402
 from routes.comments import router as comments_router  # noqa: E402
 from routes.calendar import router as calendar_router  # noqa: E402
+from routes.google_calendar import router as google_calendar_router  # noqa: E402
 from routes.finance_extras import router as finance_extras_router  # noqa: E402
 api.include_router(tasks_router)
 api.include_router(attendance_router)
@@ -4425,6 +4426,7 @@ api.include_router(master_data_router)
 api.include_router(search_router)
 api.include_router(comments_router)
 api.include_router(calendar_router)
+api.include_router(google_calendar_router)
 api.include_router(finance_extras_router)
 
 app.include_router(api)
@@ -4600,6 +4602,23 @@ async def _bootstrap_default_org():
             await asyncio.sleep(6 * 3600)
 
     app.state._scan_task = asyncio.create_task(_scan_loop())
+
+    # Retry Google Calendar writes without making ERP saves depend on an
+    # external API. Disabled automatically until OAuth credentials exist.
+    async def _google_calendar_sync_loop():
+        await asyncio.sleep(45)
+        while True:
+            try:
+                from core.google_calendar import is_configured, process_sync_queue
+                if is_configured():
+                    result = await process_sync_queue(100)
+                    if result["processed"]:
+                        logger.info("[Scheduler] Google Calendar sync: %s", result)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[Scheduler] Google Calendar sync failed: %s", type(exc).__name__)
+            await asyncio.sleep(5 * 60)
+
+    app.state._google_calendar_sync_task = asyncio.create_task(_google_calendar_sync_loop())
 
 
 async def _run_recurring_expense_scan():

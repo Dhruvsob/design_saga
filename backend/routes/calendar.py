@@ -30,6 +30,7 @@ from core.tenancy import is_super_admin, user_org_id
 from core.notifications import emit
 from core.audit import audit
 from core.db import db
+from core.google_calendar import sync_source
 from core.access_control import (
     merge_query, project_visibility_query, task_visibility_query, user_identity_ids,
     visible_project_ids,
@@ -86,6 +87,30 @@ def _valid_date(s: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _valid_time(value: Optional[str]) -> bool:
+    if value in (None, ""):
+        return True
+    try:
+        parsed = datetime.strptime(value, "%H:%M")
+        return parsed.strftime("%H:%M") == value
+    except (TypeError, ValueError):
+        return False
+
+
+def _validate_event_timing(day: str, end_day: Optional[str], start_time: Optional[str],
+                           end_time: Optional[str]) -> None:
+    if not _valid_date(day):
+        raise HTTPException(400, "Invalid date (expected YYYY-MM-DD)")
+    if end_day and not _valid_date(end_day):
+        raise HTTPException(400, "Invalid end_date (expected YYYY-MM-DD)")
+    if end_day and end_day[:10] < day[:10]:
+        raise HTTPException(400, "end_date cannot be before date")
+    if not (_valid_time(start_time) and _valid_time(end_time)):
+        raise HTTPException(400, "Times must use HH:MM")
+    if end_time and not start_time:
+        raise HTTPException(400, "start_time is required when end_time is set")
 
 
 VISIBILITIES = ["private", "org"]
@@ -173,14 +198,11 @@ async def create_event(payload: EventIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "calendar.read"):
         raise HTTPException(403, "Missing permission: calendar.read")
-    if not _valid_date(payload.date):
-        raise HTTPException(400, "Invalid date (expected YYYY-MM-DD)")
-    if payload.end_date and not _valid_date(payload.end_date):
-        raise HTTPException(400, "Invalid end_date (expected YYYY-MM-DD)")
+    _validate_event_timing(payload.date, payload.end_date, payload.start_time, payload.end_time)
     kind = payload.kind if payload.kind in EVENT_KINDS else "other"
     visibility = payload.visibility if payload.visibility in VISIBILITIES else "private"
     reminder = payload.reminder_minutes
-    if reminder is not None and (reminder < 0 or reminder > 44640):   # cap ~31 days
+    if reminder is not None and (reminder < 0 or reminder > 40320):   # Google caps at 4 weeks
         reminder = None
     doc = payload.model_dump()
     doc.update({
@@ -207,6 +229,7 @@ async def create_event(payload: EventIn, request: Request,
                    body=f"{doc['date']}" + (f" · {doc.get('start_time')}" if doc.get("start_time") else ""),
                    link="/calendar", priority="normal",
                    meta={"event_id": doc["id"]}, dedup_key=f"evt_invite_{doc['id']}")
+    await sync_source(doc["org_id"], "calendar_event", doc["id"])
     return await sdb.calendar_events.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -220,17 +243,24 @@ async def update_event(event_id: str, payload: EventUpdate, request: Request,
         raise HTTPException(404, "Event not found")
     if row.get("created_by") != user["user_id"] and not has_permission(user, "*.*"):
         raise HTTPException(403, "Only the creator or an Admin can edit this event")
-    upd = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if "date" in upd and not _valid_date(upd["date"]):
-        raise HTTPException(400, "Invalid date")
+    # Preserve explicitly supplied nulls so a user can clear reminders, links,
+    # tags, dates and times instead of leaving stale Google Calendar fields.
+    upd = {k: getattr(payload, k) for k in payload.model_fields_set}
+    if "title" in upd and not (upd["title"] or "").strip():
+        raise HTTPException(400, "Title cannot be empty")
+    merged = {**row, **upd}
+    _validate_event_timing(merged.get("date"), merged.get("end_date"),
+                           merged.get("start_time"), merged.get("end_time"))
     if "kind" in upd and upd["kind"] not in EVENT_KINDS:
         upd["kind"] = "other"
     if "visibility" in upd and upd["visibility"] not in VISIBILITIES:
         upd.pop("visibility")
-    if "reminder_minutes" in upd and (upd["reminder_minutes"] < 0 or upd["reminder_minutes"] > 44640):
+    if ("reminder_minutes" in upd and upd["reminder_minutes"] is not None
+            and (upd["reminder_minutes"] < 0 or upd["reminder_minutes"] > 40320)):
         upd.pop("reminder_minutes")
     upd["updated_at"] = iso_now()
     await sdb.calendar_events.update_one({"id": event_id}, {"$set": upd})
+    await sync_source(user_org_id(user), "calendar_event", event_id)
     return await sdb.calendar_events.find_one({"id": event_id}, {"_id": 0})
 
 
@@ -245,6 +275,7 @@ async def delete_event(event_id: str, request: Request,
     if row.get("created_by") != user["user_id"] and not has_permission(user, "*.*"):
         raise HTTPException(403, "Only the creator or an Admin can delete this event")
     await sdb.calendar_events.delete_one({"id": event_id})
+    await sync_source(user_org_id(user), "calendar_event", event_id, "delete")
     await audit(user, "calendar_event.delete", target=event_id, target_type="calendar_event",
                 meta={"title": row.get("title")})
     return {"ok": True}

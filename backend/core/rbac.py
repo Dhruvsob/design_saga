@@ -137,7 +137,7 @@ PERMISSION_CATALOG = {
         {"key": "leads",           "label": "Leads / CRM",      "actions": ["read", "create", "update", "delete"]},
         {"key": "projects",        "label": "Projects",         "actions": ["read", "create", "update", "delete"]},
         {"key": "tasks",           "label": "Tasks",            "actions": ["read", "create", "update", "delete"]},
-        {"key": "calendar",        "label": "Calendar",         "actions": ["read"]},
+        {"key": "calendar",        "label": "Calendar",         "actions": ["read", "manage"]},
         {"key": "clients",         "label": "Clients",          "actions": ["read", "create", "update", "delete"]},
         {"key": "files",           "label": "Files / Drawings", "actions": ["read", "create", "update", "delete"]},
         {"key": "vendors",         "label": "Vendors",          "actions": ["read", "create", "update", "delete"]},
