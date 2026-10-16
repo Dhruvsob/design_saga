@@ -75,6 +75,19 @@ async def task_visibility_query(user: dict) -> dict:
     return {"$or": terms}
 
 
+async def personal_task_visibility_query(user: dict) -> dict:
+    """Tasks suitable for a user's personal calendar, without role-wide access."""
+    ids = list(await user_identity_ids(user))
+    terms = [
+        {"assignee_id": {"$in": ids}},
+        {"assignees": {"$in": ids}},
+        {"created_by": user["user_id"]},
+    ]
+    if user.get("name"):
+        terms.append({"assignee_name": user["name"]})
+    return {"$or": terms}
+
+
 async def get_visible_task(user: dict, task_id: str, permission: str = "tasks.read",
                            projection: dict | None = None) -> dict:
     require_permission(user, permission)

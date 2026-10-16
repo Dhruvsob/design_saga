@@ -26,13 +26,14 @@ from core.scoped_db import sdb
 from core.helpers import iso_now, new_id
 from core.deps import require_user
 from core.rbac import has_permission
-from core.tenancy import is_super_admin, user_org_id
+from core.tenancy import user_org_id
 from core.notifications import emit
 from core.audit import audit
 from core.db import db
 from core.google_calendar import sync_source
 from core.access_control import (
-    merge_query, project_visibility_query, task_visibility_query, user_identity_ids,
+    merge_query, personal_task_visibility_query, project_visibility_query,
+    user_identity_ids,
     visible_project_ids,
 )
 
@@ -128,22 +129,15 @@ def _date_window(start: str, end: str, max_days: int = 366) -> tuple[str, str]:
     return start, end
 
 
-def _cal_can_see_all(user: dict) -> bool:
-    """Admins / SuperAdmins see every event in the tenant; others see their own,
-    events shared with the org, and events they're tagged/invited to."""
-    return is_super_admin(user) or has_permission(user, "*.*")
-
-
-def _visibility_filter(user: dict) -> dict:
-    """Mongo filter enforcing per-employee calendar privacy for non-admins.
-    Private events are only visible to their creator + tagged attendees."""
-    if _cal_can_see_all(user):
-        return {}
+async def _visibility_filter(user: dict) -> dict:
+    """Private events stay private even from tenant administrators."""
     uid = user["user_id"]
+    identity_ids = list(await user_identity_ids(user))
     return {"$or": [
-        {"visibility": {"$ne": "private"}},   # 'org' or legacy events without the field
+        {"visibility": "org"},
         {"created_by": uid},
-        {"attendee_ids": uid},
+        {"attendee_ids": {"$in": identity_ids}},
+        {"employee_ids": {"$in": identity_ids}},
     ]}
 
 
@@ -184,7 +178,7 @@ async def list_events(request: Request, start: Optional[str] = None, end: Option
         q["date"] = {"$gte": start, "$lte": end}
     elif start or end:
         raise HTTPException(400, "start and end must be provided together")
-    vis = _visibility_filter(user)
+    vis = await _visibility_filter(user)
     if vis:
         q = {"$and": [q, vis]} if q else vis
     rows = await sdb.calendar_events.find(q, {"_id": 0}).sort("date", 1).to_list(1000)
@@ -241,7 +235,8 @@ async def update_event(event_id: str, payload: EventUpdate, request: Request,
     row = await sdb.calendar_events.find_one({"id": event_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "Event not found")
-    if row.get("created_by") != user["user_id"] and not has_permission(user, "*.*"):
+    admin_shared = row.get("visibility") == "org" and has_permission(user, "*.*")
+    if row.get("created_by") != user["user_id"] and not admin_shared:
         raise HTTPException(403, "Only the creator or an Admin can edit this event")
     # Preserve explicitly supplied nulls so a user can clear reminders, links,
     # tags, dates and times instead of leaving stale Google Calendar fields.
@@ -272,7 +267,8 @@ async def delete_event(event_id: str, request: Request,
     row = await sdb.calendar_events.find_one({"id": event_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "Event not found")
-    if row.get("created_by") != user["user_id"] and not has_permission(user, "*.*"):
+    admin_shared = row.get("visibility") == "org" and has_permission(user, "*.*")
+    if row.get("created_by") != user["user_id"] and not admin_shared:
         raise HTTPException(403, "Only the creator or an Admin can delete this event")
     await sdb.calendar_events.delete_one({"id": event_id})
     await sync_source(user_org_id(user), "calendar_event", event_id, "delete")
@@ -301,7 +297,7 @@ async def calendar_feed(start: str, end: str, request: Request,
     if has_permission(user, "tasks.read"):
         task_query = merge_query(
             {"due_date": {"$gte": start, "$lte": end_hi}},
-            await task_visibility_query(user),
+            await personal_task_visibility_query(user),
         )
         tasks = await sdb.tasks.find(
             task_query,
@@ -448,7 +444,7 @@ async def calendar_feed(start: str, end: str, request: Request,
 
     # ---- 7) Manual events (privacy-filtered for non-admins) ----
     evt_q: dict = {"date": {"$gte": start, "$lte": end}}
-    vis = _visibility_filter(user)
+    vis = await _visibility_filter(user)
     if vis:
         evt_q = {"$and": [evt_q, vis]}
     evts = await sdb.calendar_events.find(evt_q, {"_id": 0}).to_list(1000)
@@ -486,15 +482,13 @@ async def calendar_reminders_due(request: Request, window: int = 5,
     so each reminder is surfaced (toast + optional sound) once per session.
     """
     user = await require_user(request, session_token, authorization)
-    uid = user["user_id"]
     now_ist = datetime.now(IST)
     today = now_ist.date().isoformat()
-    q = {
+    q = merge_query({
         "date": today,
         "start_time": {"$nin": [None, ""]},
         "reminder_minutes": {"$ne": None},
-        "$or": [{"created_by": uid}, {"attendee_ids": uid}],
-    }
+    }, await _visibility_filter(user))
     rows = await sdb.calendar_events.find(q, {"_id": 0}).to_list(200)
     due = []
     for e in rows:

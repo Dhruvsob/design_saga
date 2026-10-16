@@ -66,14 +66,21 @@ _INDEXES = [
     # Notifications
     ("notifications",      [("user_id", 1), ("read", 1), ("created_at", -1)], {}),
     ("notifications",      [("org_id", 1), ("kind", 1)], {}),
-    ("google_calendar_connections", [("org_id", 1)],
-                            {"name": "google_calendar_org_unique", "unique": True}),
+    ("google_calendar_connections", [("org_id", 1), ("user_id", 1)],
+                            {"name": "google_calendar_org_user_unique", "unique": True}),
+    ("google_calendar_connections", [("org_id", 1), ("connected_email", 1)],
+                            {"name": "google_calendar_org_email_unique", "unique": True,
+                             "sparse": True}),
     ("google_oauth_states", [("state_hash", 1)],
                             {"name": "google_oauth_state_unique", "unique": True}),
     ("google_oauth_states", [("expires_at", 1)], {"expireAfterSeconds": 0}),
     ("google_calendar_sync_queue", [("sync_key", 1)],
                             {"name": "google_calendar_sync_unique", "unique": True}),
     ("google_calendar_sync_queue", [("status", 1), ("next_attempt_at", 1)], {}),
+    ("google_calendar_sync_queue", [("org_id", 1), ("user_id", 1), ("status", 1)], {}),
+    ("google_calendar_synced_events",
+                            [("org_id", 1), ("user_id", 1), ("source_type", 1), ("source_id", 1)],
+                            {"name": "google_calendar_synced_event_unique", "unique": True}),
     # NEW modules
     ("loans",              [("org_id", 1), ("status", 1)], {}),
     ("loans",              [("org_id", 1), ("next_due_date", 1)], {}),
@@ -111,6 +118,7 @@ _INDEXES = [
 
 
 async def ensure_indexes():
+    await _migrate_google_calendar_ownership()
     for coll, keys, opts in _INDEXES:
         try:
             if opts.get("unique"):
@@ -122,6 +130,26 @@ async def ensure_indexes():
             # idempotency, identity, or scheduler locking unenforced.
             if opts.get("unique"):
                 raise
+
+
+async def _migrate_google_calendar_ownership():
+    """Convert the former tenant-wide connection to its actual ERP owner."""
+    connections = db.google_calendar_connections
+    async for row in connections.find(
+        {"user_id": {"$exists": False}, "connected_by": {"$exists": True}},
+        {"_id": 1, "connected_by": 1},
+    ):
+        await connections.update_one(
+            {"_id": row["_id"]}, {"$set": {"user_id": row["connected_by"]}})
+    orphan = await connections.find_one({"user_id": {"$exists": False}}, {"_id": 1})
+    if orphan:
+        raise RuntimeError("Google Calendar connection has no owning ERP user")
+    info = await connections.index_information()
+    if "google_calendar_org_unique" in info:
+        await connections.drop_index("google_calendar_org_unique")
+    # Legacy rows had no owner and cannot be processed safely. A personal sync
+    # recreates them for the owning user without touching ERP or Google data.
+    await db.google_calendar_sync_queue.delete_many({"user_id": {"$exists": False}})
 
 
 async def _remove_nonunique_equivalent(coll_name, keys):

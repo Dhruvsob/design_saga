@@ -118,12 +118,20 @@ async def google_email(access_token: str) -> str:
 
 
 async def save_connection(org_id: str, user_id: str, token: dict, email: str) -> None:
+    existing = await db.google_calendar_connections.find_one(
+        {"org_id": org_id, "connected_email": email, "user_id": {"$ne": user_id}},
+        {"_id": 0, "user_id": 1},
+    )
+    if existing:
+        raise GoogleCalendarError(
+            "This Google account is already connected to another ERP user in this organisation")
     now = now_utc()
     expires_at = now + timedelta(seconds=max(60, int(token.get("expires_in") or 3600) - 60))
     await db.google_calendar_connections.update_one(
-        {"org_id": org_id},
+        {"org_id": org_id, "user_id": user_id},
         {"$set": {
             "org_id": org_id,
+            "user_id": user_id,
             "connected_by": user_id,
             "connected_email": email,
             "calendar_id": "primary",
@@ -139,8 +147,9 @@ async def save_connection(org_id: str, user_id: str, token: dict, email: str) ->
     )
 
 
-async def connection_for(org_id: str) -> dict | None:
-    return await db.google_calendar_connections.find_one({"org_id": org_id}, {"_id": 0})
+async def connection_for(org_id: str, user_id: str) -> dict | None:
+    return await db.google_calendar_connections.find_one(
+        {"org_id": org_id, "user_id": user_id}, {"_id": 0})
 
 
 async def _access_token(connection: dict) -> str:
@@ -162,14 +171,14 @@ async def _access_token(connection: dict) -> str:
         })
     if response.status_code != 200:
         await db.google_calendar_connections.update_one(
-            {"org_id": connection["org_id"]},
+            {"org_id": connection["org_id"], "user_id": connection["user_id"]},
             {"$set": {"status": "reconnect_required", "last_error": "Google authorization expired"}},
         )
         raise GoogleCalendarError("Google Calendar must be reconnected")
     token = response.json()
     expires_at = now_utc() + timedelta(seconds=max(60, int(token.get("expires_in") or 3600) - 60))
     await db.google_calendar_connections.update_one(
-        {"org_id": connection["org_id"]},
+        {"org_id": connection["org_id"], "user_id": connection["user_id"]},
         {"$set": {
             "access_token_enc": encrypt_token(token["access_token"]),
             "access_token_expires_at": expires_at,
@@ -247,7 +256,8 @@ def _date_time_fields(day: str, start_time: str | None, end_day: str | None = No
         "dateTime": finish.isoformat(), "timeZone": "Asia/Kolkata"}
 
 
-async def event_body(org_id: str, source_type: str, doc: dict) -> dict | None:
+async def event_body(org_id: str, source_type: str, doc: dict,
+                     owner_user_id: str | None = None) -> dict | None:
     if source_type == "task":
         day = (doc.get("reminder_date") or doc.get("due_date") or "")[:10]
         if not day or doc.get("status") == "done":
@@ -275,7 +285,12 @@ async def event_body(org_id: str, source_type: str, doc: dict) -> dict | None:
         location = doc.get("location")
 
     start, end = _date_time_fields(day, start_time, doc.get("end_date"), doc.get("end_time"))
-    attendees = [{"email": email} for email in await _attendee_emails(org_id, doc, source_type)]
+    # Only the creator's copy sends invitations. Copies synced to assignees or
+    # invited employees must not generate duplicate Google invitations.
+    attendee_emails = []
+    if owner_user_id is None or doc.get("created_by") == owner_user_id:
+        attendee_emails = await _attendee_emails(org_id, doc, source_type)
+    attendees = [{"email": email} for email in attendee_emails]
     body = {
         "id": google_event_id(org_id, source_type, doc["id"]),
         "summary": summary[:1024],
@@ -304,14 +319,15 @@ async def event_body(org_id: str, source_type: str, doc: dict) -> dict | None:
     return body
 
 
-async def enqueue_sync(org_id: str, source_type: str, source_id: str,
+async def enqueue_sync(org_id: str, user_id: str, source_type: str, source_id: str,
                        operation: str = "upsert") -> None:
-    key = f"{org_id}:{source_type}:{source_id}"
+    key = f"{org_id}:{user_id}:{source_type}:{source_id}"
     await db.google_calendar_sync_queue.update_one(
         {"sync_key": key},
         {"$set": {
             "sync_key": key,
             "org_id": org_id,
+            "user_id": user_id,
             "source_type": source_type,
             "source_id": source_id,
             "operation": operation,
@@ -324,16 +340,78 @@ async def enqueue_sync(org_id: str, source_type: str, source_id: str,
     )
 
 
+async def _user_identity_ids(org_id: str, user: dict) -> set[str]:
+    ids = {user["user_id"]}
+    terms = [{"user_id": user["user_id"]}]
+    if user.get("email"):
+        terms.append({"email": user["email"]})
+    async for employee in db.employees.find(
+        {"org_id": org_id, "$or": terms}, {"_id": 0, "id": 1}
+    ):
+        if employee.get("id"):
+            ids.add(employee["id"])
+    return ids
+
+
+def _source_visible_to_user(source_type: str, doc: dict, user: dict,
+                            identity_ids: set[str]) -> bool:
+    """Personal Google sync: own, explicitly assigned, or explicitly shared."""
+    uid = user["user_id"]
+    if doc.get("created_by") == uid:
+        return True
+    if source_type == "calendar_event":
+        if doc.get("visibility") == "org":
+            return True
+        return bool(
+            identity_ids.intersection(doc.get("attendee_ids") or [])
+            or identity_ids.intersection(doc.get("employee_ids") or [])
+        )
+    return bool(
+        doc.get("assignee_id") in identity_ids
+        or identity_ids.intersection(doc.get("assignees") or [])
+        or (user.get("name") and doc.get("assignee_name") == user["name"])
+    )
+
+
+async def _queue_source_for_connections(org_id: str, source_type: str, source_id: str,
+                                        operation: str = "upsert") -> int:
+    collections = {"calendar_event": db.calendar_events, "task": db.tasks}
+    doc = None if operation == "delete" else await collections[source_type].find_one(
+        {"org_id": org_id, "id": source_id}, {"_id": 0})
+    queued = 0
+    async for connection in db.google_calendar_connections.find(
+        {"org_id": org_id, "status": "connected"}, {"_id": 0, "user_id": 1}
+    ):
+        user_id = connection.get("user_id")
+        if not user_id:
+            continue
+        mapping = await db.google_calendar_synced_events.find_one({
+            "org_id": org_id, "user_id": user_id,
+            "source_type": source_type, "source_id": source_id,
+        }, {"_id": 0, "event_id": 1})
+        visible = False
+        if doc:
+            user = await db.users.find_one(
+                {"org_id": org_id, "user_id": user_id, "active": {"$ne": False}}, {"_id": 0})
+            if user:
+                visible = _source_visible_to_user(
+                    source_type, doc, user, await _user_identity_ids(org_id, user))
+        if visible:
+            await enqueue_sync(org_id, user_id, source_type, source_id, "upsert")
+            queued += 1
+        elif mapping:
+            await enqueue_sync(org_id, user_id, source_type, source_id, "delete")
+            queued += 1
+    return queued
+
+
 async def sync_source(org_id: str, source_type: str, source_id: str,
                       operation: str = "upsert") -> None:
-    """Queue and attempt one source without making ERP writes depend on Google."""
+    """Queue visible personal copies without making ERP writes depend on Google."""
     if not is_configured():
         return
-    connection = await connection_for(org_id)
-    if not connection:
-        return
-    await enqueue_sync(org_id, source_type, source_id, operation)
-    await process_sync_queue(20)
+    if await _queue_source_for_connections(org_id, source_type, source_id, operation):
+        await process_sync_queue(20)
 
 
 async def sync_sources(org_id: str, source_type: str, source_ids: list[str],
@@ -341,11 +419,8 @@ async def sync_sources(org_id: str, source_type: str, source_ids: list[str],
     """Queue a batch and make only one bounded immediate sync attempt."""
     if not source_ids or not is_configured():
         return
-    connection = await connection_for(org_id)
-    if not connection:
-        return
     for source_id in source_ids[:200]:
-        await enqueue_sync(org_id, source_type, source_id, operation)
+        await _queue_source_for_connections(org_id, source_type, source_id, operation)
     await process_sync_queue(20)
 
 
@@ -359,7 +434,7 @@ async def _google_request(connection: dict, method: str, event_id: str,
         url += f"/{event_path}"
     async with httpx.AsyncClient(timeout=20) as client:
         params = {"quotaUser": hashlib.sha256(
-            connection["org_id"].encode("utf-8")).hexdigest()[:40]}
+            f'{connection["org_id"]}:{connection["user_id"]}'.encode("utf-8")).hexdigest()[:40]}
         if method in ("POST", "PUT", "DELETE"):
             params["sendUpdates"] = "all"
         return await client.request(
@@ -383,17 +458,25 @@ async def _delete_remote(connection: dict, event_id: str) -> None:
         raise GoogleCalendarError(f"Google event delete failed ({response.status_code})")
 
 
-async def process_sync_queue(limit: int = 50) -> dict:
+async def process_sync_queue(limit: int = 50, org_id: str | None = None,
+                             user_id: str | None = None) -> dict:
     now = now_utc()
+    query = {"status": "pending", "next_attempt_at": {"$lte": now}}
+    if org_id:
+        query["org_id"] = org_id
+    if user_id:
+        query["user_id"] = user_id
     rows = await db.google_calendar_sync_queue.find(
-        {"status": "pending", "next_attempt_at": {"$lte": now}}, {"_id": 0}
+        query, {"_id": 0}
     ).sort("next_attempt_at", 1).to_list(max(1, min(limit, 200)))
     result = {"processed": 0, "synced": 0, "failed": 0, "skipped": 0}
     collections = {"calendar_event": db.calendar_events, "task": db.tasks}
     for row in rows:
         result["processed"] += 1
-        connection = await connection_for(row["org_id"])
+        user_id = row.get("user_id")
+        connection = await connection_for(row["org_id"], user_id) if user_id else None
         if not connection or connection.get("status") != "connected":
+            await db.google_calendar_sync_queue.delete_one({"sync_key": row["sync_key"]})
             result["skipped"] += 1
             continue
         try:
@@ -401,35 +484,52 @@ async def process_sync_queue(limit: int = 50) -> dict:
             coll = collections[row["source_type"]]
             doc = await coll.find_one(
                 {"org_id": row["org_id"], "id": row["source_id"]}, {"_id": 0})
-            if row["operation"] == "delete" or not doc:
-                await _delete_remote(connection, event_id)
+            mapping_filter = {
+                "org_id": row["org_id"], "user_id": user_id,
+                "source_type": row["source_type"], "source_id": row["source_id"],
+            }
+            mapping = await db.google_calendar_synced_events.find_one(
+                mapping_filter, {"_id": 0})
+            user = await db.users.find_one(
+                {"org_id": row["org_id"], "user_id": user_id, "active": {"$ne": False}},
+                {"_id": 0},
+            )
+            visible = bool(doc and user and _source_visible_to_user(
+                row["source_type"], doc, user,
+                await _user_identity_ids(row["org_id"], user)))
+            if row["operation"] == "delete" or not visible:
+                if mapping:
+                    await _delete_remote(connection, mapping.get("event_id") or event_id)
+                    await db.google_calendar_synced_events.delete_one(mapping_filter)
             else:
-                body = await event_body(row["org_id"], row["source_type"], doc)
+                body = await event_body(
+                    row["org_id"], row["source_type"], doc, owner_user_id=user_id)
                 if body is None:
-                    await _delete_remote(connection, event_id)
+                    if mapping:
+                        await _delete_remote(connection, mapping.get("event_id") or event_id)
+                        await db.google_calendar_synced_events.delete_one(mapping_filter)
                 else:
                     sync_hash = hashlib.sha256(json.dumps(
                         body, sort_keys=True, separators=(",", ":")
                     ).encode("utf-8")).hexdigest()
                     unchanged = (
-                        doc.get("google_sync_hash") == sync_hash
-                        and doc.get("google_connection_id") == connection.get("connection_id")
-                        and doc.get("google_event_id") == event_id
+                        mapping
+                        and mapping.get("sync_hash") == sync_hash
+                        and mapping.get("connection_id") == connection.get("connection_id")
+                        and mapping.get("event_id") == event_id
                     )
                     if not unchanged:
                         await _upsert_remote(connection, body)
-                    await coll.update_one(
-                        {"org_id": row["org_id"], "id": row["source_id"]},
-                        {"$set": {"google_event_id": event_id,
-                                  "google_connection_id": connection.get("connection_id"),
-                                  "google_sync_hash": sync_hash,
-                                  "google_sync_status": "synced",
-                                  "google_synced_at": iso_now()},
-                         "$unset": {"google_sync_error": ""}},
+                    await db.google_calendar_synced_events.update_one(
+                        mapping_filter,
+                        {"$set": {**mapping_filter, "event_id": event_id,
+                                  "connection_id": connection.get("connection_id"),
+                                  "sync_hash": sync_hash, "synced_at": iso_now()}},
+                        upsert=True,
                     )
             await db.google_calendar_sync_queue.delete_one({"sync_key": row["sync_key"]})
             await db.google_calendar_connections.update_one(
-                {"org_id": row["org_id"]},
+                {"org_id": row["org_id"], "user_id": user_id},
                 {"$set": {"last_sync_at": iso_now(), "last_error": None}},
             )
             result["synced"] += 1
@@ -444,25 +544,33 @@ async def process_sync_queue(limit: int = 50) -> dict:
                           "updated_at": iso_now()}},
             )
             await db.google_calendar_connections.update_one(
-                {"org_id": row["org_id"]}, {"$set": {"last_error": message}})
+                {"org_id": row["org_id"], "user_id": user_id},
+                {"$set": {"last_error": message}})
             result["failed"] += 1
             log.warning("Google Calendar sync failed for %s: %s", row["sync_key"], message)
     return result
 
 
-async def enqueue_org_sources(org_id: str) -> int:
+async def enqueue_user_sources(org_id: str, user_id: str) -> int:
+    user = await db.users.find_one(
+        {"org_id": org_id, "user_id": user_id, "active": {"$ne": False}}, {"_id": 0})
+    if not user:
+        return 0
+    identity_ids = await _user_identity_ids(org_id, user)
     today = business_today().isoformat()
     count = 0
     async for event in db.calendar_events.find(
-        {"org_id": org_id, "date": {"$gte": today}}, {"_id": 0, "id": 1}
+        {"org_id": org_id, "date": {"$gte": today}}, {"_id": 0}
     ).limit(1000):
-        await enqueue_sync(org_id, "calendar_event", event["id"])
-        count += 1
+        if _source_visible_to_user("calendar_event", event, user, identity_ids):
+            await enqueue_sync(org_id, user_id, "calendar_event", event["id"])
+            count += 1
     async for task in db.tasks.find(
         {"org_id": org_id, "status": {"$ne": "done"},
          "$or": [{"reminder_date": {"$gte": today}}, {"due_date": {"$gte": today}}]},
-        {"_id": 0, "id": 1},
+        {"_id": 0},
     ).limit(2000):
-        await enqueue_sync(org_id, "task", task["id"])
-        count += 1
+        if _source_visible_to_user("task", task, user, identity_ids):
+            await enqueue_sync(org_id, user_id, "task", task["id"])
+            count += 1
     return count

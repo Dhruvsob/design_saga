@@ -27,6 +27,35 @@ def test_google_event_id_is_stable_and_google_safe():
     assert first.isalnum() and first == first.lower()
 
 
+def test_personal_sync_visibility_is_owner_or_explicit_share_only():
+    user = {"user_id": "user_a", "name": "A Person"}
+    ids = {"user_a", "emp_a"}
+
+    assert gc._source_visible_to_user(
+        "task", {"created_by": "user_a"}, user, ids)
+    assert gc._source_visible_to_user(
+        "task", {"assignee_id": "emp_a"}, user, ids)
+    assert not gc._source_visible_to_user(
+        "task", {"created_by": "user_b", "assignee_id": "emp_b"}, user, ids)
+    assert gc._source_visible_to_user(
+        "calendar_event", {"visibility": "org"}, user, ids)
+    assert gc._source_visible_to_user(
+        "calendar_event", {"visibility": "private", "employee_ids": ["emp_a"]}, user, ids)
+    assert not gc._source_visible_to_user(
+        "calendar_event", {"visibility": "private", "created_by": "user_b"}, user, ids)
+
+
+def test_assignee_copy_does_not_send_duplicate_google_invites(monkeypatch):
+    attendee_lookup = AsyncMock(return_value=["person@example.com"])
+    monkeypatch.setattr(gc, "_attendee_emails", attendee_lookup)
+    body = asyncio.run(gc.event_body("org_a", "calendar_event", {
+        "id": "evt_123", "title": "Private review", "date": "2026-10-20",
+        "created_by": "user_a", "attendee_ids": ["user_b"],
+    }, owner_user_id="user_b"))
+    assert body["attendees"] == []
+    attendee_lookup.assert_not_awaited()
+
+
 def test_oauth_url_uses_pkce_and_offline_access(monkeypatch):
     monkeypatch.setenv("GOOGLE_CALENDAR_CLIENT_ID", "client-id")
     monkeypatch.setenv("GOOGLE_CALENDAR_CLIENT_SECRET", "client-secret")
@@ -118,15 +147,13 @@ def test_remote_delete_treats_missing_event_as_success(monkeypatch):
 
 def test_batch_sync_queues_all_sources_but_processes_once(monkeypatch):
     monkeypatch.setattr(gc, "is_configured", lambda: True)
-    monkeypatch.setattr(
-        gc, "connection_for", AsyncMock(return_value={"status": "connected"})
-    )
-    enqueue = AsyncMock()
+    enqueue = AsyncMock(return_value=1)
     process = AsyncMock()
-    monkeypatch.setattr(gc, "enqueue_sync", enqueue)
+    monkeypatch.setattr(gc, "_queue_source_for_connections", enqueue)
     monkeypatch.setattr(gc, "process_sync_queue", process)
 
     asyncio.run(gc.sync_sources("org_a", "task", ["tsk_1", "tsk_2", "tsk_3"]))
 
     assert enqueue.await_count == 3
+    enqueue.assert_any_await("org_a", "task", "tsk_1", "upsert")
     process.assert_awaited_once_with(20)

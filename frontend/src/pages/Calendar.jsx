@@ -209,7 +209,7 @@ export default function CalendarPage() {
               <div className="truncate text-xs text-[#5C5C5C]">
                 {google.connected
                   ? `${google.email || "Connected"}${google.pending ? ` · ${google.pending} pending` : ""}`
-                  : google.configured ? "Connect the tenant calendar for phone and watch reminders" : "OAuth setup is required on the server"}
+                  : google.configured ? "Connect your own Google Calendar. Only your shared or assigned items sync." : "OAuth setup is required on the server"}
               </div>
               {google.last_error && <div className="text-xs text-[#B4001C]">{google.last_error}</div>}
             </div>
