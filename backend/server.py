@@ -9,6 +9,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pathlib import Path
 from pydantic import BaseModel, Field
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
@@ -967,16 +968,35 @@ async def convert_lead_to_project(lead_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "leads.update"):
         raise HTTPException(status_code=403, detail="Missing permission: leads.update")
-    lead = await sdb.leads.find_one({"id": lead_id}, {"_id": 0})
+    # Reserve this conversion atomically. Without this claim, two near-simultaneous
+    # requests can both pass the read check and create duplicate clients/projects.
+    conversion_claim = uuid.uuid4().hex
+    claim_at = iso(now_utc())
+    lead = await sdb.leads.find_one_and_update(
+        {
+            "id": lead_id,
+            "converted_project_id": None,
+            "$or": [
+                {"conversion_claim": {"$exists": False}},
+                {"conversion_claim": None},
+            ],
+        },
+        {"$set": {"conversion_claim": conversion_claim,
+                  "conversion_claimed_at": claim_at}},
+        return_document=ReturnDocument.AFTER,
+    )
     if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
-    if lead.get("converted_project_id"):
-        raise HTTPException(
-            status_code=409,
-            detail="This lead was already converted. Open the existing project instead of converting again.")
+        existing = await sdb.leads.find_one({"id": lead_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        if existing.get("converted_project_id"):
+            raise HTTPException(
+                status_code=409,
+                detail="This lead was already converted. Open the existing project instead of converting again.")
+        raise HTTPException(status_code=409, detail="Lead conversion is already in progress")
 
-    # create client
     client_id = new_id("cli_")
+    project_id = new_id("prj_")
     client_doc = {
         "id": client_id,
         "name": lead.get("name"),
@@ -985,10 +1005,8 @@ async def convert_lead_to_project(lead_id: str, request: Request,
         "company": None,
         "address": lead.get("location"),
         "created_at": iso(now_utc()),
+        "from_lead_id": lead_id,
     }
-    await sdb.clients.insert_one(dict(client_doc))
-
-    project_id = new_id("prj_")
     project = {
         "id": project_id,
         "name": f"{lead.get('name')} - {lead.get('project_type', 'Project')}",
@@ -1000,9 +1018,29 @@ async def convert_lead_to_project(lead_id: str, request: Request,
         "share_token": new_id(),
         "created_at": iso(now_utc()),
         "created_by": user["user_id"],
+        "from_lead_id": lead_id,
     }
-    await sdb.projects.insert_one(dict(project))
-    await sdb.leads.update_one({"id": lead_id}, {"$set": {"stage": "Won", "converted_project_id": project_id}})
+    try:
+        await sdb.clients.insert_one(dict(client_doc))
+        await sdb.projects.insert_one(dict(project))
+        finalized = await sdb.leads.update_one(
+            {"id": lead_id, "conversion_claim": conversion_claim,
+             "converted_project_id": None},
+            {"$set": {"stage": "Won", "converted_project_id": project_id},
+             "$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
+        )
+        if finalized.matched_count == 0:
+            raise RuntimeError("Lead conversion claim was lost")
+    except Exception:
+        # These IDs are generated for this claim, so cleanup cannot touch any
+        # pre-existing client/project. Release the claim so a retry is safe.
+        await sdb.projects.delete_one({"id": project_id})
+        await sdb.clients.delete_one({"id": client_id})
+        await sdb.leads.update_one(
+            {"id": lead_id, "conversion_claim": conversion_claim},
+            {"$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
+        )
+        raise
     await audit_log(user, "lead.convert", target=lead_id, target_type="lead",
                     meta={"project_id": project_id, "client_id": client_id})
     await audit_log(user, "project.create", target=project_id, target_type="project",
