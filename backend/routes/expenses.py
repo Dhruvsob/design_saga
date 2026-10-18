@@ -381,6 +381,12 @@ async def _reimburse_locked(user: dict, exp_id: str, payload: ReimburseIn):
     exp = await sdb.expenses.find_one({"id": exp_id}, {"_id": 0})
     if not exp:
         raise HTTPException(404, "Expense not found")
+    if exp.get("status") == "reimbursed" and exp.get("reimbursement_journal_id"):
+        existing_je = await sdb.journal_entries.find_one(
+            {"id": exp["reimbursement_journal_id"]}, {"_id": 0}
+        )
+        if existing_je:
+            return {"expense": exp, "journal": existing_je, "already_reimbursed": True}
     if exp["status"] != "approved":
         raise HTTPException(400, f"Expense must be approved before reimbursement (current: {exp['status']})")
 

@@ -61,3 +61,11 @@ def test_reimbursement_retry_recovers_existing_journal(monkeypatch):
     assert result["journal"]["id"] == "je_existing"
     assert claims.rows[0]["status"] == "reimbursed"
     assert claims.rows[0]["reimbursement_journal_id"] == "je_existing"
+
+    retry = asyncio.run(expenses._reimburse_locked(
+        {"user_id": "admin", "name": "Admin", "org_id": "org_a"},
+        "exp_1",
+        ReimburseIn(paid_from_account_id="bank", paid_on="2026-10-18"),
+    ))
+    assert retry["already_reimbursed"] is True
+    assert retry["journal"]["id"] == "je_existing"
