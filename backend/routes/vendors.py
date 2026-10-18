@@ -81,7 +81,9 @@ def _bill_total(bill: dict) -> float:
 async def _paid_against_bill(bill_id: str) -> float:
     """Sum of all vendor payments settled against this bill."""
     total = 0.0
-    async for pmt in sdb.vendor_payments.find({"bill_ids": bill_id}, {"_id": 0}):
+    async for pmt in sdb.vendor_payments.find(
+        {"bill_ids": bill_id, "status": {"$ne": "reversed"}}, {"_id": 0}
+    ):
         # For payments that settle multiple bills we stored a per-bill split.
         splits = pmt.get("bill_splits") or {}
         if bill_id in splits:
@@ -712,27 +714,74 @@ async def delete_vendor_payment(pmt_id: str, request: Request,
     linked bill statuses."""
     user = await require_user(request, session_token, authorization)
     _require(user, "finance.create")
+    async with doc_lock(sdb.vendor_payments, pmt_id):
+        return await _reverse_vendor_payment_locked(user, pmt_id)
+
+
+async def _reverse_vendor_payment_locked(user: dict, pmt_id: str):
     pmt = await sdb.vendor_payments.find_one({"id": pmt_id}, {"_id": 0})
     if not pmt:
         raise HTTPException(status_code=404, detail="Payment not found")
-    if pmt.get("journal_entry_id"):
-        orig = await sdb.journal_entries.find_one({"id": pmt["journal_entry_id"]}, {"_id": 0})
-        if orig and not orig.get("reversed"):
-            from routes.accounting import _post_journal
-            rev_lines = [{"account_id": l["account_id"], "debit": l.get("credit", 0),
-                          "credit": l.get("debit", 0),
-                          "description": f"Reversal · {l.get('description') or ''}".strip()}
-                         for l in orig.get("lines") or []]
-            rev = await _post_journal(
-                user, iso_now()[:10], f"Vendor payment reversed · {pmt.get('vendor_name') or ''}".strip(),
-                rev_lines, reference=orig.get("reference"), project_id=orig.get("project_id"),
-                vendor_id=orig.get("vendor_id"), source="vendor_payment_reversal", source_id=pmt_id)
-            await sdb.journal_entries.update_one(
-                {"id": orig["id"]}, {"$set": {"reversed": True, "reversal_je_id": rev["id"]}})
-    await sdb.vendor_payments.delete_one({"id": pmt_id})
+    if pmt.get("status") == "reversed":
+        return {"ok": True, "already_reversed": True,
+                "reversal_je_id": pmt.get("reversal_je_id")}
+
+    original_je_id = pmt.get("journal_entry_id")
+    if not original_je_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Payment has no linked journal entry; reconcile it before reversal",
+        )
+    orig = await sdb.journal_entries.find_one({"id": original_je_id}, {"_id": 0})
+    if not orig:
+        raise HTTPException(
+            status_code=409,
+            detail="Linked journal entry is missing; reconcile it before reversal",
+        )
+
+    from routes.accounting import _post_journal
+    reversal_key = (
+        f"{user_org_id(user) or 'org_default'}:vendor_payment_reversal:{pmt_id}"
+    )
+    rev = await sdb.journal_entries.find_one(
+        {"idempotency_key": reversal_key}, {"_id": 0}
+    )
+    if not rev and orig.get("reversal_je_id"):
+        rev = await sdb.journal_entries.find_one(
+            {"id": orig["reversal_je_id"]}, {"_id": 0}
+        )
+    if not rev:
+        rev_lines = [{"account_id": l["account_id"], "debit": l.get("credit", 0),
+                      "credit": l.get("debit", 0),
+                      "description": f"Reversal · {l.get('description') or ''}".strip()}
+                     for l in orig.get("lines") or []]
+        rev = await _post_journal(
+            user, iso_now()[:10],
+            f"Vendor payment reversed · {pmt.get('vendor_name') or ''}".strip(),
+            rev_lines, reference=orig.get("reference"), project_id=orig.get("project_id"),
+            vendor_id=orig.get("vendor_id"), source="vendor_payment_reversal",
+            source_id=pmt_id)
+    await sdb.journal_entries.update_one(
+        {"id": orig["id"]},
+        {"$set": {"reversed": True, "reversal_je_id": rev["id"]}},
+    )
+    reversed_at = iso_now()
+    result = await sdb.vendor_payments.update_one(
+        {"id": pmt_id, "status": {"$ne": "reversed"}},
+        {"$set": {
+            "status": "reversed",
+            "reversal_je_id": rev["id"],
+            "reversed_at": reversed_at,
+            "reversed_by": user.get("user_id"),
+        }},
+    )
+    if result.matched_count == 0:
+        return {"ok": True, "already_reversed": True,
+                "reversal_je_id": rev["id"]}
     for bid in (pmt.get("bill_ids") or []):
         await _refresh_bill_status(bid)
-    return {"ok": True}
+    return {"ok": True, "reversed": True,
+            "reversal_je_id": rev["id"]}
 
 
 # ==================================================
@@ -775,10 +824,22 @@ async def vendor_full_ledger(vendor_id: str, request: Request,
             "credit": 0.0,
             "id": p.get("id"),
         })
+        if p.get("status") == "reversed":
+            events.append({
+                "type": "payment_reversal",
+                "date": (p.get("reversed_at") or p.get("payment_date") or "")[:10],
+                "ref": p.get("reference") or "-",
+                "narration": "Payment reversal",
+                "project_id": p.get("project_id"),
+                "debit": 0.0,
+                "credit": float(p.get("amount") or 0),
+                "id": p.get("id"),
+            })
 
     if from_date: events = [e for e in events if (e.get("date") or "") >= from_date]
     if to_date:   events = [e for e in events if (e.get("date") or "") <= to_date]
-    events.sort(key=lambda e: (e.get("date") or "", 0 if e["type"] == "bill" else 1))
+    event_order = {"bill": 0, "payment": 1, "payment_reversal": 2}
+    events.sort(key=lambda e: (e.get("date") or "", event_order.get(e["type"], 9)))
 
     running = 0.0
     for e in events:
@@ -787,8 +848,11 @@ async def vendor_full_ledger(vendor_id: str, request: Request,
         running += e["credit"] - e["debit"]
         e["balance"] = round(running, 2)
 
-    total_billed = sum(e["credit"] for e in events)
-    total_paid = sum(e["debit"] for e in events)
+    total_billed = sum(e["credit"] for e in events if e["type"] == "bill")
+    total_paid = (
+        sum(e["debit"] for e in events if e["type"] == "payment")
+        - sum(e["credit"] for e in events if e["type"] == "payment_reversal")
+    )
     return {
         "vendor": vendor,
         "from_date": from_date, "to_date": to_date,
