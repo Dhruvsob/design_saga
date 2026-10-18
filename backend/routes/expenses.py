@@ -408,19 +408,26 @@ async def _reimburse_locked(user: dict, exp_id: str, payload: ReimburseIn):
         "description": f"Reimbursed to {exp['claimant_name']}",
     })
 
-    je = await _post_journal(
-        user, payload.paid_on or business_today().isoformat(),
-        f"Expense reimbursement – {exp['title']}",
-        lines, reference=payload.reference or f"EXP-{exp_id}",
-        source="expense", source_id=exp_id,
+    journal_key = f"{user_org_id(user) or 'org_default'}:expense:{exp_id}"
+    je = await sdb.journal_entries.find_one(
+        {"idempotency_key": journal_key}, {"_id": 0}
     )
+    if not je:
+        je = await _post_journal(
+            user, payload.paid_on or business_today().isoformat(),
+            f"Expense reimbursement – {exp['title']}",
+            lines, reference=payload.reference or f"EXP-{exp_id}",
+            source="expense", source_id=exp_id,
+        )
 
-    await sdb.expenses.update_one(
-        {"id": exp_id},
+    result = await sdb.expenses.update_one(
+        {"id": exp_id, "status": "approved"},
         {"$set": {"status": "reimbursed", "reimbursed_at": iso_now(),
                   "reimbursed_by": user["user_id"], "reimbursement_journal_id": je["id"],
                   "paid_from_account_id": payload.paid_from_account_id}}
     )
+    if result.matched_count != 1:
+        raise HTTPException(409, "Expense changed while reimbursement was being posted")
     await audit(user, "expense.reimburse", target=exp_id, target_type="expense",
                 meta={"amount": total, "journal_id": je["id"]})
     return {"expense": await sdb.expenses.find_one({"id": exp_id}, {"_id": 0, "_lock": 0, "_lock_at": 0}),
