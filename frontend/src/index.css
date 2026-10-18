@@ -440,7 +440,7 @@ textarea:focus-visible {
    PRINT
 ============================================================ */
 @media print {
-  .no-print, .print\\:hidden { display: none !important; }
+  .no-print, .print\:hidden { display: none !important; }
   body { background: white !important; color: black !important; }
   .card-flat {
     box-shadow: none !important;

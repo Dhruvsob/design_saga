@@ -101,7 +101,7 @@ export default function Accounting() {
 
   // CSV download helper — hits an auth-cookied endpoint via fetch (blob) → save.
   const downloadCsv = async (url, filename) => {
-    const base = process.env.REACT_APP_BACKEND_URL || "";
+    const base = import.meta.env.VITE_BACKEND_URL || "";
     const res = await fetch(`${base}/api${url}`, { credentials: "include" });
     if (!res.ok) return;
     const blob = await res.blob();

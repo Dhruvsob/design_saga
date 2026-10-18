@@ -1,6 +1,5 @@
 // Minimal ESLint v9 flat config.
-// The project is a CRA/CRACO app (real dev/build linting is handled by react-scripts).
-// This file exists so the ESLint v9 engine can run without crashing on "no config found".
+// Keep linting intentionally conservative while the legacy UI is modernized.
 // It registers the react-hooks plugin only so existing inline
 // `eslint-disable react-hooks/exhaustive-deps` directives resolve, but keeps rules off
 // to avoid altering behavior or failing on pre-existing choices in the large codebase.

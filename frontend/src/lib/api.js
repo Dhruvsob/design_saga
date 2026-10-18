@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({
@@ -10,8 +10,8 @@ const api = axios.create({
 
 // Sessions live only in the HttpOnly, Secure, SameSite cookie so injected
 // script cannot read them. A localStorage Bearer mirror is available only as
-// an explicit opt-in (REACT_APP_BEARER_FALLBACK=true) for split-origin setups.
-const BEARER_FALLBACK = process.env.REACT_APP_BEARER_FALLBACK === "true";
+// an explicit opt-in (VITE_BEARER_FALLBACK=true) for split-origin setups.
+const BEARER_FALLBACK = import.meta.env.VITE_BEARER_FALLBACK === "true";
 const STORAGE_KEY = "ds_session_token";
 
 try {

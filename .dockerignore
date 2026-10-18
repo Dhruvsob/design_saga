@@ -5,8 +5,11 @@
 **/*.py[cod]
 **/.pytest_cache
 backend/tests
+backend/backend_test.py
+backend/pytest.ini
 backend/.env
 frontend/node_modules
 frontend/build
+frontend/dist
 frontend/.env
 *.log
