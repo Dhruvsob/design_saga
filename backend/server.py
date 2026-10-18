@@ -2929,6 +2929,24 @@ class ChangeOrderIn(BaseModel):
     items_removed: Optional[List[dict]] = None
 
 
+QUOTATION_STATUS_TRANSITIONS = {
+    "draft": {"sent", "approved", "rejected"},
+    "sent": {"draft", "under_review", "approved", "rejected"},
+    "under_review": {"draft", "sent", "approved", "rejected"},
+    "rejected": {"draft", "sent"},
+    "approved": {"sent", "rejected"},
+    "converted": set(),
+}
+
+
+def _ensure_quotation_mutable(doc: dict):
+    if doc.get("status") == "converted" or doc.get("converted_project_id"):
+        raise HTTPException(
+            status_code=409,
+            detail="Converted quotations are immutable; update the linked project instead",
+        )
+
+
 # ---------- Endpoints ----------
 @api.get("/quotations-adv/templates")
 async def adv_templates(request: Request, session_token: Optional[str] = Cookie(default=None),
@@ -3013,12 +3031,23 @@ async def adv_update(qid: str, payload: QuotationUpdate, request: Request,
     doc = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
+    _ensure_quotation_mutable(doc)
     update = {k: v for k, v in payload.model_dump().items() if v is not None}
+    previous_updated_at = doc.get("updated_at")
     doc.update(update)
     doc["updated_at"] = iso(now_utc())
     doc["updated_by"] = user["user_id"]
     doc = _q_compute_costs(doc)
-    await sdb.quotations_adv.replace_one({"id": qid}, dict(doc))
+    result = await sdb.quotations_adv.replace_one(
+        {
+            "id": qid,
+            "updated_at": previous_updated_at,
+            "converted_project_id": None,
+        },
+        dict(doc),
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3028,7 +3057,18 @@ async def adv_delete(qid: str, request: Request, session_token: Optional[str] = 
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "quotations.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: quotations.delete")
-    await sdb.quotations_adv.delete_one({"id": qid})
+    doc = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    _ensure_quotation_mutable(doc)
+    result = await sdb.quotations_adv.delete_one({
+        "id": qid,
+        "status": doc.get("status"),
+        "updated_at": doc.get("updated_at"),
+        "converted_project_id": None,
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     return {"ok": True}
 
 
@@ -3040,10 +3080,21 @@ async def adv_status(qid: str, payload: StatusUpdate, request: Request,
     _require_perm(user, "quotations.update")
     if payload.status not in QUOTATION_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
-    await sdb.quotations_adv.update_one(
-        {"id": qid},
+    doc = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    current = doc.get("status") or "draft"
+    _ensure_quotation_mutable(doc)
+    if payload.status == current:
+        return doc
+    if payload.status == "converted" or payload.status not in QUOTATION_STATUS_TRANSITIONS.get(current, set()):
+        raise HTTPException(status_code=409, detail=f"Invalid quotation transition: {current} to {payload.status}")
+    result = await sdb.quotations_adv.update_one(
+        {"id": qid, "status": current, "converted_project_id": None},
         {"$set": {"status": payload.status, "status_note": payload.note, "updated_at": iso(now_utc())}}
     )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3053,16 +3104,21 @@ async def adv_approval(qid: str, payload: ApprovalUpdate, request: Request,
                        authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "quotations.update")
+    if payload.actor != "internal":
+        raise HTTPException(
+            status_code=403,
+            detail="Client decisions require a verified client approval link",
+        )
     doc = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
-    approval = doc.get("approval") or {}
-    field = "internal" if payload.actor == "internal" else "client"
+    _ensure_quotation_mutable(doc)
+    approval = dict(doc.get("approval") or {})
+    field = "internal"
     approval[f"{field}_status"] = payload.decision
     approval[f"{field}_at"] = iso(now_utc())
     approval[f"{field}_response"] = payload.note
-    if payload.actor == "internal":
-        approval["internal_by"] = user.get("name")
+    approval["internal_by"] = user.get("name")
     next_status = doc.get("status")
     if payload.decision == "approved" and approval.get("client_status") == "approved":
         next_status = "approved"
@@ -3070,10 +3126,17 @@ async def adv_approval(qid: str, payload: ApprovalUpdate, request: Request,
         next_status = "rejected"
     elif payload.decision == "changes_requested":
         next_status = "under_review"
-    await sdb.quotations_adv.update_one(
-        {"id": qid},
+    result = await sdb.quotations_adv.update_one(
+        {
+            "id": qid,
+            "status": doc.get("status"),
+            "updated_at": doc.get("updated_at"),
+            "converted_project_id": None,
+        },
         {"$set": {"approval": approval, "status": next_status, "updated_at": iso(now_utc())}}
     )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3091,6 +3154,7 @@ async def adv_new_version(qid: str, request: Request, session_token: Optional[st
     src = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
     if not src:
         raise HTTPException(status_code=404, detail="Not found")
+    _ensure_quotation_mutable(src)
 
     # archive snapshot
     versions_log = src.get("versions_log") or []
@@ -3110,8 +3174,13 @@ async def adv_new_version(qid: str, request: Request, session_token: Optional[st
         },
     })
     new_v = int(src.get("version", 1)) + 1
-    await sdb.quotations_adv.update_one(
-        {"id": qid},
+    result = await sdb.quotations_adv.update_one(
+        {
+            "id": qid,
+            "version": src.get("version", 1),
+            "updated_at": src.get("updated_at"),
+            "converted_project_id": None,
+        },
         {"$set": {
             "version": new_v,
             "version_label": f"v{new_v}",
@@ -3120,6 +3189,8 @@ async def adv_new_version(qid: str, request: Request, session_token: Optional[st
             "status": "draft",
         }}
     )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3132,6 +3203,7 @@ async def adv_change_order(qid: str, payload: ChangeOrderIn, request: Request,
     doc = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
+    _ensure_quotation_mutable(doc)
     co = {
         "id": new_id("co_"),
         "description": payload.description,
@@ -3143,9 +3215,15 @@ async def adv_change_order(qid: str, payload: ChangeOrderIn, request: Request,
         "created_at": iso(now_utc()),
         "created_by": user.get("name"),
     }
-    cos = doc.get("change_orders") or []
-    cos.append(co)
-    await sdb.quotations_adv.update_one({"id": qid}, {"$set": {"change_orders": cos, "updated_at": iso(now_utc())}})
+    result = await sdb.quotations_adv.update_one(
+        {"id": qid, "converted_project_id": None},
+        {
+            "$push": {"change_orders": co},
+            "$set": {"updated_at": iso(now_utc())},
+        },
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     return co
 
 
