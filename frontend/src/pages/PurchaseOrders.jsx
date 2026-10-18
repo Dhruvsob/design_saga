@@ -288,6 +288,7 @@ function RecordGRN({ po, onClose, onSaved }) {
     received_qty: Math.max(0, l.quantity - (l.received_qty_total || 0)), rejected_qty: 0, remarks: "",
   })));
   const [challan, setChallan] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  const [requestKey] = useState(() => crypto.randomUUID());
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try {
@@ -297,7 +298,7 @@ function RecordGRN({ po, onClose, onSaved }) {
           po_line_id: l.po_line_id, received_qty: Number(l.received_qty),
           rejected_qty: Number(l.rejected_qty || 0), remarks: l.remarks,
         })),
-      });
+      }, { headers: { "Idempotency-Key": requestKey } });
       onSaved();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "GRN failed"));

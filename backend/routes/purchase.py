@@ -10,8 +10,10 @@ Endpoints
 - GET  /api/purchase-orders/{id}/match       (3-way match report)
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import date as _date
+import hashlib
 
 from core.db import db
 from core.scoped_db import sdb
@@ -308,11 +310,29 @@ async def create_grn(payload: GRNCreateIn, request: Request,
     await require_module(user, "purchase_orders")
     if not has_any_permission(user, "vendors.create", "purchase_orders.create"):
         raise HTTPException(403, "Missing permission")
+    header_key = (request.headers.get("idempotency-key") or "").strip()[:100]
+    challan_key = (payload.delivery_challan_no or "").strip().lower()[:100]
+    client_key = f"header:{header_key}" if header_key else (
+        f"challan:{challan_key}" if challan_key else None
+    )
+    request_key = (
+        f"{user_org_id(user) or 'org_default'}:{payload.po_id}:{client_key}"
+        if client_key else None
+    )
     async with doc_lock(sdb.purchase_orders, payload.po_id):
-        return await _create_grn_locked(user, payload)
+        if request_key:
+            prior = await sdb.goods_receipts.find_one(
+                {"request_key": request_key}, {"_id": 0}
+            )
+            if prior:
+                await _reconcile_po_receipts(payload.po_id)
+                return prior
+        return await _create_grn_locked(user, payload, client_key, request_key)
 
 
-async def _create_grn_locked(user: dict, payload: GRNCreateIn):
+async def _create_grn_locked(user: dict, payload: GRNCreateIn,
+                             client_key: Optional[str] = None,
+                             request_key: Optional[str] = None):
     po = await sdb.purchase_orders.find_one({"id": payload.po_id}, {"_id": 0})
     if not po:
         raise HTTPException(404, "PO not found")
@@ -336,7 +356,6 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn):
     # Validate every GRN line points at a valid PO line + doesn't over-receive
     po_lines_by_id = {l["id"]: l for l in po.get("lines", [])}
     grn_lines_out = []
-    line_updates = {}                                   # po_line_id -> new received_qty_total
     for gl in payload.lines:
         pol = po_lines_by_id.get(gl.po_line_id)
         if not pol:
@@ -360,8 +379,6 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn):
             "rejected_qty": gl.rejected_qty or 0,
             "remarks": gl.remarks,
         })
-        line_updates[gl.po_line_id] = already + gl.received_qty
-
     # Auto-post JE: DR Inventory (or Direct Expense) / CR GRN Clearing
     from routes.accounting import _post_journal
     inv_acc_id = payload.inventory_account_id or await _ensure_account(
@@ -373,22 +390,30 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn):
     value = sum(
         float(l["received_qty"]) * float(l["unit_price"]) for l in grn_lines_out
     )
-    grn_id = new_id("grn_")
+    grn_id = (
+        f"grn_{hashlib.sha256(request_key.encode('utf-8')).hexdigest()[:24]}"
+        if request_key else new_id("grn_")
+    )
     received_date = payload.received_date or business_today().isoformat()
     je = None
     if value > 0:
-        je = await _post_journal(
-            user, received_date,
-            f"GRN {payload.po_id} – {po.get('vendor_name')}",
-            [
-                {"account_id": inv_acc_id, "debit": round(value, 2), "credit": 0,
-                 "description": f"Goods received against {po['po_number']}"},
-                {"account_id": grn_clearing_id, "debit": 0, "credit": round(value, 2),
-                 "description": "GRN clearing"},
-            ],
-            reference=payload.delivery_challan_no or f"GRN-{grn_id}",
-            source="grn", source_id=grn_id,
+        journal_key = f"{user_org_id(user) or 'org_default'}:grn:{grn_id}"
+        je = await sdb.journal_entries.find_one(
+            {"idempotency_key": journal_key}, {"_id": 0}
         )
+        if not je:
+            je = await _post_journal(
+                user, received_date,
+                f"GRN {payload.po_id} – {po.get('vendor_name')}",
+                [
+                    {"account_id": inv_acc_id, "debit": round(value, 2), "credit": 0,
+                     "description": f"Goods received against {po['po_number']}"},
+                    {"account_id": grn_clearing_id, "debit": 0, "credit": round(value, 2),
+                     "description": "GRN clearing"},
+                ],
+                reference=payload.delivery_challan_no or f"GRN-{grn_id}",
+                source="grn", source_id=grn_id,
+            )
 
     grn_doc = {
         "id": grn_id,
@@ -410,14 +435,47 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn):
         "created_at": iso_now(),
         "created_by": user["user_id"],
     }
-    await sdb.goods_receipts.insert_one(dict(grn_doc))
+    if client_key:
+        grn_doc["client_request_id"] = client_key
+        grn_doc["request_key"] = request_key
+    try:
+        await sdb.goods_receipts.insert_one(dict(grn_doc))
+    except DuplicateKeyError:
+        prior = await sdb.goods_receipts.find_one(
+            {"request_key": request_key}, {"_id": 0}
+        )
+        if not prior:
+            raise
+        await _reconcile_po_receipts(payload.po_id)
+        return prior
 
-    # Update PO line received totals + PO status (partial/received)
+    await _reconcile_po_receipts(payload.po_id)
+
+    await audit(user, "grn.create", target=grn_id, target_type="grn",
+                meta={"po_number": po["po_number"], "grn_number": grn_doc["grn_number"],
+                      "value": grn_doc["total_value"]})
+    return grn_doc
+
+
+async def _reconcile_po_receipts(po_id: str):
+    """Derive PO received quantities from GRNs so retries cannot double-count."""
+    po = await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
+    if not po:
+        raise HTTPException(404, "PO not found")
+    received_by_line = {}
+    async for grn in sdb.goods_receipts.find({"po_id": po_id}, {"_id": 0, "lines": 1}):
+        for line in grn.get("lines") or []:
+            line_id = line.get("po_line_id")
+            if line_id:
+                received_by_line[line_id] = (
+                    received_by_line.get(line_id, 0.0)
+                    + float(line.get("received_qty") or 0)
+                )
+
     updated_lines = []
     for l in po["lines"]:
         d = dict(l)
-        if l["id"] in line_updates:
-            d["received_qty_total"] = round(line_updates[l["id"]], 3)
+        d["received_qty_total"] = round(received_by_line.get(l["id"], 0.0), 3)
         updated_lines.append(d)
     all_received = all(
         float(l.get("received_qty_total", 0)) + 0.001 >= float(l["quantity"])
@@ -426,16 +484,13 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn):
     any_received = any(
         float(l.get("received_qty_total", 0)) > 0 for l in updated_lines
     )
-    new_status = "received" if all_received else ("partial" if any_received else po["status"])
+    derived_status = "received" if all_received else ("partial" if any_received else "sent")
+    new_status = po["status"] if po["status"] in ("closed", "cancelled") else derived_status
     await sdb.purchase_orders.update_one(
-        {"id": payload.po_id},
+        {"id": po_id},
         {"$set": {"lines": updated_lines, "status": new_status, "updated_at": iso_now()}},
     )
-
-    await audit(user, "grn.create", target=grn_id, target_type="grn",
-                meta={"po_number": po["po_number"], "grn_number": grn_doc["grn_number"],
-                      "value": grn_doc["total_value"]})
-    return grn_doc
+    return await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
 
 
 # ------------------------------------------------------------

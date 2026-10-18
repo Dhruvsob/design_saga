@@ -110,6 +110,8 @@ _INDEXES = [
     ("purchase_orders",    [("po_number", 1)], {"sparse": True}),
     ("goods_receipts",     [("org_id", 1), ("po_id", 1)], {}),
     ("goods_receipts",     [("grn_number", 1)], {"sparse": True}),
+    ("goods_receipts",     [("request_key", 1)],
+                            {"name": "grn_request_unique", "unique": True, "sparse": True}),
     # Expenses
     ("expenses",           [("org_id", 1), ("status", 1)], {}),
     ("expenses",           [("org_id", 1), ("claimant_id", 1)], {}),
