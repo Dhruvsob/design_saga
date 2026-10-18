@@ -3154,21 +3154,43 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "quotations.update")
-    q = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
+    conversion_claim = uuid.uuid4().hex
+    q = await sdb.quotations_adv.find_one_and_update(
+        {
+            "id": qid,
+            "status": {"$in": ["approved", "sent", "under_review"]},
+            "converted_project_id": None,
+            "$or": [
+                {"conversion_claim": {"$exists": False}},
+                {"conversion_claim": None},
+            ],
+        },
+        {"$set": {"conversion_claim": conversion_claim,
+                  "conversion_claimed_at": iso(now_utc())}},
+        return_document=ReturnDocument.AFTER,
+    )
     if not q:
-        raise HTTPException(status_code=404, detail="Not found")
-    if q.get("status") not in ("approved", "sent", "under_review"):
+        existing = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Not found")
+        if existing.get("converted_project_id") or existing.get("status") == "converted":
+            raise HTTPException(status_code=409, detail="Quotation was already converted")
+        if existing.get("conversion_claim"):
+            raise HTTPException(status_code=409, detail="Quotation conversion is already in progress")
         raise HTTPException(status_code=400, detail="Quotation must be approved (or near-final) to convert")
 
     # reuse client or create
     client_id = q.get("client_id")
+    created_client = False
     if not client_id:
         client_id = new_id("cli_")
-        await sdb.clients.insert_one({
-            "id": client_id, "name": q.get("client_name") or "Client",
-            "email": None, "phone": None, "company": None,
-            "address": q.get("project_location"), "created_at": iso(now_utc()),
-        })
+        created_client = True
+    elif not await sdb.clients.find_one({"id": client_id}, {"_id": 0, "id": 1}):
+        await sdb.quotations_adv.update_one(
+            {"id": qid, "conversion_claim": conversion_claim},
+            {"$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
+        )
+        raise HTTPException(status_code=400, detail="Quotation client no longer exists")
 
     project_id = new_id("prj_")
     project = {
@@ -3185,49 +3207,57 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
         "created_by": user["user_id"],
         "from_quotation_id": qid,
     }
-    await sdb.projects.insert_one(dict(project))
+    try:
+        if created_client:
+            await sdb.clients.insert_one({
+                "id": client_id, "name": q.get("client_name") or "Client",
+                "email": None, "phone": None, "company": None,
+                "address": q.get("project_location"), "created_at": iso(now_utc()),
+                "from_quotation_id": qid,
+            })
+        await sdb.projects.insert_one(dict(project))
 
-    # Auto-create tasks from BOQ categories + timeline phases
-    from core.helpers import business_today
-    today = business_today()
-    for i, cat in enumerate(q.get("boq", []) or []):
-        due = (today + timedelta(days=14 + i * 7)).isoformat()
-        await sdb.tasks.insert_one({
-            "id": new_id("tsk_"),
-            "title": f"Procure & finalise: {cat.get('category')}",
-            "description": f"From quotation {q.get('number')}",
-            "project_id": project_id,
-            "project_name": project["name"],
-            "assignee_id": user["user_id"],
-            "assignee_name": user["name"],
-            "priority": "medium",
-            "status": "todo",
-            "due_date": due,
-            "created_at": iso(now_utc()),
-            "created_by": user["user_id"],
-        })
-    for ph in q.get("timeline", []) or []:
-        due = (today + timedelta(weeks=ph.get("start_offset_weeks", 0) + ph.get("duration_weeks", 0))).isoformat()
-        await sdb.tasks.insert_one({
-            "id": new_id("tsk_"),
-            "title": f"Phase: {ph.get('phase')}",
-            "description": f"Auto-generated milestone task. Duration {ph.get('duration_weeks')} weeks.",
-            "project_id": project_id,
-            "project_name": project["name"],
-            "assignee_id": user["user_id"],
-            "assignee_name": user["name"],
-            "priority": "high",
-            "status": "todo",
-            "due_date": due,
-            "created_at": iso(now_utc()),
-            "created_by": user["user_id"],
-        })
+        # Auto-create tasks from BOQ categories + timeline phases.
+        from core.helpers import business_today
+        today = business_today()
+        for i, cat in enumerate(q.get("boq", []) or []):
+            due = (today + timedelta(days=14 + i * 7)).isoformat()
+            await sdb.tasks.insert_one({
+                "id": new_id("tsk_"), "title": f"Procure & finalise: {cat.get('category')}",
+                "description": f"From quotation {q.get('number')}", "project_id": project_id,
+                "project_name": project["name"], "assignee_id": user["user_id"],
+                "assignee_name": user["name"], "priority": "medium", "status": "todo",
+                "due_date": due, "created_at": iso(now_utc()), "created_by": user["user_id"],
+            })
+        for ph in q.get("timeline", []) or []:
+            due = (today + timedelta(weeks=ph.get("start_offset_weeks", 0) + ph.get("duration_weeks", 0))).isoformat()
+            await sdb.tasks.insert_one({
+                "id": new_id("tsk_"), "title": f"Phase: {ph.get('phase')}",
+                "description": f"Auto-generated milestone task. Duration {ph.get('duration_weeks')} weeks.",
+                "project_id": project_id, "project_name": project["name"],
+                "assignee_id": user["user_id"], "assignee_name": user["name"],
+                "priority": "high", "status": "todo", "due_date": due,
+                "created_at": iso(now_utc()), "created_by": user["user_id"],
+            })
 
-    # mark quotation
-    await sdb.quotations_adv.update_one(
-        {"id": qid},
-        {"$set": {"status": "converted", "converted_project_id": project_id, "updated_at": iso(now_utc())}}
-    )
+        finalized = await sdb.quotations_adv.update_one(
+            {"id": qid, "conversion_claim": conversion_claim, "converted_project_id": None},
+            {"$set": {"status": "converted", "converted_project_id": project_id,
+                      "updated_at": iso(now_utc())},
+             "$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
+        )
+        if finalized.matched_count == 0:
+            raise RuntimeError("Quotation conversion claim was lost")
+    except Exception:
+        await sdb.tasks.delete_many({"project_id": project_id})
+        await sdb.projects.delete_one({"id": project_id})
+        if created_client:
+            await sdb.clients.delete_one({"id": client_id})
+        await sdb.quotations_adv.update_one(
+            {"id": qid, "conversion_claim": conversion_claim},
+            {"$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
+        )
+        raise
     return {"project_id": project_id, "client_id": client_id}
 
 
