@@ -12,6 +12,12 @@ from routes.accounting import (
     _require_full_linked_payment,
 )
 from routes.finance_extras import _bank_match_error
+from core.finance import resolve_period
+
+
+def test_all_time_period_is_explicit_and_unbounded():
+    assert resolve_period(fy="all") == (None, None, "All time")
+    assert resolve_period(fy="ALL_TIME") == (None, None, "All time")
 
 
 def test_linked_journal_keys_are_stable_and_manual_entries_are_unkeyed():

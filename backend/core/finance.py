@@ -59,6 +59,8 @@ def resolve_period(fy: Optional[str] = None,
     if from_date or to_date:
         return from_date, to_date, "Custom"
     if fy:
+        if fy.strip().lower() in {"all", "all-time", "all_time"}:
+            return None, None, "All time"
         s, e = fy_range(fy)
         return s, e, f"FY {fy}"
     if as_of:

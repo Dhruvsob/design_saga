@@ -476,6 +476,7 @@ async def list_journal(request: Request,
                        vendor_id: Optional[str] = None,
                        employee_id: Optional[str] = None,
                        source: Optional[str] = None,
+                       include_related: bool = False,
                        q: Optional[str] = None,
                        limit: int = 200,
                        offset: int = 0,
@@ -505,7 +506,11 @@ async def list_journal(request: Request,
     if client_id: query["client_id"] = client_id
     if vendor_id: query["vendor_id"] = vendor_id
     if employee_id: query["employee_id"] = employee_id
-    if source: query["source"] = source
+    if source:
+        if include_related and source in {"income", "expense"}:
+            query["source"] = {"$in": [source, f"{source}_reversal", f"{source}_reinstatement"]}
+        else:
+            query["source"] = source
     if q:
         needle = q.strip()
         if needle:
@@ -567,8 +572,8 @@ async def edit_journal(je_id: str, payload: JournalEditIn, request: Request,
     je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
     if not je:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    if (je.get("source") or "").endswith("_reversal"):
-        raise HTTPException(status_code=409, detail="Reversal entries cannot be edited.")
+    if (je.get("source") or "").endswith(("_reversal", "_reinstatement")):
+        raise HTTPException(status_code=409, detail="System reversal/reinstatement entries cannot be edited.")
 
     updates: dict = {}
     if payload.date is not None and payload.date != je.get("date"):
@@ -629,8 +634,8 @@ async def reverse_journal(je_id: str, request: Request,
         raise HTTPException(status_code=404, detail="Transaction not found")
     if je.get("reversed"):
         raise HTTPException(status_code=409, detail="This transaction has already been reversed.")
-    if (je.get("source") or "").endswith("_reversal"):
-        raise HTTPException(status_code=409, detail="You cannot reverse a reversal entry.")
+    if (je.get("source") or "").endswith(("_reversal", "_reinstatement")):
+        raise HTTPException(status_code=409, detail="You cannot directly reverse a system reversal/reinstatement entry.")
 
     rev_lines = [
         {"account_id": l["account_id"], "debit": l.get("credit") or 0, "credit": l.get("debit") or 0,
@@ -660,6 +665,107 @@ async def reverse_journal(je_id: str, request: Request,
                 meta={"reversal_je_id": rev["id"], "total": je.get("total")},
                 org_id=user_org_id(user))
     return {"ok": True, "reversal": rev}
+
+
+@router.post("/journal-entries/{je_id}/undo-reversal")
+async def undo_journal_reversal(je_id: str, request: Request,
+                                session_token: Optional[str] = Cookie(default=None),
+                                authorization: Optional[str] = Header(default=None)):
+    """Reinstate a directly entered journal without deleting its audit history.
+
+    `je_id` is the reversal entry. The reinstatement mirrors the original entry,
+    so original + reversal + reinstatement has the same net effect as the
+    original transaction. Source-driven documents use their own workflows
+    because their business status must be restored together with accounting.
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+
+    reversal = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
+    if not reversal:
+        raise HTTPException(status_code=404, detail="Reversal entry not found")
+    if not (reversal.get("source") or "").endswith("_reversal"):
+        raise HTTPException(status_code=409, detail="This is not a reversal entry")
+
+    original_id = reversal.get("source_id")
+    original = await sdb.journal_entries.find_one({"id": original_id}, {"_id": 0})
+    if reversal.get("undone") or reversal.get("undo_je_id"):
+        undo_id = reversal.get("undo_je_id")
+        # Heal an interrupted prior request where the reinstatement and
+        # reversal marker were saved but the original marker was not cleared.
+        if original and undo_id:
+            await sdb.journal_entries.update_one(
+                {"id": original_id, "reversal_je_id": je_id},
+                {"$set": {"reversed": False, "reinstatement_je_id": undo_id,
+                          "reinstated_at": reversal.get("undone_at") or iso_now(),
+                          "reinstated_by": reversal.get("undone_by") or user["user_id"]},
+                 "$unset": {"reversal_je_id": "", "reversed_at": "", "reversed_by": ""}},
+            )
+        return {"ok": True, "already_undone": True,
+                "original": original_id, "reinstatement_je_id": undo_id}
+    if not original or original.get("reversal_je_id") != je_id or not original.get("reversed"):
+        raise HTTPException(status_code=409, detail="The linked original transaction is not in a reversible state")
+
+    original_source = original.get("source") or "manual"
+    if original_source not in {"manual", "income", "expense"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Undo this reversal from its original invoice, milestone, payroll, vendor, or other source workflow",
+        )
+
+    reinstatement_source = f"{original_source}_reinstatement"
+    reinstatement = await sdb.journal_entries.find_one(
+        {"source": reinstatement_source, "source_id": je_id}, {"_id": 0})
+    if not reinstatement:
+        try:
+            reinstatement = await _post_journal(
+                user,
+                business_today().isoformat(),
+                f"Reinstatement of: {original.get('narration') or original_id}",
+                [
+                    {
+                        "account_id": line["account_id"],
+                        "debit": line.get("debit") or 0,
+                        "credit": line.get("credit") or 0,
+                        "description": f"Reinstatement · {line.get('description') or ''}".strip(),
+                    }
+                    for line in original.get("lines") or []
+                ],
+                reference=original.get("reference"),
+                project_id=original.get("project_id"),
+                client_id=original.get("client_id"),
+                vendor_id=original.get("vendor_id"),
+                employee_id=original.get("employee_id"),
+                source=reinstatement_source,
+                source_id=je_id,
+            )
+        except HTTPException as exc:
+            if exc.status_code != 409:
+                raise
+            reinstatement = await sdb.journal_entries.find_one(
+                {"source": reinstatement_source, "source_id": je_id}, {"_id": 0})
+            if not reinstatement:
+                raise
+    changed_at = iso_now()
+    await sdb.journal_entries.update_one(
+        {"id": je_id, "undone": {"$ne": True}},
+        {"$set": {"undone": True, "undo_je_id": reinstatement["id"],
+                  "undone_at": changed_at, "undone_by": user["user_id"]}},
+    )
+    await sdb.journal_entries.update_one(
+        {"id": original_id, "reversal_je_id": je_id},
+        {"$set": {"reversed": False, "reinstatement_je_id": reinstatement["id"],
+                  "reinstated_at": changed_at, "reinstated_by": user["user_id"]},
+         "$unset": {"reversal_je_id": "", "reversed_at": "", "reversed_by": ""}},
+    )
+    await audit(
+        user, "journal.reversal.undo", target=je_id, target_type="journal_entry",
+        meta={"original_je_id": original_id, "reinstatement_je_id": reinstatement["id"],
+              "total": original.get("total")},
+        org_id=user_org_id(user),
+    )
+    return {"ok": True, "original": original_id, "reinstatement": reinstatement}
 
 
 
@@ -1147,9 +1253,10 @@ async def trial_balance(request: Request, as_of: Optional[str] = None,
     balances). No double-counting because JEs never adjust the opening
     balance field directly."""
     await require_user(request, session_token, authorization)
-    # If FY supplied but as_of not, treat as_of = fy end.
+    # If FY supplied but as_of not, treat as_of = fy end. Explicit all-time
+    # intentionally leaves the upper bound open.
     if fy and not as_of:
-        _, as_of = fy_range(fy)
+        _, as_of, _ = resolve_period(fy=fy)
     q = {}
     if as_of: q["date"] = {"$lte": as_of}
     entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(10000)
@@ -1498,7 +1605,7 @@ async def balance_sheet(request: Request, as_of: Optional[str] = None,
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     if fy and not as_of:
-        _, as_of = fy_range(fy)
+        _, as_of, _ = resolve_period(fy=fy)
     q = {}
     if as_of: q["date"] = {"$lte": as_of}
     entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(20000)
@@ -1772,13 +1879,14 @@ def _csv_response(filename: str, rows: list, headers: list) -> FastAPIResponse:
 @router.get("/accounting/reports/pl.csv")
 async def export_pl_csv(request: Request,
                         from_date: Optional[str] = None, to_date: Optional[str] = None,
+                        fy: Optional[str] = None,
                         project_id: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission")
-    data = await profit_and_loss(request, from_date=from_date, to_date=to_date,
+    data = await profit_and_loss(request, from_date=from_date, to_date=to_date, fy=fy,
                                  project_id=project_id,
                                  session_token=session_token, authorization=authorization)
     rows = [{"section": "Income", "account": r["name"], "amount": r["amount"]} for r in data["income"]]
@@ -1791,12 +1899,13 @@ async def export_pl_csv(request: Request,
 
 @router.get("/accounting/reports/trial-balance.csv")
 async def export_tb_csv(request: Request, as_of: Optional[str] = None,
+                        fy: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission")
-    data = await trial_balance(request, as_of=as_of,
+    data = await trial_balance(request, as_of=as_of, fy=fy,
                                session_token=session_token, authorization=authorization)
     return _csv_response("trial-balance.csv", data["rows"],
                          ["account_name", "account_type", "debit", "credit", "balance"])
@@ -1804,12 +1913,13 @@ async def export_tb_csv(request: Request, as_of: Optional[str] = None,
 
 @router.get("/accounting/reports/balance-sheet.csv")
 async def export_bs_csv(request: Request, as_of: Optional[str] = None,
+                        fy: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission")
-    data = await balance_sheet(request, as_of=as_of,
+    data = await balance_sheet(request, as_of=as_of, fy=fy,
                                session_token=session_token, authorization=authorization)
     rows = []
     for r in data["assets"]["rows"]:      rows.append({"section": "Assets", "name": r["name"], "balance": r["balance"]})
@@ -1825,12 +1935,13 @@ async def export_bs_csv(request: Request, as_of: Optional[str] = None,
 @router.get("/accounting/reports/cash-flow.csv")
 async def export_cf_csv(request: Request,
                         from_date: Optional[str] = None, to_date: Optional[str] = None,
+                        fy: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission")
-    data = await cash_flow_statement(request, from_date=from_date, to_date=to_date,
+    data = await cash_flow_statement(request, from_date=from_date, to_date=to_date, fy=fy,
                                      session_token=session_token, authorization=authorization)
     rows = [{"section": "", "line": "Opening balance", "amount": data["opening_balance"]}]
     for k, v in data["inflows"].items():  rows.append({"section": "Inflow",  "line": k, "amount": v})
@@ -1845,6 +1956,7 @@ async def export_cf_csv(request: Request,
 @router.get("/journal-entries.csv")
 async def export_journal_csv(request: Request,
                              from_date: Optional[str] = None, to_date: Optional[str] = None,
+                             fy: Optional[str] = None,
                              project_id: Optional[str] = None, client_id: Optional[str] = None,
                              vendor_id: Optional[str] = None, source: Optional[str] = None,
                              session_token: Optional[str] = Cookie(default=None),
@@ -1852,6 +1964,7 @@ async def export_journal_csv(request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission")
+    from_date, to_date, _ = resolve_period(fy, from_date, to_date)
     q: dict = {}
     if from_date or to_date:
         d = {}

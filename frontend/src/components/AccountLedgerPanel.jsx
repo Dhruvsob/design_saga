@@ -47,6 +47,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
     const fromDate = r ? r.from : from;
     const toDate = r ? r.to : to;
     const params = new URLSearchParams();
+    if (preset === "all") params.set("fy", "all");
     if (fromDate) params.set("from_date", fromDate);
     if (toDate) params.set("to_date", toDate);
     return params.toString() ? `?${params.toString()}` : "";

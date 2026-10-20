@@ -58,6 +58,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
     const fromDate = r ? r.from : from;
     const toDate = r ? r.to : to;
     const params = new URLSearchParams();
+    if (preset === "all") params.set("fy", "all");
     if (fromDate) params.set("from_date", fromDate);
     if (toDate) params.set("to_date", toDate);
     if (accountId) params.set("account_id", accountId);

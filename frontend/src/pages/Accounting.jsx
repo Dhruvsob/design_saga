@@ -3,6 +3,7 @@ import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { Daybook } from "../components/Daybook";
 import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
+import { TransactionDetail } from "../components/TransactionDetail";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
 import { formatDate } from "../lib/format";
@@ -40,6 +41,7 @@ export default function Accounting() {
   const [vendors, setVendors] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [journal, setJournal] = useState([]);
+  const [journalPage, setJournalPage] = useState({ total: 0, limit: 100, offset: 0 });
   const [pl, setPL] = useState(null);
   const [tb, setTB] = useState(null);
   const [bs, setBS] = useState(null);
@@ -70,8 +72,6 @@ export default function Accounting() {
     setFyOptions(f.data?.choices || []);
     if (!fy && f.data?.current) setFy(f.data.current);
   };
-  const loadDashboard = async () => (setDashboard((await api.get("/accounting/dashboard")).data));
-  const loadJournal = async () => (setJournal((await api.get("/journal-entries")).data));
   const periodQs = () => {
     const p = new URLSearchParams();
     if (fromDate || toDate) {
@@ -82,6 +82,23 @@ export default function Accounting() {
     }
     return p.toString() ? `?${p.toString()}` : "";
   };
+  const loadDashboard = async () => (setDashboard((await api.get("/accounting/dashboard")).data));
+  const loadJournal = async (kind = tab, offset = 0) => {
+    if (!["income", "expense"].includes(kind)) return;
+    const p = new URLSearchParams(periodQs().replace(/^\?/, ""));
+    p.set("source", kind);
+    p.set("include_related", "true");
+    p.set("limit", "100");
+    p.set("offset", String(offset));
+    const { data } = await api.get(`/journal-entries?${p.toString()}`);
+    const items = Array.isArray(data) ? data : (data.items || []);
+    setJournal(items);
+    setJournalPage({
+      total: Array.isArray(data) ? items.length : (data.total || 0),
+      limit: Array.isArray(data) ? 100 : (data.limit || 100),
+      offset: Array.isArray(data) ? 0 : (data.offset || 0),
+    });
+  };
   const loadReports = async () => {
     const qs = periodQs();
     const [p, t] = await Promise.all([
@@ -91,7 +108,10 @@ export default function Accounting() {
     setPL(p.data); setTB(t.data);
   };
 
-  useEffect(() => { loadCommon(); loadDashboard(); loadJournal(); }, []);
+  useEffect(() => { loadCommon(); loadDashboard(); }, []);
+  useEffect(() => {
+    if (["income", "expense"].includes(tab)) loadJournal(tab, 0);
+  }, [tab, fy, fromDate, toDate]);
   useEffect(() => { if (tab === "reports") loadReports(); }, [tab, fy, fromDate, toDate]);
   useEffect(() => {
     const qs = periodQs();
@@ -146,8 +166,8 @@ export default function Accounting() {
         ))}
       </div>
 
-      {/* Financial period selector — applies to Reports / Balance Sheet / Cash Flow / Ledgers / Validation */}
-      {["reports", "balance", "cashflow", "ledgers", "validation"].includes(tab) && (
+      {/* Shared financial period selector. "All time" is sent explicitly. */}
+      {["income", "expense", "reports", "balance", "cashflow", "ledgers", "validation"].includes(tab) && (
         <div className="flex items-center gap-3 flex-wrap text-xs" data-testid="fy-bar">
           <span className="overline">FINANCIAL PERIOD</span>
           <select
@@ -156,7 +176,7 @@ export default function Accounting() {
             className="border border-[#E5E5E5] px-2 py-1 text-xs bg-white"
             data-testid="fy-select"
           >
-            <option value="">— All time —</option>
+            <option value="all">— All time —</option>
             {fyOptions.map((o) => (
               <option key={o.label} value={o.label}>{`FY ${o.label}${o.is_current ? " (current)" : ""}`}</option>
             ))}
@@ -178,7 +198,10 @@ export default function Accounting() {
           {(fromDate || toDate || fy) && (
             <button
               className="btn-ghost text-xs"
-              onClick={() => { setFy(""); setFromDate(""); setToDate(""); }}
+              onClick={() => {
+                setFy(fyOptions.find((o) => o.is_current)?.label || "");
+                setFromDate(""); setToDate("");
+              }}
               data-testid="clear-period"
             >Reset</button>
           )}
@@ -197,10 +220,11 @@ export default function Accounting() {
           kind="income" showForm={showForm} setShowForm={setShowForm}
           accounts={accounts} banks={banks} txnAccs={incomeAccs}
           clients={clients} projects={projects} vendors={vendors} employees={employees}
-          journal={journal.filter((j) => j.source === "income")}
+          journal={journal} page={journalPage}
+          onPage={(offset) => loadJournal("income", offset)}
           onSubmit={async (payload) => {
             await api.post("/accounting/income", payload);
-            setShowForm(false); loadJournal(); loadDashboard();
+            setShowForm(false); loadJournal("income", 0); loadDashboard();
           }}
         />
       )}
@@ -210,10 +234,11 @@ export default function Accounting() {
           kind="expense" showForm={showForm} setShowForm={setShowForm}
           accounts={accounts} banks={banks} txnAccs={expenseAccs}
           clients={clients} projects={projects} vendors={vendors} employees={employees}
-          journal={journal.filter((j) => j.source === "expense")}
+          journal={journal} page={journalPage}
+          onPage={(offset) => loadJournal("expense", offset)}
           onSubmit={async (payload) => {
             await api.post("/accounting/expense", payload);
-            setShowForm(false); loadJournal(); loadDashboard();
+            setShowForm(false); loadJournal("expense", 0); loadDashboard();
           }}
         />
       )}
@@ -232,18 +257,19 @@ export default function Accounting() {
       )}
 
       {tab === "reports" && (
-        <Reports pl={pl} tb={tb} onReload={loadReports} onDownload={downloadCsv} />
+        <Reports pl={pl} tb={tb} onReload={loadReports} onDownload={downloadCsv} periodQs={periodQs()} />
       )}
 
       {tab === "balance" && (
         <BalanceSheetView
           bs={bs}
           onDownload={downloadCsv}
+          periodQs={periodQs()}
         />
       )}
 
       {tab === "cashflow" && (
-        <CashFlowView cf={cf} onDownload={downloadCsv} />
+        <CashFlowView cf={cf} onDownload={downloadCsv} periodQs={periodQs()} />
       )}
 
       {tab === "commissions" && (
@@ -253,7 +279,7 @@ export default function Accounting() {
       {tab === "recurring" && (
         <RecurringExpenses accounts={accounts} vendors={vendors}
           projects={projects} clients={clients}
-          onChanged={() => { loadDashboard(); loadJournal(); }} />
+          onChanged={() => { loadDashboard(); }} />
       )}
 
       {tab === "bank" && (
@@ -355,7 +381,7 @@ function CommissionsDashboard({ data, onDownload }) {
 }
 
 // ================================================================
-function BalanceSheetView({ bs, onDownload }) {
+function BalanceSheetView({ bs, onDownload, periodQs }) {
   if (!bs) return <div className="overline">LOADING BALANCE SHEET…</div>;
   const Section = ({ title, rows, total, extraRow }) => (
     <div className="card-flat">
@@ -384,7 +410,7 @@ function BalanceSheetView({ bs, onDownload }) {
     <div className="space-y-4" data-testid="balance-sheet-tab">
       <div className="flex items-center justify-between">
         <div className="overline">AS OF {bs.as_of || "TODAY"} · {bs.balanced ? "BALANCED ✓" : "MISMATCH"}</div>
-        <button className="btn-ghost text-xs" onClick={() => onDownload("/accounting/reports/balance-sheet.csv", "balance-sheet.csv")} data-testid="dl-bs-csv">
+        <button className="btn-ghost text-xs" onClick={() => onDownload(`/accounting/reports/balance-sheet.csv${periodQs}`, "balance-sheet.csv")} data-testid="dl-bs-csv">
           <DownloadSimple size={12} /> CSV
         </button>
       </div>
@@ -443,7 +469,7 @@ function BalanceSheetView({ bs, onDownload }) {
 }
 
 // ================================================================
-function CashFlowView({ cf, onDownload }) {
+function CashFlowView({ cf, onDownload, periodQs }) {
   if (!cf) return <div className="overline">LOADING CASH FLOW…</div>;
   const Row = ({ label, value, tint }) => (
     <div className="flex justify-between border-b border-[#F5F5F5] py-1.5 text-sm">
@@ -457,7 +483,7 @@ function CashFlowView({ cf, onDownload }) {
         <div className="overline">
           {cf.from ? `${cf.from} → ${cf.to || "today"}` : "ALL TIME"}
         </div>
-        <button className="btn-ghost text-xs" onClick={() => onDownload("/accounting/reports/cash-flow.csv", "cash-flow.csv")} data-testid="dl-cf-csv">
+        <button className="btn-ghost text-xs" onClick={() => onDownload(`/accounting/reports/cash-flow.csv${periodQs}`, "cash-flow.csv")} data-testid="dl-cf-csv">
           <DownloadSimple size={12} /> CSV
         </button>
       </div>
@@ -692,7 +718,8 @@ function CollectionsDue() {
 }
 
 // ================================================================
-function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, clients, projects, vendors, employees, journal, onSubmit }) {
+function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, clients, projects, vendors, employees, journal, page, onPage, onSubmit }) {
+  const [detail, setDetail] = useState(null);
   const [form, setForm] = useState(() => ({
     date: new Date().toISOString().slice(0, 10), amount: "",
     ...(kind === "income" ? { income_account_id: "", bank_account_id: "", client_id: "", project_id: "", vendor_id: "", employee_id: "" }
@@ -816,9 +843,19 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
             {journal.map((j) => {
               const primary = j.lines?.find((l) => l.account_type === (kind === "income" ? "income" : "expense"));
               return (
-                <tr key={j.id} className="border-t border-[#F0F0F0]" data-testid={`${kind}-row-${j.id}`}>
-                  <td className="p-2 font-mono text-xs">{j.date}</td>
-                  <td className="p-2">{j.narration}</td>
+                <tr key={j.id} onClick={() => setDetail(j)}
+                  className="border-t border-[#F0F0F0] cursor-pointer hover:bg-[#FAFAF7]"
+                  data-testid={`${kind}-row-${j.id}`}>
+                  <td className="p-2 font-mono text-xs">{formatDate(j.date)}</td>
+                  <td className="p-2">
+                    {j.narration}
+                    {j.source?.endsWith("_reversal") && (
+                      <span className="ml-2 text-[10px] text-[#8B7F6A]">{j.undone ? "REVERSAL UNDONE" : "REVERSAL"}</span>
+                    )}
+                    {j.source?.endsWith("_reinstatement") && (
+                      <span className="ml-2 text-[10px] text-[#1D633E]">REINSTATED</span>
+                    )}
+                  </td>
                   <td className="p-2 text-xs">{primary?.account_name || "—"}</td>
                   <td className="p-2 font-mono text-xs">{j.reference || "—"}</td>
                   <td className={`p-2 text-right font-mono font-semibold ${kind === "income" ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
@@ -831,6 +868,23 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
           </tbody>
         </table></div>
       </div>
+      {page?.total > page?.limit && (
+        <div className="flex items-center justify-between text-xs text-[#5C5C5C]">
+          <span>
+            {page.offset + 1}–{Math.min(page.offset + page.limit, page.total)} of {page.total}
+          </span>
+          <div className="flex gap-2">
+            <button className="btn-ghost text-xs" disabled={page.offset === 0}
+              onClick={() => onPage(Math.max(0, page.offset - page.limit))}>Previous</button>
+            <button className="btn-ghost text-xs" disabled={page.offset + page.limit >= page.total}
+              onClick={() => onPage(page.offset + page.limit)}>Next</button>
+          </div>
+        </div>
+      )}
+      {detail && (
+        <TransactionDetail entry={detail} onClose={() => setDetail(null)}
+          onChanged={() => onPage(page?.offset || 0)} />
+      )}
     </div>
   );
 }
@@ -954,20 +1008,20 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
 }
 
 // ================================================================
-function Reports({ pl, tb, onReload, onDownload }) {
+function Reports({ pl, tb, onReload, onDownload, periodQs }) {
   if (!pl || !tb) return <div className="text-center py-16 overline">LOADING…</div>;
   return (
     <div className="space-y-6" data-testid="reports-tab">
       <div className="flex justify-between items-center">
         <div className="overline">FINANCIAL REPORTS</div>
         <div className="flex items-center gap-2">
-          <button onClick={() => onDownload("/accounting/reports/pl.csv", "profit-loss.csv")} className="btn-ghost text-xs" data-testid="dl-pl-csv">
+          <button onClick={() => onDownload(`/accounting/reports/pl.csv${periodQs}`, "profit-loss.csv")} className="btn-ghost text-xs" data-testid="dl-pl-csv">
             <DownloadSimple size={12} /> P&amp;L
           </button>
-          <button onClick={() => onDownload("/accounting/reports/trial-balance.csv", "trial-balance.csv")} className="btn-ghost text-xs" data-testid="dl-tb-csv">
+          <button onClick={() => onDownload(`/accounting/reports/trial-balance.csv${periodQs}`, "trial-balance.csv")} className="btn-ghost text-xs" data-testid="dl-tb-csv">
             <DownloadSimple size={12} /> Trial balance
           </button>
-          <button onClick={() => onDownload("/journal-entries.csv", "journal.csv")} className="btn-ghost text-xs" data-testid="dl-journal-csv">
+          <button onClick={() => onDownload(`/journal-entries.csv${periodQs}`, "journal.csv")} className="btn-ghost text-xs" data-testid="dl-journal-csv">
             <DownloadSimple size={12} /> Journal
           </button>
           <button onClick={onReload} className="btn-ghost text-xs" data-testid="reports-refresh"><ArrowsClockwise size={12} /> Refresh</button>
@@ -978,7 +1032,7 @@ function Reports({ pl, tb, onReload, onDownload }) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="overline">PROFIT &amp; LOSS</div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5">All time</div>
+            <div className="text-xs text-[#5C5C5C] mt-0.5">{pl.period_label || "Selected period"}</div>
           </div>
           <div className="text-right">
             <div className="overline">NET</div>

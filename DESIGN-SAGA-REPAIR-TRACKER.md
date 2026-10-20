@@ -7,10 +7,10 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 - Local checkout: `codex/repair-release`; baseline `77e6237` is committed and pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
 - Production checkout: `/opt/design-saga-git`; last verified application checkpoint was `24728c0`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
-- Live URL/API: previously healthy at `https://gamaa.in`; on 2026-10-20 both HTTPS and VPS SSH timed out from an otherwise connected workstation. Current production state is unverified and deployment is blocked until host access returns.
-- Services: Caddy, web, backend, FerretDB, and PostgreSQL were healthy at the last verified checkpoint; current state is unverified while the host is unreachable.
+- Live URL/API: on 2026-10-20 HTTPS and SSH remain unreachable externally. Hostinger reports the VPS running, all five Compose containers running, and backend internal `/api/` checks returning 200 every 30 seconds. A Hostinger backup completed at 22:40 and a controlled VPS restart completed successfully at 22:53, but external ports remained unreachable. This isolates the active incident to the VPS public network/edge path; deployment remains blocked.
+- Services: Hostinger Docker Manager currently reports Caddy, web, backend, FerretDB, and PostgreSQL running. Production business data has not been modified during the network incident.
 - VPS baseline: 3.8 GiB RAM, 2 GiB swap, root disk 56% used, low load at inspection. UFW default-deny and key-only SSH are active.
-- Current action: centralized project collections-due view is implemented and locally build-verified. Deployment is pending VPS reachability and the required pre-deploy backup.
+- Current action: explicit all-time accounting ranges and audit-safe reversal undo are implemented and locally build-verified. Deployment and the requested Ritesh Soni correction are pending restored SSH/public access and an exact production-record audit.
 
 ## System Inventory
 
@@ -72,8 +72,23 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 | DS-015 | Medium | Central project milestone collections/receivables view | Implemented and pushed; deployment blocked by VPS reachability |
 | DS-018 | High | Accounting posting, ledger, GST and bank-reconciliation integrity controls | Implemented locally; production verification pending |
 | DS-019 | High | Vendor bill, Accounts Payable, advance-payment and three-way-match integrity | Implemented locally; production data audit pending |
+| DS-020 | High | All-time accounting ranges and safe reversal undo | Implemented locally; production correction/deployment blocked by public VPS network |
 
 ## Issue Log
+
+### DS-020: All-time accounting and reversal correction
+
+- Root causes:
+  - Selecting `All time` sent no period parameter, while report and journal APIs interpret an omitted period as the current Indian financial year. Daybook and account-ledger presets had the same ambiguity.
+  - Income/Expense history used the legacy unpaginated journal response and silently showed only the newest 200 rows.
+  - Reversal entries were intentionally immutable but had no safe way to correct an accidental reversal.
+- Correction:
+  - Add an explicit `fy=all` contract that resolves to an unbounded date range, use it across reports, exports, Daybook, account ledgers, Income, and Expense, and show the selected report label.
+  - Make Income/Expense history server-filtered and paginated, include reversal/reinstatement records, and open the shared transaction detail view.
+  - Add `Undo reversal` for direct manual/income/expense entries. It posts an idempotent reinstatement journal, retains the original reversal and audit event, heals interrupted retries, and does not support source-driven invoice/milestone/payroll/vendor entries whose business document must be restored through its own workflow.
+- Verification: Python compilation, period-contract assertion, `git diff --check`, frontend ESLint, and Vite production build pass. The build retains the existing large-chunk warning.
+- Production status: not deployed. The named ₹10,000 Ritesh Soni reversal has not been changed because the exact tenant, original journal, reversal journal, and linked source cannot be safely inspected while SSH/public access is unavailable.
+- Database effect after deployment: no migration or automatic rewrite. Using Undo reversal adds one balanced reinstatement journal and audit record; it never deletes posted accounting evidence.
 
 ### DS-019: Vendor bills, A/P and three-way matching
 

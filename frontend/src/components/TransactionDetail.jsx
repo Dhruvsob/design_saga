@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { formatDate } from "../lib/format";
 import {
   X, ArrowSquareOut, PencilSimple, ArrowUUpLeft, FloppyDisk, Warning,
 } from "@phosphor-icons/react";
@@ -18,6 +19,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const [mode, setMode] = useState("view");
   const [busy, setBusy] = useState(false);
   const [confirmReverse, setConfirmReverse] = useState(false);
+  const [confirmUndo, setConfirmUndo] = useState(false);
   const [form, setForm] = useState({
     date: entry.date || "",
     narration: entry.narration || "",
@@ -31,8 +33,11 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
 
   const source = entry.source || "";
   const isReversal = source.endsWith("_reversal");
+  const isReinstatement = source.endsWith("_reinstatement");
   const isReversed = !!entry.reversed;
-  const canModify = !isReversal && !isReversed;
+  const canUndoReversal = isReversal && !entry.undone &&
+    ["manual_reversal", "income_reversal", "expense_reversal"].includes(source);
+  const canModify = !isReversal && !isReinstatement && !isReversed;
   const canEditAmount = false;
   // Drill-through: open the most relevant source record.
   const drillTarget = (() => {
@@ -92,6 +97,20 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
     }
   };
 
+  const doUndoReversal = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/journal-entries/${entry.id}/undo-reversal`);
+      toast.success("Reversal undone — the original balance was reinstated");
+      onChanged && onChanged();
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not undo reversal");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" data-testid="txn-detail-modal" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
@@ -104,7 +123,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
               {entry.narration || "Journal entry"}
             </div>
             <div className="text-xs text-[#5C5C5C] mt-0.5 font-mono">
-              {entry.date}{entry.reference ? ` · Ref ${entry.reference}` : ""}{entry.created_by_name ? ` · by ${entry.created_by_name}` : ""}
+              {formatDate(entry.date)}{entry.reference ? ` · Ref ${entry.reference}` : ""}{entry.created_by_name ? ` · by ${entry.created_by_name}` : ""}
             </div>
             {isReversed && (
               <span className="inline-block mt-2 text-[10px] font-semibold text-[#B4001C] border border-[#B4001C] px-2 py-0.5" data-testid="txn-reversed-badge">
@@ -113,7 +132,12 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
             )}
             {isReversal && (
               <span className="inline-block mt-2 text-[10px] font-semibold text-[#8B7F6A] border border-[#8B7F6A] px-2 py-0.5">
-                REVERSAL ENTRY
+                {entry.undone ? "REVERSAL UNDONE" : "REVERSAL ENTRY"}
+              </span>
+            )}
+            {isReinstatement && (
+              <span className="inline-block mt-2 text-[10px] font-semibold text-[#1D633E] border border-[#1D633E] px-2 py-0.5">
+                REINSTATED
               </span>
             )}
           </div>
@@ -191,6 +215,20 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                     <PencilSimple size={14} /> Edit
                   </button>
                 )}
+                {canUndoReversal && (
+                  confirmUndo ? (
+                    <span className="flex items-center gap-1">
+                      <button onClick={doUndoReversal} disabled={busy} className="btn-primary bg-[#1D633E] text-sm" data-testid="txn-undo-reversal-confirm">
+                        {busy ? "Restoring…" : "Confirm undo"}
+                      </button>
+                      <button onClick={() => setConfirmUndo(false)} className="btn-ghost text-sm">No</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setConfirmUndo(true)} className="btn-ghost text-sm" data-testid="txn-undo-reversal-btn">
+                      <ArrowUUpLeft size={14} /> Undo reversal
+                    </button>
+                  )
+                )}
                 {canModify && (
                   confirmReverse ? (
                     <span className="flex items-center gap-1">
@@ -216,7 +254,9 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
             </div>
             {!canModify && (
               <div className="px-4 pb-4 text-[11px] text-[#9A9A9A]">
-                This is a {isReversed ? "reversed" : "reversal / system"} entry and is locked to protect your books.
+                {canUndoReversal
+                  ? "Undoing creates a documented reinstatement; the reversal remains in the audit trail."
+                  : `This is a ${isReversed ? "reversed" : "reversal / system"} entry and is locked to protect your books.`}
               </div>
             )}
           </>
