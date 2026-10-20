@@ -239,12 +239,6 @@ export default function Accounting() {
         <BalanceSheetView
           bs={bs}
           onDownload={downloadCsv}
-          onReconcile={async () => {
-            const { data } = await api.post("/accounting/reports/balance-sheet/reconcile");
-            const fresh = await api.get("/accounting/reports/balance-sheet");
-            setBS(fresh.data);
-            return data;
-          }}
         />
       )}
 
@@ -361,9 +355,7 @@ function CommissionsDashboard({ data, onDownload }) {
 }
 
 // ================================================================
-function BalanceSheetView({ bs, onDownload, onReconcile }) {
-  const [reconciling, setReconciling] = useState(false);
-  const [reconcileMsg, setReconcileMsg] = useState(null);
+function BalanceSheetView({ bs, onDownload }) {
   if (!bs) return <div className="overline">LOADING BALANCE SHEET…</div>;
   const Section = ({ title, rows, total, extraRow }) => (
     <div className="card-flat">
@@ -423,33 +415,7 @@ function BalanceSheetView({ bs, onDownload, onReconcile }) {
               </span>
             )}
           </div>
-          {!bs.balanced && onReconcile && (
-            <button
-              className="btn-primary text-xs"
-              disabled={reconciling}
-              data-testid="reconcile-bs-btn"
-              onClick={async () => {
-                if (!window.confirm(
-                  `Post an equity adjustment of ${CURRENCY(bs.delta)} to close the imbalance? This will be recorded on 'Opening Balance Adjustment' account for audit.`
-                )) return;
-                setReconciling(true);
-                try {
-                  const result = await onReconcile();
-                  setReconcileMsg(result?.message || "Reconciled.");
-                } catch (e) {
-                  setReconcileMsg(e?.response?.data?.detail || "Reconcile failed");
-                } finally {
-                  setReconciling(false);
-                }
-              }}
-            >
-              {reconciling ? "Reconciling…" : "Reconcile"}
-            </button>
-          )}
         </div>
-        {reconcileMsg && (
-          <div className="mt-2 text-xs italic" data-testid="reconcile-msg">{reconcileMsg}</div>
-        )}
         {Array.isArray(bs.unbalanced_journal_entries) && bs.unbalanced_journal_entries.length > 0 && (
           <details className="mt-3">
             <summary className="cursor-pointer overline">

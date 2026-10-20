@@ -9,7 +9,7 @@ Public helpers:
 - `current_fy_label()` → the FY that today's date falls into.
 - `fy_choices(back=5, forward=1)` → dropdown options for the UI.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Optional, Tuple, List
 
 
@@ -17,7 +17,9 @@ FY_START_MONTH = 4      # April
 
 
 def current_fy_label(today: Optional[date] = None) -> str:
-    today = today or datetime.utcnow().date()
+    if today is None:
+        from core.helpers import business_today
+        today = business_today()
     if today.month >= FY_START_MONTH:
         start_year = today.year
     else:

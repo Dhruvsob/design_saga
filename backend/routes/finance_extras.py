@@ -245,7 +245,11 @@ async def _post_recurring_rule(rule: dict, user: dict) -> Optional[dict]:
          "description": f"Recurring · {rule['name']}"},
     ]
     if gst_amt > 0:
-        gst_acc = await sdb.accounts.find_one({"name": "GST Payable"}, {"_id": 0, "id": 1})
+        await _seed_coa_if_empty()
+        gst_acc = await sdb.accounts.find_one(
+            {"name": "Input GST Credit", "type": "asset", "active": {"$ne": False}},
+            {"_id": 0, "id": 1},
+        )
         if gst_acc:
             lines.append({"account_id": gst_acc["id"], "debit": gst_amt, "credit": 0,
                           "description": "GST input"})
@@ -262,6 +266,7 @@ async def _post_recurring_rule(rule: dict, user: dict) -> Optional[dict]:
         project_id=rule.get("project_id"), client_id=rule.get("client_id"),
         vendor_id=rule.get("vendor_id"),
         source="recurring_expense", source_id=rule["id"],
+        idempotency_suffix=run_date,
     )
 
     nxt = _next_run(_date.fromisoformat(run_date), rule["frequency"],
@@ -566,6 +571,33 @@ def _parse_amount(raw) -> Optional[float]:
         return None
 
 
+def _bank_match_error(row: dict, journal: dict, max_days: int = 3) -> Optional[str]:
+    """Return why a statement row cannot safely match a journal, or None."""
+    if journal.get("reversed") or str(journal.get("source") or "").endswith("_reversal"):
+        return "Reversed journal entries cannot be matched"
+    try:
+        row_date = _date.fromisoformat(row.get("date") or "")
+        journal_date = _date.fromisoformat(journal.get("date") or "")
+    except (TypeError, ValueError):
+        return "Statement and journal dates must be valid"
+    if abs((journal_date - row_date).days) > max_days:
+        return f"Journal date must be within {max_days} days of the statement row"
+
+    amount = round(abs(float(row.get("amount") or 0)), 2)
+    if amount <= 0:
+        return "Statement amount must be non-zero"
+    money_in = float(row.get("amount") or 0) > 0
+    for line in journal.get("lines") or []:
+        if line.get("account_id") != row.get("account_id"):
+            continue
+        expected = float((line.get("debit") if money_in else line.get("credit")) or 0)
+        opposite = float((line.get("credit") if money_in else line.get("debit")) or 0)
+        if round(expected, 2) == amount and round(opposite, 2) == 0:
+            return None
+    direction = "debit" if money_in else "credit"
+    return f"Journal must contain a matching {direction} on this bank account"
+
+
 def _parse_date(raw) -> Optional[str]:
     if not raw:
         return None
@@ -684,7 +716,7 @@ async def upload_bank_statement(account_id: str, request: Request,
             {"$unwind": "$lines"},
             {"$match": {"lines.account_id": account_id,
                         ("lines.debit" if need_debit else "lines.credit"):
-                            {"$gte": abs(signed_amt) - 0.5, "$lte": abs(signed_amt) + 0.5}}},
+                            {"$gte": abs(signed_amt) - 0.01, "$lte": abs(signed_amt) + 0.01}}},
             {"$lookup": {
                 "from": "bank_statement_rows",
                 "localField": "id",
@@ -870,12 +902,28 @@ async def match_bank_row(row_id: str, payload: BankMatchIn, request: Request,
     je = await sdb.journal_entries.find_one({"id": payload.journal_id}, {"_id": 0})
     if not je:
         raise HTTPException(404, "Journal entry not found")
+    if row.get("status") in {"reconciled", "ignored"}:
+        raise HTTPException(409, "Reconciled or ignored rows cannot be rematched")
+    error = _bank_match_error(row, je)
+    if error:
+        raise HTTPException(400, error)
+    duplicate = await sdb.bank_statement_rows.find_one(
+        {"id": {"$ne": row_id}, "matched_journal_id": je["id"],
+         "status": {"$in": ["auto_matched", "matched", "reconciled"]}},
+        {"_id": 0, "id": 1},
+    )
+    if duplicate:
+        raise HTTPException(409, "Journal entry is already matched to another statement row")
     await sdb.bank_statement_rows.update_one(
         {"id": row_id},
         {"$set": {"status": "matched",
                   "matched_journal_id": je["id"],
                   "matched_at": iso_now(),
                   "matched_by": user["user_id"]}},
+    )
+    await audit(
+        user, "bank_recon.match", target=row_id, target_type="bank_statement_row",
+        meta={"journal_id": je["id"]},
     )
     return {"ok": True}
 
@@ -888,13 +936,29 @@ async def reconcile_bank_row(row_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.update"):
         raise HTTPException(403, "Missing permission: finance.update")
+    row = await sdb.bank_statement_rows.find_one({"id": row_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(404, "Row not found")
+    if not row.get("matched_journal_id") or row.get("status") not in {"auto_matched", "matched"}:
+        raise HTTPException(409, "Match this row to a valid journal entry before reconciling")
+    je = await sdb.journal_entries.find_one({"id": row["matched_journal_id"]}, {"_id": 0})
+    if not je:
+        raise HTTPException(409, "The matched journal entry no longer exists")
+    error = _bank_match_error(row, je)
+    if error:
+        raise HTTPException(409, error)
     res = await sdb.bank_statement_rows.update_one(
-        {"id": row_id},
+        {"id": row_id, "status": {"$in": ["auto_matched", "matched"]}},
         {"$set": {"status": "reconciled", "reconciled_at": iso_now(),
                   "reconciled_by": user["user_id"]}},
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Row not found")
+    await audit(
+        user, "bank_recon.reconcile", target=row_id,
+        target_type="bank_statement_row",
+        meta={"journal_id": je["id"]},
+    )
     return {"ok": True}
 
 

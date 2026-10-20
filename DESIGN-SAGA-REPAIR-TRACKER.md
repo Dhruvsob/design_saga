@@ -4,11 +4,11 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; baseline `24728c0` is committed and pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Local checkout: `codex/repair-release`; baseline `77e6237` is committed and pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
 - Production checkout: `/opt/design-saga-git`; last verified application checkpoint was `24728c0`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API: previously healthy at `https://gamaa.in`; on 2026-10-20 both HTTPS and VPS SSH timed out from an otherwise connected workstation. Current production state is unverified and deployment is blocked until host access returns.
-- Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
+- Services: Caddy, web, backend, FerretDB, and PostgreSQL were healthy at the last verified checkpoint; current state is unverified while the host is unreachable.
 - VPS baseline: 3.8 GiB RAM, 2 GiB swap, root disk 56% used, low load at inspection. UFW default-deny and key-only SSH are active.
 - Current action: centralized project collections-due view is implemented and locally build-verified. Deployment is pending VPS reachability and the required pre-deploy backup.
 
@@ -69,9 +69,34 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 | DS-012 | High | Empty role overrides restored default privileges; legacy session routes missed tenant lifecycle gates | Fixed, deployed, and verified live |
 | DS-013 | High | Search, comments, calendar, and event notifications bypassed primary visibility boundaries | Fixed, deployed, and verified live |
 | DS-014 | High | Repair-branch scheduler, audit-chain, business-date, idempotency, numbering, and workflow integrity gaps | Fixed, deployed, and verified live |
-| DS-015 | Medium | Central project milestone collections/receivables view | Implemented locally; deployment blocked by VPS reachability |
+| DS-015 | Medium | Central project milestone collections/receivables view | Implemented and pushed; deployment blocked by VPS reachability |
+| DS-018 | High | Accounting posting, ledger, GST and bank-reconciliation integrity controls | Implemented locally; production verification pending |
 
 ## Issue Log
+
+### DS-018: Accounting integrity controls
+
+- Root causes:
+  - Journal posting accepted malformed dates, blank narrations, inactive accounts, non-finite/negative values, and lines containing both or neither debit and credit.
+  - Posted standalone journals could be amount/date edited or hard-deleted, bypassing a durable correction trail.
+  - A date-filtered account ledger started from the static account opening balance and omitted every movement before the selected range; large ledgers were silently cut at 2,000 entries.
+  - Expense and recurring-expense input GST debited the `GST Payable` liability instead of an input-tax asset.
+  - Manual bank matching did not verify account, direction, amount, date proximity, reversal state, or duplicate use; unmatched rows could be marked reconciled.
+  - Recurring-expense journal idempotency keyed only by rule, so a later period could conflict with the first successful posting.
+  - Balance-sheet reconcile directly mutated an equity opening balance, hiding the source of an imbalance.
+- Correction:
+  - Validate journal dates, narration, line cardinality, finite non-negative values, exactly-one-side debit/credit, balance, and active same-tenant accounts.
+  - Require reversal for posted date/amount corrections and disable physical journal deletion in API/UI; descriptive metadata remains auditable and editable.
+  - Carry pre-period movements into filtered ledger opening balances and fail explicitly above 10,000 rows instead of silently truncating.
+  - Seed and use `Input GST Credit` as an asset for new expense input-tax postings. Historical GST rows are not rewritten automatically.
+  - Require a unique, unreversed journal with the same bank account, signed direction, exact paise amount, and a three-day date window before match/reconcile; audit both actions.
+  - Key recurring postings by rule and run date, and tighten automatic bank matching to one paisa.
+  - Disable automatic balance-sheet opening-balance mutation and direct users to diagnose and reverse the actual bad entry.
+  - Lock account type and opening balance after journal activity; reject duplicate account names and audit account updates.
+- Files changed: `backend/core/finance.py`, `backend/models/accounting.py`, `backend/routes/accounting.py`, `backend/routes/finance_extras.py`, `backend/tests/test_accounting_safety.py`, `frontend/src/components/TransactionDetail.jsx`, `frontend/src/pages/Accounting.jsx`.
+- Verification: Python compilation and `git diff --check` pass; frontend ESLint and Vite production build pass. Focused pytest execution remains unavailable on this workstation because its Python installation has neither pip nor the backend dependencies. Container/integration and production data audits remain required before deployment.
+- Database effect: startup/account-list seeding adds one zero-balance asset account (`Input GST Credit`) per tenant when missing. No existing journal, opening balance, or business record is rewritten.
+- Deployment: pending VPS access, verified backup, disposable integration test, and service-specific health checks.
 
 ### DS-015: Central project collections due (ઉઘરાણી)
 

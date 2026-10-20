@@ -15,6 +15,8 @@ GST/TDS aggregations.
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Depends
 from typing import Optional
 from datetime import date as _date, timedelta
+import math
+import re
 
 from core.db import db
 from core.scoped_db import sdb
@@ -137,6 +139,19 @@ async def create_account(payload: AccountIn, request: Request,
     if payload.type not in ACCOUNT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid account type")
     doc = payload.model_dump()
+    doc["name"] = doc["name"].strip()
+    if not doc["name"]:
+        raise HTTPException(status_code=400, detail="Account name is required")
+    duplicate = await sdb.accounts.find_one(
+        {"name": {"$regex": f"^{re.escape(doc['name'])}$", "$options": "i"}},
+        {"_id": 0, "id": 1},
+    )
+    if duplicate:
+        raise HTTPException(status_code=409, detail="An account with this name already exists")
+    opening = float(doc.get("opening_balance") or 0)
+    if not math.isfinite(opening):
+        raise HTTPException(status_code=400, detail="Opening balance must be finite")
+    doc["opening_balance"] = round(opening, 2)
     doc["id"] = new_id("acc_")
     doc["created_at"] = iso_now()
     doc["created_by"] = user["user_id"]
@@ -156,9 +171,47 @@ async def update_account(acc_id: str, payload: AccountIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.update"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    existing = await sdb.accounts.find_one({"id": acc_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Account not found")
     upd = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if upd.get("type") not in ACCOUNT_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid account type")
+    upd["name"] = upd["name"].strip()
+    if not upd["name"]:
+        raise HTTPException(status_code=400, detail="Account name is required")
+    duplicate = await sdb.accounts.find_one(
+        {"id": {"$ne": acc_id},
+         "name": {"$regex": f"^{re.escape(upd['name'])}$", "$options": "i"}},
+        {"_id": 0, "id": 1},
+    )
+    if duplicate:
+        raise HTTPException(status_code=409, detail="An account with this name already exists")
+    opening = float(upd.get("opening_balance") or 0)
+    if not math.isfinite(opening):
+        raise HTTPException(status_code=400, detail="Opening balance must be finite")
+    upd["opening_balance"] = round(opening, 2)
+    has_activity = await sdb.journal_entries.find_one(
+        {"lines.account_id": acc_id}, {"_id": 0, "id": 1})
+    if has_activity:
+        if upd.get("type") != existing.get("type"):
+            raise HTTPException(
+                status_code=409,
+                detail="Account type cannot change after journal activity exists",
+            )
+        if upd["opening_balance"] != round(float(existing.get("opening_balance") or 0), 2):
+            raise HTTPException(
+                status_code=409,
+                detail="Opening balance cannot change after journal activity exists; post a documented adjustment instead",
+            )
     upd["updated_at"] = iso_now()
+    upd["updated_by"] = user["user_id"]
     await sdb.accounts.update_one({"id": acc_id}, {"$set": upd})
+    await audit(
+        user, "account.update", target=acc_id, target_type="account",
+        meta={"fields": [key for key in upd if key not in {"updated_at", "updated_by"}]},
+        org_id=user_org_id(user),
+    )
     return await sdb.accounts.find_one({"id": acc_id}, {"_id": 0})
 
 
@@ -310,9 +363,36 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
                         source: str = "manual", source_id: str = None,
                         idempotency_suffix: str = None) -> dict:
     """Persist a balanced journal entry. `lines` = [{account_id, debit, credit, description}, ...]"""
-    total_debit = sum(float(l.get("debit") or 0) for l in lines)
-    total_credit = sum(float(l.get("credit") or 0) for l in lines)
-    if round(total_debit, 2) != round(total_credit, 2):
+    try:
+        _date.fromisoformat(date)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Journal date must be YYYY-MM-DD")
+    if not str(narration or "").strip():
+        raise HTTPException(status_code=400, detail="Journal narration is required")
+    if len(lines or []) < 2:
+        raise HTTPException(status_code=400, detail="Journal must contain at least two lines")
+
+    for line in lines:
+        if not line.get("account_id"):
+            raise HTTPException(status_code=400, detail="Every journal line requires an account")
+        try:
+            debit = float(line.get("debit") or 0)
+            credit = float(line.get("credit") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Journal amounts must be numbers")
+        if not math.isfinite(debit) or not math.isfinite(credit):
+            raise HTTPException(status_code=400, detail="Journal amounts must be finite")
+        if debit < 0 or credit < 0:
+            raise HTTPException(status_code=400, detail="Journal amounts cannot be negative")
+        if (debit > 0) == (credit > 0):
+            raise HTTPException(
+                status_code=400,
+                detail="Each journal line must contain exactly one positive debit or credit",
+            )
+
+    total_debit = round(sum(float(l.get("debit") or 0) for l in lines), 2)
+    total_credit = round(sum(float(l.get("credit") or 0) for l in lines), 2)
+    if total_debit != total_credit:
         raise HTTPException(status_code=400,
                             detail=f"Journal not balanced: debit={total_debit} credit={total_credit}")
     if total_debit == 0:
@@ -324,7 +404,7 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
     resolved_lines = []
     for l in lines:
         acc = accs.get(l["account_id"])
-        if not acc:
+        if not acc or acc.get("active") is False:
             raise HTTPException(status_code=400, detail=f"Unknown account_id: {l['account_id']}")
         resolved_lines.append({
             "account_id": l["account_id"],
@@ -338,7 +418,7 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
     doc = {
         "id": new_id("je_"),
         "date": date,
-        "narration": narration,
+        "narration": narration.strip(),
         "reference": reference,
         "project_id": project_id,
         "client_id": client_id,
@@ -467,25 +547,6 @@ class JournalEditIn(BaseModel):
     amount: Optional[float] = None
 
 
-# Sources that are auto-posted from another module — never hard-delete these;
-# they must be reversed so the source document and books stay consistent.
-_LINKED_SOURCES = {
-    "invoice_payment", "milestone_payment", "invoice", "payroll",
-    "vendor_payment", "vendor_bill", "loan", "loan_payment",
-}
-
-
-def _is_simple_two_line(je: dict) -> bool:
-    """A plain entry = 2 lines, one pure debit + one pure credit of equal value.
-    These are safe to re-amount in place (single expense/income/manual)."""
-    lines = je.get("lines") or []
-    if len(lines) != 2:
-        return False
-    debits = [l for l in lines if float(l.get("debit") or 0) > 0 and float(l.get("credit") or 0) == 0]
-    credits = [l for l in lines if float(l.get("credit") or 0) > 0 and float(l.get("debit") or 0) == 0]
-    return len(debits) == 1 and len(credits) == 1
-
-
 @router.get("/journal-entries/{je_id}")
 async def get_journal(je_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
@@ -510,34 +571,23 @@ async def edit_journal(je_id: str, payload: JournalEditIn, request: Request,
         raise HTTPException(status_code=409, detail="Reversal entries cannot be edited.")
 
     updates: dict = {}
-    if payload.date is not None:
-        updates["date"] = payload.date
+    if payload.date is not None and payload.date != je.get("date"):
+        raise HTTPException(
+            status_code=409,
+            detail="Posted transaction dates cannot be changed in place. Reverse the entry and record a corrected one.",
+        )
     if payload.narration is not None:
-        updates["narration"] = payload.narration
+        if not payload.narration.strip():
+            raise HTTPException(status_code=400, detail="Narration is required")
+        updates["narration"] = payload.narration.strip()
     if payload.reference is not None:
         updates["reference"] = payload.reference
 
-    # Amount change is only safe for a plain, standalone, un-reversed entry.
     if payload.amount is not None and round(float(payload.amount), 2) != round(float(je.get("total") or 0), 2):
-        amt = round(float(payload.amount), 2)
-        if amt <= 0:
-            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-        if je.get("source") not in {"manual", "income", "expense"} or je.get("source_id") or je.get("reversed"):
-            raise HTTPException(status_code=409,
-                detail="This entry is linked to another record. Reverse it and record a new one to change the amount.")
-        if not _is_simple_two_line(je):
-            raise HTTPException(status_code=409,
-                detail="This entry has multiple lines (e.g. GST/splits). Reverse it and record a new one to change the amount.")
-        new_lines = []
-        for l in je["lines"]:
-            nl = dict(l)
-            if float(l.get("debit") or 0) > 0:
-                nl["debit"], nl["credit"] = amt, 0
-            else:
-                nl["credit"], nl["debit"] = amt, 0
-            new_lines.append(nl)
-        updates["lines"] = new_lines
-        updates["total"] = amt
+        raise HTTPException(
+            status_code=409,
+            detail="Posted transaction amounts cannot be changed in place. Reverse the entry and record a corrected one.",
+        )
 
     if not updates:
         return je
@@ -561,21 +611,10 @@ async def delete_journal(je_id: str, request: Request,
     if not je:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    src = je.get("source") or "manual"
-    # Only plain, standalone entries may be physically deleted. Anything posted
-    # from another module (or already part of a reversal chain) must be reversed.
-    if src in _LINKED_SOURCES or src.endswith("_reversal") or je.get("source_id") or je.get("reversed"):
-        raise HTTPException(status_code=409,
-            detail="This is a posted/linked transaction and cannot be deleted. Use Reverse to keep your books balanced.")
-    if src not in {"manual", "income", "expense"}:
-        raise HTTPException(status_code=409,
-            detail="This transaction cannot be deleted. Use Reverse instead.")
-
-    await sdb.journal_entries.delete_one({"id": je_id})
-    await audit(user, "journal.delete", target=je_id, target_type="journal_entry",
-                meta={"narration": je.get("narration"), "total": je.get("total"), "source": src},
-                org_id=user_org_id(user))
-    return {"ok": True, "deleted": je_id}
+    raise HTTPException(
+        status_code=409,
+        detail="Posted transactions cannot be deleted. Use Reverse to preserve the accounting audit trail.",
+    )
 
 
 @router.post("/journal-entries/{je_id}/reverse")
@@ -751,7 +790,11 @@ async def create_expense(payload: ExpenseIn, request: Request,
          "description": "Expense"},
     ]
     if gst_amt > 0:
-        gst_acc = await sdb.accounts.find_one({"name": "GST Payable"}, {"_id": 0, "id": 1})
+        await _seed_coa_if_empty()
+        gst_acc = await sdb.accounts.find_one(
+            {"name": "Input GST Credit", "type": "asset", "active": {"$ne": False}},
+            {"_id": 0, "id": 1},
+        )
         if gst_acc:
             lines.append({"account_id": gst_acc["id"], "debit": gst_amt, "credit": 0,
                           "description": "GST input"})
@@ -800,9 +843,29 @@ async def account_ledger(acc_id: str, request: Request,
         if from_date: d["$gte"] = from_date
         if to_date: d["$lte"] = to_date
         q["date"] = d
-    entries = await sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1).to_list(2000)
+    entries = []
+    async for entry in sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1):
+        entries.append(entry)
+        if len(entries) > 10000:
+            raise HTTPException(
+                status_code=413,
+                detail="Ledger contains more than 10,000 entries; select a narrower date range",
+            )
 
-    rows, running = [], float(acc.get("opening_balance") or 0)
+    opening = float(acc.get("opening_balance") or 0)
+    if from_date:
+        async for prior in sdb.journal_entries.find(
+            {"lines.account_id": acc_id, "date": {"$lt": from_date}},
+            {"_id": 0, "lines": 1},
+        ):
+            for line in prior.get("lines") or []:
+                if line.get("account_id") == acc_id:
+                    opening += _movement_for(
+                        acc["type"], float(line.get("debit") or 0),
+                        float(line.get("credit") or 0),
+                    )
+
+    rows, running = [], opening
     for e in entries:
         for l in e["lines"]:
             if l["account_id"] != acc_id:
@@ -816,7 +879,7 @@ async def account_ledger(acc_id: str, request: Request,
             })
     total_debit = sum(r["debit"] for r in rows)
     total_credit = sum(r["credit"] for r in rows)
-    return {"account": acc, "opening_balance": float(acc.get("opening_balance") or 0),
+    return {"account": acc, "opening_balance": round(opening, 2),
             "closing_balance": round(running, 2),
             "total_debit": round(total_debit, 2), "total_credit": round(total_credit, 2),
             "rows": rows}
@@ -1502,47 +1565,18 @@ async def reconcile_balance_sheet(request: Request,
                                   as_of: Optional[str] = None,
                                   session_token: Optional[str] = Cookie(default=None),
                                   authorization: Optional[str] = Header(default=None)):
-    """Close a small imbalance by parking the delta on 'Opening Balance Adjustment'.
-
-    Strategy — cannot fix imbalance via a balanced JE (both sides cancel), so we
-    directly adjust the `opening_balance` of the reserved equity account
-    'Opening Balance Adjustment'. This keeps the audit trail intact:
-    every original journal entry is preserved untouched.
-
-    Requires `finance.create` permission.
-    """
+    """Retained for API compatibility; automatic opening-balance mutation is disabled."""
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.create"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
 
-    # Recompute current delta
-    bs = await balance_sheet(request, as_of=as_of,
-                             session_token=session_token,
-                             authorization=authorization)
-    delta = float(bs.get("delta") or 0)
-    if abs(delta) < 0.01:
-        return {"ok": True, "delta": 0.0, "adjusted": False,
-                "message": "Balance sheet already balanced."}
-
-    await _seed_coa_if_empty()
-    adj_acc = await sdb.accounts.find_one({"name": "Opening Balance Adjustment"}, {"_id": 0})
-    if not adj_acc:
-        raise HTTPException(500, "Opening Balance Adjustment account missing")
-
-    # If assets > liab+eq by `delta`, we need liab+eq up by `delta`.
-    # Adjustment account is equity: increasing its opening_balance raises equity.
-    new_opening = round(float(adj_acc.get("opening_balance") or 0) + delta, 2)
-    await sdb.accounts.update_one(
-        {"id": adj_acc["id"]},
-        {"$set": {"opening_balance": new_opening,
-                  "reconciled_at": iso_now(),
-                  "reconciled_by": user["user_id"]}}
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "Automatic balance-sheet adjustment is disabled because it changes opening balances. "
+            "Review the reported unbalanced entries and correct them with documented reversals."
+        ),
     )
-    return {"ok": True, "delta": delta, "adjusted": True,
-            "adjustment_amount": delta,
-            "adjustment_account_id": adj_acc["id"],
-            "new_opening_balance": new_opening,
-            "message": f"Parked ₹{delta} on 'Opening Balance Adjustment' to reconcile."}
 
 
 # ==================================================

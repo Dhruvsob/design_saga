@@ -11,6 +11,7 @@ from routes.accounting import (
     _milestone_due_bucket,
     _require_full_linked_payment,
 )
+from routes.finance_extras import _bank_match_error
 
 
 def test_linked_journal_keys_are_stable_and_manual_entries_are_unkeyed():
@@ -49,3 +50,20 @@ def test_milestone_due_buckets_cover_collection_workflow():
     assert _milestone_due_bucket("2026-11-20", today, horizon) == "later"
     assert _milestone_due_bucket(None, today, horizon) == "no_due_date"
     assert _milestone_due_bucket("not-a-date", today, horizon) == "no_due_date"
+
+
+def test_bank_match_requires_same_account_direction_amount_and_nearby_date():
+    row = {"date": "2026-10-20", "amount": 1250, "account_id": "bank_1"}
+    valid = {
+        "date": "2026-10-22",
+        "lines": [
+            {"account_id": "bank_1", "debit": 1250, "credit": 0},
+            {"account_id": "income_1", "debit": 0, "credit": 1250},
+        ],
+    }
+    assert _bank_match_error(row, valid) is None
+
+    wrong_direction = {**valid, "lines": [{"account_id": "bank_1", "debit": 0, "credit": 1250}]}
+    assert "matching debit" in _bank_match_error(row, wrong_direction)
+    assert "within 3 days" in _bank_match_error(row, {**valid, "date": "2026-10-30"})
+    assert "cannot be matched" in _bank_match_error(row, {**valid, "reversed": True})

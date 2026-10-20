@@ -4,28 +4,19 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import {
-  X, ArrowSquareOut, PencilSimple, ArrowUUpLeft, Trash, FloppyDisk, Warning,
+  X, ArrowSquareOut, PencilSimple, ArrowUUpLeft, FloppyDisk, Warning,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) =>
   `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-function isSimpleTwoLine(entry) {
-  const lines = entry?.lines || [];
-  if (lines.length !== 2) return false;
-  const debits = lines.filter((l) => (+l.debit || 0) > 0 && (+l.credit || 0) === 0);
-  const credits = lines.filter((l) => (+l.credit || 0) > 0 && (+l.debit || 0) === 0);
-  return debits.length === 1 && credits.length === 1;
-}
-
 // Shared transaction detail — used by the Daybook and every Account Ledger.
 // "Simple outside, professional underneath": shows the full double-entry, and
-// (for permitted, safe entries) lets the user Edit / Reverse / Delete.
+// (for permitted entries) lets the user edit metadata or post a reversal.
 export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const navigate = useNavigate();
   const [mode, setMode] = useState("view");
   const [busy, setBusy] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReverse, setConfirmReverse] = useState(false);
   const [form, setForm] = useState({
     date: entry.date || "",
@@ -42,9 +33,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const isReversal = source.endsWith("_reversal");
   const isReversed = !!entry.reversed;
   const canModify = !isReversal && !isReversed;
-  const standalone = ["manual", "income", "expense"].includes(source) && !entry.source_id;
-  const canDelete = canModify && standalone;
-  const canEditAmount = canModify && standalone && isSimpleTwoLine(entry);
+  const canEditAmount = false;
   // Drill-through: open the most relevant source record.
   const drillTarget = (() => {
     if (source.startsWith("loan_")) return { label: "Open loan", path: `/loans/${entry.source_id || ""}` };
@@ -103,20 +92,6 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
     }
   };
 
-  const doDelete = async () => {
-    setBusy(true);
-    try {
-      await api.delete(`/journal-entries/${entry.id}`);
-      toast.success("Transaction deleted");
-      onChanged && onChanged();
-      onClose();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not delete transaction");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return createPortal(
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" data-testid="txn-detail-modal" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
@@ -151,7 +126,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
             <div>
               <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Date</label>
               <input type="date" className="input-flat w-full" value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="txn-edit-date" />
+                disabled data-testid="txn-edit-date" />
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Description</label>
@@ -171,7 +146,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
               {!canEditAmount && (
                 <div className="text-[11px] text-[#9A9A9A] mt-1 flex items-start gap-1">
                   <Warning size={13} className="mt-0.5 shrink-0" />
-                  Amount is locked for this entry (it has GST/splits or is linked). Reverse it and record a new one to change the amount.
+                  Posted dates and amounts are corrected by reversal so the audit trail remains complete.
                 </div>
               )}
             </div>
@@ -236,20 +211,6 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                   <button onClick={openSource} className="btn-ghost text-sm" data-testid="txn-open-source">
                     <ArrowSquareOut size={14} /> {drillTarget?.label || "Open related record"}
                   </button>
-                )}
-                {canDelete && (
-                  confirmDelete ? (
-                    <span className="flex items-center gap-1">
-                      <button onClick={doDelete} disabled={busy} className="btn-primary bg-[#B4001C] text-sm" data-testid="txn-delete-confirm">
-                        {busy ? "Deleting…" : "Confirm delete"}
-                      </button>
-                      <button onClick={() => setConfirmDelete(false)} className="btn-ghost text-sm">No</button>
-                    </span>
-                  ) : (
-                    <button onClick={() => setConfirmDelete(true)} className="btn-ghost text-sm text-[#B4001C]" data-testid="txn-delete-btn">
-                      <Trash size={14} /> Delete
-                    </button>
-                  )
                 )}
               </div>
             </div>
