@@ -70,6 +70,22 @@ def _cash_collection_source(source: str) -> bool:
     return base in {"income", "invoice_payment", "milestone_payment", "commission_income"}
 
 
+def _milestone_due_bucket(due_date: Optional[str], today: _date,
+                          horizon: _date) -> str:
+    """Classify an unpaid project milestone for the collections dashboard."""
+    if not due_date:
+        return "no_due_date"
+    try:
+        due = _date.fromisoformat(due_date)
+    except (TypeError, ValueError):
+        return "no_due_date"
+    if due < today:
+        return "overdue"
+    if due <= horizon:
+        return "due_30"
+    return "later"
+
+
 # ==================================================
 # Chart of Accounts
 # ==================================================
@@ -1210,6 +1226,79 @@ async def finance_dashboard(request: Request,
         },
         "upcoming_payments": upcoming,
         "recent_transactions": recent,
+    }
+
+
+@router.get("/accounting/receivables")
+async def project_receivables(request: Request,
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    """Tenant-scoped project milestones that are still due for collection."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+
+    today = business_today()
+    horizon = today + timedelta(days=30)
+    milestones = await sdb.payment_milestones.find(
+        {"status": {"$nin": ["paid", "cancelled"]}}, {"_id": 0}
+    ).sort("due_date", 1).to_list(5000)
+
+    project_ids = list({m.get("project_id") for m in milestones if m.get("project_id")})
+    projects = {
+        p["id"]: p async for p in sdb.projects.find(
+            {"id": {"$in": project_ids}},
+            {"_id": 0, "id": 1, "name": 1, "client_id": 1, "client_name": 1},
+        )
+    } if project_ids else {}
+    client_ids = list({p.get("client_id") for p in projects.values() if p.get("client_id")})
+    clients = {
+        c["id"]: c.get("name") async for c in sdb.clients.find(
+            {"id": {"$in": client_ids}}, {"_id": 0, "id": 1, "name": 1}
+        )
+    } if client_ids else {}
+
+    totals = {"all": 0.0, "overdue": 0.0, "due_30": 0.0,
+              "later": 0.0, "no_due_date": 0.0}
+    rows = []
+    for milestone in milestones:
+        amount = float(milestone.get("amount") or 0)
+        paid = float(milestone.get("paid_amount") or 0)
+        outstanding = round(max(0.0, amount - paid), 2)
+        if outstanding <= 0:
+            continue
+        due_date = milestone.get("due_date")
+        bucket = _milestone_due_bucket(due_date, today, horizon)
+        project = projects.get(milestone.get("project_id"), {})
+        client_id = project.get("client_id")
+        days_overdue = 0
+        if bucket == "overdue":
+            days_overdue = (today - _date.fromisoformat(due_date)).days
+        totals["all"] += outstanding
+        totals[bucket] += outstanding
+        rows.append({
+            "id": milestone.get("id"),
+            "name": milestone.get("name"),
+            "project_id": milestone.get("project_id"),
+            "project_name": project.get("name") or "Unknown project",
+            "client_id": client_id,
+            "client_name": project.get("client_name") or clients.get(client_id),
+            "due_date": due_date,
+            "status": milestone.get("status") or "pending",
+            "amount": round(amount, 2),
+            "paid_amount": round(paid, 2),
+            "outstanding": outstanding,
+            "bucket": bucket,
+            "days_overdue": days_overdue,
+        })
+
+    rows.sort(key=lambda row: (row.get("due_date") or "9999-12-31", row.get("project_name") or ""))
+    return {
+        "as_of": today.isoformat(),
+        "horizon": horizon.isoformat(),
+        "totals": {key: round(value, 2) for key, value in totals.items()},
+        "count": len(rows),
+        "rows": rows,
     }
 
 

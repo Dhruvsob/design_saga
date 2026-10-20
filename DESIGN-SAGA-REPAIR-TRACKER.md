@@ -1,16 +1,16 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-17 (Asia/Calcutta)
+Last updated: 2026-10-20 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `production`; application checkpoint `cf82c92` is committed and pushed to GitHub `main` and `production`.
-- Production checkout: `/opt/design-saga-git`, `production` at `cf82c92`.
+- Local checkout: `codex/repair-release`; baseline `24728c0` is committed and pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; last verified application checkpoint was `24728c0`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
-- Live URL/API: `https://gamaa.in`, API health returned `{"service":"Design Saga API","status":"ok"}`.
+- Live URL/API: previously healthy at `https://gamaa.in`; on 2026-10-20 both HTTPS and VPS SSH timed out from an otherwise connected workstation. Current production state is unverified and deployment is blocked until host access returns.
 - Services: Caddy, web, backend, FerretDB, and PostgreSQL are running; health-enabled services are healthy.
 - VPS baseline: 3.8 GiB RAM, 2 GiB swap, root disk 56% used, low load at inspection. UFW default-deny and key-only SSH are active.
-- Current action: repair release `2c76e78` (application code through `b28a373`) is deployed and verified live. Next priorities are external credential rotation, off-server backups/alerts, dependency remediation, and the remaining route-by-route IDOR audit.
+- Current action: centralized project collections-due view is implemented and locally build-verified. Deployment is pending VPS reachability and the required pre-deploy backup.
 
 ## System Inventory
 
@@ -69,8 +69,19 @@ Last updated: 2026-10-17 (Asia/Calcutta)
 | DS-012 | High | Empty role overrides restored default privileges; legacy session routes missed tenant lifecycle gates | Fixed, deployed, and verified live |
 | DS-013 | High | Search, comments, calendar, and event notifications bypassed primary visibility boundaries | Fixed, deployed, and verified live |
 | DS-014 | High | Repair-branch scheduler, audit-chain, business-date, idempotency, numbering, and workflow integrity gaps | Fixed, deployed, and verified live |
+| DS-015 | Medium | Central project milestone collections/receivables view | Implemented locally; deployment blocked by VPS reachability |
 
 ## Issue Log
+
+### DS-015: Central project collections due (ઉઘરાણી)
+
+- Existing behavior: payment milestones can already be created and paid inside each individual project, and Accounting shows only the first eight milestones due in the next 30 days.
+- Gap: there was no tenant-wide view for accountants to see total pending, overdue, next-30-day, later, and undated project collections with project/client context.
+- Correction: added a tenant-scoped read endpoint over existing payment milestones, project/client enrichment, outstanding-amount calculation, due buckets, an indexed query path, search/filter controls, DD/MM/YYYY rendering, and direct navigation to the original project. No second payment or accounting engine was introduced.
+- Files changed: `backend/routes/accounting.py`, `backend/core/indexes.py`, `backend/tests/test_accounting_safety.py`, `frontend/src/pages/Accounting.jsx`.
+- Verification: backend modules compile; frontend ESLint passes; Vite production build passes. The focused pytest file could not run locally because this Windows Python installation does not include pytest. No production data was read or changed.
+- Deployment: pending. `gamaa.in:443` and `187.52.124.46:22` timed out on 2026-10-20, so backup, service deployment, and live verification were not attempted.
+- Rollback: revert the DS-015 commit and redeploy backend/web. The added non-unique milestone index is backward-compatible and may remain. No data migration or rewrite is involved.
 
 ### DS-001: Server-side financial read authorization
 

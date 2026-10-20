@@ -5,6 +5,7 @@ import { Daybook } from "../components/Daybook";
 import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
+import { formatDate } from "../lib/format";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
@@ -17,6 +18,7 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", Icon: ChartLine },
   { id: "income",    label: "Income",    Icon: ArrowDown },
   { id: "expense",   label: "Expense",   Icon: ArrowUp },
+  { id: "receivables", label: "Collections Due", Icon: Money },
   { id: "daybook",   label: "Daybook",   Icon: Notebook },
   { id: "coa",       label: "Chart of Accounts", Icon: ListDashes },
   { id: "ledgers",   label: "Ledgers",   Icon: Bank },
@@ -215,6 +217,8 @@ export default function Accounting() {
           }}
         />
       )}
+
+      {tab === "receivables" && <CollectionsDue />}
 
       {tab === "daybook" && (
         <Daybook
@@ -617,6 +621,106 @@ function SubKPI({ label, value, tint }) {
     <div className="card-flat">
       <div className="overline">{label}</div>
       <div className="font-display font-bold text-2xl mt-1" style={{ color: tint }}>{value}</div>
+    </div>
+  );
+}
+
+function CollectionsDue() {
+  const [data, setData] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    api.get("/accounting/receivables")
+      .then(({ data: result }) => setData(result))
+      .catch((error) => toast.error(error?.response?.data?.detail || "Could not load collections"));
+  }, []);
+
+  if (!data) return <div className="overline">LOADING COLLECTIONS…</div>;
+  const term = query.trim().toLowerCase();
+  const rows = (data.rows || []).filter((row) => {
+    if (filter !== "all" && row.bucket !== filter) return false;
+    if (!term) return true;
+    return `${row.project_name || ""} ${row.client_name || ""} ${row.name || ""}`
+      .toLowerCase().includes(term);
+  });
+  const filters = [
+    ["all", "All pending"],
+    ["overdue", "Overdue"],
+    ["due_30", "Next 30 days"],
+    ["later", "Later"],
+    ["no_due_date", "No due date"],
+  ];
+
+  return (
+    <div className="space-y-4" data-testid="collections-due-tab">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <div className="overline">PROJECT COLLECTIONS · ઉઘરાણી</div>
+          <div className="text-xs text-[#5C5C5C] mt-1">As of {formatDate(data.as_of)} · next 30 days through {formatDate(data.horizon)}</div>
+        </div>
+        <input
+          className="input-flat min-w-[260px]"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search project, client or milestone"
+          data-testid="collections-search"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KPI label="Total pending" value={CURRENCY(data.totals?.all)} Icon={Money} tint="#0A0A0A" />
+        <KPI label="Overdue" value={CURRENCY(data.totals?.overdue)} Icon={ArrowUp} tint="#B4001C" />
+        <KPI label="Next 30 days" value={CURRENCY(data.totals?.due_30)} Icon={ArrowDown} tint="#7A4E1A" />
+        <KPI label="Later" value={CURRENCY(data.totals?.later)} Icon={ChartLine} tint="#1D633E" />
+      </div>
+
+      <div className="flex gap-1.5 flex-wrap" data-testid="collections-filters">
+        {filters.map(([id, label]) => (
+          <button key={id} onClick={() => setFilter(id)}
+            className={`px-3 py-1.5 text-xs border ${filter === id ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "bg-white text-[#5C5C5C] border-[#E5E5E5]"}`}
+            data-testid={`collections-filter-${id}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="border border-[#E5E5E5] overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase text-[#5C5C5C]">
+            <tr>
+              <th className="p-3 text-left">Due date</th>
+              <th className="p-3 text-left">Project</th>
+              <th className="p-3 text-left">Client</th>
+              <th className="p-3 text-left">Milestone</th>
+              <th className="p-3 text-left">Status</th>
+              <th className="p-3 text-right">To collect</th>
+              <th className="p-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7]">
+                <td className="p-3 font-mono text-xs whitespace-nowrap">
+                  <div>{formatDate(row.due_date)}</div>
+                  {row.days_overdue > 0 && <div className="text-[10px] text-[#B4001C]">{row.days_overdue} days overdue</div>}
+                </td>
+                <td className="p-3 font-semibold">{row.project_name}</td>
+                <td className="p-3 text-[#5C5C5C]">{row.client_name || "—"}</td>
+                <td className="p-3">{row.name || "Payment milestone"}</td>
+                <td className="p-3"><span className={`status-chip chip-${row.status}`}>{row.status}</span></td>
+                <td className="p-3 text-right font-mono font-semibold">{CURRENCY(row.outstanding)}</td>
+                <td className="p-3 text-right">
+                  {row.project_id && <a href={`/projects/${row.project_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="p-10 text-center text-[#9A9A9A]">No collections match this view.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

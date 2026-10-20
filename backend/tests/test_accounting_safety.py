@@ -1,11 +1,14 @@
 """Regression coverage for accounting integrity helpers."""
 
+from datetime import date
+
 import pytest
 from fastapi import HTTPException
 
 from routes.accounting import (
     _cash_collection_source,
     _linked_journal_key,
+    _milestone_due_bucket,
     _require_full_linked_payment,
 )
 
@@ -35,3 +38,14 @@ def test_collection_sources_include_reversals_for_net_reporting():
     assert _cash_collection_source("invoice_payment_reversal") is True
     assert _cash_collection_source("milestone_payment_reversal") is True
     assert _cash_collection_source("payroll") is False
+
+
+def test_milestone_due_buckets_cover_collection_workflow():
+    today = date(2026, 10, 20)
+    horizon = date(2026, 11, 19)
+    assert _milestone_due_bucket("2026-10-19", today, horizon) == "overdue"
+    assert _milestone_due_bucket("2026-10-20", today, horizon) == "due_30"
+    assert _milestone_due_bucket("2026-11-19", today, horizon) == "due_30"
+    assert _milestone_due_bucket("2026-11-20", today, horizon) == "later"
+    assert _milestone_due_bucket(None, today, horizon) == "no_due_date"
+    assert _milestone_due_bucket("not-a-date", today, horizon) == "no_due_date"

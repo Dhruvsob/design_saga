@@ -64,6 +64,7 @@ _INDEXES = [
     ("journal_entries",    [("idempotency_key", 1)],
                             {"name": "journal_idempotency_unique", "unique": True, "sparse": True}),
     ("accounts",           [("org_id", 1), ("type", 1)], {}),
+    ("payment_milestones", [("org_id", 1), ("status", 1), ("due_date", 1)], {}),
     # Notifications
     ("notifications",      [("user_id", 1), ("read", 1), ("created_at", -1)], {}),
     ("notifications",      [("org_id", 1), ("kind", 1)], {}),
