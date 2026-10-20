@@ -13,7 +13,7 @@ DEFAULT_COA = [
     ("Cash", "asset", "1001"), ("Petty Cash", "asset", "1002"),
     ("Bank - Primary", "asset", "1101"), ("Fixed Assets", "asset", "1201"),
     ("Accounts Receivable", "asset", "1301"), ("Security Deposits", "asset", "1401"),
-    ("Input GST Credit", "asset", "1501"),
+    ("Input GST Credit", "asset", "1501"), ("Vendor Advances", "asset", "1502"),
     # Liabilities
     ("Accounts Payable", "liability", "2001"), ("GST Payable", "liability", "2101"),
     ("TDS Payable", "liability", "2102"), ("Loans", "liability", "2201"),

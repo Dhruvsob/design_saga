@@ -522,11 +522,15 @@ async def three_way_match(po_id: str, request: Request,
     bill_agg = {}  # pol_id -> {qty, amount}
     bill_total = 0.0
     bills = []
-    async for b in sdb.vendor_bills.find({"po_id": po_id}, {"_id": 0}):
+    async for b in sdb.vendor_bills.find(
+        {"po_id": po_id,
+         "status": {"$in": ["received", "partially_paid", "overdue", "paid"]}},
+        {"_id": 0}
+    ):
         bills.append({"id": b["id"], "bill_number": b.get("bill_number"),
-                     "amount": b.get("amount"), "status": b.get("status")})
-        bill_total += float(b.get("amount", 0))
-        for bl in b.get("lines", []) if b.get("lines") else []:
+                     "amount": b.get("total"), "status": b.get("status")})
+        bill_total += float(b.get("total", 0))
+        for bl in b.get("items", []) or []:
             pol = bl.get("po_line_id")
             if not pol:
                 continue

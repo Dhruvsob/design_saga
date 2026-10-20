@@ -71,8 +71,29 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 | DS-014 | High | Repair-branch scheduler, audit-chain, business-date, idempotency, numbering, and workflow integrity gaps | Fixed, deployed, and verified live |
 | DS-015 | Medium | Central project milestone collections/receivables view | Implemented and pushed; deployment blocked by VPS reachability |
 | DS-018 | High | Accounting posting, ledger, GST and bank-reconciliation integrity controls | Implemented locally; production verification pending |
+| DS-019 | High | Vendor bill, Accounts Payable, advance-payment and three-way-match integrity | Implemented locally; production data audit pending |
 
 ## Issue Log
+
+### DS-019: Vendor bills, A/P and three-way matching
+
+- Root causes:
+  - Received vendor bills updated the vendor UI but posted no journal, while vendor payments debited Accounts Payable. A/P could therefore become negative without a booked liability.
+  - Bill schemas could not carry a purchase-order or PO-line link, while the three-way matcher queried those links and obsolete `lines`/`amount` fields. The advertised PO/GRN/bill comparison could not succeed.
+  - Unallocated vendor payments also debited A/P instead of a vendor-advance asset.
+  - Posted bills could be financially edited or hard-deleted, and paid bills could be cancelled without first reversing their payments.
+  - Draft bills leaked into billed/performance/commission totals, reversed payments inflated the vendor summary, and filtered vendor ledgers lost their pre-period opening balance.
+- Correction:
+  - New received non-PO bills post DR expense + DR Input GST / CR Accounts Payable + CR TDS Payable. The UI requires an explicit expense account; legacy API clients fall back to `Miscellaneous Expenses` with an `accounting_warning` marker.
+  - New PO bills carry `po_id`/`po_line_id`, verify the vendor and received quantities, and post DR GRN Clearing + DR Input GST / CR Accounts Payable + CR TDS Payable. The existing three-way report now reads `items` and `total` and excludes draft/cancelled bills.
+  - Allocated payments debit A/P; excess/on-account amounts debit the new `Vendor Advances` asset; both use the central journal validator and a linked source ID.
+  - Vendor bill and payment creation use idempotency keys. Posted financials require reversal; paid bills cannot be cancelled until linked payments are reversed; cancellation posts an idempotent bill reversal and preserves/corrects commission audit state.
+  - Drafts are excluded from billed, ledger, performance, and commission figures; reversed payments are excluded from paid summaries; date-filtered vendor ledgers carry the correct opening balance.
+  - The vendor bill form can select a purchase order and prefill linked PO lines, or select an expense account for a non-PO bill. Failed API calls remain visible with an error instead of closing the form.
+- Files changed: `backend/core/indexes.py`, `backend/models/accounting.py`, `backend/models/vendor.py`, `backend/routes/purchase.py`, `backend/routes/vendors.py`, vendor/purchase/accounting regression tests, and `frontend/src/pages/VendorDetail.jsx`.
+- Verification: Python compilation and `git diff --check` pass; frontend ESLint and Vite production build pass; 20 focused accounting/vendor-payment/purchase/release tests pass locally.
+- Database effect: startup/account seeding adds the zero-balance `Vendor Advances` asset when missing and adds non-destructive vendor-bill PO/idempotency indexes. No historical bill or journal is rewritten automatically.
+- Production gate: audit historical non-draft vendor bills for missing `journal_entry_id`, compare bill totals to existing payment/AP activity, back up the database, and run an explicit reviewed backfill only where evidence is unambiguous.
 
 ### DS-018: Accounting integrity controls
 
@@ -94,7 +115,7 @@ Last updated: 2026-10-20 (Asia/Calcutta)
   - Disable automatic balance-sheet opening-balance mutation and direct users to diagnose and reverse the actual bad entry.
   - Lock account type and opening balance after journal activity; reject duplicate account names and audit account updates.
 - Files changed: `backend/core/finance.py`, `backend/models/accounting.py`, `backend/routes/accounting.py`, `backend/routes/finance_extras.py`, `backend/tests/test_accounting_safety.py`, `frontend/src/components/TransactionDetail.jsx`, `frontend/src/pages/Accounting.jsx`.
-- Verification: Python compilation and `git diff --check` pass; frontend ESLint and Vite production build pass. Focused pytest execution remains unavailable on this workstation because its Python installation has neither pip nor the backend dependencies. Container/integration and production data audits remain required before deployment.
+- Verification: Python compilation and `git diff --check` pass; frontend ESLint and Vite production build pass; the focused accounting/vendor-payment/purchase/release suite passes 20/20 locally. Container integration and production data audits remain required before deployment.
 - Database effect: startup/account-list seeding adds one zero-balance asset account (`Input GST Credit`) per tenant when missing. No existing journal, opening balance, or business record is rewritten.
 - Deployment: pending VPS access, verified backup, disposable integration test, and service-specific health checks.
 

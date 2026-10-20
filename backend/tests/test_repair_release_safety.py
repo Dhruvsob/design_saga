@@ -39,7 +39,7 @@ def test_integrity_indexes_are_unique():
     required = {
         "job_lock_name_unique", "job_status_name_unique",
         "expense_request_unique", "vendor_payment_request_unique",
-        "vendor_bill_number_unique", "vendor_gstin_unique",
+        "vendor_bill_number_unique", "vendor_bill_request_unique", "vendor_gstin_unique",
         "invoice_number_unique",
         "employees_org_employee_unique", "counter_org_kind_unique",
     }
@@ -54,6 +54,7 @@ def test_optional_unique_indexes_use_single_sparse_keys():
     assert keys_by_name["expense_request_unique"] == [("request_key", 1)]
     assert keys_by_name["vendor_payment_request_unique"] == [("request_key", 1)]
     assert keys_by_name["vendor_bill_number_unique"] == [("bill_key", 1)]
+    assert keys_by_name["vendor_bill_request_unique"] == [("request_key", 1)]
     assert keys_by_name["vendor_gstin_unique"] == [("gstin_key", 1)]
 
 

@@ -39,6 +39,7 @@ from core.tenancy import user_org_id
 from core.rbac import has_permission
 from core.locks import doc_lock
 from core.finance import require_asset_account
+from core.audit import audit
 import re as _re_mod
 from models.accounting import VendorIn
 from models.vendor import (
@@ -76,6 +77,136 @@ def _bill_total(bill: dict) -> float:
     bill["tds_amount"] = tds
     bill["total"] = grand
     return grand
+
+
+async def _post_vendor_bill(user: dict, bill: dict) -> dict:
+    """Post one received vendor bill to GRN clearing/expense and A/P."""
+    if bill.get("journal_entry_id"):
+        existing = await sdb.journal_entries.find_one(
+            {"id": bill["journal_entry_id"]}, {"_id": 0})
+        if existing:
+            return existing
+    if bill.get("status") == "draft":
+        raise HTTPException(status_code=409, detail="Draft bills are not posted to accounting")
+    if float(bill.get("subtotal") or 0) <= 0 or float(bill.get("total") or 0) <= 0:
+        raise HTTPException(status_code=400, detail="A received bill must have a positive total")
+
+    from routes.accounting import _post_journal, _seed_coa_if_empty
+    await _seed_coa_if_empty()
+    ap = await sdb.accounts.find_one(
+        {"name": "Accounts Payable", "type": "liability", "active": {"$ne": False}},
+        {"_id": 0},
+    )
+    if not ap:
+        raise HTTPException(status_code=500, detail="Accounts Payable account missing")
+
+    project_id = bill.get("project_id")
+    if bill.get("po_id"):
+        po = await sdb.purchase_orders.find_one({"id": bill["po_id"]}, {"_id": 0})
+        if not po or po.get("vendor_id") != bill.get("vendor_id"):
+            raise HTTPException(status_code=400, detail="Purchase order does not belong to this vendor")
+        if po.get("status") in {"draft", "cancelled"}:
+            raise HTTPException(status_code=409, detail="Purchase order must be sent before billing")
+        project_id = po.get("project_id") or project_id
+        po_lines = {line["id"]: line for line in po.get("lines") or []}
+        received_by_line = {}
+        async for grn in sdb.goods_receipts.find(
+            {"po_id": po["id"]}, {"_id": 0, "lines": 1}
+        ):
+            for line in grn.get("lines") or []:
+                line_id = line.get("po_line_id")
+                received_by_line[line_id] = received_by_line.get(line_id, 0.0) + float(
+                    line.get("received_qty") or 0)
+        billed_by_line = {}
+        async for prior in sdb.vendor_bills.find(
+            {"po_id": po["id"], "id": {"$ne": bill["id"]},
+             "journal_entry_id": {"$ne": None},
+             "status": {"$in": ["received", "partially_paid", "overdue", "paid"]}},
+            {"_id": 0, "items": 1},
+        ):
+            for item in prior.get("items") or []:
+                line_id = item.get("po_line_id")
+                billed_by_line[line_id] = billed_by_line.get(line_id, 0.0) + float(
+                    item.get("quantity") or 0)
+        for item in bill.get("items") or []:
+            line_id = item.get("po_line_id")
+            if not line_id or line_id not in po_lines:
+                raise HTTPException(status_code=400, detail="Every PO bill item must link to a PO line")
+            new_total = billed_by_line.get(line_id, 0.0) + float(item.get("quantity") or 0)
+            if new_total > received_by_line.get(line_id, 0.0) + 0.001:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Billed quantity exceeds received quantity for {po_lines[line_id].get('item_name')}",
+                )
+        base = await sdb.accounts.find_one(
+            {"name": "GRN Clearing", "type": "liability", "active": {"$ne": False}},
+            {"_id": 0},
+        )
+        if not base:
+            raise HTTPException(status_code=409, detail="No GRN clearing account exists; record the goods receipt first")
+    else:
+        if bill.get("expense_account_id"):
+            base = await sdb.accounts.find_one(
+                {"id": bill["expense_account_id"], "type": "expense",
+                 "active": {"$ne": False}},
+                {"_id": 0},
+            )
+        else:
+            base = await sdb.accounts.find_one(
+                {"name": "Miscellaneous Expenses", "type": "expense",
+                 "active": {"$ne": False}},
+                {"_id": 0},
+            )
+            await sdb.vendor_bills.update_one(
+                {"id": bill["id"]},
+                {"$set": {"expense_account_id": (base or {}).get("id"),
+                          "accounting_warning": "default_expense_account"}},
+            )
+        if not base:
+            raise HTTPException(status_code=400, detail="A valid expense account is required for a non-PO bill")
+
+    subtotal = round(float(bill.get("subtotal") or 0), 2)
+    tax = round(float(bill.get("tax_amount") or 0), 2)
+    tds = round(float(bill.get("tds_amount") or 0), 2)
+    payable = round(float(bill.get("total") or 0), 2)
+    lines = [{
+        "account_id": base["id"], "debit": subtotal, "credit": 0,
+        "description": "GRN clearing" if bill.get("po_id") else "Vendor expense",
+    }]
+    if tax > 0:
+        input_gst = await sdb.accounts.find_one(
+            {"name": "Input GST Credit", "type": "asset", "active": {"$ne": False}},
+            {"_id": 0},
+        )
+        if not input_gst:
+            raise HTTPException(status_code=500, detail="Input GST Credit account missing")
+        lines.append({"account_id": input_gst["id"], "debit": tax, "credit": 0,
+                      "description": "Input GST credit"})
+    lines.append({"account_id": ap["id"], "debit": 0, "credit": payable,
+                  "description": f"Payable to {bill.get('vendor_name') or 'vendor'}"})
+    if tds > 0:
+        tds_account = await sdb.accounts.find_one(
+            {"name": "TDS Payable", "type": "liability", "active": {"$ne": False}},
+            {"_id": 0},
+        )
+        if not tds_account:
+            raise HTTPException(status_code=500, detail="TDS Payable account missing")
+        lines.append({"account_id": tds_account["id"], "debit": 0, "credit": tds,
+                      "description": "TDS withheld"})
+
+    journal = await _post_journal(
+        user, bill["bill_date"],
+        f"Vendor bill {bill.get('bill_number')} · {bill.get('vendor_name')}",
+        lines, reference=bill.get("bill_number"), project_id=project_id,
+        vendor_id=bill.get("vendor_id"), source="vendor_bill", source_id=bill["id"],
+    )
+    await sdb.vendor_bills.update_one(
+        {"id": bill["id"]},
+        {"$set": {"journal_entry_id": journal["id"], "accounting_status": "posted",
+                  "project_id": project_id, "posted_at": iso_now(),
+                  "posted_by": user["user_id"]}},
+    )
+    return journal
 
 
 async def _paid_against_bill(bill_id: str) -> float:
@@ -247,8 +378,10 @@ async def get_vendor(vendor_id: str, request: Request,
 
     outstanding = sum(float(b.get("outstanding") or 0)
                       for b in bills if b.get("status") in ("received", "partially_paid", "overdue"))
-    total_billed = sum(float(b.get("total") or 0) for b in bills if b.get("status") != "cancelled")
-    total_paid = sum(float(p.get("amount") or 0) for p in payments)
+    total_billed = sum(float(b.get("total") or 0) for b in bills
+                       if b.get("status") not in ("draft", "cancelled"))
+    total_paid = sum(float(p.get("amount") or 0) for p in payments
+                     if p.get("status") != "reversed")
 
     # Assigned tasks / projects (backward compat: some tasks store vendor_id, others vendor_contact.vendor_name)
     task_query = {"$or": [
@@ -417,6 +550,13 @@ async def create_vendor_bill(payload: VendorBillIn, request: Request,
     user = await require_user(request, session_token, authorization)
     _require(user, "finance.create")
 
+    idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
+    request_key = f"{user_org_id(user)}:{payload.vendor_id}:{idem}" if idem else None
+    if request_key:
+        prior = await sdb.vendor_bills.find_one({"request_key": request_key}, {"_id": 0})
+        if prior:
+            return prior
+
     vendor = await sdb.vendors_acc.find_one({"id": payload.vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -456,12 +596,34 @@ async def create_vendor_bill(payload: VendorBillIn, request: Request,
     doc["vendor_name"] = vendor.get("name")
     doc["created_at"] = iso_now()
     doc["created_by"] = user["user_id"]
+    if request_key:
+        doc["request_key"] = request_key
+        doc["client_request_id"] = idem
     try:
         await sdb.vendor_bills.insert_one(dict(doc))
     except DuplicateKeyError:
+        if request_key:
+            prior = await sdb.vendor_bills.find_one({"request_key": request_key}, {"_id": 0})
+            if prior:
+                return prior
         raise HTTPException(status_code=409,
                             detail="A bill with this number already exists for this vendor")
-    await _refresh_bill_status(doc["id"])
+    if doc.get("status") != "draft":
+        try:
+            await _post_vendor_bill(user, doc)
+        except Exception:
+            # The bill is not yet visible to any payment workflow; compensate
+            # the failed create instead of leaving an unposted A/P document.
+            await sdb.vendor_bills.delete_one({"id": doc["id"]})
+            raise
+    if doc.get("status") != "draft":
+        await _refresh_bill_status(doc["id"])
+    await audit(
+        user, "vendor_bill.create", target=doc["id"], target_type="vendor_bill",
+        meta={"status": doc.get("status"), "total": doc.get("total"),
+              "journal_entry_id": (await sdb.vendor_bills.find_one(
+                  {"id": doc["id"]}, {"_id": 0, "journal_entry_id": 1}) or {}).get("journal_entry_id")},
+    )
     # Auto-compute commission for this bill (if vendor has commission enabled).
     await _compute_commission_for_bill(doc["id"])
     return await sdb.vendor_bills.find_one({"id": doc["id"]}, {"_id": 0})
@@ -519,6 +681,17 @@ async def update_vendor_bill(bill_id: str, payload: VendorBillUpdate, request: R
         raise HTTPException(status_code=400, detail="Paid status is derived from recorded payments")
     if bill.get("status") == "cancelled" and patch.get("status") not in (None, "cancelled"):
         raise HTTPException(status_code=400, detail="Cancelled bills cannot be reopened")
+    financial_fields = {
+        "bill_number", "bill_date", "project_id", "po_id", "expense_account_id",
+        "items", "tax_rate", "tds_rate",
+    }
+    if bill.get("journal_entry_id") and financial_fields.intersection(patch):
+        raise HTTPException(
+            status_code=409,
+            detail="Posted bill financials cannot be edited. Cancel with a reversal and record a corrected bill.",
+        )
+    if bill.get("journal_entry_id") and patch.get("status") == "cancelled":
+        raise HTTPException(status_code=409, detail="Use the cancel action so accounting is reversed")
     if ("items" in patch or "tax_rate" in patch or "tds_rate" in patch) and float(bill.get("paid_amount") or 0) > 0:
         raise HTTPException(status_code=400, detail="Bill amounts cannot change after payments are recorded; reverse the payments first")
     if patch.get("bill_number"):
@@ -543,9 +716,20 @@ async def update_vendor_bill(bill_id: str, payload: VendorBillUpdate, request: R
         patch["tax_amount"] = merged["tax_amount"]
         patch["tds_amount"] = merged["tds_amount"]
         patch["total"] = merged["total"]
+    merged_for_post = {**bill, **patch}
+    if bill.get("status") == "draft" and patch.get("status") == "received":
+        merged_for_post["items"] = [
+            item if isinstance(item, dict) else item.model_dump()
+            for item in (merged_for_post.get("items") or [])
+        ]
+        _bill_total(merged_for_post)
+        await _post_vendor_bill(user, merged_for_post)
     patch["updated_at"] = iso_now()
+    patch["updated_by"] = user["user_id"]
     await sdb.vendor_bills.update_one({"id": bill_id}, {"$set": patch})
-    await _refresh_bill_status(bill_id)
+    updated_bill = await sdb.vendor_bills.find_one({"id": bill_id}, {"_id": 0})
+    if updated_bill and updated_bill.get("status") != "draft":
+        await _refresh_bill_status(bill_id)
     # If financials changed, re-compute commission for this bill.
     if "items" in patch or "tax_rate" in patch or "tds_rate" in patch or "status" in patch:
         await _compute_commission_for_bill(bill_id)
@@ -558,27 +742,64 @@ async def delete_vendor_bill(bill_id: str, request: Request,
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require(user, "finance.create")
-    # Refuse to hard-delete a bill that has payments — force cancel instead.
+    bill = await sdb.vendor_bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if bill.get("status") == "cancelled":
+        return {"ok": True, "already_cancelled": True,
+                "reversal_je_id": bill.get("reversal_je_id")}
     paid = await _paid_against_bill(bill_id)
     if paid > 0:
-        await sdb.vendor_bills.update_one({"id": bill_id}, {"$set": {"status": "cancelled",
-                                                                    "cancelled_at": iso_now()}})
-        # Propagate to commission row (guards received rows internally).
-        await _compute_commission_for_bill(bill_id)
-        return {"ok": True, "cancelled": True}
-    # Hard delete path — also clean any linked commission rows.
-    await sdb.vendor_bills.delete_one({"id": bill_id})
-    # Pending / invoiced commission for a hard-deleted bill: drop.
-    await sdb.vendor_commissions.delete_many({
-        "bill_id": bill_id,
-        "status": {"$in": ["pending", "invoiced"]},
-    })
-    # Already-received commission: reverse the accounting impact too.
-    async for row in sdb.vendor_commissions.find(
-        {"bill_id": bill_id, "status": "received"}, {"_id": 0}
-    ):
-        await _reverse_commission_je(row)
-    return {"ok": True, "deleted": True}
+        raise HTTPException(
+            status_code=409,
+            detail="Reverse all payments against this bill before cancelling it",
+        )
+    if bill.get("status") == "draft" and not bill.get("journal_entry_id"):
+        await sdb.vendor_bills.delete_one({"id": bill_id})
+        await sdb.vendor_commissions.delete_many({
+            "bill_id": bill_id, "status": {"$in": ["pending", "invoiced"]},
+        })
+        return {"ok": True, "deleted": True}
+
+    original = await sdb.journal_entries.find_one(
+        {"id": bill.get("journal_entry_id")}, {"_id": 0})
+    if not original:
+        raise HTTPException(
+            status_code=409,
+            detail="Bill has no linked accounting entry; reconcile it before cancellation",
+        )
+    from routes.accounting import _post_journal
+    reversal_key = f"{user_org_id(user) or 'org_default'}:vendor_bill_reversal:{bill_id}"
+    reversal = await sdb.journal_entries.find_one(
+        {"idempotency_key": reversal_key}, {"_id": 0})
+    if not reversal:
+        reversal = await _post_journal(
+            user, business_today().isoformat(),
+            f"Reversal of vendor bill {bill.get('bill_number')}",
+            [{"account_id": line["account_id"], "debit": line.get("credit") or 0,
+              "credit": line.get("debit") or 0,
+              "description": f"Reversal · {line.get('description') or ''}"}
+             for line in original.get("lines") or []],
+            reference=bill.get("bill_number"), project_id=bill.get("project_id"),
+            vendor_id=bill.get("vendor_id"), source="vendor_bill_reversal",
+            source_id=bill_id,
+        )
+    await sdb.journal_entries.update_one(
+        {"id": original["id"]},
+        {"$set": {"reversed": True, "reversal_je_id": reversal["id"],
+                  "reversed_at": iso_now(), "reversed_by": user["user_id"]}},
+    )
+    await sdb.vendor_bills.update_one(
+        {"id": bill_id},
+        {"$set": {"status": "cancelled", "cancelled_at": iso_now(),
+                  "cancelled_by": user["user_id"], "reversal_je_id": reversal["id"]}},
+    )
+    # Preserve the commission audit row; pending commissions are cancelled and
+    # received commissions get their own accounting reversal.
+    await _compute_commission_for_bill(bill_id)
+    await audit(user, "vendor_bill.cancel", target=bill_id, target_type="vendor_bill",
+                meta={"journal_entry_id": original["id"], "reversal_je_id": reversal["id"]})
+    return {"ok": True, "cancelled": True, "reversal_je_id": reversal["id"]}
 
 
 # ==================================================
@@ -612,6 +833,8 @@ async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, ba
     vendor = await sdb.vendors_acc.find_one({"id": payload.vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
+    from routes.accounting import _post_journal, _seed_coa_if_empty
+    await _seed_coa_if_empty()
     ap_acc = await sdb.accounts.find_one({"name": "Accounts Payable"}, {"_id": 0})
     if not ap_acc:
         raise HTTPException(status_code=500, detail="Accounts Payable account missing – seed COA first")
@@ -620,12 +843,17 @@ async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, ba
     remaining = float(payload.amount)
     bill_splits: dict = {}
     if payload.bill_ids:
+        if len(payload.bill_ids) != len(set(payload.bill_ids)):
+            raise HTTPException(status_code=400, detail="Duplicate bill IDs in payment")
         open_bills = []
         for bid in payload.bill_ids:
             b = await sdb.vendor_bills.find_one({"id": bid, "vendor_id": payload.vendor_id},
                                                {"_id": 0})
-            if b and b.get("status") not in ("paid", "cancelled"):
-                open_bills.append(b)
+            if not b:
+                raise HTTPException(status_code=404, detail=f"Vendor bill not found: {bid}")
+            if b.get("status") in ("paid", "cancelled", "draft"):
+                raise HTTPException(status_code=409, detail=f"Bill {b.get('bill_number')} is not payable")
+            open_bills.append(b)
     else:
         open_bills = await sdb.vendor_bills.find(
             {"vendor_id": payload.vendor_id,
@@ -639,36 +867,37 @@ async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, ba
         outstanding = float(b.get("outstanding") or (b.get("total", 0) - b.get("paid_amount", 0)))
         if outstanding <= 0.001:
             continue
+        if not b.get("journal_entry_id"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Bill {b.get('bill_number')} is not posted to accounting; reconcile it before payment",
+            )
         pay_here = min(outstanding, remaining)
         bill_splits[b["id"]] = round(pay_here, 2)
         remaining -= pay_here
 
-    # Post the journal entry first (source of truth). Do it inline so we don't
-    # need to import the private helper from routes/accounting.
-    je_id = new_id("je_")
-    je_lines = [
-        {"account_id": ap_acc["id"], "account_name": ap_acc["name"],
-         "account_type": ap_acc["type"], "debit": float(payload.amount), "credit": 0.0,
-         "description": f"Payment to {vendor.get('name')}"},
-        {"account_id": bank_acc["id"], "account_name": bank_acc["name"],
-         "account_type": bank_acc["type"], "debit": 0.0, "credit": float(payload.amount),
-         "description": f"Paid via {payload.payment_method}"},
-    ]
-    je_doc = {
-        "id": je_id, "date": payload.payment_date,
-        "narration": f"Vendor payment – {vendor.get('name')}",
-        "reference": payload.reference,
-        "project_id": payload.project_id,
-        "vendor_id": payload.vendor_id,
-        "source": "vendor_payment",
-        "source_id": None,
-        "total": float(payload.amount),
-        "lines": je_lines,
-        "created_at": iso_now(),
-        "created_by": user["user_id"],
-        "created_by_name": user.get("name"),
-    }
-    await sdb.journal_entries.insert_one(dict(je_doc))
+    allocated = round(float(payload.amount) - remaining, 2)
+    je_lines = []
+    if allocated > 0:
+        je_lines.append({
+            "account_id": ap_acc["id"], "debit": allocated, "credit": 0,
+            "description": f"Bills settled for {vendor.get('name')}",
+        })
+    if remaining > 0.001:
+        advances = await sdb.accounts.find_one(
+            {"name": "Vendor Advances", "type": "asset", "active": {"$ne": False}},
+            {"_id": 0},
+        )
+        if not advances:
+            raise HTTPException(status_code=500, detail="Vendor Advances account missing")
+        je_lines.append({
+            "account_id": advances["id"], "debit": round(remaining, 2), "credit": 0,
+            "description": f"Advance to {vendor.get('name')}",
+        })
+    je_lines.append({
+        "account_id": bank_acc["id"], "debit": 0, "credit": float(payload.amount),
+        "description": f"Paid via {payload.payment_method}",
+    })
 
     pmt = payload.model_dump()
     pmt["id"] = new_id("vpay_")
@@ -676,17 +905,33 @@ async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, ba
     pmt["bill_ids"] = list(bill_splits.keys()) if bill_splits else (payload.bill_ids or [])
     pmt["bill_splits"] = bill_splits
     pmt["unallocated"] = round(remaining, 2)         # excess advance (on-account)
-    pmt["journal_entry_id"] = je_id
     if idem:
         pmt["client_request_id"] = idem
         pmt["request_key"] = request_key
     pmt["created_at"] = iso_now()
     pmt["created_by"] = user["user_id"]
-    await sdb.vendor_payments.insert_one(dict(pmt))
+    je = await _post_journal(
+        user, payload.payment_date, f"Vendor payment · {vendor.get('name')}",
+        je_lines, reference=payload.reference, project_id=payload.project_id,
+        vendor_id=payload.vendor_id, source="vendor_payment", source_id=pmt["id"],
+    )
+    pmt["journal_entry_id"] = je["id"]
+    try:
+        await sdb.vendor_payments.insert_one(dict(pmt))
+    except Exception:
+        # Compensate an incomplete technical write before the payment becomes
+        # visible. User-facing posted journals are never deleted.
+        await sdb.journal_entries.delete_one({"id": je["id"]})
+        raise
 
     # Update bill statuses
     for bid in bill_splits.keys():
         await _refresh_bill_status(bid)
+
+    await audit(user, "vendor_payment.create", target=pmt["id"],
+                target_type="vendor_payment",
+                meta={"journal_entry_id": je["id"], "allocated": allocated,
+                      "advance": round(remaining, 2)})
 
     return await sdb.vendor_payments.find_one({"id": pmt["id"]}, {"_id": 0})
 
@@ -801,8 +1046,11 @@ async def vendor_full_ledger(vendor_id: str, request: Request,
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     events: list = []
-    async for b in sdb.vendor_bills.find({"vendor_id": vendor_id,
-                                         "status": {"$ne": "cancelled"}}, {"_id": 0}):
+    async for b in sdb.vendor_bills.find(
+        {"vendor_id": vendor_id, "status": {"$ne": "cancelled"}}, {"_id": 0}
+    ):
+        if b.get("status") == "draft":
+            continue
         events.append({
             "type": "bill",
             "date": b.get("bill_date"),
@@ -836,8 +1084,6 @@ async def vendor_full_ledger(vendor_id: str, request: Request,
                 "id": p.get("id"),
             })
 
-    if from_date: events = [e for e in events if (e.get("date") or "") >= from_date]
-    if to_date:   events = [e for e in events if (e.get("date") or "") <= to_date]
     event_order = {"bill": 0, "payment": 1, "payment_reversal": 2}
     events.sort(key=lambda e: (e.get("date") or "", event_order.get(e["type"], 9)))
 
@@ -848,18 +1094,30 @@ async def vendor_full_ledger(vendor_id: str, request: Request,
         running += e["credit"] - e["debit"]
         e["balance"] = round(running, 2)
 
-    total_billed = sum(e["credit"] for e in events if e["type"] == "bill")
+    opening_balance = 0.0
+    if from_date:
+        prior = [e for e in events if (e.get("date") or "") < from_date]
+        if prior:
+            opening_balance = prior[-1]["balance"]
+    visible_events = [
+        e for e in events
+        if (not from_date or (e.get("date") or "") >= from_date)
+        and (not to_date or (e.get("date") or "") <= to_date)
+    ]
+
+    total_billed = sum(e["credit"] for e in visible_events if e["type"] == "bill")
     total_paid = (
-        sum(e["debit"] for e in events if e["type"] == "payment")
-        - sum(e["credit"] for e in events if e["type"] == "payment_reversal")
+        sum(e["debit"] for e in visible_events if e["type"] == "payment")
+        - sum(e["credit"] for e in visible_events if e["type"] == "payment_reversal")
     )
     return {
         "vendor": vendor,
         "from_date": from_date, "to_date": to_date,
+        "opening_balance": round(opening_balance, 2),
         "total_billed": round(total_billed, 2),
         "total_paid": round(total_paid, 2),
-        "outstanding": round(total_billed - total_paid, 2),
-        "entries": events,
+        "outstanding": round(running, 2),
+        "entries": visible_events,
     }
 
 
@@ -896,8 +1154,11 @@ async def vendor_performance(vendor_id: str, request: Request,
     # Payment reliability (vendor's perspective is inverted: how well WE pay them)
     total_billed = 0.0
     outstanding = 0.0
-    async for b in sdb.vendor_bills.find({"vendor_id": vendor_id, "status": {"$ne": "cancelled"}},
-                                        {"_id": 0}):
+    async for b in sdb.vendor_bills.find(
+        {"vendor_id": vendor_id,
+         "status": {"$in": ["received", "partially_paid", "overdue", "paid"]}},
+        {"_id": 0},
+    ):
         total_billed += float(b.get("total") or 0)
         if b.get("status") in ("received", "partially_paid", "overdue"):
             outstanding += float(b.get("outstanding") or 0)
@@ -1099,6 +1360,11 @@ async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
         return None
     cfg = vendor.get("commission") or {}
     existing = await sdb.vendor_commissions.find_one({"bill_id": bill_id}, {"_id": 0})
+
+    if bill.get("status") == "draft":
+        if existing and existing.get("status") in ("pending", "invoiced"):
+            await sdb.vendor_commissions.delete_one({"id": existing["id"]})
+        return None
 
     # Effective-date filter
     b_date = bill.get("bill_date") or ""

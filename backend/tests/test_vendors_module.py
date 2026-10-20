@@ -255,16 +255,12 @@ class TestVendorBills:
         # store for downstream tests
         TestVendorBills.bill_id = b["id"]
 
-    def test_patch_bill_recomputes(self, admin_headers):
+    def test_posted_bill_financials_require_reversal(self, admin_headers):
         bid = TestVendorBills.bill_id
         r = requests.patch(f"{API}/vendor-bills/{bid}",
                            json={"items": [{"description": "Wardrobe", "quantity": 1, "rate": 25000}]},
                            headers=admin_headers)
-        assert r.status_code == 200
-        b = r.json()
-        assert b["subtotal"] == 25000
-        assert b["total"] == 25000 + 4500 - 250  # 29250
-        assert b["total"] == 29250
+        assert r.status_code == 409
 
     def test_patch_bill_invalid_status(self, admin_headers):
         bid = TestVendorBills.bill_id
@@ -272,17 +268,19 @@ class TestVendorBills:
                            json={"status": "made_up"}, headers=admin_headers)
         assert r.status_code == 400
 
-    def test_delete_unpaid_bill_hard(self, admin_headers, created_vendor):
-        # create a throwaway bill and hard-delete it
+    def test_cancel_unpaid_posted_bill_with_reversal(self, admin_headers, created_vendor):
+        # create a throwaway posted bill and cancel it with an accounting reversal
         p = {"vendor_id": created_vendor["id"], "bill_date": "2026-01-11",
              "items": [{"description": "x", "quantity": 1, "rate": 100}]}
         r = requests.post(f"{API}/vendor-bills", json=p, headers=admin_headers)
         bid = r.json()["id"]
         r2 = requests.delete(f"{API}/vendor-bills/{bid}", headers=admin_headers)
         assert r2.status_code == 200
-        assert r2.json().get("deleted") is True
+        assert r2.json().get("cancelled") is True
+        assert r2.json().get("reversal_je_id")
         r3 = requests.get(f"{API}/vendor-bills/{bid}", headers=admin_headers)
-        assert r3.status_code == 404
+        assert r3.status_code == 200
+        assert r3.json()["status"] == "cancelled"
 
 
 @pytest.fixture(scope="module")

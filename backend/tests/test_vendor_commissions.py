@@ -145,29 +145,29 @@ def test_slab_type(admin, vendor_id):
     assert row["amount"] == 1500  # 50000 * 3%
 
 
-# ---------------------- 5. Bill PATCH recomputes ----------------------
-def test_bill_patch_recomputes_commission(admin, vendor_id):
+# ---------------------- 5. Posted bill corrections require reversal ----------------------
+def test_posted_bill_patch_does_not_rewrite_commission(admin, vendor_id):
     # switch back to 10% percentage
     requests.patch(f"{API}/vendors/{vendor_id}/commercial", headers=admin,
                    json={"applicable": True, "type": "percentage", "percentage": 10})
     r = requests.patch(f"{API}/vendor-bills/{pytest.pct_bill_id}", headers=admin,
                        json={"items": [{"description": "x", "quantity": 1, "rate": 25000}]})
-    assert r.status_code == 200, r.text
-    assert r.json()["subtotal"] == 25000
+    assert r.status_code == 409, r.text
     rows = requests.get(f"{API}/vendors/{vendor_id}/commissions", headers=admin).json()
     row = next(x for x in rows if x["bill_id"] == pytest.pct_bill_id)
-    assert row["amount"] == 2500
+    assert row["amount"] == 5000
 
 
-# ---------------------- 6. Delete bill drops commission ----------------------
-def test_delete_bill_drops_commission(admin, vendor_id):
+# ---------------------- 6. Cancel bill preserves commission audit row ----------------------
+def test_cancel_bill_cancels_commission(admin, vendor_id):
     b = _create_bill(vendor_id, admin, qty=1, rate=10000)  # 10% => 1000
     rows = requests.get(f"{API}/vendors/{vendor_id}/commissions", headers=admin).json()
     assert any(x["bill_id"] == b["id"] for x in rows)
     r = requests.delete(f"{API}/vendor-bills/{b['id']}", headers=admin)
     assert r.status_code == 200
     rows = requests.get(f"{API}/vendors/{vendor_id}/commissions", headers=admin).json()
-    assert not any(x["bill_id"] == b["id"] for x in rows)
+    row = next(x for x in rows if x["bill_id"] == b["id"])
+    assert row["status"] == "cancelled"
 
 
 # ---------------------- 7. min_purchase gate ----------------------
@@ -176,7 +176,7 @@ def test_min_purchase_gate(admin, vendor_id):
                        json={"applicable": True, "type": "percentage",
                              "percentage": 10, "min_purchase": 100000})
     assert r.status_code == 200
-    # existing 25000 bill should NOT have commission now
+    # existing 50000 bill should NOT have commission now
     rows = requests.get(f"{API}/vendors/{vendor_id}/commissions", headers=admin).json()
     assert not any(x["bill_id"] == pytest.pct_bill_id for x in rows)
     # restore

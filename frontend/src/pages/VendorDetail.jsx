@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "sonner";
 import {
   ArrowLeft, Star, Buildings, Phone, Envelope, MapPin, Bank as BankIcon,
   IdentificationCard, CurrencyInr, Plus, Trash, FileText, Gauge, Receipt,
@@ -31,6 +32,7 @@ export default function VendorDetail() {
   const [perf, setPerf] = useState(null);
   const [commissionLedger, setCommissionLedger] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -40,6 +42,10 @@ export default function VendorDetail() {
     ]);
     setV(data);
     setAccounts(acc);
+    if (hasPerm("purchase_orders.read")) {
+      const poResult = await api.get(`/purchase-orders?vendor_id=${id}`).catch(() => ({ data: [] }));
+      setPurchaseOrders(poResult.data || []);
+    }
   }, [id, hasPerm]);
 
   useEffect(() => { load(); }, [load]);
@@ -74,12 +80,20 @@ export default function VendorDetail() {
 
   const submitBill = async (form) => {
     setBusy(true);
-    try { await api.post("/vendor-bills", { ...form, vendor_id: id }); await load(); }
+    try {
+      await api.post("/vendor-bills", { ...form, vendor_id: id },
+        { headers: { "Idempotency-Key": crypto.randomUUID() } });
+      await load();
+    }
     finally { setBusy(false); }
   };
   const submitPayment = async (form) => {
     setBusy(true);
-    try { await api.post("/vendor-payments", { ...form, vendor_id: id }); await load(); }
+    try {
+      await api.post("/vendor-payments", { ...form, vendor_id: id },
+        { headers: { "Idempotency-Key": crypto.randomUUID() } });
+      await load();
+    }
     finally { setBusy(false); }
   };
   const submitRating = async (form) => {
@@ -173,7 +187,8 @@ export default function VendorDetail() {
       )}
       {tab === "ledger" && <Ledger data={ledger} />}
       {tab === "bills" && (
-        <Bills v={v} accounts={accounts} canBill={canBill} onCreate={submitBill} busy={busy} />
+        <Bills v={v} accounts={accounts} purchaseOrders={purchaseOrders}
+          canBill={canBill} onCreate={submitBill} busy={busy} />
       )}
       {tab === "payments" && (
         <Payments v={v} accounts={accounts} canBill={canBill} onCreate={submitPayment} busy={busy} />
@@ -300,9 +315,10 @@ function Ledger({ data }) {
 }
 
 /* -------------------- BILLS -------------------- */
-function Bills({ v, canBill, onCreate, busy }) {
+function Bills({ v, accounts, purchaseOrders, canBill, onCreate, busy }) {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ bill_date: today(), due_date: "", items: [emptyItem()], tax_rate: 18, tds_rate: 0, notes: "", project_id: "" });
+  const expenseAccounts = accounts.filter((a) => a.type === "expense" && a.active !== false);
+  const [f, setF] = useState({ bill_date: today(), due_date: "", items: [emptyItem()], tax_rate: 18, tds_rate: 0, notes: "", project_id: "", po_id: "", expense_account_id: "" });
   const total = useMemo(() => {
     const sub = f.items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.rate || 0), 0);
     return sub + sub * f.tax_rate / 100 - sub * f.tds_rate / 100;
@@ -320,7 +336,17 @@ function Bills({ v, canBill, onCreate, busy }) {
       {open && (
         <form
           className="card-flat space-y-3"
-          onSubmit={(e) => { e.preventDefault(); onCreate(f); setOpen(false); setF({ ...f, items: [emptyItem()] }); }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              await onCreate(f);
+              setOpen(false);
+              setF({ ...f, items: [emptyItem()] });
+              toast.success("Vendor bill posted");
+            } catch (error) {
+              toast.error(error?.response?.data?.detail || "Could not record vendor bill");
+            }
+          }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <input required type="date" className="input-flat" value={f.bill_date}
@@ -331,6 +357,38 @@ function Bills({ v, canBill, onCreate, busy }) {
               onChange={(e) => setF({ ...f, tax_rate: parseFloat(e.target.value) || 0 })} />
             <input type="number" step="0.01" className="input-flat" placeholder="TDS %" value={f.tds_rate}
               onChange={(e) => setF({ ...f, tds_rate: parseFloat(e.target.value) || 0 })} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <select className="input-flat" value={f.po_id}
+              onChange={(e) => {
+                const po = purchaseOrders.find((row) => row.id === e.target.value);
+                setF({
+                  ...f,
+                  po_id: e.target.value,
+                  project_id: po?.project_id || f.project_id,
+                  expense_account_id: e.target.value ? "" : f.expense_account_id,
+                  items: po ? (po.lines || []).map((line) => ({
+                    po_line_id: line.id,
+                    description: line.item_name || line.description || "PO item",
+                    quantity: line.received_qty_total || line.quantity,
+                    rate: line.unit_price,
+                  })) : [emptyItem()],
+                });
+              }}>
+              <option value="">Not linked to a purchase order</option>
+              {purchaseOrders.filter((po) => !["draft", "cancelled", "closed"].includes(po.status)).map((po) => (
+                <option key={po.id} value={po.id}>{po.po_number} · {INR_D(po.grand_total)}</option>
+              ))}
+            </select>
+            {!f.po_id && (
+              <select required className="input-flat" value={f.expense_account_id}
+                onChange={(e) => setF({ ...f, expense_account_id: e.target.value })}>
+                <option value="">Expense account *</option>
+                {expenseAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="space-y-2">
             {f.items.map((it, i) => (
@@ -441,7 +499,17 @@ function Payments({ v, accounts, canBill, onCreate, busy }) {
       {open && (
         <form
           className="card-flat space-y-3"
-          onSubmit={(e) => { e.preventDefault(); onCreate(f); setOpen(false); setF({ ...f, amount: 0, reference: "", notes: "", bill_ids: [] }); }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              await onCreate(f);
+              setOpen(false);
+              setF({ ...f, amount: 0, reference: "", notes: "", bill_ids: [] });
+              toast.success("Vendor payment recorded");
+            } catch (error) {
+              toast.error(error?.response?.data?.detail || "Could not record vendor payment");
+            }
+          }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <input required type="number" step="0.01" className="input-flat" placeholder="Amount *"

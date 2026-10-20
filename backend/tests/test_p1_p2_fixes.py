@@ -1,6 +1,6 @@
 """Tests for P1/P2 fixes:
-- Vendor Bill soft-cancel reverses commission JE (P1)
-- Balance Sheet imbalance detection + reconcile endpoint (P2)
+- Vendor Bill cancellation reverses bill/payment/commission journals safely (P1)
+- Balance Sheet imbalance detection with destructive reconcile disabled (P2)
 - Object-storage-backed logo upload (P2)
 """
 import os
@@ -34,10 +34,10 @@ def bank_account_id(admin):
 
 
 # ============================================================
-# P1: Vendor Bill soft-cancel reverses commission JE
+# P1: Vendor Bill cancellation reverses commission JE
 # ============================================================
 def test_bill_soft_cancel_reverses_received_commission(admin, bank_account_id):
-    """Full flow: create vendor + bill + payment (soft-cancel path) + receive
+    """Full flow: create vendor + bill + payment + receive
     commission, then cancel the bill → expect a reversal JE and the commission
     row to be marked 'reversed'."""
     today = datetime.now(timezone.utc).date().isoformat()
@@ -55,13 +55,13 @@ def test_bill_soft_cancel_reverses_received_commission(admin, bank_account_id):
                                               "rate": 50000}],
                                    "tax_rate": 0, "tds_rate": 0}).json()
         bill_id = bill["id"]
-        # Add a payment so hard-delete is blocked → soft cancel path
-        requests.post(f"{API}/vendor-payments", headers=admin,
-                      json={"vendor_id": vid, "amount": 10000,
-                            "payment_date": today,
-                            "payment_method": "bank_transfer",
-                            "paid_from_account_id": bank_account_id,
-                            "bill_ids": [bill_id]})
+        # Add a payment to prove cancellation is blocked until reversal.
+        payment = requests.post(f"{API}/vendor-payments", headers=admin,
+                                json={"vendor_id": vid, "amount": 10000,
+                                      "payment_date": today,
+                                      "payment_method": "bank_transfer",
+                                      "paid_from_account_id": bank_account_id,
+                                      "bill_ids": [bill_id]}).json()
         # Receive commission (posts DR Bank / CR Income JE for ₹5000)
         r = requests.post(f"{API}/vendors/{vid}/commissions/receive",
                           headers=admin,
@@ -77,7 +77,14 @@ def test_bill_soft_cancel_reverses_received_commission(admin, bank_account_id):
         assert row["status"] == "received"
         assert not row.get("reversal_je_id")
 
-        # Cancel the bill (soft-cancel because it has payments)
+        # A paid bill cannot be cancelled until its payment is reversed.
+        blocked = requests.delete(f"{API}/vendor-bills/{bill_id}", headers=admin)
+        assert blocked.status_code == 409
+        reversed_payment = requests.delete(
+            f"{API}/vendor-payments/{payment['id']}", headers=admin)
+        assert reversed_payment.status_code == 200
+
+        # Cancel the bill, posting an A/P reversal.
         r2 = requests.delete(f"{API}/vendor-bills/{bill_id}", headers=admin)
         assert r2.status_code == 200
         assert r2.json().get("cancelled") is True
@@ -119,9 +126,9 @@ def test_bill_soft_cancel_reverses_received_commission(admin, bank_account_id):
 
 
 # ============================================================
-# P2: Balance-Sheet imbalance detection + reconcile
+# P2: Balance-Sheet imbalance detection without destructive auto-adjustment
 # ============================================================
-def test_balance_sheet_exposes_delta_and_reconciles(admin):
+def test_balance_sheet_exposes_delta_and_blocks_auto_reconcile(admin):
     bs = requests.get(f"{API}/accounting/reports/balance-sheet",
                       headers=admin).json()
     # New shape must include delta + unbalanced_journal_entries
@@ -129,26 +136,10 @@ def test_balance_sheet_exposes_delta_and_reconciles(admin):
     assert "unbalanced_journal_entries" in bs
     assert isinstance(bs["unbalanced_journal_entries"], list)
 
-    if bs["balanced"]:
-        # Nothing to reconcile.
-        r = requests.post(f"{API}/accounting/reports/balance-sheet/reconcile",
-                          headers=admin)
-        assert r.status_code == 200
-        assert r.json()["adjusted"] is False
-        return
-
-    # Unbalanced → reconcile should adjust and re-check.
     r = requests.post(f"{API}/accounting/reports/balance-sheet/reconcile",
                       headers=admin)
-    assert r.status_code == 200, r.text
-    d = r.json()
-    assert d["adjusted"] is True
-    assert d["adjustment_account_id"]
-
-    bs2 = requests.get(f"{API}/accounting/reports/balance-sheet",
-                       headers=admin).json()
-    assert bs2["balanced"] is True
-    assert abs(bs2["delta"]) < 0.01
+    assert r.status_code == 409
+    assert "opening balances" in r.json()["detail"]
 
 
 # ============================================================

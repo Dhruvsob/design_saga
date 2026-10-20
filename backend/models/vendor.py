@@ -10,6 +10,7 @@ but every new document is written multi-tenant ready.
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
+from datetime import date
 
 from core.url_security import external_http_url
 
@@ -76,6 +77,7 @@ def _validate_attachments(value):
 
 
 class VendorBillItem(BaseModel):
+    po_line_id: Optional[str] = None
     description: str = Field(max_length=500)
     quantity: float = Field(default=1, ge=0)
     rate: float = Field(default=0, ge=0)
@@ -88,8 +90,10 @@ class VendorBillIn(BaseModel):
     bill_date: str                              # YYYY-MM-DD
     due_date: Optional[str] = None
     project_id: Optional[str] = None
+    po_id: Optional[str] = None
+    expense_account_id: Optional[str] = None
     task_id: Optional[str] = None
-    items: List[VendorBillItem] = []
+    items: List[VendorBillItem] = Field(default_factory=list)
     tax_rate: Optional[float] = Field(default=0.0, ge=0, le=100)   # GST %
     tds_rate: Optional[float] = Field(default=0.0, ge=0, le=100)   # TDS %
     notes: Optional[str] = None
@@ -98,12 +102,25 @@ class VendorBillIn(BaseModel):
     _validate_attachments = field_validator("attachments")(_validate_attachments)
     org_id: Optional[str] = Field(default=None, exclude=True)  # server-assigned; client value ignored
 
+    @field_validator("bill_date", "due_date")
+    @classmethod
+    def validate_bill_dates(cls, value):
+        if value in (None, ""):
+            return value
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
+
 
 class VendorBillUpdate(BaseModel):
     bill_number: Optional[str] = None
     bill_date: Optional[str] = None
     due_date: Optional[str] = None
     project_id: Optional[str] = None
+    po_id: Optional[str] = None
+    expense_account_id: Optional[str] = None
     task_id: Optional[str] = None
     items: Optional[List[VendorBillItem]] = None
     tax_rate: Optional[float] = Field(default=None, ge=0, le=100)
@@ -112,6 +129,17 @@ class VendorBillUpdate(BaseModel):
     attachments: Optional[List[dict]] = None
     status: Optional[str] = None
     _validate_attachments = field_validator("attachments")(_validate_attachments)
+
+    @field_validator("bill_date", "due_date")
+    @classmethod
+    def validate_bill_dates(cls, value):
+        if value in (None, ""):
+            return value
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
 
 
 # ---------- Payments ----------
