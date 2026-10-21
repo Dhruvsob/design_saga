@@ -33,10 +33,11 @@ for service in postgres ferretdb backend web caddy; do
   [ -z "$health" ] || [ "$health" = "healthy" ] || add_problem "$service health is $health"
 done
 
-site_code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' https://gamaa.in/ || true)
-[ "$site_code" = "200" ] || add_problem "site returned ${site_code:-no response}"
-api_code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' https://gamaa.in/api/ || true)
-[ "$api_code" = "200" ] || add_problem "API returned ${api_code:-no response}"
+docker exec design-saga-web-1 wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || \
+  add_problem "web origin did not respond"
+docker exec design-saga-backend-1 python -c \
+  "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/', timeout=5)" \
+  >/dev/null 2>&1 || add_problem "API origin did not respond"
 
 disk_percent=$(df -P / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')
 case "$disk_percent" in

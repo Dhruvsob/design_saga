@@ -54,10 +54,20 @@ wait_for() {
   done
 }
 
+build_service() {
+  service=$1
+  build_network=${DESIGN_SAGA_BUILD_NETWORK:-host}
+  case "$service" in
+    backend) docker build --network="$build_network" -t design-saga-backend:latest -f backend/Dockerfile . ;;
+    web) docker build --network="$build_network" -t design-saga-web:latest -f frontend/Dockerfile . ;;
+    *) echo "Unsupported service build: $service" >&2; return 1 ;;
+  esac
+}
+
 deploy_service() {
   service=$1
   docker tag "design-saga-${service}:latest" "design-saga-${service}:rollback-${rollback}"
-  docker compose build "$service"
+  build_service "$service"
   docker compose up -d --no-deps --force-recreate "$service"
   if ! wait_for "$service"; then
     docker logs --tail 100 "design-saga-${service}-1" >&2 || true
@@ -72,8 +82,10 @@ deploy_service() {
 if [ "$backend" = true ]; then deploy_service backend; fi
 if [ "$web" = true ]; then deploy_service web; fi
 
-curl -fsS https://gamaa.in/ >/dev/null
-curl -fsS https://gamaa.in/api/ >/dev/null
-test "$(curl -sS -o /dev/null -w '%{http_code}' https://gamaa.in/api/auth/me)" = 401
+docker exec design-saga-web-1 wget -qO- http://127.0.0.1/ >/dev/null
+docker exec design-saga-backend-1 python -c \
+  "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/', timeout=5)" >/dev/null
+docker exec design-saga-backend-1 python -c \
+  "import http.client; c=http.client.HTTPConnection('127.0.0.1', 8000, timeout=5); c.request('GET', '/api/auth/me'); r=c.getresponse(); assert r.status == 401, r.status"
 
 echo "Design Saga deployment completed: $(printf '%s' "$new_rev" | cut -c1-7)"

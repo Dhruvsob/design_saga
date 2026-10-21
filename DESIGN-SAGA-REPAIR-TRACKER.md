@@ -432,6 +432,17 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 
 ## Deployment Safety
 
+### DS-018: Accounting all-time, reversal recovery, and deployment resilience
+
+- Root causes: accounting views treated a missing financial-year filter as the current FY, so "All time" omitted older transactions; reversal recovery had no audit-safe user action; vendor bill posting could leave accounts-payable activity disconnected; and the VPS deployment/monitor scripts depended on the host's failing outbound IPv4 path.
+- Correction: added an explicit `fy=all` contract across Income, Expenses, Daybook, ledgers, reports and exports; added paginated transaction history/detail; introduced an idempotent `undo-reversal` operation that posts a reinstatement instead of deleting audit history; tightened accounting/vendor posting invariants; and made trusted image builds use a configurable host build network with direct container smoke checks.
+- Verification: 57 focused accounting, vendor, attachment, RBAC/session, attendance and Google Calendar tests passed, plus frontend lint/build and Python compilation. Production contains four journal entries spanning 22/11/2025 through 05/08/2026, proving the all-time range crosses financial years.
+- Ritesh Soni entry: `je_9201f35ac20e`, dated 22/11/2025 for Rs 10,000, remains present as an income journal. Production contains zero linked or global reversal entries, so no financial row was deleted or altered.
+- Production deployment: verified backups `/opt/design-saga-backups/20261021T071920Z` and `/opt/design-saga-backups/20261021T072737Z` passed all SHA-256 checks. Backend and web were deployed at `cddc2dad4e9538ad033407c4d0c1d285ff97f8e6`; PostgreSQL, FerretDB and Caddy retained uptime. All five containers are healthy, site/API/auth return 200/200/401, UFW is active, SSH key access works over IPv6, and VPS-only Caddy changes remain untouched.
+- VPS networking: persistent IPv6 DNS was added because provider-side outbound IPv4 is unavailable. The independent off-server backup and attendance-evidence jobs still require the provider to restore outbound IPv4 access to their IPv4-only source; same-host Design Saga backups remain current and verified.
+- Files changed: accounting/vendor backend routes and models, accounting frontend views, focused tests, `deploy/update-production.sh`, and `deploy/monitor.sh`.
+- Database effect: no migration, deletion, reversal, reinstatement, or permanent QA data was created.
+
 ### DS-007: Safe Git-driven production updates
 
 - Symptom/risk: the VPS `post-merge` hook rebuilt backend and web and ran unrestricted `docker compose up -d` after every merge, including documentation-only changes. It performed no pre-deploy backup, changed-service detection, readiness rollback, or infrastructure-change gate.
