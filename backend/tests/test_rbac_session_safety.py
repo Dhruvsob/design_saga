@@ -36,6 +36,28 @@ def test_missing_tenant_is_denied(monkeypatch):
     assert exc.value.status_code == 403
 
 
+def test_regular_user_without_tenant_is_denied():
+    user = {
+        "user_id": "orphan", "role": "Employee",
+        "email": "orphan@test.invalid", "approval_status": "approved",
+        "is_active": True,
+    }
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(deps.ensure_user_access(user))
+    assert exc.value.status_code == 403
+
+
+def test_platform_admin_without_tenant_remains_valid():
+    user = {
+        "user_id": "platform", "role": "SuperAdmin",
+        "email": "platform@test.invalid", "approval_status": "approved",
+        "is_active": True, "is_super_admin": True,
+    }
+
+    asyncio.run(deps.ensure_user_access(user))
+
+
 @pytest.mark.parametrize("org", [
     {"is_suspended": True, "is_active": True},
     {"is_suspended": False, "is_active": False},

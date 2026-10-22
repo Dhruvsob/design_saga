@@ -81,7 +81,11 @@ async def ensure_user_access(user: dict) -> None:
 
     from .tenancy import is_super_admin
     org_id = user.get("org_id")
-    if org_id and not is_super_admin(user):
+    platform_admin = is_super_admin(user)
+    if not org_id and not platform_admin:
+        raise HTTPException(status_code=403,
+                            detail="Your account is not linked to an organisation. Contact support.")
+    if org_id and not platform_admin:
         org = await db.organizations.find_one(
             {"org_id": org_id},
             {"_id": 0, "is_suspended": 1, "is_active": 1})

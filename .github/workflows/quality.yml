@@ -40,6 +40,7 @@ jobs:
           tests/test_financial_read_permissions.py
           tests/test_visibility_surfaces.py
           tests/test_tenant_lookup_scoping.py
+          tests/test_rbac_session_safety.py
           tests/test_repair_release_safety.py
           tests/test_purchase_safety.py
           tests/test_expense_safety.py

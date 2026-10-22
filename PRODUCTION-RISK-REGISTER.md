@@ -12,7 +12,7 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Tenant login | Super Admin, tenant owner, email, and employee ID must use one authentication system and resolve the correct tenant/role | Fixed and deployed |
-| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Scoped business database, secondary lookup repairs, tenant cleanup and focused isolation tests are in place; route-by-route adversarial coverage continues |
+| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Scoped business database, secondary lookup repairs, tenant cleanup, orphan-account fail-closed lifecycle gate and focused isolation tests are in place; route-by-route adversarial coverage continues |
 | Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, and deployed at `236d7c7` |
 | Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, and deployed at `236d7c7` |
 | Exposed credentials | Rotate the MongoDB Atlas password previously pasted into chat and revoke the temporary Mongo viewer token; confirm neither is used by production | Open, external account action required |
