@@ -4764,12 +4764,24 @@ app.add_middleware(
 # ============================================================
 # Multi-tenant bootstrap: ensure a default org exists + backfill
 # ============================================================
+def _org_backfill_filter(collection: str, super_admin_emails: set[str]) -> dict:
+    missing_org = {"$or": [
+        {"org_id": {"$exists": False}}, {"org_id": None},
+    ]}
+    if collection == "users" and super_admin_emails:
+        return {"$and": [
+            missing_org,
+            {"email": {"$nin": sorted(super_admin_emails)}},
+        ]}
+    return missing_org
+
+
 @app.on_event("startup")
 async def _bootstrap_default_org():
     """Idempotently create the default Design Saga organisation and
     backfill `org_id` onto every legacy document that predates the
     multi-tenant migration."""
-    from core.tenancy import DEFAULT_ORG_ID, DEFAULT_ORG_SLUG
+    from core.tenancy import DEFAULT_ORG_ID, DEFAULT_ORG_SLUG, SUPER_ADMIN_EMAILS
     default = await db.organizations.find_one({"org_id": DEFAULT_ORG_ID}, {"_id": 0})
     if not default:
         from models.organization import features_for_mode as _feats
@@ -4851,7 +4863,7 @@ async def _bootstrap_default_org():
     for coll in collections:
         try:
             res = await db[coll].update_many(
-                {"$or": [{"org_id": {"$exists": False}}, {"org_id": None}]},
+                _org_backfill_filter(coll, SUPER_ADMIN_EMAILS),
                 {"$set": {"org_id": DEFAULT_ORG_ID}},
             )
             if res.modified_count:
