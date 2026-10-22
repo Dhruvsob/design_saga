@@ -13,6 +13,7 @@ from core.scoped_db import sdb
 from core.helpers import now_utc, iso_now, new_id
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
+from core.access_control import merge_query, project_visibility_query
 from models.attendance import (
     CheckInIn, CheckOutIn, AttendanceOverrideIn,
     LeaveRequestIn, LeaveActionIn, LeaveRuleIn, ApproveAttendanceIn,
@@ -264,6 +265,58 @@ async def update_att_policy(payload: AttendancePolicyIn, request: Request,
 # ==================================================
 # Geo-fenced Locations
 # ==================================================
+async def _attendance_project_query(user: dict) -> dict:
+    """Projects a user may safely reference from an attendance punch."""
+    active = {"archived": {"$ne": True}}
+    if _can_manage_attendance(user):
+        return active
+
+    visibility = await project_visibility_query(user)
+    if not visibility:
+        return active
+
+    site_project_ids = await sdb.office_locations.distinct(
+        "project_id",
+        {"is_active": True, "kind": "site", "project_id": {"$nin": [None, ""]}},
+    )
+    attendance_visibility = {"$or": [visibility]}
+    if site_project_ids:
+        attendance_visibility["$or"].append({"id": {"$in": site_project_ids}})
+    return merge_query(active, attendance_visibility)
+
+
+async def _validate_attendance_project(user: dict, project_id: Optional[str]) -> Optional[dict]:
+    if not project_id:
+        return None
+    project = await sdb.projects.find_one(
+        {"id": project_id, "archived": {"$ne": True}},
+        {"_id": 0, "id": 1, "name": 1},
+    )
+    if not project:
+        raise HTTPException(400, "Selected project is unavailable")
+    allowed_query = merge_query({"id": project_id}, await _attendance_project_query(user))
+    if not await sdb.projects.find_one(allowed_query, {"_id": 0, "id": 1}):
+        raise HTTPException(403, "You are not authorized to use this project for attendance")
+    return project
+
+
+@router.get("/attendance/project-options")
+async def attendance_project_options(request: Request,
+                                     session_token: Optional[str] = Cookie(default=None),
+                                     authorization: Optional[str] = Header(default=None)):
+    """Minimal project choices for site attendance, without exposing project details."""
+    user = await require_user(request, session_token, authorization)
+    if not has_any_permission(
+        user, "attendance.read", "attendance.create", "attendance.update", "attendance.approve",
+    ):
+        raise HTTPException(403, "Missing attendance permission")
+    rows = await sdb.projects.find(
+        await _attendance_project_query(user),
+        {"_id": 0, "id": 1, "name": 1},
+    ).sort("name", 1).to_list(500)
+    return rows
+
+
 @router.get("/attendance/locations")
 async def list_locations(request: Request,
                          session_token: Optional[str] = Cookie(default=None),
@@ -359,7 +412,8 @@ async def geo_check(lat: float, lng: float, kind: str = "office",
                     session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     """Quick check before check-in — tells UI whether user is inside a fence."""
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    await _validate_attendance_project(user, project_id)
     return await _resolve_geo_fence(kind, lat, lng, project_id, accuracy_m)
 
 
@@ -531,6 +585,7 @@ async def check_in(payload: CheckInIn, request: Request,
         raise HTTPException(status_code=400, detail="Already checked in today")
 
     att_type = payload.attendance_type or "office"
+    await _validate_attendance_project(user, payload.project_id)
     policy = await _get_attendance_policy()
 
     # ---- Auto-holiday / weekly-off short-circuit ----

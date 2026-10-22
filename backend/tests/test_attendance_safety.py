@@ -34,6 +34,41 @@ def test_attendance_manager_can_target_an_employee():
     assert attendance._select_employee_id(user, "emp_b", "emp_a") == "emp_b"
 
 
+def test_attendance_project_options_include_authorized_site_projects(monkeypatch):
+    class Locations:
+        async def distinct(self, field, query):
+            assert field == "project_id"
+            assert query["kind"] == "site"
+            return ["project_site"]
+
+    async def assigned_only(_user):
+        return {"$or": [{"team_ids": {"$in": ["emp_a"]}}]}
+
+    monkeypatch.setattr(
+        attendance, "sdb", SimpleNamespace(office_locations=Locations()),
+    )
+    monkeypatch.setattr(attendance, "project_visibility_query", assigned_only)
+    query = asyncio.run(attendance._attendance_project_query({
+        "user_id": "user_a", "permissions": ["attendance.create"],
+    }))
+    assert query == {
+        "$and": [
+            {"archived": {"$ne": True}},
+            {"$or": [
+                {"$or": [{"team_ids": {"$in": ["emp_a"]}}]},
+                {"id": {"$in": ["project_site"]}},
+            ]},
+        ],
+    }
+
+
+def test_attendance_managers_can_choose_any_active_project():
+    query = asyncio.run(attendance._attendance_project_query({
+        "user_id": "manager", "permissions": ["attendance.update"],
+    }))
+    assert query == {"archived": {"$ne": True}}
+
+
 def test_today_uses_india_business_date(monkeypatch):
     ist = timezone(timedelta(hours=5, minutes=30))
     monkeypatch.setattr(

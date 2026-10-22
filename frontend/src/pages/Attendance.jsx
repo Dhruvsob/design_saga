@@ -76,7 +76,7 @@ export default function Attendance() {
       api.get(`/attendance/me/summary?year=${ym.y}&month=${ym.m}`),
       api.get("/leaves?mine=true"),
       api.get("/attendance/meta"),
-      api.get("/projects"),
+      api.get("/attendance/project-options").catch(() => ({ data: [] })),
       api.get("/attendance/policy").catch(() => ({ data: null })),
       api.get(`/attendance/my-salary?year=${ym.y}&month=${ym.m}`).catch(() => ({ data: null })),
       api.get("/attendance/corrections?mine=true").catch(() => ({ data: [] })),
@@ -90,6 +90,11 @@ export default function Attendance() {
     setMonthly(data);
   };
   useEffect(() => { loadMe(); if (isHR && tab === "monthly") loadMonthly(); }, [ym, tab]);
+  useEffect(() => {
+    if (siteVisit && projects.length === 1 && !siteForm.project_id) {
+      setSiteForm((current) => ({ ...current, project_id: projects[0].id }));
+    }
+  }, [siteVisit, projects, siteForm.project_id]);
 
   const [attType, setAttType] = useState("office");
   const [checkInBusy, setCheckInBusy] = useState(false);
@@ -127,6 +132,10 @@ export default function Attendance() {
   });
 
   const doCheckIn = async (opts = {}) => {
+    if (attType === "site_visit" && projects.length > 0 && !siteForm.project_id) {
+      alert("Please select the project for this site visit.");
+      return;
+    }
     setCheckInBusy(true);
     if (!opts.force && !opts.retryLate) setOutsideBlock(null);
     setAccuracyBlock(null);
@@ -286,8 +295,9 @@ export default function Attendance() {
               {!checkedIn && siteVisit && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3" data-testid="site-visit-form">
                   <select className="input-flat" value={siteForm.project_id}
+                    disabled={projects.length === 0}
                     onChange={(e) => setSiteForm({ ...siteForm, project_id: e.target.value })}>
-                    <option value="">Project (optional)…</option>
+                    <option value="">{projects.length ? "Select project…" : "No authorized projects available"}</option>
                     {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                   <input className="input-flat" placeholder="Location / address" value={siteForm.site_location}

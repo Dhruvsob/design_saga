@@ -432,6 +432,13 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 
 ## Deployment Safety
 
+### DS-019: Attendance project selection for authorized sites
+
+- Root cause: the Attendance page reused the general `/projects` list, whose project-team visibility correctly hid projects from unassigned employees. Hiren Panchal was not a project team member even though the active Oeuvre_2 attendance geofence authorized that site, leaving his site-project selector empty.
+- Correction: added an attendance-only project-options endpoint that returns only project `id` and `name` for assigned projects or active authorized site fences; archived projects remain hidden. Check-in and geo-check now reject unavailable or unauthorized project IDs, and the UI auto-selects a sole valid project without weakening tenant or project visibility.
+- Verification: production read-only evaluation returns exactly `D_1101, Oeuvre 2` for Hiren and excludes the archived Cloud 9 project. Thirty-six focused attendance, payroll, authentication and tenant-scope tests pass; frontend lint/build and diff checks pass.
+- Database effect: none. No attendance, employee, project, geofence, or business record was changed.
+
 ### DS-018: Accounting all-time, reversal recovery, and deployment resilience
 
 - Root causes: accounting views treated a missing financial-year filter as the current FY, so "All time" omitted older transactions; reversal recovery had no audit-safe user action; vendor bill posting could leave accounts-payable activity disconnected; and the VPS deployment/monitor scripts depended on the host's failing outbound IPv4 path.
