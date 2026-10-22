@@ -45,6 +45,15 @@ def test_personal_sync_visibility_is_owner_or_explicit_share_only():
         "calendar_event", {"visibility": "private", "created_by": "user_b"}, user, ids)
 
 
+def test_calendar_sync_excludes_inactive_and_unapproved_users():
+    assert gc._active_user_filter("org_a", "user_a") == {
+        "org_id": "org_a",
+        "user_id": "user_a",
+        "is_active": {"$ne": False},
+        "approval_status": {"$nin": ["pending", "rejected"]},
+    }
+
+
 def test_assignee_copy_does_not_send_duplicate_google_invites(monkeypatch):
     attendee_lookup = AsyncMock(return_value=["person@example.com"])
     monkeypatch.setattr(gc, "_attendee_emails", attendee_lookup)

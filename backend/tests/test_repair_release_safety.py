@@ -43,6 +43,9 @@ def test_integrity_indexes_are_unique():
         "vendor_bill_number_unique", "vendor_bill_request_unique", "vendor_gstin_unique",
         "invoice_number_unique",
         "employees_org_employee_unique", "counter_org_kind_unique",
+        "user_id_unique",
+        "project_share_token_unique",
+        "notification_dedup_unique",
     }
     found = {opts.get("name") for _, _, opts in _INDEXES if opts.get("unique")}
     assert required <= found

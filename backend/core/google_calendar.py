@@ -373,6 +373,15 @@ def _source_visible_to_user(source_type: str, doc: dict, user: dict,
     )
 
 
+def _active_user_filter(org_id: str, user_id: str) -> dict:
+    return {
+        "org_id": org_id,
+        "user_id": user_id,
+        "is_active": {"$ne": False},
+        "approval_status": {"$nin": ["pending", "rejected"]},
+    }
+
+
 async def _queue_source_for_connections(org_id: str, source_type: str, source_id: str,
                                         operation: str = "upsert") -> int:
     collections = {"calendar_event": db.calendar_events, "task": db.tasks}
@@ -392,7 +401,7 @@ async def _queue_source_for_connections(org_id: str, source_type: str, source_id
         visible = False
         if doc:
             user = await db.users.find_one(
-                {"org_id": org_id, "user_id": user_id, "active": {"$ne": False}}, {"_id": 0})
+                _active_user_filter(org_id, user_id), {"_id": 0})
             if user:
                 visible = _source_visible_to_user(
                     source_type, doc, user, await _user_identity_ids(org_id, user))
@@ -491,9 +500,7 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
             mapping = await db.google_calendar_synced_events.find_one(
                 mapping_filter, {"_id": 0})
             user = await db.users.find_one(
-                {"org_id": row["org_id"], "user_id": user_id, "active": {"$ne": False}},
-                {"_id": 0},
-            )
+                _active_user_filter(row["org_id"], user_id), {"_id": 0})
             visible = bool(doc and user and _source_visible_to_user(
                 row["source_type"], doc, user,
                 await _user_identity_ids(row["org_id"], user)))
@@ -553,7 +560,7 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
 
 async def enqueue_user_sources(org_id: str, user_id: str) -> int:
     user = await db.users.find_one(
-        {"org_id": org_id, "user_id": user_id, "active": {"$ne": False}}, {"_id": 0})
+        _active_user_filter(org_id, user_id), {"_id": 0})
     if not user:
         return 0
     identity_ids = await _user_identity_ids(org_id, user)

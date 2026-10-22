@@ -9,6 +9,8 @@ from .db import db
 # (collection, index_keys, opts)
 _INDEXES = [
     # Auth
+    ("users",              [("user_id", 1)],
+                            {"name": "user_id_unique", "unique": True}),
     ("users",              [("email", 1)], {"unique": True, "sparse": True}),
     ("users",              [("org_id", 1), ("role", 1)], {}),
     ("users",              [("employee_id", 1)], {"sparse": True}),
@@ -30,7 +32,9 @@ _INDEXES = [
     ("projects",           [("org_id", 1), ("stage", 1)], {}),
     ("projects",           [("org_id", 1), ("client_id", 1)], {}),
     ("projects",           [("id", 1)], {}),
-    ("projects",           [("share_token", 1)], {"sparse": True}),
+    ("projects",           [("share_token", 1)],
+                            {"name": "project_share_token_unique", "unique": True,
+                             "sparse": True}),
     ("tasks",              [("org_id", 1), ("project_id", 1), ("status", 1)], {}),
     ("tasks",              [("org_id", 1), ("assignee_id", 1)], {}),
     ("tasks",              [("reminder_date", 1)], {"sparse": True}),
@@ -69,6 +73,9 @@ _INDEXES = [
     # Notifications
     ("notifications",      [("user_id", 1), ("read", 1), ("created_at", -1)], {}),
     ("notifications",      [("org_id", 1), ("kind", 1)], {}),
+    ("notifications",      [("dedup_id", 1)],
+                            {"name": "notification_dedup_unique", "unique": True,
+                             "sparse": True}),
     ("chat_messages",      [("org_id", 1), ("project_id", 1), ("created_at", -1)], {}),
     ("ai_messages",        [("org_id", 1), ("user_id", 1), ("session_id", 1)], {}),
     ("google_calendar_connections", [("org_id", 1), ("user_id", 1)],

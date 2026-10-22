@@ -7,8 +7,8 @@ from fastapi import HTTPException
 
 import core.deps as deps
 from core.rbac import has_permission, user_with_perms
-from routes.auth import _pack_user
-from server import _user_with_perms
+from routes.auth import _ensure_assignable_role, _pack_user
+from server import _employee_account_filter, _user_with_perms
 
 
 def test_empty_permission_override_is_fail_closed_everywhere():
@@ -56,6 +56,37 @@ def test_platform_admin_without_tenant_remains_valid():
     }
 
     asyncio.run(deps.ensure_user_access(user))
+
+
+def test_superadmin_impersonation_is_session_scoped_and_does_not_mutate_user():
+    persisted = {
+        "user_id": "platform", "role": "SuperAdmin", "is_super_admin": True,
+        "org_id": "legacy_global_leak", "impersonating": True,
+    }
+    contextual = deps.apply_session_context(
+        persisted, {"impersonated_org_id": "org_a"})
+
+    assert contextual["org_id"] == "org_a"
+    assert contextual["impersonating"] is True
+    assert persisted["org_id"] == "legacy_global_leak"
+    clean_session = deps.apply_session_context(persisted, {})
+    assert "org_id" not in clean_session
+    assert "impersonating" not in clean_session
+
+
+def test_employee_auth_link_is_bound_to_employee_tenant():
+    employee = {"user_id": "user_linked", "org_id": "org_a"}
+    actor = {"user_id": "admin", "org_id": "org_b", "role": "Admin"}
+    assert _employee_account_filter(employee, actor) == {
+        "user_id": "user_linked", "org_id": "org_a",
+    }
+
+
+def test_superadmin_cannot_be_assigned_as_a_tenant_role():
+    with pytest.raises(HTTPException) as exc:
+        _ensure_assignable_role(
+            {"user_id": "platform", "is_super_admin": True}, "SuperAdmin")
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.parametrize("org", [

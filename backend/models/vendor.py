@@ -8,11 +8,12 @@ seeded data (`db.vendors_acc`).
 All new schemas ship with an optional `org_id` — the app is single-org today
 but every new document is written multi-tenant ready.
 """
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 from typing import List, Optional
 from datetime import date
 
 from core.url_security import external_http_url
+from models.base import FiniteModel
 
 
 AGENCY_TYPES = [
@@ -27,19 +28,19 @@ COMMISSION_STATUSES = ["pending", "invoiced", "received", "cancelled"]
 
 
 # ---------- Commission Config (embedded on vendor master) ----------
-class CommissionSlab(BaseModel):
-    min_purchase: float = 0
-    max_purchase: Optional[float] = None       # None = open-ended top slab
-    percentage: float = 0
+class CommissionSlab(FiniteModel):
+    min_purchase: float = Field(default=0, ge=0)
+    max_purchase: Optional[float] = Field(default=None, ge=0)  # None = open-ended top slab
+    percentage: float = Field(default=0, ge=0, le=100)
 
 
-class CommissionConfig(BaseModel):
+class CommissionConfig(FiniteModel):
     applicable: bool = False
     type: str = "percentage"                   # from COMMISSION_TYPES
-    percentage: Optional[float] = 0.0
-    fixed_amount: Optional[float] = 0.0
+    percentage: Optional[float] = Field(default=0.0, ge=0, le=100)
+    fixed_amount: Optional[float] = Field(default=0.0, ge=0)
     slabs: Optional[List[CommissionSlab]] = None
-    min_purchase: Optional[float] = 0.0        # only compute commission above this
+    min_purchase: Optional[float] = Field(default=0.0, ge=0)
     effective_from: Optional[str] = None       # YYYY-MM-DD
     effective_to: Optional[str] = None
     notes: Optional[str] = None
@@ -47,8 +48,8 @@ class CommissionConfig(BaseModel):
     income_label: Optional[str] = "Vendor Commission Income"
 
 
-class CommissionReceiveIn(BaseModel):
-    amount: float
+class CommissionReceiveIn(FiniteModel):
+    amount: float = Field(gt=0)
     received_date: str                          # YYYY-MM-DD
     bank_account_id: str                        # cash/bank account credited
     payment_method: Optional[str] = "bank_transfer"
@@ -76,7 +77,7 @@ def _validate_attachments(value):
     return out
 
 
-class VendorBillItem(BaseModel):
+class VendorBillItem(FiniteModel):
     po_line_id: Optional[str] = None
     description: str = Field(max_length=500)
     quantity: float = Field(default=1, ge=0)
@@ -84,7 +85,7 @@ class VendorBillItem(BaseModel):
     amount: float = 0                          # server-computed = qty * rate
 
 
-class VendorBillIn(BaseModel):
+class VendorBillIn(FiniteModel):
     vendor_id: str
     bill_number: Optional[str] = None          # vendor's own invoice/bill number
     bill_date: str                              # YYYY-MM-DD
@@ -114,7 +115,7 @@ class VendorBillIn(BaseModel):
         return value
 
 
-class VendorBillUpdate(BaseModel):
+class VendorBillUpdate(FiniteModel):
     bill_number: Optional[str] = None
     bill_date: Optional[str] = None
     due_date: Optional[str] = None
@@ -143,7 +144,7 @@ class VendorBillUpdate(BaseModel):
 
 
 # ---------- Payments ----------
-class VendorPaymentIn(BaseModel):
+class VendorPaymentIn(FiniteModel):
     vendor_id: str
     amount: float = Field(gt=0)
     payment_date: str                          # YYYY-MM-DD
@@ -157,7 +158,7 @@ class VendorPaymentIn(BaseModel):
 
 
 # ---------- Rating ----------
-class VendorRatingIn(BaseModel):
+class VendorRatingIn(FiniteModel):
     project_id: Optional[str] = None
     task_id: Optional[str] = None
     quality: Optional[float] = Field(default=None, ge=0, le=5)
@@ -168,7 +169,7 @@ class VendorRatingIn(BaseModel):
 
 
 # ---------- Documents (attachments on vendor master) ----------
-class VendorDocumentIn(BaseModel):
+class VendorDocumentIn(FiniteModel):
     label: str
     url: str
     kind: Optional[str] = None                 # gst_certificate | pan | agreement | insurance | other
@@ -178,7 +179,7 @@ class VendorDocumentIn(BaseModel):
 
 
 # ---------- Update (partial edit of vendor master) ----------
-class VendorUpdate(BaseModel):
+class VendorUpdate(FiniteModel):
     name: Optional[str] = None
     company: Optional[str] = None
     agency_type: Optional[str] = None

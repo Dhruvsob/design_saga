@@ -1,8 +1,9 @@
 """Accounting models — double-entry compatible."""
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from typing import List, Optional
 
 from core.url_security import external_http_url
+from models.base import FiniteModel
 
 
 ACCOUNT_TYPES = ["asset", "liability", "income", "expense", "equity"]
@@ -46,7 +47,7 @@ DEFAULT_COA = [
 PAYMENT_METHODS = ["cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"]
 
 
-class AccountIn(BaseModel):
+class AccountIn(FiniteModel):
     name: str
     type: str                                 # from ACCOUNT_TYPES
     code: Optional[str] = None
@@ -57,14 +58,14 @@ class AccountIn(BaseModel):
     notes: Optional[str] = None
 
 
-class JournalLine(BaseModel):
+class JournalLine(FiniteModel):
     account_id: str
-    debit: Optional[float] = 0.0
-    credit: Optional[float] = 0.0
+    debit: Optional[float] = Field(default=0.0, ge=0)
+    credit: Optional[float] = Field(default=0.0, ge=0)
     description: Optional[str] = None
 
 
-class JournalIn(BaseModel):
+class JournalIn(FiniteModel):
     date: str                                # YYYY-MM-DD
     narration: str
     reference: Optional[str] = None
@@ -75,10 +76,10 @@ class JournalIn(BaseModel):
     lines: List[JournalLine]
 
 
-class IncomeIn(BaseModel):
+class IncomeIn(FiniteModel):
     """Simple income entry (payment received). Auto-creates a journal entry."""
     date: str
-    amount: float
+    amount: float = Field(gt=0)
     client_id: Optional[str] = None
     project_id: Optional[str] = None
     vendor_id: Optional[str] = None
@@ -92,9 +93,9 @@ class IncomeIn(BaseModel):
     notes: Optional[str] = None
 
 
-class ExpenseIn(BaseModel):
+class ExpenseIn(FiniteModel):
     date: str
-    amount: float
+    amount: float = Field(gt=0)
     expense_account_id: str
     paid_from_account_id: str                 # cash / bank Rx out
     vendor_id: Optional[str] = None
@@ -102,7 +103,7 @@ class ExpenseIn(BaseModel):
     client_id: Optional[str] = None
     employee_id: Optional[str] = None
     payment_method: Optional[str] = "bank_transfer"
-    gst: Optional[float] = 0.0
+    gst: Optional[float] = Field(default=0.0, ge=0)
     reference: Optional[str] = None
     bill_url: Optional[str] = None
     notes: Optional[str] = None
@@ -113,25 +114,31 @@ class ExpenseIn(BaseModel):
         return external_http_url(value) if value is not None else None
 
 
-class MilestoneIn(BaseModel):
+class MilestoneIn(FiniteModel):
     project_id: str
     name: str
-    percent: Optional[float] = None
-    amount: Optional[float] = None
+    percent: Optional[float] = Field(default=None, gt=0, le=100)
+    amount: Optional[float] = Field(default=None, gt=0)
     due_date: Optional[str] = None
     notes: Optional[str] = None
 
+    @model_validator(mode="after")
+    def require_value(self):
+        if self.amount is None and self.percent is None:
+            raise ValueError("Milestone amount or percent is required")
+        return self
 
-class MilestoneUpdate(BaseModel):
+
+class MilestoneUpdate(FiniteModel):
     name: Optional[str] = None
-    percent: Optional[float] = None
-    amount: Optional[float] = None
+    percent: Optional[float] = Field(default=None, gt=0, le=100)
+    amount: Optional[float] = Field(default=None, gt=0)
     due_date: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None              # pending | invoiced | paid
 
 
-class VendorIn(BaseModel):
+class VendorIn(FiniteModel):
     # Identity
     name: str
     company: Optional[str] = None
@@ -147,7 +154,7 @@ class VendorIn(BaseModel):
     gstin: Optional[str] = None
     pan: Optional[str] = None
     tds_applicable: Optional[bool] = False
-    tds_rate: Optional[float] = 0.0
+    tds_rate: Optional[float] = Field(default=0.0, ge=0, le=100)
     # Banking
     bank_name: Optional[str] = None
     bank_account_number: Optional[str] = None
@@ -158,7 +165,7 @@ class VendorIn(BaseModel):
     category: Optional[str] = None            # e.g. Carpenter, Electrician, Marble, Lighting…
     tags: Optional[List[str]] = None
     # Meta
-    rating: Optional[float] = 0.0             # aggregate 0-5
+    rating: Optional[float] = Field(default=0.0, ge=0, le=5)
     active: Optional[bool] = True
     notes: Optional[str] = None
     # Multi-tenant ready (not enforced yet — see PRD)

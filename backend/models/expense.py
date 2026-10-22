@@ -1,17 +1,18 @@
 """Expense claim / approval models."""
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 from typing import Optional, List, Literal
 
 from core.url_security import external_http_url
+from models.base import FiniteModel
 
 
-class ExpenseLineIn(BaseModel):
+class ExpenseLineIn(FiniteModel):
     category: str                          # travel|meals|materials|utilities|site|office|other
     description: Optional[str] = None
     amount: float = Field(gt=0)
     date: Optional[str] = None
     receipt_url: Optional[str] = None
-    tax_rate: Optional[float] = 0
+    tax_rate: Optional[float] = Field(default=0, ge=0, le=100)
 
     @field_validator("receipt_url")
     @classmethod
@@ -19,7 +20,7 @@ class ExpenseLineIn(BaseModel):
         return external_http_url(value) if value is not None else None
 
 
-class ExpenseCreateIn(BaseModel):
+class ExpenseCreateIn(FiniteModel):
     title: str = Field(min_length=1, max_length=200)
     lines: List[ExpenseLineIn] = Field(min_length=1)
     project_id: Optional[str] = None
@@ -29,19 +30,19 @@ class ExpenseCreateIn(BaseModel):
     notes: Optional[str] = None
 
 
-class ApprovalDecisionIn(BaseModel):
+class ApprovalDecisionIn(FiniteModel):
     decision: Literal["approve", "reject"]
     comment: Optional[str] = None
 
 
-class ReimburseIn(BaseModel):
+class ReimburseIn(FiniteModel):
     paid_from_account_id: str                       # bank/cash
     paid_on: Optional[str] = None
     reference: Optional[str] = None
     notes: Optional[str] = None
 
 
-class ExpensePolicyIn(BaseModel):
+class ExpensePolicyIn(FiniteModel):
     """Org-level rules — set once by Company Admin."""
     auto_approve_below: float = Field(default=0, ge=0)      # 0 = never auto approve
     l1_approver_role: Literal["ProjectManager", "Director", "Admin", "Accountant", "HR"] = "ProjectManager"

@@ -6,8 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 import routes.accounting as accounting
+from models.accounting import IncomeIn, JournalLine, MilestoneIn
 from routes.accounting import (
     _cash_collection_source,
     _linked_journal_key,
@@ -15,12 +17,37 @@ from routes.accounting import (
     _require_full_linked_payment,
 )
 from routes.finance_extras import _bank_match_error
+from routes.finance_extras import RecurringIn
 from core.finance import resolve_period
 
 
 def test_all_time_period_is_explicit_and_unbounded():
     assert resolve_period(fy="all") == (None, None, "All time")
     assert resolve_period(fy="ALL_TIME") == (None, None, "All time")
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_money_is_rejected_before_persistence(bad):
+    with pytest.raises(ValidationError):
+        IncomeIn(date="2026-10-22", amount=bad, income_account_id="income",
+                 bank_account_id="bank")
+    with pytest.raises(ValidationError):
+        JournalLine(account_id="bank", debit=bad)
+    with pytest.raises(ValidationError):
+        MilestoneIn(project_id="project", name="Advance", amount=bad)
+    with pytest.raises(ValidationError):
+        RecurringIn(name="Rent", amount=bad, expense_account_id="rent",
+                    paid_from_account_id="bank")
+
+
+def test_milestones_require_a_positive_amount_or_valid_percent():
+    with pytest.raises(ValidationError):
+        MilestoneIn(project_id="project", name="Empty")
+    with pytest.raises(ValidationError):
+        MilestoneIn(project_id="project", name="Negative", amount=-1)
+    with pytest.raises(ValidationError):
+        MilestoneIn(project_id="project", name="Zero percent", percent=0)
+    assert MilestoneIn(project_id="project", name="Half", percent=50).percent == 50
 
 
 def test_linked_journal_keys_are_stable_and_manual_entries_are_unkeyed():

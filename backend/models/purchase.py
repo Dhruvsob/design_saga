@@ -7,11 +7,12 @@ Flow
 3. Vendor sends bill → link bill.po_id → app auto 3-way matches
    (PO qty, GRN qty, Bill qty/amount) and flags variances.
 """
-from pydantic import BaseModel, Field
+from pydantic import Field
 from typing import Optional, List, Literal
+from models.base import FiniteModel
 
 
-class POLineIn(BaseModel):
+class POLineIn(FiniteModel):
     item_name: str
     description: Optional[str] = None
     quantity: float = Field(gt=0)
@@ -20,7 +21,7 @@ class POLineIn(BaseModel):
     tax_rate: float = Field(default=0, ge=0, le=100)
 
 
-class POCreateIn(BaseModel):
+class POCreateIn(FiniteModel):
     vendor_id: str
     project_id: Optional[str] = None
     order_date: Optional[str] = None                   # ISO date, default today
@@ -32,7 +33,7 @@ class POCreateIn(BaseModel):
     reference: Optional[str] = None
 
 
-class POUpdateIn(BaseModel):
+class POUpdateIn(FiniteModel):
     expected_delivery: Optional[str] = None
     delivery_address: Optional[str] = None
     payment_terms: Optional[str] = None
@@ -41,14 +42,14 @@ class POUpdateIn(BaseModel):
     status: Optional[Literal["draft", "sent", "partial", "received", "closed", "cancelled"]] = None
 
 
-class GRNLineIn(BaseModel):
+class GRNLineIn(FiniteModel):
     po_line_id: str
     received_qty: float = Field(ge=0)
-    rejected_qty: Optional[float] = 0
+    rejected_qty: Optional[float] = Field(default=0, ge=0)
     remarks: Optional[str] = None
 
 
-class GRNCreateIn(BaseModel):
+class GRNCreateIn(FiniteModel):
     po_id: str
     received_date: Optional[str] = None
     received_by: Optional[str] = None

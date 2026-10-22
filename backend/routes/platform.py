@@ -75,6 +75,16 @@ def _sanitize_org(o: dict) -> dict:
     return {k: v for k, v in (o or {}).items() if k != "_id"}
 
 
+def _current_session_filter(session_token: Optional[str], authorization: Optional[str]) -> dict:
+    from core.helpers import session_lookup_values
+    token = session_token
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    return {"session_token": {"$in": session_lookup_values(token)}}
+
+
 # ------------------------------------------------------------------
 # ORGANISATIONS CRUD
 # ------------------------------------------------------------------
@@ -186,7 +196,14 @@ async def create_org(payload: OrgCreateIn, request: Request,
         "created_at": now,
         "created_by": sa["user_id"],
     }
-    await db.users.insert_one(dict(admin_doc))
+    try:
+        await db.users.insert_one(dict(admin_doc))
+    except Exception:
+        # Do not leave an unusable tenant behind if its first login cannot be created.
+        await db.organizations.delete_one({"org_id": org_id})
+        raise
+    await audit(sa, "org.create", target=org_id, target_type="org",
+                meta={"admin_user_id": admin_uid, "plan": org_doc["plan"]})
     return {"org": org_doc, "admin_user_id": admin_uid}
 
 
@@ -194,7 +211,7 @@ async def create_org(payload: OrgCreateIn, request: Request,
 async def update_org(org_id: str, payload: OrgUpdateIn, request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
-    await require_super_admin(request, session_token, authorization)
+    sa = await require_super_admin(request, session_token, authorization)
     org = await get_org(org_id)
     if not org:
         raise HTTPException(404, "Organisation not found")
@@ -219,6 +236,8 @@ async def update_org(org_id: str, payload: OrgUpdateIn, request: Request,
         }
     up["updated_at"] = iso_now()
     await db.organizations.update_one({"org_id": org_id}, {"$set": up})
+    await audit(sa, "org.update", target=org_id, target_type="org",
+                meta={"fields": sorted(k for k in up if k != "updated_at")})
     return await get_org(org_id)
 
 
@@ -263,7 +282,7 @@ async def delete_org(org_id: str, request: Request,
                      authorization: Optional[str] = Header(default=None)):
     """Delete an org. By default just marks inactive. `?purge=true`
     hard-deletes the org AND all its data (dangerous)."""
-    await require_super_admin(request, session_token, authorization)
+    sa = await require_super_admin(request, session_token, authorization)
     if org_id == DEFAULT_ORG_ID:
         raise HTTPException(400, "Default organisation cannot be deleted")
     org = await get_org(org_id)
@@ -274,9 +293,16 @@ async def delete_org(org_id: str, request: Request,
         await db.organizations.update_one({"org_id": org_id},
                                           {"$set": {"is_active": False,
                                                     "deleted_at": iso_now()}})
-        await audit({"user_id": "sa", "email": "sa", "role": "SuperAdmin"},
-                    "org.deactivate", target=org_id, target_type="org",
-                    meta={"org_name": org.get("name")})
+        tenant_user_ids = [
+            row["user_id"] async for row in db.users.find(
+                {"org_id": org_id}, {"_id": 0, "user_id": 1})
+            if row.get("user_id")
+        ]
+        if tenant_user_ids:
+            await db.user_sessions.delete_many({"user_id": {"$in": tenant_user_ids}})
+        await audit(sa, "org.deactivate", target=org_id, target_type="org",
+                    meta={"org_name": org.get("name"),
+                          "sessions_revoked": len(tenant_user_ids)})
         return {"ok": True, "purged": False}
 
     # Sessions and login-attempt rows do not carry org_id, so remove them via
@@ -304,8 +330,7 @@ async def delete_org(org_id: str, request: Request,
         await db[coll].delete_many({"org_id": org_id})
     await db.audit_chain.delete_one({"chain": org_id})
     await db.organizations.delete_one({"org_id": org_id})
-    await audit({"user_id": "sa", "email": "sa", "role": "SuperAdmin"},
-                "org.purge", target=org_id, target_type="org",
+    await audit(sa, "org.purge", target=org_id, target_type="org",
                 meta={"org_name": org.get("name")})
     return {"ok": True, "purged": True}
 
@@ -346,6 +371,8 @@ async def add_org_admin(org_id: str, payload: RegisterIn, request: Request,
         "created_at": iso_now(), "created_by": sa["user_id"],
     }
     await db.users.insert_one(dict(doc))
+    await audit(sa, "user.create", target=uid, target_type="user",
+                meta={"role": "Admin"}, org_id=org_id)
     doc.pop("password_hash", None)
     return doc
 
@@ -360,12 +387,14 @@ async def reset_org_user_password(org_id: str, user_id: str, payload: ResetPassw
     if not user:
         raise HTTPException(404, "User not found in this org")
     await db.users.update_one(
-        {"user_id": user_id},
+        {"user_id": user_id, "org_id": org_id},
         {"$set": {"password_hash": _hash(payload.new_password),
                   "password_updated_at": iso_now(),
                   "password_reset_by": sa["user_id"]}}
     )
     await db.user_sessions.delete_many({"user_id": user_id})
+    await audit(sa, "user.password_reset", target=user_id, target_type="user",
+                meta={"sessions_revoked": True}, org_id=org_id)
     return {"ok": True}
 
 
@@ -415,6 +444,10 @@ async def reassign_org(user_id: str, payload: ReassignOrgIn, request: Request,
     if payload.approve:
         updates.update({"approval_status": "approved", "is_active": True})
     await db.users.update_one({"user_id": user_id}, {"$set": updates})
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await audit(sa, "user.reassign_org", target=user_id, target_type="user",
+                meta={"from_org_id": target.get("org_id"), "to_org_id": payload.org_id,
+                      "role": role, "sessions_revoked": True}, org_id=payload.org_id)
     return await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
 
 
@@ -612,19 +645,20 @@ async def update_org_limits(org_id: str, payload: dict, request: Request,
 async def impersonate_org(org_id: str, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
-    """Super Admin picks an org context to operate in. Sets user.org_id
-    for the duration of the session (writes to the user doc)."""
+    """Apply tenant context only to the current Super Admin session."""
     sa = await require_super_admin(request, session_token, authorization)
-    if org_id == "":
-        # exit impersonation
-        await db.users.update_one({"user_id": sa["user_id"]},
-                                  {"$unset": {"org_id": "", "impersonating": ""}})
-        return {"ok": True, "org_id": None}
     org = await get_org(org_id)
     if not org:
         raise HTTPException(404, "Organisation not found")
+    session_filter = _current_session_filter(session_token, authorization)
+    await db.user_sessions.update_one(
+        session_filter, {"$set": {"impersonated_org_id": org_id}})
+    # Remove legacy account-wide state left by older deployments.
     await db.users.update_one({"user_id": sa["user_id"]},
-                              {"$set": {"org_id": org_id, "impersonating": True}})
+                              {"$unset": {"org_id": "", "impersonating": ""}})
+    platform_actor = {**sa, "org_id": None}
+    await audit(platform_actor, "platform.impersonation_start", target=org_id,
+                target_type="org")
     return {"ok": True, "org_id": org_id, "org": org}
 
 
@@ -633,6 +667,13 @@ async def exit_impersonation(request: Request,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     sa = await require_super_admin(request, session_token, authorization)
+    previous_org_id = sa.get("org_id")
+    session_filter = _current_session_filter(session_token, authorization)
+    await db.user_sessions.update_one(
+        session_filter, {"$unset": {"impersonated_org_id": ""}})
     await db.users.update_one({"user_id": sa["user_id"]},
                               {"$unset": {"org_id": "", "impersonating": ""}})
+    platform_actor = {**sa, "org_id": None}
+    await audit(platform_actor, "platform.impersonation_end",
+                target=previous_org_id or "", target_type="org")
     return {"ok": True}

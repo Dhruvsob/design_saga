@@ -12,7 +12,7 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Tenant login | Super Admin, tenant owner, email, and employee ID must use one authentication system and resolve the correct tenant/role | Fixed and deployed |
-| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Scoped business database, secondary lookup repairs, tenant cleanup, orphan-account fail-closed lifecycle gate and focused isolation tests are in place; route-by-route adversarial coverage continues |
+| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Scoped business database, secondary lookup repairs, tenant cleanup, orphan-account fail-closed lifecycle gate, session-scoped platform impersonation and focused isolation tests are in place; route-by-route adversarial coverage continues |
 | Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, and deployed at `236d7c7` |
 | Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, and deployed at `236d7c7` |
 | Exposed credentials | Rotate the MongoDB Atlas password previously pasted into chat and revoke the temporary Mongo viewer token; confirm neither is used by production | Open, external account action required |
@@ -34,9 +34,9 @@ yet received sufficient adversarial testing.
 | Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed and deployed |
 | Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed and deployed |
 | Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Project/task/file/search/comments/calendar/notification/public-share fixed; vendor financial/privacy and linked project/task visibility fixed; quotation cost-vs-actual now requires invoice/finance read; remaining route audit continues |
-| Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides fixed and deployed; broader escalation audit continues |
-| Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Lifecycle gates fixed and deployed; production frontend uses cookie-only sessions and purges legacy localStorage tokens, with Bearer fallback disabled unless explicitly built in for split-origin use |
-| CSRF and cookies | Confirm `Secure`, `HttpOnly`, appropriate `SameSite`, origin checks and no state-changing GET routes | Fixed baseline: secure HttpOnly SameSite=Lax cookies plus unsafe-method Origin/Referer enforcement; ongoing route audit remains |
+| Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides are fail-closed; tenant user creation, approval, employee-account creation and role changes cannot mint a platform `SuperAdmin`; broader route audit continues |
+| Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Lifecycle gates fixed; password/reset/reassignment/offboarding and tenant suspension/deactivation revoke sessions; SuperAdmin impersonation is isolated to one session; production uses cookie-only sessions |
+| CSRF and cookies | Confirm `Secure`, `HttpOnly`, appropriate `SameSite`, origin checks and no state-changing GET routes | Secure HttpOnly SameSite=Lax cookies, unsafe-method Origin/Referer enforcement and a production fail-closed explicit-CORS guard are covered; ongoing route audit remains |
 | Rate limiting | Login, password reset, OTP, public portal, search, AI and expensive exports need per-IP/account limits | Fixed single-worker baseline for auth/reset, portal, branding, search, AI, exports and uploads; move buckets to shared storage before adding workers |
 | Secrets management | No secrets in Git/images/logs; least-privilege environment access; rotation procedure and secret inventory | Current tree audited: historical account/password pairs removed from scripts/reports, test harnesses require environment credentials, production hashes do not match the removed passwords, and structured log redaction is active; full Git-history rewrite and external credential rotation remain operations actions |
 | Stored XSS | Validate/sanitize notes, descriptions, comments, names, SVG/media and any rich-text rendering | Baseline fixed: React text rendering, no `dangerouslySetInnerHTML`, shared external-URL validation, defensive rendering of legacy links, response-time branding sanitization, raster-only logo upload/proxy paths, and tenant-owned branding validation; future rich-text changes require continuing review |
@@ -48,16 +48,16 @@ yet received sufficient adversarial testing.
 
 | Area | Risk / required evidence | Status |
 |---|---|---|
-| Employee/user link | Employee creation must create/link exactly one active authentication user where requested | Fixed for reported login path; uniqueness audit required |
+| Employee/user link | Employee creation must create/link exactly one active authentication user where requested | Tenant-bound account lookup, safe offboarding, active-session revocation and duplicate login-ID prevention are covered; production identity preflight is clean and user IDs are uniquely indexed |
 | Invoice lifecycle | Draft/issued/paid/reversed/deleted transitions and permissions | Fixed for linked payment path; full lifecycle audit required |
 | Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Idempotency, duplicate submission, claimant visibility, approval concurrency, receipt URLs and reimbursement accounts fixed/tested; broader workflow QA continues |
 | Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Status transitions, cancellation dependencies, over-receipt and bill/payment idempotency fixed/tested; broader workflow QA continues |
 | Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | EMI/prepayment locking, balance floors, journal cardinality and safe archive/reversal rules fixed/tested |
 | Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Settlement locking/idempotency and accounting linkage fixed/tested; finance-only read/update authorization fixed 2026-10-22; tax-policy review remains |
 | Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Dependency matrix blocks deletion when operational, attendance or financial history exists; archive path is available and tested |
-| Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | Employee/document counters and key finance identifiers protected; broader normalization audit continues |
+| Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | User ID, tenant employee counter, employee/document counters and key finance identifiers are protected; production duplicate preflight is clean; broader normalization audit continues |
 | Time zones | All business dates use Asia/Kolkata while stored timestamps remain UTC; test midnight/month/year boundaries | Shared IST business-date helper applied to audited modules; boundary regression test passes |
-| Money precision | Decimal-safe calculations, rounding policy, GST/TDS, currency and reconciliation | Audit |
+| Money precision | Decimal-safe calculations, rounding policy, GST/TDS, currency and reconciliation | Non-finite, zero/negative and out-of-range financial inputs are rejected before persistence; Decimal migration and tax-rounding policy audit remain open |
 
 ## P2 - Reliability, DevOps and Operations
 
@@ -73,8 +73,8 @@ yet received sufficient adversarial testing.
 | Alerting/runbooks | Actionable alerts and written response steps for outage, full disk, DB failure, auth spike and certificate failure | Partial: local systemd monitor and deduplicated journal alerts are active; external webhook and broader incident runbooks remain open |
 | Scheduled jobs | Single-run locks, retries, idempotency, missed-job recovery and visible failure state | Single-run locks and visible health fixed/tested; retry/alert policy remains open |
 | Data exports | Permission checks, tenant scoping, formula injection protection, memory limits and audit records | Fixed baseline: finance permissions and tenant scoping, formula-safe CSV cells, 50,000-row cap, export rate limits and audit records are active; large-dataset streaming remains a performance follow-up |
-| Email/notifications | No cross-tenant recipient resolution, retries without duplicates, bounce/error handling | Task recipient and stored portal-message ownership fixed; retry/deduplication/bounce handling audit remains open |
-| AI features | No secret/PII leakage, tenant context boundaries, prompt injection controls, cost/rate limits and graceful key absence | Stored message tenant ownership fixed; prompt-injection, PII, rate and cost controls remain open |
+| Email/notifications | No cross-tenant recipient resolution, retries without duplicates, bounce/error handling | Active approved recipients are tenant-scoped; notification deduplication is atomic and uniquely indexed; external email retry/bounce handling remains open |
+| AI features | No secret/PII leakage, tenant context boundaries, prompt injection controls, cost/rate limits and graceful key absence | Message history is user+tenant scoped, caller context stays at untrusted user priority, rate limits and graceful key absence are covered; automated PII redaction and budget telemetry remain open |
 
 ## P2 - Frontend and Product QA
 
@@ -87,7 +87,7 @@ yet received sufficient adversarial testing.
 | Accessibility | Keyboard navigation, labels, focus, contrast, table semantics and screen-reader checks | Audit |
 | Responsive layout | No clipped controls, overlapping text or unusable tables on supported mobile/desktop widths | Audit |
 | Browser compatibility | Current Chrome, Edge, Safari and mobile smoke tests | Audit |
-| Performance | Bundle size, lazy loading, pagination, large tenant datasets and API latency budgets | Audit |
+| Performance | Bundle size, lazy loading, pagination, large tenant datasets and API latency budgets | Accounting/Daybook pagination is active; production build reports a 1.49 MB main JavaScript chunk, so route-level lazy loading and measured API budgets remain open |
 
 ## Required Release Gates
 

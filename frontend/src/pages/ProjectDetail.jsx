@@ -9,7 +9,7 @@ import ActivityTimeline from "../components/ActivityTimeline";
 import { empName } from "../lib/format";
 import { safeExternalUrl } from "../lib/url";
 import {
-  ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise,
+  ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
   X, Warning, Trash, UsersThree, CaretRight,
 } from "@phosphor-icons/react";
 
@@ -64,6 +64,17 @@ export default function ProjectDetail() {
     const url = `${window.location.origin}/portal/${p.share_token}`;
     navigator.clipboard.writeText(url);
     toast.success("Client portal link copied to clipboard");
+  };
+
+  const rotateShare = async () => {
+    if (!window.confirm("Reset this client portal link? The previous link will stop working immediately.")) return;
+    try {
+      const { data } = await api.post(`/projects/${id}/share-token/rotate`);
+      setP((current) => ({ ...current, share_token: data.share_token }));
+      toast.success("Client portal link reset");
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not reset portal link");
+    }
   };
 
   const addFile = async (e) => {
@@ -192,9 +203,16 @@ export default function ProjectDetail() {
               </button>
             </>
           )}
-          <button onClick={copyShare} className="btn-ghost" data-testid="share-portal-btn">
-            <Copy size={14} /> Client portal link
-          </button>
+          {hasPerm("projects.update") && p.share_token && (
+            <>
+              <button onClick={copyShare} className="btn-ghost" data-testid="share-portal-btn">
+                <Copy size={14} /> Client portal link
+              </button>
+              <button onClick={rotateShare} className="btn-ghost" title="Invalidate the old client portal link">
+                <ArrowsClockwise size={14} /> Reset portal link
+              </button>
+            </>
+          )}
         </div>
       </div>
 

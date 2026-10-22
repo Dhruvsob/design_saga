@@ -13,7 +13,7 @@ from models.user import LoginPasswordIn
 import routes.auth as auth_routes
 from routes.auth import (
     _check_lockout, _ensure_assignable_role, _ensure_target_in_actor_tenant,
-    _register_failed_attempt, _request_ip_hash,
+    _password_matches, _register_failed_attempt, _request_ip_hash,
 )
 
 
@@ -85,6 +85,17 @@ def test_login_payload_rejects_oversized_inputs():
         LoginPasswordIn(identifier="a" * 255, password="valid")
     with pytest.raises(ValidationError):
         LoginPasswordIn(identifier="valid", password="a" * 129)
+
+
+def test_shared_employee_id_never_selects_an_arbitrary_password_match(monkeypatch):
+    monkeypatch.setattr(
+        auth_routes, "verify_password", lambda password, stored: password == stored)
+    candidates = [
+        {"user_id": "user_a", "org_id": "org_a", "password_hash": "same"},
+        {"user_id": "user_b", "org_id": "org_b", "password_hash": "same"},
+    ]
+    matches = _password_matches(candidates, "same")
+    assert [row["user_id"] for row in matches] == ["user_a", "user_b"]
 
 
 def test_failed_login_records_opaque_source(monkeypatch):

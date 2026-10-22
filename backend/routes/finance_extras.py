@@ -13,7 +13,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import Response as FastAPIResponse
-from pydantic import BaseModel
+from pydantic import Field
+from models.base import FiniteModel
 
 from core.audit import audit
 from core.db import db  # noqa: F401  (kept for future use)
@@ -41,9 +42,9 @@ router = APIRouter()
 FREQUENCIES = ["weekly", "monthly", "quarterly", "yearly"]
 
 
-class RecurringIn(BaseModel):
+class RecurringIn(FiniteModel):
     name: str
-    amount: float
+    amount: float = Field(gt=0)
     expense_account_id: str
     paid_from_account_id: str
     frequency: str = "monthly"
@@ -55,14 +56,14 @@ class RecurringIn(BaseModel):
     project_id: Optional[str] = None
     client_id: Optional[str] = None
     reference: Optional[str] = None
-    gst: Optional[float] = 0.0
+    gst: Optional[float] = Field(default=0.0, ge=0)
     notes: Optional[str] = None
     active: Optional[bool] = True
 
 
-class RecurringUpdate(BaseModel):
+class RecurringUpdate(FiniteModel):
     name: Optional[str] = None
-    amount: Optional[float] = None
+    amount: Optional[float] = Field(default=None, gt=0)
     expense_account_id: Optional[str] = None
     paid_from_account_id: Optional[str] = None
     frequency: Optional[str] = None
@@ -73,7 +74,7 @@ class RecurringUpdate(BaseModel):
     project_id: Optional[str] = None
     client_id: Optional[str] = None
     reference: Optional[str] = None
-    gst: Optional[float] = None
+    gst: Optional[float] = Field(default=None, ge=0)
     notes: Optional[str] = None
     active: Optional[bool] = None
 
@@ -327,7 +328,7 @@ async def scan_recurring(request: Request,
 # ==========================================================================
 # 2) FAVORITE ACCOUNTS
 # ==========================================================================
-class FavoriteIn(BaseModel):
+class FavoriteIn(FiniteModel):
     account_id: str
 
 
@@ -424,13 +425,9 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
         q["bill_date"] = d
     rows = await sdb.vendor_commissions.find(q, {"_id": 0}).sort("bill_date", 1).to_list(2000)
 
-    org = None
-    try:
-        oid = user_org_id(user)
-        if oid:
-            org = await db.organizations.find_one({"id": oid}, {"_id": 0})
-    except Exception:
-        org = None
+    oid = user_org_id(user)
+    org = await db.organizations.find_one(
+        {"org_id": oid}, {"_id": 0}) if oid else None
     org_name = (org or {}).get("name") or "Design Saga"
 
     earned = sum(float(r.get("amount") or 0) for r in rows if r.get("status") not in ("cancelled", "reversed"))
@@ -540,11 +537,11 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
 # unmatched row (routed through _post_journal to keep the books balanced).
 # ==========================================================================
 
-class BankMatchIn(BaseModel):
+class BankMatchIn(FiniteModel):
     journal_id: str
 
 
-class BankCreateJEIn(BaseModel):
+class BankCreateJEIn(FiniteModel):
     counterpart_account_id: str        # income or expense to book against
     narration: Optional[str] = None
     reference: Optional[str] = None

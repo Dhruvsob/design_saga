@@ -63,10 +63,20 @@ def verify_password(pw: str, hashed: str) -> bool:
         return False
 
 
-async def _next_employee_id() -> str:
-    """Sequential DS0001, DS0002 …  Safe against gaps because we take max+1."""
+def _password_matches(candidates: list[dict], password: str) -> list[dict]:
+    """Verify every candidate so a shared tenant-local ID is never chosen arbitrarily."""
+    return [
+        candidate for candidate in candidates
+        if candidate.get("password_hash")
+        and verify_password(password, candidate["password_hash"])
+    ]
+
+
+async def _next_employee_id(org_id: str) -> str:
+    """Return a concurrency-safe, tenant-local DS0001-style login ID."""
+    from pymongo import ReturnDocument
     max_num = 0
-    async for u in db.users.find({"employee_id": {"$regex": "^DS\\d+$"}},
+    async for u in db.users.find({"org_id": org_id, "employee_id": {"$regex": "^DS\\d+$"}},
                                  {"_id": 0, "employee_id": 1}):
         try:
             n = int(u["employee_id"][2:])
@@ -74,7 +84,15 @@ async def _next_employee_id() -> str:
                 max_num = n
         except (ValueError, KeyError):
             pass
-    return f"DS{(max_num + 1):04d}"
+    key = {"org_id": org_id, "kind": "user_employee_id"}
+    if not await db.counters.find_one(key):
+        try:
+            await db.counters.insert_one({**key, "seq": max_num})
+        except Exception:
+            pass  # A concurrent creator won the unique counter insert.
+    counter = await db.counters.find_one_and_update(
+        key, {"$inc": {"seq": 1}}, return_document=ReturnDocument.AFTER)
+    return f"DS{int(counter['seq']):04d}"
 
 
 def _pack_user(u: dict) -> dict:
@@ -199,9 +217,11 @@ def _ensure_target_in_actor_tenant(actor: dict, target: dict) -> None:
 
 
 def _ensure_assignable_role(actor: dict, role: str) -> None:
-    from core.tenancy import is_super_admin
-    if normalize_role(role) == "SuperAdmin" and not is_super_admin(actor):
-        raise HTTPException(status_code=403, detail="Only the platform owner can assign SuperAdmin")
+    if normalize_role(role) == "SuperAdmin":
+        raise HTTPException(
+            status_code=403,
+            detail="SuperAdmin is a platform identity and cannot be assigned to a tenant user",
+        )
 
 
 # ==================================================
@@ -227,11 +247,17 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
     # one whose password actually matches.
     candidates = await db.users.find(_identifier_query(ident), {"_id": 0}).to_list(50)
 
-    user = None
-    for cand in candidates:
-        if cand.get("password_hash") and verify_password(payload.password, cand["password_hash"]):
-            user = cand
-            break
+    matches = _password_matches(candidates, payload.password)
+    if len(matches) > 1:
+        await _register_failed_attempt(ident, ip_hash)
+        await audit(None, "auth.login_ambiguous", target_type="auth",
+                    meta={"identifier_hash": hashlib.sha256(ident.lower().encode()).hexdigest()[:16],
+                          "matches": len(matches), "src": ip_hash[:12]})
+        raise HTTPException(
+            status_code=409,
+            detail="This User ID exists in more than one workspace. Sign in with your email address.",
+        )
+    user = matches[0] if matches else None
 
     if user is None:
         await _register_failed_attempt(ident, ip_hash)
@@ -303,8 +329,10 @@ async def admin_register(payload: RegisterIn, request: Request,
         raise HTTPException(status_code=409, detail="Email already registered")
 
     # Plan limit — max users per tenant
-    from core.tenancy import user_org_id
-    _org_id = user_org_id(admin)
+    from core.tenancy import user_org_id, is_super_admin
+    _org_id = admin.get("org_id") if is_super_admin(admin) else user_org_id(admin)
+    if not _org_id:
+        raise HTTPException(status_code=400, detail="Select a tenant before creating a tenant user")
     if _org_id:
         _org = await db.organizations.find_one({"org_id": _org_id}, {"_id": 0, "features": 1})
         _max = ((_org or {}).get("features") or {}).get("limits", {}).get("max_users")
@@ -318,12 +346,12 @@ async def admin_register(payload: RegisterIn, request: Request,
     role = normalize_role(payload.role)
     _ensure_assignable_role(admin, role)
     user_id = f"user_{uuid.uuid4().hex[:12]}"
-    employee_id = await _next_employee_id()
+    employee_id = await _next_employee_id(_org_id)
     # Multi-tenant: new users inherit the admin's org
     from core.tenancy import user_org_id
     doc = {
         "user_id": user_id,
-        "org_id": user_org_id(admin),
+        "org_id": _org_id,
         "employee_id": employee_id,
         "email": email,
         "name": payload.name.strip(),
@@ -337,6 +365,9 @@ async def admin_register(payload: RegisterIn, request: Request,
         "created_by": admin["user_id"],
     }
     await db.users.insert_one(dict(doc))
+    await audit(admin, "user.create", target=user_id, target_type="user",
+                meta={"role": role, "approval_status": doc["approval_status"]},
+                org_id=_org_id)
     return _pack_user(doc)
 
 
@@ -365,6 +396,8 @@ async def admin_reset_password(user_id: str, payload: ResetPasswordIn, request: 
     # Clear any brute-force lockout so the NEW password works immediately
     # (otherwise a previously locked user stays blocked for 15 min after reset).
     await _clear_lockout_for_user(target)
+    await audit(admin, "user.password_reset", target=user_id, target_type="user",
+                meta={"sessions_revoked": True}, org_id=target.get("org_id"))
     return {"ok": True, "unlocked": True}
 
 
@@ -385,6 +418,8 @@ async def unlock_user(user_id: str, request: Request,
     if not _is_sa(admin) and (target.get("org_id") or _DEF) != _uoid(admin):
         raise HTTPException(status_code=404, detail="User not found")
     await _clear_lockout_for_user(target)
+    await audit(admin, "user.unlock", target=user_id, target_type="user",
+                org_id=target.get("org_id"))
     return {"ok": True, "unlocked": True}
 
 
@@ -423,7 +458,7 @@ async def approve_user(user_id: str, payload: ApprovalDecisionIn, request: Reque
         role = normalize_role(payload.role or target.get("role") or "Employee")
         _ensure_assignable_role(admin, role)
         # Assign employee_id if missing
-        emp_id = target.get("employee_id") or await _next_employee_id()
+        emp_id = target.get("employee_id") or await _next_employee_id(target.get("org_id") or "org_default")
         await db.users.update_one({"user_id": user_id}, {"$set": {
             "approval_status": "approved",
             "is_active": True,
@@ -463,4 +498,7 @@ async def approve_user(user_id: str, payload: ApprovalDecisionIn, request: Reque
         raise HTTPException(status_code=400, detail="decision must be approve|reject")
 
     fresh = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    await audit(admin, f"user.{payload.decision}", target=user_id, target_type="user",
+                meta={"role": fresh.get("role"), "reason": payload.reason or None},
+                org_id=target.get("org_id"))
     return _pack_user(fresh)

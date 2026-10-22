@@ -59,7 +59,11 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
     now_iso = iso_now()
     # Resolve each recipient's org so notifications stay tenant-tagged.
     org_by_uid = {}
-    async for u in db.users.find({"user_id": {"$in": [x for x in set(user_ids) if x]}},
+    async for u in db.users.find({
+            "user_id": {"$in": [x for x in set(user_ids) if x]},
+            "is_active": {"$ne": False},
+            "approval_status": {"$nin": ["pending", "rejected"]},
+        },
                                  {"_id": 0, "user_id": 1, "org_id": 1}):
         org_by_uid[u["user_id"]] = u.get("org_id")
     # Tenant isolation: inside a tenant request, recipients from any other
@@ -74,14 +78,7 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
             continue
         if scope_org and (org_by_uid.get(uid) or "org_default") != scope_org:
             continue
-        # Dedup — if a doc with the same key already exists for this user, skip.
-        if dedup_key:
-            existing = await db.notifications.find_one(
-                {"user_id": uid, "dedup_key": dedup_key}, {"_id": 0, "id": 1},
-            )
-            if existing:
-                continue
-        docs.append({
+        doc = {
             "id": new_id("ntf_"),
             "user_id": uid,
             "org_id": org_by_uid.get(uid),
@@ -95,10 +92,21 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
             "dedup_key": dedup_key,
             "created_at": now_iso,
             "expires_at": expires_at,
-        })
-    if docs:
+        }
+        if dedup_key:
+            doc["dedup_id"] = f"{uid}:{dedup_key}"
+        docs.append(doc)
+    if not docs:
+        return 0
+    if not dedup_key:
         await db.notifications.insert_many(docs)
-    return len(docs)
+        return len(docs)
+    inserted = 0
+    for doc in docs:
+        result = await db.notifications.update_one(
+            {"dedup_id": doc["dedup_id"]}, {"$setOnInsert": doc}, upsert=True)
+        inserted += int(getattr(result, "upserted_id", None) is not None)
+    return inserted
 
 
 async def emit_admins(kind: str, title: str, body: str = "",
@@ -141,6 +149,9 @@ async def emit_hr(kind: str, title: str, body: str = "",
                   meta: Optional[dict] = None, dedup_key: Optional[str] = None,
                   org_id: Optional[str] = None) -> int:
     q = {"role": {"$in": ["Admin", "Director", "HR"]}, "is_active": {"$ne": False}}
+    if not org_id:
+        from core.scoped_db import current_org_id
+        org_id = current_org_id()
     if org_id:
         q["org_id"] = org_id
     ids = []

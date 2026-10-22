@@ -26,7 +26,7 @@ from core.downloads import content_disposition
 from core.rbac import has_permission
 from core.tenancy import user_org_id
 from core.audit import audit
-from pydantic import BaseModel
+from models.base import FiniteModel
 from pymongo.errors import DuplicateKeyError
 from core.finance import resolve_period, current_fy_label, fy_choices, fy_range
 from models.accounting import (
@@ -545,7 +545,7 @@ async def list_journal(request: Request,
 # ==================================================
 # Single transaction: view / edit / delete / reverse
 # ==================================================
-class JournalEditIn(BaseModel):
+class JournalEditIn(FiniteModel):
     date: Optional[str] = None
     narration: Optional[str] = None
     reference: Optional[str] = None
@@ -2023,6 +2023,11 @@ async def add_milestone(project_id: str, payload: MilestoneIn, request: Request,
     amount = payload.amount
     if amount is None and payload.percent is not None:
         amount = round(float(proj.get("budget") or 0) * float(payload.percent) / 100.0, 2)
+    if not amount or amount <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Milestone amount must be positive; set an amount or a project budget",
+        )
 
     doc = {
         "id": new_id("ms_"),
@@ -2038,6 +2043,8 @@ async def add_milestone(project_id: str, payload: MilestoneIn, request: Request,
         "created_by": user["user_id"],
     }
     await sdb.payment_milestones.insert_one(dict(doc))
+    await audit(user, "milestone.create", target=doc["id"], target_type="milestone",
+                meta={"project_id": project_id, "amount": amount})
     return await sdb.payment_milestones.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -2056,6 +2063,16 @@ async def update_milestone(ms_id: str, payload: MilestoneUpdate, request: Reques
         raise HTTPException(status_code=400, detail="Invalid milestone status")
     if existing_ms.get("status") == "paid" and {"amount", "percent"}.intersection(upd):
         raise HTTPException(status_code=409, detail="Reverse the payment before changing a paid milestone amount")
+    if "percent" in upd and "amount" not in upd:
+        project = await sdb.projects.find_one(
+            {"id": existing_ms.get("project_id")}, {"_id": 0, "budget": 1})
+        amount = round(float((project or {}).get("budget") or 0) * float(upd["percent"]) / 100.0, 2)
+        if amount <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot calculate this percentage without a positive project budget",
+            )
+        upd["amount"] = amount
     if upd.get("status") == "paid" and existing_ms.get("status") != "paid" \
             and not has_permission(user, "finance.create"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
@@ -2088,6 +2105,8 @@ async def update_milestone(ms_id: str, payload: MilestoneUpdate, request: Reques
         upd["paid_amount"] = None
         upd["paid_at"] = None
     await sdb.payment_milestones.update_one({"id": ms_id}, {"$set": upd})
+    await audit(user, "milestone.update", target=ms_id, target_type="milestone",
+                meta={"fields": sorted(k for k in upd if k != "updated_at")})
     return await sdb.payment_milestones.find_one({"id": ms_id}, {"_id": 0})
 
 
@@ -2111,6 +2130,9 @@ async def delete_milestone(ms_id: str, request: Request,
             detail="Reverse the milestone payment before deleting this milestone",
         )
     await sdb.payment_milestones.delete_one({"id": ms_id})
+    await audit(user, "milestone.delete", target=ms_id, target_type="milestone",
+                meta={"project_id": milestone.get("project_id"),
+                      "amount": milestone.get("amount")})
     return {"ok": True}
 
 

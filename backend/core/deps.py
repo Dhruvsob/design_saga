@@ -28,6 +28,24 @@ async def resolve_permissions(role, org_id):
     return expand_permissions(role)
 
 
+def apply_session_context(user: Optional[dict], session: dict) -> Optional[dict]:
+    """Apply Super Admin tenant impersonation to this session only."""
+    if not user:
+        return user
+    from .tenancy import is_super_admin
+    if not is_super_admin(user):
+        return user
+    contextual = dict(user)
+    # Ignore legacy persisted impersonation, which leaked across every session.
+    contextual.pop("org_id", None)
+    contextual.pop("impersonating", None)
+    org_id = session.get("impersonated_org_id")
+    if org_id:
+        contextual["org_id"] = org_id
+        contextual["impersonating"] = True
+    return contextual
+
+
 async def get_current_user(
     request: Request,
     session_token: Optional[str] = Cookie(default=None),
@@ -57,6 +75,7 @@ async def get_current_user(
         return None
 
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    user = apply_session_context(user, session)
     if user:
         # Attach effective (override-aware) permissions so has_permission and
         # the frontend both honour any per-tenant role customisation.
