@@ -6,6 +6,7 @@ SuperAdmin billing, and tenant isolation.
 """
 import requests
 import sys
+import os
 from datetime import datetime
 
 BASE_URL = "https://gamaa-preview.preview.emergentagent.com/api"
@@ -606,16 +607,25 @@ class ERPTester:
         self.log("="*80 + "\n", Colors.BLUE)
 
         # Login
-        self.admin_token = self.login("admin@designsaga.com", "Admin@123")
+        self.admin_token = self.login(
+            os.environ.get("ERP_TEST_ADMIN_EMAIL", ""),
+            os.environ.get("ERP_TEST_ADMIN_PASSWORD", ""),
+        )
         if not self.admin_token:
             self.fail("Admin login failed - cannot continue")
             return 1
 
-        self.super_admin_token = self.login("designsaga10@gmail.com", "Admin@123")
+        self.super_admin_token = self.login(
+            os.environ.get("ERP_TEST_SUPER_ADMIN_EMAIL", ""),
+            os.environ.get("ERP_TEST_SUPER_ADMIN_PASSWORD", ""),
+        )
         if not self.super_admin_token:
             self.log("⚠️  SuperAdmin login failed - some tests will be skipped", Colors.YELLOW)
 
-        self.accountant_token = self.login("acct@test.com", "Acct@1234")
+        self.accountant_token = self.login(
+            os.environ.get("ERP_TEST_ACCOUNTANT_EMAIL", ""),
+            os.environ.get("ERP_TEST_ACCOUNTANT_PASSWORD", ""),
+        )
         if not self.accountant_token:
             self.log("⚠️  Accountant login failed - visibility test will be limited", Colors.YELLOW)
 

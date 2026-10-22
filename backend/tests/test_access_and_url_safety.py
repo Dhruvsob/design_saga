@@ -10,7 +10,7 @@ from models.expense import ExpenseLineIn
 from models.task import Attachment, TaskIn
 from models.vendor import VendorDocumentIn
 from routes.organization import _sanitize_branding_update
-from server import DocumentIn
+from server import DocumentIn, _public_file_projection
 
 
 @pytest.mark.parametrize("url", [
@@ -67,6 +67,18 @@ def test_branding_update_accepts_only_own_internal_logo():
     assert _sanitize_branding_update({"logo_url": own}, {}, "org_1")["logo_url"] == own
     with pytest.raises(ValueError):
         _sanitize_branding_update({"logo_url": own}, {}, "org_2")
+
+
+def test_public_file_projection_drops_unsafe_legacy_urls():
+    visible = _public_file_projection([
+        {"id": "safe", "name": "Plan", "url": "https://files.example/plan.pdf"},
+        {"id": "script", "name": "Bad", "url": "javascript:alert(1)"},
+        {"id": "missing", "name": "Missing"},
+    ])
+    assert visible == [{
+        "id": "safe", "name": "Plan", "url": "https://files.example/plan.pdf",
+        "stage": None, "created_at": None,
+    }]
 
 
 def test_permission_guard_and_query_merge():

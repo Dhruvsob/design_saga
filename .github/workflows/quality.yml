@@ -27,6 +27,9 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - uses: actions/checkout@v7
+      - name: Reject tracked credentials
+        working-directory: ${{ github.workspace }}
+        run: bash .github/scripts/scan-secrets.sh
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

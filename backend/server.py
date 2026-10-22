@@ -2254,6 +2254,21 @@ async def invoice_pdf(invoice_id: str, request: Request,
 # ============================================================
 # Client Portal (shareable token, no auth)
 # ============================================================
+def _public_file_projection(files: list[dict]) -> list[dict]:
+    """Expose only browser-safe links from legacy project file records."""
+    result = []
+    for file_doc in files:
+        try:
+            safe_url = external_http_url(file_doc.get("url"))
+        except (TypeError, ValueError):
+            continue
+        result.append({
+            "id": file_doc["id"], "name": file_doc.get("name"), "url": safe_url,
+            "stage": file_doc.get("stage"), "created_at": file_doc.get("created_at"),
+        })
+    return result
+
+
 @api.get("/portal/{token}")
 async def portal_view(token: str):
     project, org_id = await _public_project_by_token(token)
@@ -2282,8 +2297,7 @@ async def portal_view(token: str):
             "done": sum(1 for t in tasks if t.get("status") == "done"),
             "in_progress": sum(1 for t in tasks if t.get("status") == "in_progress"),
         },
-        "files": [{"id": f["id"], "name": f.get("name"), "url": f.get("url"), "stage": f.get("stage"),
-                   "created_at": f.get("created_at")} for f in files],
+        "files": _public_file_projection(files),
         "invoices": [{"id": i["id"], "number": i.get("number"), "total": i.get("total"),
                       "status": i.get("status"), "due_date": i.get("due_date"),
                       "doc_type": i.get("doc_type")} for i in invoices],

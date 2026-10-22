@@ -12,7 +12,11 @@ from datetime import date, timedelta, datetime
 BASE = os.environ.get("API_BASE", "http://localhost:8001/api")
 
 
-def login(email="admin@designsaga.com", password="Admin@123"):
+def login(email=None, password=None):
+    email = email or os.environ.get("ERP_TEST_ADMIN_EMAIL")
+    password = password or os.environ.get("ERP_TEST_ADMIN_PASSWORD")
+    if not email or not password:
+        raise RuntimeError("Set ERP_TEST_ADMIN_EMAIL and ERP_TEST_ADMIN_PASSWORD")
     s = requests.Session()
     r = s.post(f"{BASE}/auth/login-password",
                json={"identifier": email, "password": password})

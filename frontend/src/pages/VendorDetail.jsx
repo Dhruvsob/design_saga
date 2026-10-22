@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../lib/api";
+import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import {
@@ -659,9 +660,11 @@ function Documents({ v, canEdit, onAdd, onDelete, busy }) {
           <div key={d.id} className="border border-[#E5E5E5] p-4 flex items-start gap-3">
             <FileText size={22} className="text-[#8B7F6A]" />
             <div className="flex-1 min-w-0">
-              <a href={d.url} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[#8B7F6A] break-all">
-                {d.label}
-              </a>
+              {safeExternalUrl(d.url) ? (
+                <a href={safeExternalUrl(d.url)} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[#8B7F6A] break-all">
+                  {d.label}
+                </a>
+              ) : <span className="font-semibold text-sm">{d.label}</span>}
               <div className="text-xs text-[#9A9A9A] font-mono">
                 {d.kind?.replace("_", " ")} {d.expires_on ? `· expires ${d.expires_on}` : ""}
               </div>

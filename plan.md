@@ -126,9 +126,8 @@
 - Implement Phase 2 project-create team selection + task assignee picker + “Assigned to me” UX.
 - Implement Phase 3 formatting util + targeted date/numeric cleanup.
 - Implement Phase 4 SuperAdmin billing fields + full-screen toggle + Team/Roles verification.
-- Run `testing_agent_v3` after each phase (required) using:
-  - Admin: `admin@designsaga.com` / `Admin@123`
-  - SuperAdmin: `designsaga10@gmail.com` / `Admin@123`
+- Run the integration suite after each phase using credentials supplied only
+  through the `ERP_TEST_*` environment variables.
   - Create a restricted Employee user for visibility tests.
 
 ---

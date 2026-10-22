@@ -100,8 +100,8 @@
   "test_environment": {
     "base_url": "https://gamaa-preview.preview.emergentagent.com/api",
     "test_credentials": {
-      "super_admin": "designsaga10@gmail.com / Admin@123",
-      "org_default_admin": "admin@designsaga.com / Admin@123",
+      "super_admin": "redacted; supplied through ERP_TEST_* environment variables",
+      "org_default_admin": "redacted; supplied through ERP_TEST_* environment variables",
       "test_orgs_created": "2 (Org A and Org B with their admins)",
       "cleanup": "All test orgs and users cleaned up successfully"
     }

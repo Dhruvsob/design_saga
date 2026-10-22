@@ -4,13 +4,19 @@ Tests the expanded permission catalog and enforcement for all ERP modules.
 """
 import requests
 import sys
+import os
 from datetime import datetime
 
 BASE_URL = "https://gamaa-preview.preview.emergentagent.com/api"
 
-# Test credentials from /app/memory/test_credentials.md
-ADMIN_CREDS = {"identifier": "admin@designsaga.com", "password": "Admin@123"}
-ACCOUNTANT_CREDS = {"identifier": "acct@test.com", "password": "Acct@1234"}
+ADMIN_CREDS = {
+    "identifier": os.environ.get("ERP_TEST_ADMIN_EMAIL", ""),
+    "password": os.environ.get("ERP_TEST_ADMIN_PASSWORD", ""),
+}
+ACCOUNTANT_CREDS = {
+    "identifier": os.environ.get("ERP_TEST_ACCOUNTANT_EMAIL", ""),
+    "password": os.environ.get("ERP_TEST_ACCOUNTANT_PASSWORD", ""),
+}
 
 class RBACTester:
     def __init__(self):

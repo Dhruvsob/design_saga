@@ -12,13 +12,15 @@ import os, sys, uuid, io, requests
 from datetime import date, timedelta, datetime
 
 BASE = os.environ.get("API_BASE", "http://localhost:8001/api")
-ADMIN_EMAIL = "admin@designsaga.com"
-ADMIN_PWD = "Admin@123"
-ACCT_EMAIL = "acct@test.com"
-ACCT_PWD = "Acct@1234"
+ADMIN_EMAIL = os.environ.get("ERP_TEST_ADMIN_EMAIL")
+ADMIN_PWD = os.environ.get("ERP_TEST_ADMIN_PASSWORD")
+ACCT_EMAIL = os.environ.get("ERP_TEST_ACCOUNTANT_EMAIL")
+ACCT_PWD = os.environ.get("ERP_TEST_ACCOUNTANT_PASSWORD")
 
 
 def login(email=ADMIN_EMAIL, password=ADMIN_PWD):
+    if not email or not password:
+        raise RuntimeError("Set the ERP_TEST_* account environment variables")
     s = requests.Session()
     r = s.post(f"{BASE}/auth/login-password",
                json={"identifier": email, "password": password})

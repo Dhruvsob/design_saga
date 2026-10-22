@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
+import { safeExternalUrl } from "../lib/url";
 import {
   Receipt, Plus, Warning, Check, X, ArrowsClockwise, CurrencyInr, ThumbsUp, ThumbsDown, Wallet,
 } from "@phosphor-icons/react";
@@ -245,7 +246,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, userRole, onClose,
                 <Td className="text-xs uppercase font-mono">{l.category}</Td>
                 <Td>{l.description || "—"}</Td>
                 <Td className="font-mono">{fmtMoney(l.amount)}</Td>
-                <Td>{l.receipt_url ? <a href={l.receipt_url} target="_blank" rel="noreferrer" className="accent-blue text-xs">View</a> : <span className="text-[#9A9A9A]">—</span>}</Td>
+                <Td>{safeExternalUrl(l.receipt_url) ? <a href={safeExternalUrl(l.receipt_url)} target="_blank" rel="noreferrer" className="accent-blue text-xs">View</a> : <span className="text-[#9A9A9A]">—</span>}</Td>
               </tr>
             ))}
           </tbody>

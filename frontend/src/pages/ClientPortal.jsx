@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api, { API } from "../lib/api";
+import { safeExternalUrl } from "../lib/url";
 
 export default function ClientPortal() {
   const { token } = useParams();
@@ -124,17 +125,23 @@ export default function ClientPortal() {
         <div className="overline mb-3">DELIVERABLES / FILES</div>
         <div className="space-y-2">
           {files.length === 0 && <p className="text-[#5C5C5C] text-sm">No files shared yet.</p>}
-          {files.map((f) => (
-            <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="block border border-[#E5E5E5] p-4 hover:border-[#0A0A0A] transition">
+          {files.map((f) => {
+            const fileUrl = safeExternalUrl(f.url);
+            const body = (
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold">{f.name}</div>
                   <div className="text-xs text-[#5C5C5C] mt-1">{f.stage || "—"} · {(f.created_at || "").slice(0, 10)}</div>
                 </div>
-                <div className="overline">OPEN →</div>
+                <div className="overline">{fileUrl ? "OPEN →" : "UNAVAILABLE"}</div>
               </div>
-            </a>
-          ))}
+            );
+            return fileUrl ? (
+              <a key={f.id} href={fileUrl} target="_blank" rel="noreferrer" className="block border border-[#E5E5E5] p-4 hover:border-[#0A0A0A] transition">
+                {body}
+              </a>
+            ) : <div key={f.id} className="block border border-[#E5E5E5] p-4">{body}</div>;
+          })}
         </div>
       </section>
 

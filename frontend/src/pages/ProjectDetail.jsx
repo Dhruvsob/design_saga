@@ -7,6 +7,7 @@ import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import { empName } from "../lib/format";
+import { safeExternalUrl } from "../lib/url";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise,
   X, Warning, Trash, UsersThree, CaretRight,
@@ -434,12 +435,12 @@ export default function ProjectDetail() {
           {(p.files || []).length === 0 && <Empty text="No files yet." />}
           {(p.files || []).map((f) => (
             <div key={f.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition group">
-              <a href={f.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm">{f.name}</div>
                 <div className="text-xs text-[#5C5C5C]">{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
-              </a>
+              </div>
               <div className="flex items-center gap-2">
-                <a href={f.url} target="_blank" rel="noreferrer" className="overline">OPEN →</a>
+                {safeExternalUrl(f.url) ? <a href={safeExternalUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[#9A9A9A]">UNAVAILABLE</span>}
                 <button onClick={() => deleteFile(f.id)} className="btn-ghost p-1 text-[#B22B22] opacity-0 group-hover:opacity-100 transition" title="Remove" data-testid={`file-delete-${f.id}`}>
                   <Trash size={12} />
                 </button>

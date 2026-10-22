@@ -71,7 +71,7 @@
   },
   "test_environment": {
     "base_url": "https://gamaa-preview.preview.emergentagent.com/api",
-    "admin_credentials": "admin@designsaga.com / Admin@123",
+    "admin_credentials": "redacted; supplied through ERP_TEST_* environment variables",
     "test_date": "2025-01-XX",
     "total_tests": 24,
     "tests_passed": 24,

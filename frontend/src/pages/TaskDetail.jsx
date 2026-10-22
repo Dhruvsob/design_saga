@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import { safeExternalUrl } from "../lib/url";
 import PageHero from "../components/PageHero";
 import CommentsPanel from "../components/CommentsPanel";
 import {
@@ -405,7 +406,7 @@ function References({ task, onSave }) {
         </div>
         {(task.reference_links || []).map((l, i) => (
           <div key={i} className="flex items-center justify-between text-xs border border-[#E5E5E5] p-2" data-testid={`ref-${i}`}>
-            <a href={l} target="_blank" rel="noreferrer" className="truncate flex-1 text-[#8B7F6A] hover:underline">{l}</a>
+            {safeExternalUrl(l) ? <a href={safeExternalUrl(l)} target="_blank" rel="noreferrer" className="truncate flex-1 text-[#8B7F6A] hover:underline">{l}</a> : <span className="truncate flex-1 text-[#9A9A9A]">Invalid link</span>}
             <button onClick={() => delLink(i)} className="text-[#FF2A00] ml-2"><Trash size={12} /></button>
           </div>
         ))}
@@ -429,9 +430,11 @@ function References({ task, onSave }) {
           <div key={i} className="flex items-center justify-between text-xs border border-[#E5E5E5] p-2" data-testid={`att-${i}`}>
             <div className="flex items-center gap-2 truncate flex-1">
               <PaperclipHorizontal size={12} />
-              <a href={a.url} target="_blank" rel="noreferrer" className="truncate text-[#8B7F6A] hover:underline">
-                {a.label || a.url}
-              </a>
+              {safeExternalUrl(a.url) ? (
+                <a href={safeExternalUrl(a.url)} target="_blank" rel="noreferrer" className="truncate text-[#8B7F6A] hover:underline">
+                  {a.label || a.url}
+                </a>
+              ) : <span className="truncate text-[#9A9A9A]">{a.label || "Invalid attachment"}</span>}
               <span className="text-[10px] font-mono text-[#9A9A9A]">{a.type}</span>
             </div>
             <button onClick={() => delAtt(i)} className="text-[#FF2A00]"><Trash size={12} /></button>

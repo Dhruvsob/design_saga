@@ -7,15 +7,17 @@ import os, sys, json, requests, uuid
 from datetime import date, timedelta
 
 BASE = os.environ.get("API_BASE", "http://localhost:8001/api")
-EMAIL = "admin@designsaga.com"
-PASSWORD = "Admin@123"
+EMAIL = os.environ.get("ERP_TEST_ADMIN_EMAIL")
+PASSWORD = os.environ.get("ERP_TEST_ADMIN_PASSWORD")
 
 # Non-admin (Accountant role) test user credentials — will be seeded on the fly
-NON_ADMIN_EMAIL = "acct@test.com"
-NON_ADMIN_PWD = "Acct@1234"
+NON_ADMIN_EMAIL = os.environ.get("ERP_TEST_ACCOUNTANT_EMAIL")
+NON_ADMIN_PWD = os.environ.get("ERP_TEST_ACCOUNTANT_PASSWORD")
 
 
 def login(email=EMAIL, password=PASSWORD):
+    if not email or not password:
+        raise RuntimeError("Set the ERP_TEST_* account environment variables")
     s = requests.Session()
     r = s.post(f"{BASE}/auth/login-password",
                json={"identifier": email, "password": password})
