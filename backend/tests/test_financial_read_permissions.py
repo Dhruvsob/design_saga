@@ -1,8 +1,10 @@
 """Regression coverage for financial read authorization helpers."""
 
+import asyncio
 import pytest
 from fastapi import HTTPException
 
+import server
 from server import _can_read_invoices, _employee_for_user, _ensure_invoice_read
 from routes.vendors import _vendor_for_user
 
@@ -80,3 +82,13 @@ def test_vendor_projection_hides_financial_identity_from_operational_users():
 
     accountant = _vendor_for_user(vendor, {"role": "Accountant"})
     assert accountant["bank_account_number"] == "123456"
+
+
+def test_quotation_actuals_require_invoice_or_finance_read(monkeypatch):
+    async def regular_quotation_reader(*_args, **_kwargs):
+        return {"role": "Employee", "permissions": ["quotations.read"]}
+
+    monkeypatch.setattr(server, "require_user", regular_quotation_reader)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.adv_cost_vs_actual("quote_1", None))
+    assert exc.value.status_code == 403

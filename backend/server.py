@@ -3345,6 +3345,7 @@ async def adv_cost_vs_actual(qid: str, request: Request, session_token: Optional
     """Aggregates paid invoice totals on the converted project vs quoted grand_total."""
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "quotations.read")
+    _ensure_invoice_read(user)
     q = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
     if not q:
         raise HTTPException(status_code=404, detail="Not found")

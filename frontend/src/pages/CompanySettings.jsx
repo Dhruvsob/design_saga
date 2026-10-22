@@ -63,9 +63,9 @@ export default function CompanySettings() {
       const dataUrl = reader.result;
       setSaving(true); setErr("");
       try {
-        await api.post("/org/current/logo", { logo_data_url: dataUrl });
+        const { data } = await api.post("/org/current/logo", { logo_data_url: dataUrl });
         await refreshOrg();
-        setBranding({ logo_url: dataUrl });
+        setBranding({ logo_url: data.logo_url });
       } catch (ex) {
         setErr(fmtErr(ex?.response?.data?.detail, "Upload failed"));
       } finally { setSaving(false); }

@@ -40,6 +40,35 @@ DEFAULT_BRANDING = {
 }
 
 
+def _sanitize_branding_update(branding: dict, existing: dict, org_id: str) -> dict:
+    """Validate browser-rendered asset URLs and preserve legacy inline logos."""
+    cleaned = dict(branding or {})
+    current_logo = (existing or {}).get("logo_url")
+    if "logo_url" in cleaned and cleaned["logo_url"] is not None:
+        logo_url = cleaned["logo_url"]
+        if not isinstance(logo_url, str):
+            raise ValueError("Logo URL must be text")
+        if logo_url.startswith("/api/org/logo/"):
+            path = logo_url.removeprefix("/api/org/logo/")
+            if (not _storage.LOGO_PATH_RE.fullmatch(path)
+                    or path.split("/", 3)[2] != org_id):
+                raise ValueError("Logo does not belong to this organisation")
+        elif logo_url.startswith("data:"):
+            # The upload endpoint may retain an inline logo only when object
+            # storage is unavailable. Do not let the general settings route
+            # introduce or replace large inline payloads.
+            if logo_url != current_logo:
+                raise ValueError("Upload logos through the logo endpoint")
+        else:
+            from core.url_security import external_http_url
+            cleaned["logo_url"] = external_http_url(logo_url)
+
+    if cleaned.get("favicon_url") is not None:
+        from core.url_security import external_http_url
+        cleaned["favicon_url"] = external_http_url(cleaned["favicon_url"])
+    return cleaned
+
+
 def _pack_org(o: dict) -> dict:
     """Public projection of an org doc."""
     if not o:
@@ -97,7 +126,12 @@ async def update_current_org(payload: BrandingUpdateIn, request: Request,
     if "branding" in up and hasattr(up["branding"], "dict"):
         # merge with existing branding
         existing = org.get("branding") or {}
-        merged = {**existing, **up["branding"].dict(exclude_unset=True)}
+        try:
+            incoming = _sanitize_branding_update(
+                up["branding"].dict(exclude_unset=True), existing, oid)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        merged = {**existing, **incoming}
         up["branding"] = merged
     up["updated_at"] = iso_now()
     up["updated_by"] = user["user_id"]

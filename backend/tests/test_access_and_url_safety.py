@@ -9,6 +9,7 @@ from models.accounting import ExpenseIn
 from models.expense import ExpenseLineIn
 from models.task import Attachment, TaskIn
 from models.vendor import VendorDocumentIn
+from routes.organization import _sanitize_branding_update
 from server import DocumentIn
 
 
@@ -49,6 +50,23 @@ def test_all_attachment_models_use_the_shared_url_policy():
             date="2026-10-13", amount=1, expense_account_id="expense",
             paid_from_account_id="bank", bill_url="data:text/html,bad",
         )
+
+
+def test_branding_update_cannot_replace_object_logo_with_inline_data():
+    current = {
+        "logo_url": "/api/org/logo/designsaga-erp/org-logos/org_1/"
+                    "0123456789abcdef0123456789abcdef.png",
+    }
+    with pytest.raises(ValueError):
+        _sanitize_branding_update(
+            {"logo_url": "data:image/png;base64,AAAA"}, current, "org_1")
+
+
+def test_branding_update_accepts_only_own_internal_logo():
+    own = "/api/org/logo/designsaga-erp/org-logos/org_1/0123456789abcdef0123456789abcdef.png"
+    assert _sanitize_branding_update({"logo_url": own}, {}, "org_1")["logo_url"] == own
+    with pytest.raises(ValueError):
+        _sanitize_branding_update({"logo_url": own}, {}, "org_2")
 
 
 def test_permission_guard_and_query_merge():
