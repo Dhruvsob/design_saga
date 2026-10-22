@@ -41,11 +41,17 @@ def test_attendance_project_options_include_authorized_site_projects(monkeypatch
             assert query["kind"] == "site"
             return ["project_site"]
 
+    class Employees:
+        async def find_one(self, query, projection):
+            return None
+
     async def assigned_only(_user):
         return {"$or": [{"team_ids": {"$in": ["emp_a"]}}]}
 
     monkeypatch.setattr(
-        attendance, "sdb", SimpleNamespace(office_locations=Locations()),
+        attendance, "sdb", SimpleNamespace(
+            office_locations=Locations(), employees=Employees(),
+        ),
     )
     monkeypatch.setattr(attendance, "project_visibility_query", assigned_only)
     query = asyncio.run(attendance._attendance_project_query({
@@ -67,6 +73,28 @@ def test_attendance_managers_can_choose_any_active_project():
         "user_id": "manager", "permissions": ["attendance.update"],
     }))
     assert query == {"archived": {"$ne": True}}
+
+
+def test_site_execution_employee_can_choose_any_active_project(monkeypatch):
+    class Employees:
+        async def find_one(self, query, projection):
+            return {"designation": "", "department": "Site Execution"}
+
+    monkeypatch.setattr(
+        attendance, "sdb", SimpleNamespace(employees=Employees()),
+    )
+    query = asyncio.run(attendance._attendance_project_query({
+        "user_id": "hiren", "permissions": ["attendance.create"],
+    }))
+    assert query == {"archived": {"$ne": True}}
+
+
+def test_site_supervisor_detection_is_narrow():
+    assert attendance._is_site_supervisor_employee({"designation": "Site Supervisor"}) is True
+    assert attendance._is_site_supervisor_employee({"department": "Site Supervision"}) is True
+    assert attendance._is_site_supervisor_employee({"department": "Site Execution"}) is True
+    assert attendance._is_site_supervisor_employee({"designation": "Designer"}) is False
+    assert attendance._is_site_supervisor_employee({"department": "Accounts"}) is False
 
 
 def test_today_uses_india_business_date(monkeypatch):

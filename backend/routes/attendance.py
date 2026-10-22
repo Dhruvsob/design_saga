@@ -265,10 +265,34 @@ async def update_att_policy(payload: AttendancePolicyIn, request: Request,
 # ==================================================
 # Geo-fenced Locations
 # ==================================================
+def _is_site_supervisor_employee(employee: Optional[dict]) -> bool:
+    if not employee:
+        return False
+    designation = str(employee.get("designation") or "").strip().lower()
+    department = str(employee.get("department") or "").strip().lower()
+    return (
+        "site supervisor" in designation
+        or designation == "supervisor"
+        or department in {"site execution", "site supervision"}
+    )
+
+
+async def _attendance_can_choose_any_project(user: dict) -> bool:
+    if _can_manage_attendance(user):
+        return True
+    links = [{"user_id": user["user_id"]}]
+    if user.get("email"):
+        links.append({"email": user["email"]})
+    employee = await sdb.employees.find_one(
+        {"$or": links}, {"_id": 0, "designation": 1, "department": 1},
+    )
+    return _is_site_supervisor_employee(employee)
+
+
 async def _attendance_project_query(user: dict) -> dict:
     """Projects a user may safely reference from an attendance punch."""
     active = {"archived": {"$ne": True}}
-    if _can_manage_attendance(user):
+    if await _attendance_can_choose_any_project(user):
         return active
 
     visibility = await project_visibility_query(user)
