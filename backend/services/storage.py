@@ -43,7 +43,7 @@ MAX_LOGO_BYTES = 2 * 1024 * 1024   # 2MB decoded
 # SVG is intentionally excluded: it is an active document format (script,
 # external references) and cannot be safely sanitised server-side here.
 ALLOWED_LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
-LOGO_PATH_RE = re.compile(r"^" + re.escape("designsaga-erp") + r"/org-logos/[A-Za-z0-9_-]{1,64}/[a-f0-9]{32}\.(png|jpg|webp|gif|svg)$")
+LOGO_PATH_RE = re.compile(r"^" + re.escape("designsaga-erp") + r"/org-logos/[A-Za-z0-9_-]{1,64}/[a-f0-9]{32}\.(png|jpg|webp)$")
 
 
 def sniff_image_mime(raw: bytes) -> Optional[str]:

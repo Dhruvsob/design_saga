@@ -69,12 +69,44 @@ def _sanitize_branding_update(branding: dict, existing: dict, org_id: str) -> di
     return cleaned
 
 
+def _safe_branding_projection(branding: dict, org_id: str) -> dict:
+    """Drop unsafe legacy asset values before returning branding to a browser."""
+    cleaned = dict(branding or {})
+    logo_url = cleaned.get("logo_url")
+    if logo_url:
+        try:
+            if logo_url.startswith("/api/org/logo/"):
+                path = logo_url.removeprefix("/api/org/logo/")
+                if (not _storage.LOGO_PATH_RE.fullmatch(path)
+                        or path.split("/", 3)[2] != org_id):
+                    raise ValueError("Invalid internal logo")
+            elif logo_url.startswith("data:"):
+                raw, mime = _storage.parse_data_url(logo_url)
+                if mime not in _storage.ALLOWED_LOGO_MIME:
+                    raise ValueError("Unsupported inline logo")
+                _storage.validate_logo_bytes(raw, mime)
+            else:
+                from core.url_security import external_http_url
+                cleaned["logo_url"] = external_http_url(logo_url)
+        except (AttributeError, TypeError, ValueError):
+            cleaned["logo_url"] = None
+
+    if cleaned.get("favicon_url"):
+        from core.url_security import external_http_url
+        try:
+            cleaned["favicon_url"] = external_http_url(cleaned["favicon_url"])
+        except (TypeError, ValueError):
+            cleaned["favicon_url"] = None
+    return cleaned
+
+
 def _pack_org(o: dict) -> dict:
     """Public projection of an org doc."""
     if not o:
         return o
     out = {k: v for k, v in o.items() if k not in ("_id", "notes")}
-    out.setdefault("branding", {})
+    out["branding"] = _safe_branding_projection(
+        out.get("branding") or {}, out.get("org_id") or DEFAULT_ORG_ID)
     for k, v in DEFAULT_BRANDING.items():
         out["branding"].setdefault(k, v)
     # Ensure business_mode + features are always present for the UI
@@ -300,5 +332,6 @@ async def public_branding(slug: str):
         "slug": o.get("slug"),
         "name": o.get("name"),
         "display_name": o.get("display_name") or o.get("name"),
-        "branding": (o.get("branding") or {}),
+        "branding": _safe_branding_projection(
+            o.get("branding") or {}, o.get("org_id") or DEFAULT_ORG_ID),
     }

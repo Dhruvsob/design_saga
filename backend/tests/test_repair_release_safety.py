@@ -13,6 +13,7 @@ from core.audit import audit_digest, verify_chain
 from core.http_security import rate_limit_decision, reset_rate_limits
 from core.indexes import _INDEXES
 from core.helpers import business_today
+from server import _demo_seeding_enabled
 
 
 def _request(path: str) -> Request:
@@ -65,6 +66,15 @@ def test_business_date_uses_configured_timezone(monkeypatch):
         lambda: datetime(2026, 10, 14, 20, 0, tzinfo=timezone.utc),
     )
     assert business_today().isoformat() == "2026-10-15"
+
+
+def test_demo_seeding_is_impossible_in_production(monkeypatch):
+    monkeypatch.setenv("ENABLE_SEED_DEMO", "true")
+    monkeypatch.setenv("ENV", "production")
+    assert _demo_seeding_enabled() is False
+
+    monkeypatch.setenv("ENV", "development")
+    assert _demo_seeding_enabled() is True
 
 
 class _Cursor:

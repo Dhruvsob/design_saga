@@ -9,7 +9,8 @@ from models.accounting import ExpenseIn
 from models.expense import ExpenseLineIn
 from models.task import Attachment, TaskIn
 from models.vendor import VendorDocumentIn
-from routes.organization import _sanitize_branding_update
+from routes.organization import _pack_org, _sanitize_branding_update
+from services.storage import LOGO_PATH_RE
 from server import DocumentIn, _public_file_projection
 
 
@@ -67,6 +68,23 @@ def test_branding_update_accepts_only_own_internal_logo():
     assert _sanitize_branding_update({"logo_url": own}, {}, "org_1")["logo_url"] == own
     with pytest.raises(ValueError):
         _sanitize_branding_update({"logo_url": own}, {}, "org_2")
+
+
+def test_legacy_branding_projection_drops_active_or_foreign_assets():
+    packed = _pack_org({
+        "org_id": "org_1",
+        "branding": {
+            "logo_url": "javascript:alert(1)",
+            "favicon_url": "data:text/html,bad",
+        },
+    })
+    assert packed["branding"]["logo_url"] is None
+    assert packed["branding"]["favicon_url"] is None
+
+    assert not LOGO_PATH_RE.fullmatch(
+        "designsaga-erp/org-logos/org_1/0123456789abcdef0123456789abcdef.svg")
+    assert not LOGO_PATH_RE.fullmatch(
+        "designsaga-erp/org-logos/org_1/0123456789abcdef0123456789abcdef.gif")
 
 
 def test_public_file_projection_drops_unsafe_legacy_urls():

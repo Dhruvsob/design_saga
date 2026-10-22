@@ -65,6 +65,12 @@ SUPER_ADMIN_EMAILS = {
 def _is_super_admin(email: Optional[str]) -> bool:
     return bool(email) and email.strip().lower() in SUPER_ADMIN_EMAILS
 
+
+def _demo_seeding_enabled() -> bool:
+    environment = os.environ.get("ENV", os.environ.get("APP_ENV", "")).strip().lower()
+    enabled = os.environ.get("ENABLE_SEED_DEMO", "").strip().lower() in ("1", "true", "yes")
+    return enabled and environment not in ("production", "prod")
+
 app = FastAPI(title="Design Saga API")
 api = APIRouter(prefix="/api")
 
@@ -2427,7 +2433,7 @@ async def ai_history(session_id: str, request: Request,
 @api.post("/seed")
 async def seed_demo(request: Request, session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
-    if os.environ.get("ENABLE_SEED_DEMO", "").lower() not in ("1", "true", "yes"):
+    if not _demo_seeding_enabled():
         raise HTTPException(status_code=403,
                             detail="Demo seeding disabled. Set ENABLE_SEED_DEMO=true to enable.")
     user = await require_user(request, session_token, authorization)
@@ -3815,7 +3821,7 @@ async def adv_pdf(qid: str, request: Request, session_token: Optional[str] = Coo
 @api.post("/quotations-adv/seed")
 async def adv_seed(request: Request, session_token: Optional[str] = Cookie(default=None),
                    authorization: Optional[str] = Header(default=None)):
-    if os.environ.get("ENABLE_SEED_DEMO", "").lower() not in ("1", "true", "yes"):
+    if not _demo_seeding_enabled():
         raise HTTPException(status_code=403,
                             detail="Demo seeding disabled. Set ENABLE_SEED_DEMO=true to enable.")
     user = await require_user(request, session_token, authorization)
@@ -4503,7 +4509,7 @@ async def add_reward(eid: str, payload: RewardIn, request: Request,
 async def seed_employees(request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
-    if os.environ.get("ENABLE_SEED_DEMO", "").lower() not in ("1", "true", "yes"):
+    if not _demo_seeding_enabled():
         raise HTTPException(status_code=403,
                             detail="Demo seeding disabled. Set ENABLE_SEED_DEMO=true to enable.")
     user = await require_user(request, session_token, authorization)
