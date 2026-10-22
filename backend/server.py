@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from typing import List, Optional, Literal
@@ -4001,8 +4001,10 @@ class EmployeeUpdate(BaseModel):
 
 
 class DocumentIn(BaseModel):
-    label: str
+    label: str = Field(min_length=1, max_length=200)
     url: str
+
+    _validate_url = field_validator("url")(external_http_url)
 
 
 class WarningIn(BaseModel):

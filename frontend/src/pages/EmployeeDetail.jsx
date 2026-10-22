@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../lib/api";
+import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft, FloppyDisk, Plus, Trash, Warning, Trophy,
@@ -428,7 +429,9 @@ export default function EmployeeDetail() {
             <p className="text-sm text-[#5C5C5C]">No documents yet. Add offer letter, Aadhaar, PAN, contract etc.</p>
           ) : (
             <div className="space-y-2">
-              {(emp.documents || []).map((d) => (
+              {(emp.documents || []).map((d) => {
+                const safeUrl = safeExternalUrl(d.url);
+                return (
                 <div key={d.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition">
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-sm">{d.label}</div>
@@ -438,9 +441,11 @@ export default function EmployeeDetail() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a href={d.url} target="_blank" rel="noreferrer" className="btn-ghost text-xs">
-                      <ArrowSquareOut size={12} /> Open
-                    </a>
+                    {safeUrl && (
+                      <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs">
+                        <ArrowSquareOut size={12} /> Open
+                      </a>
+                    )}
                     {canEdit && (
                       <button onClick={() => removeDocument(d.id)} className="text-[#FF2A00] hover:scale-110 transition p-2">
                         <Trash size={14} />
@@ -448,7 +453,8 @@ export default function EmployeeDetail() {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>

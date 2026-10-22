@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-10-17 (Asia/Kolkata)
+Last updated: 2026-10-22 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -12,7 +12,7 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Tenant login | Super Admin, tenant owner, email, and employee ID must use one authentication system and resolve the correct tenant/role | Fixed and deployed |
-| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Trusted-scope override and audited secondary lookups fixed/deployed at `7cf22c1`; route-by-route audit continues |
+| Tenant isolation | Every business query must enforce `org_id`; cross-tenant IDs must return no data | Scoped business database, secondary lookup repairs, tenant cleanup and focused isolation tests are in place; route-by-route adversarial coverage continues |
 | Project/task/file IDOR | Same-tenant users must not read or modify guessed projects, tasks, follow-ups, reminders, settings, or file links | Fixed, tested, and deployed at `236d7c7` |
 | Attachment URL injection | Reject `javascript:`, `data:`, `file:`, credential-bearing, malformed, and control-character URLs | Fixed, tested, and deployed at `236d7c7` |
 | Exposed credentials | Rotate the MongoDB Atlas password previously pasted into chat and revoke the temporary Mongo viewer token; confirm neither is used by production | Open, external account action required |
@@ -21,7 +21,7 @@ yet received sufficient adversarial testing.
 | Host firewall | Deny unsolicited inbound traffic while preserving SSH, HTTP, HTTPS, and HTTP/3 | Fixed: UFW default-deny is active with only 22/tcp, 80/tcp, 443/tcp, and 443/udp allowed for IPv4/IPv6 |
 | Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Partial: daily checksummed archive and restore validation pass; off-server encrypted retention and documented RPO/RTO remain open |
 | Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Partially fixed; test a complete restore drill |
-| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/backup monitor is active; external webhook, capacity/TLS/5xx alerting remain open |
+| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/backup monitor is active; external notification delivery is parked pending Hostinger outbound IPv4 resolution; capacity/TLS/5xx alerting remains open |
 
 ## P1 - Authorization and Data Protection
 
@@ -33,14 +33,14 @@ yet received sufficient adversarial testing.
 | Approval races | Concurrent attendance, leave, correction, and late-arrival approvals must produce one final decision | Fixed, deployed, and verified live |
 | Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed and deployed |
 | Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed and deployed |
-| Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Search/comments/calendar/notification/public-share leaks fixed; remaining modules continue |
+| Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Project/task/file/search/comments/calendar/notification/public-share fixed; vendor financial/privacy and linked project/task visibility fixed and tested 2026-10-22; remaining route audit continues |
 | Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides fixed and deployed; broader escalation audit continues |
 | Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Lifecycle gates fixed and deployed; stolen-token resistance audit continues |
 | CSRF and cookies | Confirm `Secure`, `HttpOnly`, appropriate `SameSite`, origin checks and no state-changing GET routes | Fixed baseline: secure HttpOnly SameSite=Lax cookies plus unsafe-method Origin/Referer enforcement; ongoing route audit remains |
 | Rate limiting | Login, password reset, OTP, public portal, search, AI and expensive exports need per-IP/account limits | Fixed single-worker baseline for auth/reset, portal, branding, search, AI, exports and uploads; move buckets to shared storage before adding workers |
 | Secrets management | No secrets in Git/images/logs; least-privilege environment access; rotation procedure and secret inventory | Audit |
-| Stored XSS | Validate/sanitize notes, descriptions, comments, names, SVG/media and any rich-text rendering | Audit |
-| File handling | Authenticated object access, signed expiry, ownership, size/type limits, filename safety, malware scanning and deletion lifecycle | Open; URL scheme protection alone is complete |
+| Stored XSS | Validate/sanitize notes, descriptions, comments, names, SVG/media and any rich-text rendering | Baseline fixed: React text rendering, no `dangerouslySetInnerHTML`, shared external-URL validation and defensive legacy employee-document rendering; SVG/media and future rich-text changes require continuing review |
+| File handling | Authenticated object access, signed expiry, ownership, size/type limits, filename safety, malware scanning and deletion lifecycle | Partial: project ownership, URL-scheme checks, logo size/type/byte validation and safe response headers are fixed; general binary upload/malware scanning and object-store deletion remain open |
 | Tenant deletion lifecycle | Purge all tenant business/integration data, sessions, login identifiers and per-tenant audit state without touching global records | Fixed, disposable-database tested and deployed at `7cf22c1`; physical object-store garbage collection remains an operations follow-up |
 | Audit logs | Tamper-resistant records for auth, permissions, payroll, finance, approvals, exports and destructive actions | Audit |
 
@@ -50,11 +50,11 @@ yet received sufficient adversarial testing.
 |---|---|---|
 | Employee/user link | Employee creation must create/link exactly one active authentication user where requested | Fixed for reported login path; uniqueness audit required |
 | Invoice lifecycle | Draft/issued/paid/reversed/deleted transitions and permissions | Fixed for linked payment path; full lifecycle audit required |
-| Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Idempotency and duplicate submission fixed/tested; remaining approval/receipt audit continues |
-| Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Over-receipt and bill/payment idempotency fixed/tested; remaining lifecycle audit continues |
-| Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | Concurrent EMI posting and journal cardinality fixed/tested; prepayment/deletion audit continues |
-| Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Audit |
-| Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Partially fixed; dependency matrix audit required |
+| Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Idempotency, duplicate submission, claimant visibility, approval concurrency, receipt URLs and reimbursement accounts fixed/tested; broader workflow QA continues |
+| Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Status transitions, cancellation dependencies, over-receipt and bill/payment idempotency fixed/tested; broader workflow QA continues |
+| Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | EMI/prepayment locking, balance floors, journal cardinality and safe archive/reversal rules fixed/tested |
+| Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Settlement locking/idempotency and accounting linkage fixed/tested; finance-only read/update authorization fixed 2026-10-22; tax-policy review remains |
+| Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Dependency matrix blocks deletion when operational, attendance or financial history exists; archive path is available and tested |
 | Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | Employee/document counters and key finance identifiers protected; broader normalization audit continues |
 | Time zones | All business dates use Asia/Kolkata while stored timestamps remain UTC; test midnight/month/year boundaries | Shared IST business-date helper applied to audited modules; boundary regression test passes |
 | Money precision | Decimal-safe calculations, rounding policy, GST/TDS, currency and reconciliation | Audit |

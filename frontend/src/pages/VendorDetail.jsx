@@ -25,7 +25,10 @@ export default function VendorDetail() {
   const { hasPerm, currentOrg } = useAuth();
   const businessMode = (currentOrg?.business_mode || "hybrid").toLowerCase();
   // Hybrid gets everything so all workflows stay reachable during transitions.
-  const TABS = businessMode === "consultancy" ? CONSULTANCY_TABS : TURNKEY_TABS;
+  const canFinanceRead = hasPerm("finance.read");
+  const financeTabs = new Set(["commercial", "ledger", "bills", "payments", "commissions"]);
+  const TABS = (businessMode === "consultancy" ? CONSULTANCY_TABS : TURNKEY_TABS)
+    .filter((name) => canFinanceRead || !financeTabs.has(name));
   const [v, setV] = useState(null);
   const [tab, setTab] = useState("overview");
   const [ledger, setLedger] = useState(null);
@@ -51,12 +54,12 @@ export default function VendorDetail() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (tab === "ledger") api.get(`/vendors/${id}/ledger`).then(({ data }) => setLedger(data));
+    if (tab === "ledger" && canFinanceRead) api.get(`/vendors/${id}/ledger`).then(({ data }) => setLedger(data));
     if (tab === "performance") api.get(`/vendors/${id}/performance`).then(({ data }) => setPerf(data));
-    if (tab === "commissions" || tab === "commercial") {
+    if (canFinanceRead && (tab === "commissions" || tab === "commercial")) {
       api.get(`/vendors/${id}/commission-ledger`).then(({ data }) => setCommissionLedger(data));
     }
-  }, [tab, id]);
+  }, [tab, id, canFinanceRead]);
 
   const saveCommercial = async (cfg) => {
     setBusy(true);
@@ -153,9 +156,9 @@ export default function VendorDetail() {
 
       {/* KPI ROW */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Kpi label="Total billed" value={INR(s.total_billed || 0)} />
-        <Kpi label="Total paid" value={INR(s.total_paid || 0)} />
-        <Kpi label="Open bills" value={s.open_bills || 0} />
+        {canFinanceRead && <Kpi label="Total billed" value={INR(s.total_billed || 0)} />}
+        {canFinanceRead && <Kpi label="Total paid" value={INR(s.total_paid || 0)} />}
+        {canFinanceRead && <Kpi label="Open bills" value={s.open_bills || 0} />}
         <Kpi label="Assigned tasks" value={s.task_count || 0} />
         <Kpi label="Projects touched" value={s.project_count || 0} />
       </div>
@@ -182,7 +185,7 @@ export default function VendorDetail() {
       {tab === "overview" && <Overview v={v} onRate={submitRating} busy={busy} canRate={hasPerm("vendors.update")} />}
       {tab === "commercial" && (
         <Commercial ledger={commissionLedger} vendor={v}
-          canEdit={hasPerm("vendors.update")}
+          canEdit={hasPerm("finance.update")}
           onSave={saveCommercial} busy={busy} />
       )}
       {tab === "ledger" && <Ledger data={ledger} />}

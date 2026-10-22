@@ -9,6 +9,7 @@ from models.accounting import ExpenseIn
 from models.expense import ExpenseLineIn
 from models.task import Attachment, TaskIn
 from models.vendor import VendorDocumentIn
+from server import DocumentIn
 
 
 @pytest.mark.parametrize("url", [
@@ -39,6 +40,8 @@ def test_all_attachment_models_use_the_shared_url_policy():
         TaskIn(title="unsafe", reference_links=["data:text/html,bad"])
     with pytest.raises(ValidationError):
         VendorDocumentIn(label="unsafe", url="file:///tmp/a")
+    with pytest.raises(ValidationError):
+        DocumentIn(label="unsafe", url="javascript:alert(1)")
     with pytest.raises(ValidationError):
         ExpenseLineIn(category="travel", amount=1, receipt_url="javascript:x")
     with pytest.raises(ValidationError):

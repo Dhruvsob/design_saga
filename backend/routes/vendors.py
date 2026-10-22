@@ -15,16 +15,17 @@ Design decisions
 * **Vendor payments** are recorded as balanced journal_entries with
   `source="vendor_payment"` (DR Accounts Payable · CR Cash/Bank), plus a
   `bill_ids` link so we can compute paid-vs-outstanding on any bill.
-* Every new document carries an optional `org_id` – multi-tenant ready
-  (not enforced).
+* Every business query is tenant-scoped by `sdb`; new records are stamped with
+  the active organization context.
 
 RBAC
 ----
-* `vendors.read`   – Admin, Director, ProjectManager, Designer, Accountant, Employee
+* `vendors.read`   – operational directory/assignment data
 * `vendors.create` – Admin, Director, ProjectManager, Accountant
 * `vendors.update` – Admin, Director, ProjectManager, Accountant
 * `vendors.delete` – Admin, Director
-* `finance.create` – required for bills & payments (Admin, Director, Accountant)
+* `finance.read`   – required for bills, payments, ledgers and commissions
+* `finance.create` – required for posting bills & payments (Admin, Director, Accountant)
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
 from pymongo.errors import DuplicateKeyError
@@ -40,6 +41,10 @@ from core.rbac import has_permission
 from core.locks import doc_lock
 from core.finance import require_asset_account
 from core.audit import audit
+from core.access_control import (
+    get_visible_project, merge_query, project_visibility_query, task_visibility_query,
+    visible_project_ids,
+)
 import re as _re_mod
 from models.accounting import VendorIn
 from models.vendor import (
@@ -59,6 +64,26 @@ router = APIRouter()
 def _require(user: dict, perm: str):
     if not has_permission(user, perm):
         raise HTTPException(status_code=403, detail=f"Missing permission: {perm}")
+
+
+_VENDOR_FINANCIAL_FIELDS = {
+    "pan", "bank_name", "bank_account_number", "bank_ifsc", "bank_branch",
+    "upi_id", "tds_applicable", "tds_rate", "commission",
+}
+
+
+def _can_read_vendor_financials(user: dict) -> bool:
+    return has_permission(user, "finance.read")
+
+
+def _vendor_for_user(vendor: dict, user: dict) -> dict:
+    out = dict(vendor)
+    if not _can_read_vendor_financials(user):
+        for field in _VENDOR_FINANCIAL_FIELDS:
+            out.pop(field, None)
+        if not has_permission(user, "vendors.update"):
+            out.pop("documents", None)
+    return out
 
 
 def _bill_total(bill: dict) -> float:
@@ -283,6 +308,7 @@ async def list_vendors(
 
     # Filter by project: only vendors that have journal_entries or bills against this project
     if project_id:
+        await get_visible_project(user, project_id)
         involved = set()
         async for e in sdb.journal_entries.find({"project_id": project_id,
                                                 "vendor_id": {"$ne": None}},
@@ -293,16 +319,17 @@ async def list_vendors(
             involved.add(b["vendor_id"])
         rows = [r for r in rows if r["id"] in involved]
 
-    # Attach lightweight rollups (outstanding + rating) for the list view
-    for v in rows:
-        outstanding = 0.0
-        async for b in sdb.vendor_bills.find(
-            {"vendor_id": v["id"], "status": {"$in": ["received", "partially_paid", "overdue"]}},
-            {"_id": 0, "outstanding": 1, "total": 1, "paid_amount": 1},
-        ):
-            outstanding += float(b.get("outstanding") or (b.get("total", 0) - b.get("paid_amount", 0)))
-        v["outstanding"] = round(outstanding, 2)
-    return rows
+    # Outstanding balances are accounting data, not general vendor-directory data.
+    if _can_read_vendor_financials(user):
+        for v in rows:
+            outstanding = 0.0
+            async for b in sdb.vendor_bills.find(
+                {"vendor_id": v["id"], "status": {"$in": ["received", "partially_paid", "overdue"]}},
+                {"_id": 0, "outstanding": 1, "total": 1, "paid_amount": 1},
+            ):
+                outstanding += float(b.get("outstanding") or (b.get("total", 0) - b.get("paid_amount", 0)))
+            v["outstanding"] = round(outstanding, 2)
+    return [_vendor_for_user(v, user) for v in rows]
 
 
 
@@ -372,9 +399,12 @@ async def get_vendor(vendor_id: str, request: Request,
     if not v:
         raise HTTPException(status_code=404, detail="Vendor not found")
 
-    # Aggregate detail: bills, payments, assigned tasks, projects, performance.
-    bills = await sdb.vendor_bills.find({"vendor_id": vendor_id}, {"_id": 0}).sort("bill_date", -1).to_list(500)
-    payments = await sdb.vendor_payments.find({"vendor_id": vendor_id}, {"_id": 0}).sort("payment_date", -1).to_list(500)
+    can_finance = _can_read_vendor_financials(user)
+    # Aggregate finance only for users allowed to read accounting data.
+    bills = (await sdb.vendor_bills.find({"vendor_id": vendor_id}, {"_id": 0})
+             .sort("bill_date", -1).to_list(500)) if can_finance else []
+    payments = (await sdb.vendor_payments.find({"vendor_id": vendor_id}, {"_id": 0})
+                .sort("payment_date", -1).to_list(500)) if can_finance else []
 
     outstanding = sum(float(b.get("outstanding") or 0)
                       for b in bills if b.get("status") in ("received", "partially_paid", "overdue"))
@@ -388,34 +418,42 @@ async def get_vendor(vendor_id: str, request: Request,
         {"vendor_id": vendor_id},
         {"vendor_contact.vendor_name": v.get("name")},
     ]}
-    tasks = await sdb.tasks.find(task_query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    tasks = await sdb.tasks.find(
+        merge_query(task_query, await task_visibility_query(user)), {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
 
     project_ids = list({t.get("project_id") for t in tasks if t.get("project_id")})
-    # Also pull projects that appear in bills or journal entries
-    async for b in sdb.vendor_bills.find({"vendor_id": vendor_id, "project_id": {"$ne": None}},
-                                        {"_id": 0, "project_id": 1}):
-        if b.get("project_id"): project_ids.append(b["project_id"])
-    async for e in sdb.journal_entries.find({"vendor_id": vendor_id, "project_id": {"$ne": None}},
-                                           {"_id": 0, "project_id": 1}):
-        if e.get("project_id"): project_ids.append(e["project_id"])
+    # Finance readers may also discover projects through bills/journals.
+    if can_finance:
+        async for b in sdb.vendor_bills.find({"vendor_id": vendor_id, "project_id": {"$ne": None}},
+                                            {"_id": 0, "project_id": 1}):
+            if b.get("project_id"): project_ids.append(b["project_id"])
+        async for e in sdb.journal_entries.find({"vendor_id": vendor_id, "project_id": {"$ne": None}},
+                                               {"_id": 0, "project_id": 1}):
+            if e.get("project_id"): project_ids.append(e["project_id"])
     project_ids = list(set(project_ids))
-    projects = await sdb.projects.find({"id": {"$in": project_ids}},
+    projects = await sdb.projects.find(merge_query(
+                                      {"id": {"$in": project_ids}},
+                                      await project_visibility_query(user)),
                                       {"_id": 0, "id": 1, "name": 1, "stage": 1,
                                        "client_name": 1}).to_list(200)
 
     v["summary"] = {
-        "total_billed": round(total_billed, 2),
-        "total_paid": round(total_paid, 2),
-        "outstanding": round(outstanding, 2),
-        "open_bills": sum(1 for b in bills if b.get("status") in ("received", "partially_paid", "overdue")),
         "task_count": len(tasks),
         "project_count": len(projects),
     }
-    v["bills"] = bills
-    v["payments"] = payments
+    if can_finance:
+        v["summary"].update({
+            "total_billed": round(total_billed, 2),
+            "total_paid": round(total_paid, 2),
+            "outstanding": round(outstanding, 2),
+            "open_bills": sum(1 for b in bills if b.get("status") in ("received", "partially_paid", "overdue")),
+        })
+        v["bills"] = bills
+        v["payments"] = payments
     v["tasks"] = tasks
     v["projects"] = projects
-    return v
+    return _vendor_for_user(v, user)
 
 
 @router.patch("/vendors/{vendor_id}")
@@ -503,6 +541,8 @@ async def rate_vendor(vendor_id: str, payload: VendorRatingIn, request: Request,
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     doc = payload.model_dump()
+    if doc.get("project_id"):
+        await get_visible_project(user, doc["project_id"])
     doc["id"] = new_id("vrat_")
     doc["vendor_id"] = vendor_id
     doc["rated_by"] = user["user_id"]
@@ -536,7 +576,12 @@ async def list_vendor_ratings(vendor_id: str, request: Request,
     # Verify the vendor belongs to the caller's org before exposing ratings.
     if not await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=404, detail="Vendor not found")
-    return await sdb.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0}) \
+    visible_ids = await visible_project_ids(user)
+    return await sdb.vendor_ratings.find({
+        "vendor_id": vendor_id,
+        "$or": [{"project_id": {"$in": visible_ids}}, {"project_id": None},
+                {"project_id": {"$exists": False}}],
+    }, {"_id": 0}) \
                                   .sort("created_at", -1).to_list(500)
 
 
@@ -637,7 +682,7 @@ async def list_vendor_bills(request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     query: dict = {}
     if vendor_id:  query["vendor_id"] = vendor_id
     if project_id: query["project_id"] = project_id
@@ -651,7 +696,7 @@ async def get_vendor_bill(bill_id: str, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     bill = await sdb.vendor_bills.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -943,7 +988,7 @@ async def list_vendor_payments(request: Request,
                                session_token: Optional[str] = Cookie(default=None),
                                authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     query: dict = {}
     if vendor_id:  query["vendor_id"] = vendor_id
     if project_id: query["project_id"] = project_id
@@ -1040,7 +1085,7 @@ async def vendor_full_ledger(vendor_id: str, request: Request,
                              authorization: Optional[str] = Header(default=None)):
     """Chronological running-balance ledger: bills DR the vendor, payments CR them."""
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -1137,7 +1182,9 @@ async def vendor_performance(vendor_id: str, request: Request,
     # Task-based completion
     task_query = {"$or": [{"vendor_id": vendor_id},
                           {"vendor_contact.vendor_name": vendor.get("name")}]}
-    tasks = await sdb.tasks.find(task_query, {"_id": 0}).to_list(500)
+    tasks = await sdb.tasks.find(
+        merge_query(task_query, await task_visibility_query(user)), {"_id": 0}
+    ).to_list(500)
     total_tasks = len(tasks)
     done_tasks = sum(1 for t in tasks if t.get("status") == "done"
                      or t.get("status_detail") == "Completed")
@@ -1152,19 +1199,26 @@ async def vendor_performance(vendor_id: str, request: Request,
     delay_rate = round((delayed / total_tasks) * 100, 1) if total_tasks else 0.0
 
     # Payment reliability (vendor's perspective is inverted: how well WE pay them)
+    can_finance = _can_read_vendor_financials(user)
     total_billed = 0.0
     outstanding = 0.0
-    async for b in sdb.vendor_bills.find(
-        {"vendor_id": vendor_id,
-         "status": {"$in": ["received", "partially_paid", "overdue", "paid"]}},
-        {"_id": 0},
-    ):
-        total_billed += float(b.get("total") or 0)
-        if b.get("status") in ("received", "partially_paid", "overdue"):
-            outstanding += float(b.get("outstanding") or 0)
+    if can_finance:
+        async for b in sdb.vendor_bills.find(
+            {"vendor_id": vendor_id,
+             "status": {"$in": ["received", "partially_paid", "overdue", "paid"]}},
+            {"_id": 0},
+        ):
+            total_billed += float(b.get("total") or 0)
+            if b.get("status") in ("received", "partially_paid", "overdue"):
+                outstanding += float(b.get("outstanding") or 0)
 
     # Rating-based
-    ratings = await sdb.vendor_ratings.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(500)
+    visible_ids = await visible_project_ids(user)
+    ratings = await sdb.vendor_ratings.find({
+        "vendor_id": vendor_id,
+        "$or": [{"project_id": {"$in": visible_ids}}, {"project_id": None},
+                {"project_id": {"$exists": False}}],
+    }, {"_id": 0}).to_list(500)
     def _avg(k):
         vals = [float(r[k]) for r in ratings if r.get(k) is not None]
         return round(sum(vals) / len(vals), 2) if vals else None
@@ -1187,9 +1241,12 @@ async def vendor_performance(vendor_id: str, request: Request,
     performance_score = round(
         completion_rate * 0.30 + on_time_pct * 0.25 + rating_pct * 0.35 + pay_pct * 0.10,
         1,
+    ) if can_finance else round(
+        completion_rate * (30 / 90) + on_time_pct * (25 / 90) + rating_pct * (35 / 90),
+        1,
     )
 
-    return {
+    result = {
         "vendor_id": vendor_id,
         "vendor_name": vendor.get("name"),
         "tasks": {"total": total_tasks, "done": done_tasks, "open": open_tasks,
@@ -1198,11 +1255,13 @@ async def vendor_performance(vendor_id: str, request: Request,
         "ratings": {"count": len(ratings), "quality": quality, "timeliness": timeliness,
                     "cost": cost, "communication": communication,
                     "overall": vendor.get("rating", 0.0)},
-        "financial": {"total_billed": round(total_billed, 2),
-                      "outstanding": round(outstanding, 2),
-                      "payment_reliability": pay_pct},
         "performance_score": performance_score,
     }
+    if can_finance:
+        result["financial"] = {"total_billed": round(total_billed, 2),
+                               "outstanding": round(outstanding, 2),
+                               "payment_reliability": pay_pct}
+    return result
 
 
 # ==================================================================
@@ -1446,7 +1505,7 @@ async def update_vendor_commercial(vendor_id: str, payload: CommissionConfig, re
                                    session_token: Optional[str] = Cookie(default=None),
                                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.update")
+    _require(user, "finance.update")
     if payload.type not in COMMISSION_TYPES:
         raise HTTPException(status_code=400,
                             detail=f"commission type must be one of {COMMISSION_TYPES}")
@@ -1474,7 +1533,7 @@ async def get_vendor_commercial(vendor_id: str, request: Request,
                                 session_token: Optional[str] = Cookie(default=None),
                                 authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -1489,7 +1548,7 @@ async def list_vendor_commissions(vendor_id: str, request: Request,
                                   session_token: Optional[str] = Cookie(default=None),
                                   authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     q: dict = {"vendor_id": vendor_id}
     if status:
         q["status"] = status
@@ -1504,7 +1563,7 @@ async def vendor_commission_ledger(vendor_id: str, request: Request,
                                    session_token: Optional[str] = Cookie(default=None),
                                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -1674,7 +1733,7 @@ async def commissions_dashboard(request: Request,
                                 session_token: Optional[str] = Cookie(default=None),
                                 authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     from datetime import datetime, timezone
     today = business_today()
     month_start = f"{today.year:04d}-{today.month:02d}-01"
@@ -1740,7 +1799,7 @@ async def commissions_report(request: Request,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "vendors.read")
+    _require(user, "finance.read")
     q: dict = {}
     if vendor_id:  q["vendor_id"] = vendor_id
     if project_id: q["project_id"] = project_id

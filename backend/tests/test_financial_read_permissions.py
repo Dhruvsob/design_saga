@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from server import _can_read_invoices, _employee_for_user, _ensure_invoice_read
+from routes.vendors import _vendor_for_user
 
 
 def test_invoice_read_allows_invoice_or_finance_permission():
@@ -63,3 +64,19 @@ def test_employee_projection_separates_payroll_and_hr_permissions():
     )
     assert hr_only["aadhaar"] == "111122223333"
     assert "salary" not in hr_only
+
+
+def test_vendor_projection_hides_financial_identity_from_operational_users():
+    vendor = {
+        "id": "vendor_1", "name": "Site supplier", "phone": "123",
+        "pan": "ABCDE1234F", "bank_account_number": "123456",
+        "bank_ifsc": "BANK0001", "upi_id": "private@bank",
+        "commission": {"applicable": True, "percentage": 5},
+    }
+    visible = _vendor_for_user(vendor, {"role": "Employee"})
+    assert visible["name"] == "Site supplier"
+    for key in ("pan", "bank_account_number", "bank_ifsc", "upi_id", "commission"):
+        assert key not in visible
+
+    accountant = _vendor_for_user(vendor, {"role": "Accountant"})
+    assert accountant["bank_account_number"] == "123456"
