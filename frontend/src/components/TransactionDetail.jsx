@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { formatDate } from "../lib/format";
+import { useAuth } from "../context/AuthContext";
 import {
   X, ArrowSquareOut, PencilSimple, ArrowUUpLeft, FloppyDisk, Warning,
 } from "@phosphor-icons/react";
@@ -16,6 +17,7 @@ const CURRENCY = (n) =>
 // (for permitted entries) lets the user edit metadata or post a reversal.
 export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const navigate = useNavigate();
+  const { hasPerm } = useAuth();
   const [mode, setMode] = useState("view");
   const [busy, setBusy] = useState(false);
   const [confirmReverse, setConfirmReverse] = useState(false);
@@ -35,9 +37,10 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const isReversal = source.endsWith("_reversal");
   const isReinstatement = source.endsWith("_reinstatement");
   const isReversed = !!entry.reversed;
-  const canUndoReversal = isReversal && !entry.undone &&
+  const canUpdate = hasPerm("finance.update");
+  const canUndoReversal = canUpdate && isReversal && !entry.undone &&
     ["manual_reversal", "income_reversal", "expense_reversal"].includes(source);
-  const canModify = !isReversal && !isReinstatement && !isReversed;
+  const canModify = canUpdate && !isReversal && !isReinstatement && !isReversed;
   const canEditAmount = false;
   // Drill-through: open the most relevant source record.
   const drillTarget = (() => {
@@ -238,7 +241,12 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                       <button onClick={() => setConfirmReverse(false)} className="btn-ghost text-sm">No</button>
                     </span>
                   ) : (
-                    <button onClick={() => setConfirmReverse(true)} className="btn-ghost text-sm" data-testid="txn-reverse-btn">
+                    <button
+                      onClick={() => setConfirmReverse(true)}
+                      className="btn-ghost text-sm"
+                      title="Posted transactions cannot be deleted. Reverse creates a balancing audit entry."
+                      data-testid="txn-reverse-btn"
+                    >
                       <ArrowUUpLeft size={14} /> Reverse
                     </button>
                   )
@@ -252,7 +260,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                 )}
               </div>
             </div>
-            {!canModify && (
+            {!canModify && (isReversed || isReversal || isReinstatement) && (
               <div className="px-4 pb-4 text-[11px] text-[#9A9A9A]">
                 {canUndoReversal
                   ? "Undoing creates a documented reinstatement; the reversal remains in the audit trail."

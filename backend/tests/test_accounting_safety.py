@@ -1,10 +1,13 @@
 """Regression coverage for accounting integrity helpers."""
 
+import asyncio
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
+import routes.accounting as accounting
 from routes.accounting import (
     _cash_collection_source,
     _linked_journal_key,
@@ -73,3 +76,20 @@ def test_bank_match_requires_same_account_direction_amount_and_nearby_date():
     assert "matching debit" in _bank_match_error(row, wrong_direction)
     assert "within 3 days" in _bank_match_error(row, {**valid, "date": "2026-10-30"})
     assert "cannot be matched" in _bank_match_error(row, {**valid, "reversed": True})
+
+
+def test_posted_journal_delete_is_always_rejected(monkeypatch):
+    class JournalEntries:
+        async def find_one(self, *_args, **_kwargs):
+            return {"id": "je_1", "org_id": "org_a", "total": 100}
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin_a", "org_id": "org_a", "permissions": ["finance.delete"]}
+
+    monkeypatch.setattr(accounting, "sdb", SimpleNamespace(journal_entries=JournalEntries()))
+    monkeypatch.setattr(accounting, "require_user", user)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(accounting.delete_journal("je_1", None))
+    assert exc.value.status_code == 409
+    assert "cannot be deleted" in exc.value.detail

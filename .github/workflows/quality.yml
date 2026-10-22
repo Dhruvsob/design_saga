@@ -40,6 +40,7 @@ jobs:
         run: >-
           python -m pytest -q
           tests/test_access_and_url_safety.py
+          tests/test_accounting_safety.py
           tests/test_financial_read_permissions.py
           tests/test_visibility_surfaces.py
           tests/test_tenant_lookup_scoping.py
