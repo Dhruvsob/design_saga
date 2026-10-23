@@ -46,6 +46,20 @@ VALID_KINDS = {
     "info",
 }
 
+NOTIFICATION_CATEGORY_BY_KIND = {
+    "task_assigned": "tasks", "task_due": "tasks", "task_overdue": "tasks",
+    "vendor_bill_due": "finance", "vendor_bill_overdue": "finance",
+    "invoice_due": "finance", "invoice_overdue": "finance",
+    "milestone_due": "finance", "milestone_overdue": "finance",
+    "payroll_due": "finance",
+    "leave_request": "attendance", "leave_decided": "attendance",
+    "attendance_pending": "attendance", "attendance_decided": "attendance",
+    "meeting": "calendar", "reminder": "calendar",
+}
+
+# Account state messages must always reach the affected user.
+MANDATORY_KINDS = {"account_approved", "account_rejected", "info"}
+
 
 async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
                link: Optional[str] = None, priority: str = "normal",
@@ -70,6 +84,17 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
     # organisation (or unknown users) are silently dropped.
     from core.scoped_db import current_org_id
     scope_org = current_org_id()
+    preferences = {}
+    candidate_ids = list(org_by_uid)
+    if kind not in MANDATORY_KINDS and candidate_ids:
+        preference_keys = [
+            {"user_id": uid, "org_id": org_by_uid.get(uid) or "org_default"}
+            for uid in candidate_ids
+        ]
+        async for pref in db.notification_preferences.find(
+                {"$or": preference_keys}, {"_id": 0}):
+            preferences[(pref.get("user_id"), pref.get("org_id"))] = pref
+    category = NOTIFICATION_CATEGORY_BY_KIND.get(kind)
     docs = []
     for uid in set(user_ids):
         if not uid:
@@ -77,6 +102,9 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
         if uid not in org_by_uid:
             continue
         if scope_org and (org_by_uid.get(uid) or "org_default") != scope_org:
+            continue
+        pref_key = (uid, org_by_uid.get(uid) or "org_default")
+        if category and preferences.get(pref_key, {}).get(category) is False:
             continue
         doc = {
             "id": new_id("ntf_"),

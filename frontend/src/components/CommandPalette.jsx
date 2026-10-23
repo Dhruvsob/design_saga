@@ -4,6 +4,7 @@ import api from "../lib/api";
 import {
   MagnifyingGlass, Briefcase, UserCircle, UsersThree, Kanban, HardHat,
   Receipt, IdentificationCard, Package, ArrowRight, Plus, Coins,
+  CalendarBlank, FileText,
 } from "@phosphor-icons/react";
 
 const TYPE_META = {
@@ -16,6 +17,8 @@ const TYPE_META = {
   employee:       { label: "EMPLOYEE", Icon: IdentificationCard },
   purchase_order: { label: "PO",       Icon: Package },
   transaction:    { label: "TXN",      Icon: Coins },
+  quotation:      { label: "QUOTE",    Icon: FileText },
+  calendar_event: { label: "EVENT",    Icon: CalendarBlank },
 };
 
 const QUICK_ACTIONS = [
@@ -113,7 +116,7 @@ export default function CommandPalette({ open, setOpen }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onInputKey}
-            placeholder="Search projects, clients, invoices, expenses, amounts…"
+            placeholder="Search projects, quotations, events, amounts…"
             className="flex-1 outline-none text-sm placeholder-[#9A9A9A] bg-transparent"
             data-testid="command-palette-input"
           />

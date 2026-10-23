@@ -5,6 +5,7 @@ import {
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard,
   Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn,
+  Scroll,
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
@@ -31,6 +32,7 @@ const NAV = [
   { to: "/loans",       label: "Loans & EMI",  section: "14", perm: "loans.read",   Icon: CreditCard, module: "loans" },
   { to: "/settings/company", label: "Company", section: "15", perm: "*.*",           Icon: Palette, admin: true },
   { to: "/admin/rbac",  label: "Team & Roles", section: "16", perm: "users.read",     Icon: ShieldCheck, admin: true },
+  { to: "/settings/audit", label: "Audit Log", section: "17", perm: "*.*", Icon: Scroll, admin: true },
 ];
 
 const fmtClock = (d) => formatTime(d);

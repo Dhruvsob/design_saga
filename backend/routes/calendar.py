@@ -129,7 +129,7 @@ def _date_window(start: str, end: str, max_days: int = 366) -> tuple[str, str]:
     return start, end
 
 
-async def _visibility_filter(user: dict) -> dict:
+async def event_visibility_query(user: dict) -> dict:
     """Private events stay private even from tenant administrators."""
     uid = user["user_id"]
     identity_ids = list(await user_identity_ids(user))
@@ -178,7 +178,7 @@ async def list_events(request: Request, start: Optional[str] = None, end: Option
         q["date"] = {"$gte": start, "$lte": end}
     elif start or end:
         raise HTTPException(400, "start and end must be provided together")
-    vis = await _visibility_filter(user)
+    vis = await event_visibility_query(user)
     if vis:
         q = {"$and": [q, vis]} if q else vis
     rows = await sdb.calendar_events.find(q, {"_id": 0}).sort("date", 1).to_list(1000)
@@ -444,7 +444,7 @@ async def calendar_feed(start: str, end: str, request: Request,
 
     # ---- 7) Manual events (privacy-filtered for non-admins) ----
     evt_q: dict = {"date": {"$gte": start, "$lte": end}}
-    vis = await _visibility_filter(user)
+    vis = await event_visibility_query(user)
     if vis:
         evt_q = {"$and": [evt_q, vis]}
     evts = await sdb.calendar_events.find(evt_q, {"_id": 0}).to_list(1000)
@@ -488,7 +488,7 @@ async def calendar_reminders_due(request: Request, window: int = 5,
         "date": today,
         "start_time": {"$nin": [None, ""]},
         "reminder_minutes": {"$ne": None},
-    }, await _visibility_filter(user))
+    }, await event_visibility_query(user))
     rows = await sdb.calendar_events.find(q, {"_id": 0}).to_list(200)
     due = []
     for e in rows:

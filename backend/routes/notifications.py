@@ -6,6 +6,7 @@ strictly the HTTP surface + the scheduled scanner.
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
 
 from core.db import db
 from core.scoped_db import sdb
@@ -19,6 +20,23 @@ from core.rbac import has_any_permission
 router = APIRouter()
 
 
+class NotificationPreferencesIn(BaseModel):
+    tasks: bool = True
+    finance: bool = True
+    attendance: bool = True
+    calendar: bool = True
+
+
+def _preference_response(row: Optional[dict] = None) -> dict:
+    row = row or {}
+    return {
+        "tasks": row.get("tasks", True),
+        "finance": row.get("finance", True),
+        "attendance": row.get("attendance", True),
+        "calendar": row.get("calendar", True),
+    }
+
+
 def _require_scan_permission(user: dict) -> None:
     if not has_any_permission(user, "*.*", "finance.read"):
         raise HTTPException(403, "Missing permission: finance.read")
@@ -27,6 +45,34 @@ def _require_scan_permission(user: dict) -> None:
 # ==================================================
 # List / count / mark read / dismiss
 # ==================================================
+@router.get("/notifications/preferences")
+async def get_notification_preferences(
+        request: Request,
+        session_token: Optional[str] = Cookie(default=None),
+        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    row = await db.notification_preferences.find_one(
+        {"user_id": user["user_id"], "org_id": user_org_id(user)}, {"_id": 0})
+    return _preference_response(row)
+
+
+@router.put("/notifications/preferences")
+async def update_notification_preferences(
+        payload: NotificationPreferencesIn, request: Request,
+        session_token: Optional[str] = Cookie(default=None),
+        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    org_id = user_org_id(user)
+    values = payload.model_dump()
+    await db.notification_preferences.update_one(
+        {"user_id": user["user_id"], "org_id": org_id},
+        {"$set": {**values, "updated_at": iso_now()},
+         "$setOnInsert": {"user_id": user["user_id"], "org_id": org_id}},
+        upsert=True,
+    )
+    return values
+
+
 @router.get("/notifications")
 async def list_notifications(request: Request,
                              unread_only: bool = False,

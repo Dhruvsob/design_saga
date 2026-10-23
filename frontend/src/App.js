@@ -31,6 +31,7 @@ import Expenses from "./pages/Expenses";
 import SuperAdminPanel from "./pages/SuperAdminPanel";
 import CalendarPage from "./pages/Calendar";
 import CompanySettings from "./pages/CompanySettings";
+import AuditLog from "./pages/AuditLog";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Layout from "./components/Layout";
 
@@ -130,6 +131,7 @@ function AppRouter() {
       <Route path="/expenses" element={<ProtectedShell requirePerm="expenses.read"><Expenses /></ProtectedShell>} />
       <Route path="/admin/rbac" element={<ProtectedShell requirePerm="users.read"><RBACAdmin /></ProtectedShell>} />
       <Route path="/settings/company" element={<ProtectedShell requirePerm="*.*"><CompanySettings /></ProtectedShell>} />
+      <Route path="/settings/audit" element={<ProtectedShell requirePerm="*.*"><AuditLog /></ProtectedShell>} />
       <Route path="/super-admin" element={<ProtectedShell requireSuperAdmin><SuperAdminPanel /></ProtectedShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

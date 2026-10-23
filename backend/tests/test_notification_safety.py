@@ -47,6 +47,16 @@ class _Notifications:
         return SimpleNamespace(upserted_id=key)
 
 
+class _Preferences:
+    def __init__(self, rows):
+        self.rows = rows
+        self.queries = []
+
+    def find(self, query, *_args):
+        self.queries.append(query)
+        return _Cursor(self.rows)
+
+
 def test_emit_dedup_is_atomic_and_excludes_inactive_users(monkeypatch):
     users = _Users([
         {"user_id": "active", "org_id": "org_a", "is_active": True},
@@ -81,6 +91,50 @@ def test_emit_hr_uses_current_tenant_scope(monkeypatch):
     asyncio.run(notifications_module.emit_hr("info", "Status"))
 
     assert users.queries[0]["org_id"] == "org_a"
+
+
+def test_emit_honours_tenant_scoped_user_preferences(monkeypatch):
+    users = _Users([
+        {"user_id": "quiet", "org_id": "org_a", "is_active": True},
+        {"user_id": "enabled", "org_id": "org_a", "is_active": True},
+    ])
+    preferences = _Preferences([
+        {"user_id": "quiet", "org_id": "org_a", "tasks": False},
+    ])
+    notifications = _Notifications()
+    monkeypatch.setattr(
+        notifications_module, "db",
+        SimpleNamespace(users=users, notification_preferences=preferences,
+                        notifications=notifications),
+    )
+    from core import scoped_db
+    monkeypatch.setattr(scoped_db, "current_org_id", lambda: "org_a")
+
+    inserted = asyncio.run(notifications_module.emit(
+        ["quiet", "enabled"], "task_due", "Task due", dedup_key="task:1"))
+
+    assert inserted == 1
+    assert list(notifications.rows) == ["enabled:task:1"]
+    assert preferences.queries[0]["$or"] == [
+        {"user_id": "quiet", "org_id": "org_a"},
+        {"user_id": "enabled", "org_id": "org_a"},
+    ]
+
+
+def test_mandatory_account_notices_ignore_optional_preferences(monkeypatch):
+    users = _Users([{"user_id": "quiet", "org_id": "org_a", "is_active": True}])
+    notifications = _Notifications()
+    monkeypatch.setattr(
+        notifications_module, "db",
+        SimpleNamespace(users=users, notifications=notifications),
+    )
+    from core import scoped_db
+    monkeypatch.setattr(scoped_db, "current_org_id", lambda: "org_a")
+
+    inserted = asyncio.run(notifications_module.emit(
+        ["quiet"], "account_rejected", "Account update", dedup_key="account:1"))
+
+    assert inserted == 1
 
 
 async def _zero():

@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
+import { formatDate } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
-import { Bell, Check, X, ArrowClockwise } from "@phosphor-icons/react";
+import { Bell, Check, X, ArrowClockwise, SlidersHorizontal, CaretLeft } from "@phosphor-icons/react";
+
+const PREFERENCE_LABELS = [
+  ["tasks", "Tasks"],
+  ["finance", "Finance"],
+  ["attendance", "Attendance & leave"],
+  ["calendar", "Calendar"],
+];
 
 const KIND_COLOR = {
   task_assigned: "bg-[#EEF2FF] text-[#8B7F6A]",
@@ -33,7 +41,7 @@ const relativeTime = (iso) => {
   if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 };
 
 export default function NotificationBell() {
@@ -43,6 +51,8 @@ export default function NotificationBell() {
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [preferences, setPreferences] = useState(null);
   const boxRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -104,6 +114,25 @@ export default function NotificationBell() {
     } finally { setBusy(false); }
   };
 
+  const openSettings = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.get("/notifications/preferences");
+      setPreferences(data);
+      setSettingsOpen(true);
+    } finally { setBusy(false); }
+  };
+
+  const savePreferences = async () => {
+    if (!preferences) return;
+    setBusy(true);
+    try {
+      const { data } = await api.put("/notifications/preferences", preferences);
+      setPreferences(data);
+      setSettingsOpen(false);
+    } finally { setBusy(false); }
+  };
+
   const sorted = useMemo(() =>
     [...items].sort((a, b) =>
       (a.read === b.read) ? (b.created_at || "").localeCompare(a.created_at || "")
@@ -132,33 +161,70 @@ export default function NotificationBell() {
       {open && (
         <div
           data-testid="notif-panel"
-          className="absolute right-0 mt-2 w-[380px] max-h-[520px] bg-white border border-[#E5E5E5] shadow-xl z-50 flex flex-col"
+          className="absolute right-0 mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[520px] bg-white border border-[#E5E5E5] shadow-xl z-50 flex flex-col"
         >
           {/* header */}
           <div className="p-4 border-b border-[#E5E5E5] flex items-center justify-between">
             <div>
-              <div className="overline">NOTIFICATIONS</div>
+              <div className="overline">{settingsOpen ? "NOTIFICATION SETTINGS" : "NOTIFICATIONS"}</div>
               <div className="text-xs text-[#5C5C5C] mt-0.5">
-                {unread > 0 ? `${unread} unread` : "All caught up."}
+                {settingsOpen ? "Choose alerts for this account." : (unread > 0 ? `${unread} unread` : "All caught up.")}
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                onClick={scan} disabled={busy}
-                title="Refresh notifications"
-                className="btn-ghost text-xs" data-testid="notif-scan-btn"
-              ><ArrowClockwise size={12} /></button>
-              {unread > 0 && (
+              {settingsOpen ? (
                 <button
-                  onClick={markAll} disabled={busy}
-                  className="btn-ghost text-xs" data-testid="notif-mark-all-btn"
-                ><Check size={12} /> All read</button>
-              )}
+                  onClick={() => setSettingsOpen(false)} disabled={busy}
+                  title="Back to notifications" className="btn-ghost text-xs"
+                  data-testid="notif-settings-back"
+                ><CaretLeft size={12} /> Back</button>
+              ) : (<>
+                <button
+                  onClick={openSettings} disabled={busy}
+                  title="Notification settings"
+                  className="btn-ghost text-xs" data-testid="notif-settings-btn"
+                ><SlidersHorizontal size={12} /></button>
+                <button
+                  onClick={scan} disabled={busy}
+                  title="Refresh notifications"
+                  className="btn-ghost text-xs" data-testid="notif-scan-btn"
+                ><ArrowClockwise size={12} /></button>
+                {unread > 0 && (
+                  <button
+                    onClick={markAll} disabled={busy}
+                    className="btn-ghost text-xs" data-testid="notif-mark-all-btn"
+                  ><Check size={12} /> All read</button>
+                )}
+              </>)}
             </div>
           </div>
 
           {/* list */}
-          <div className="overflow-y-auto flex-1">
+          {settingsOpen ? (
+            <div className="overflow-y-auto flex-1 p-4" data-testid="notif-settings-panel">
+              <div className="divide-y divide-[#E5E5E5] border-y border-[#E5E5E5]">
+                {PREFERENCE_LABELS.map(([key, label]) => (
+                  <label key={key} className="min-h-12 flex items-center justify-between gap-4 py-3 cursor-pointer">
+                    <span className="text-sm font-semibold">{label}</span>
+                    <input
+                      type="checkbox"
+                      checked={preferences?.[key] !== false}
+                      onChange={(e) => setPreferences((cur) => ({ ...cur, [key]: e.target.checked }))}
+                      className="h-4 w-4 accent-[#8B7F6A]"
+                      data-testid={`notif-pref-${key}`}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="text-xs text-[#5C5C5C] mt-3">
+                Account approval and security notices remain enabled.
+              </div>
+              <button
+                onClick={savePreferences} disabled={busy || !preferences}
+                className="btn-primary w-full mt-4" data-testid="notif-preferences-save"
+              >Save preferences</button>
+            </div>
+          ) : <div className="overflow-y-auto flex-1">
             {sorted.length === 0 && (
               <div className="p-10 text-center">
                 <Bell size={24} className="mx-auto text-[#9A9A9A] mb-2" />
@@ -205,7 +271,7 @@ export default function NotificationBell() {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
         </div>
       )}
     </div>

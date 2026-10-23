@@ -7,6 +7,28 @@ from pydantic import ValidationError
 
 from routes.calendar import _date_window
 from routes.comments import CommentIn, _require_entity_access
+from routes import search as search_routes
+
+
+class _SearchCursor:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def sort(self, *_args):
+        return self
+
+    async def to_list(self, limit):
+        return self.rows[:limit]
+
+
+class _SearchCollection:
+    def __init__(self, rows=None):
+        self.rows = rows or []
+        self.queries = []
+
+    def find(self, query, *_args):
+        self.queries.append(query)
+        return _SearchCursor(self.rows)
 
 
 def test_calendar_window_is_validated_and_bounded():
@@ -33,3 +55,41 @@ def test_comment_entity_permission_is_required_before_lookup():
     with pytest.raises(HTTPException) as exc:
         asyncio.run(_require_entity_access(user, "vendor", "vendor_1"))
     assert exc.value.status_code == 403
+
+
+def test_global_search_includes_advanced_quotes_and_only_visible_events(monkeypatch):
+    async def require_user(*_args, **_kwargs):
+        return {"user_id": "user_1", "permissions": ["quotations.read", "calendar.read"]}
+
+    async def no_visibility(_user):
+        return {}
+
+    async def private_event_visibility(_user):
+        return {"created_by": "user_1"}
+
+    quote = _SearchCollection([{
+        "id": "quo_1", "project_title": "Alpha House", "number": "Q-101",
+        "client_name": "Alpha Client", "status": "draft",
+    }])
+    event = _SearchCollection([{
+        "id": "evt_1", "title": "Alpha review", "date": "2026-10-24",
+        "start_time": "10:00", "location": "Site",
+    }])
+    empty = _SearchCollection()
+    fake_sdb = type("SearchDB", (), {
+        "projects": empty, "clients": empty, "leads": empty, "tasks": empty,
+        "vendors_acc": empty, "invoices": empty, "quotations_adv": quote,
+        "calendar_events": event, "employees": empty, "purchase_orders": empty,
+        "journal_entries": empty,
+    })()
+    monkeypatch.setattr(search_routes, "require_user", require_user)
+    monkeypatch.setattr(search_routes, "project_visibility_query", no_visibility)
+    monkeypatch.setattr(search_routes, "task_visibility_query", no_visibility)
+    monkeypatch.setattr(search_routes, "event_visibility_query", private_event_visibility)
+    monkeypatch.setattr(search_routes, "sdb", fake_sdb)
+
+    result = asyncio.run(search_routes.global_search(None, q="Alpha", limit=5))
+
+    assert {(row["type"], row["id"]) for row in result["results"]} == {
+        ("quotation", "quo_1"), ("calendar_event", "evt_1")}
+    assert event.queries[0]["$and"][0]["$and"][1] == {"created_by": "user_1"}

@@ -11,6 +11,7 @@ from core.deps import require_user
 from core.scoped_db import sdb
 from core.rbac import has_permission
 from core.access_control import merge_query, project_visibility_query, task_visibility_query
+from routes.calendar import event_visibility_query
 
 router = APIRouter()
 
@@ -88,6 +89,25 @@ async def global_search(request: Request, q: str = Query(default="", max_length=
                lambda r: "/invoices",
                lambda r: " \u00b7 ".join(x for x in [r.get("client_name"), r.get("status")] if x),
                "invoices.read")
+
+    await push(sdb.quotations_adv, {"$or": [
+                   {"number": rx}, {"project_title": rx}, {"client_name": rx},
+                   {"project_location": rx},
+               ]},
+               "quotation", "project_title",
+               lambda r: f"/quotations/{r.get('id')}",
+               lambda r: " · ".join(x for x in [r.get("number"), r.get("client_name"), r.get("status")] if x),
+               "quotations.read")
+
+    event_query = merge_query(
+        {"$or": [{"title": rx}, {"location": rx}, {"notes": rx}]},
+        await event_visibility_query(user),
+    )
+    await push(sdb.calendar_events, event_query,
+               "calendar_event", "title",
+               lambda r: "/calendar",
+               lambda r: " · ".join(x for x in [r.get("date"), r.get("start_time"), r.get("location")] if x),
+               "calendar.read")
 
     await push(sdb.employees, {"$or": [{"name": rx}, {"employee_id": rx}, {"designation": rx}]},
                "employee", "name",
