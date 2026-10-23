@@ -1,16 +1,15 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-20 (Asia/Calcutta)
+Last updated: 2026-10-23 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; baseline `77e6237` is committed and pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; last verified application checkpoint was `24728c0`.
-- Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. The diff adds `gamaa.tech` routes to services outside this Compose project. Do not overwrite, reset, or include these changes in Design Saga deployments.
-- Live URL/API: on 2026-10-20 HTTPS and SSH remain unreachable from the current source IP. Hostinger reports the VPS running, all five Compose containers running, backend internal `/api/` checks returning 200, `eth0` and the default route present, ports 22/80/443 listening, and its own SSH diagnostic succeeding. The firewall reset completed at 23:13:44; UFW is now inactive and iptables policies are ACCEPT. Hostinger identified a high-abuse-confidence block on the current client connection, so deployment remains blocked from this network even though the VPS itself is reachable from Hostinger.
-- Services: Hostinger Docker Manager currently reports Caddy, web, backend, FerretDB, and PostgreSQL running. Production business data has not been modified during the network incident.
-- VPS baseline: 3.8 GiB RAM, 2 GiB swap, root disk 56% used, low load at inspection. Key-only SSH remains configured. The prior UFW default-deny rules were removed by Hostinger's firewall-reset operation and must be restored immediately after alternate SSH access is established.
-- Current action: explicit all-time accounting ranges and audit-safe reversal undo are implemented and locally build-verified. Deployment and the requested Ritesh Soni correction are pending restored SSH/public access and an exact production-record audit.
+- Local checkout: `codex/repair-release`; deployed baseline `dfdbbee` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; `dfdbbee` verified on 2026-10-23 before DS-021/DS-022 work.
+- Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
+- Live URL/API and key-only SSH are reachable again. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
+- Checksummed backup `/opt/design-saga-backups/20261023T130742Z` passed integrity verification before the sample-tenant Chart of Accounts cleanup.
+- Current action: validate, commit, backup and deploy DS-021/DS-022, then run reversible sample-tenant functional checks. Historical AR/vendor corrections remain evidence-gated and must not rewrite live books automatically.
 
 ## System Inventory
 
@@ -73,6 +72,60 @@ Last updated: 2026-10-20 (Asia/Calcutta)
 | DS-018 | High | Accounting posting, ledger, GST and bank-reconciliation integrity controls | Implemented locally; production verification pending |
 | DS-019 | High | Vendor bill, Accounts Payable, advance-payment and three-way-match integrity | Implemented locally; production data audit pending |
 | DS-020 | High | All-time accounting ranges and safe reversal undo | Implemented locally; production correction/deployment blocked by public VPS network |
+| DS-021 | High | Capital, investment and person-wise receivable/payable workflows | In implementation and regression verification |
+| DS-022 | Medium | Chart of Accounts current balances, editing, deactivation and future duplicate-code prevention | In implementation and regression verification |
+
+## User-Reported Master Backlog - 2026-10-23
+
+This is the canonical intake list supplied after the repair-release deployment. Statuses below are based on current-code inspection; production-data items remain open until the exact tenant records are reconciled. "Implemented" does not mean historical production data was rewritten.
+
+| ID | Sev | Reported issue | Reconciled state |
+|---|---|---|---|
+| BR-001 | High | Invoice payment cannot be recorded / draft invoice stuck | Current status workflow records a receipt; recoverability fix deployed at `7cdecea`; exact `INV-1001` record still needs production-data verification |
+| BR-002 | High | PO/bill cannot link to project | Project and PO links exist in current PO/vendor-bill API and UI; verify historical records |
+| BR-003 | High | Collections Due empty | Tenant-wide milestone collections endpoint/UI implemented; empty production view requires milestone-data audit |
+| BR-004 | High | Vendor ledger shows wrong balance | Posting/opening-balance/reversal corrections implemented; historical vendor bill/payment backfill remains evidence-gated |
+| BR-005 | High | AR and client receivables not reflected | Confirmed architecture gap: paid receipts post directly to income; controlled invoice-accrual migration required before changing live books |
+| BR-006 | High | Attendance check-in and employee-login link broken | Fixed and deployed; attendance identity/project access/idempotency covered by current tests |
+| BR-007 | High | Notifications and settings unavailable | Notification generation/privacy fixed and deployed; end-user notification preferences screen remains a product gap |
+| BR-008 | Medium | Chart of Accounts balances show zero/opening only | Confirmed UI defect; DS-022 adds derived current balances |
+| BR-009 | Medium | Duplicate account codes | Historical audit required; create/update duplicate-code rejection added under DS-022 |
+| BR-010 | Medium | Inconsistent monthly balances | Requires exact screen/period data trace after DS-022 current-balance correction |
+| BR-011 | Medium | Tasks without due dates marked overdue | Current dashboard and scheduler explicitly require a due date; retain as regression coverage |
+| BR-012 | Medium | Preview broken | Needs workflow-specific reproduction; invoice PDF and document preview must be assessed separately |
+| BR-013 | Medium | Expense invalid URL | URL handling/security correction is present; production reproduction still useful for affected legacy record |
+| BR-014 | Medium | Invoice sending not implemented | Confirmed gap: status/PDF exist, outbound email delivery does not |
+| BR-015 | Medium | Invoice payment link/UPI missing | Confirmed product gap; requires payment-provider/security design, not a hard-coded link |
+| BR-016 | Medium | GST incomplete | Partial: input/output posting exists; tenant GST settings, split GST and GSTR reports remain |
+| BR-017 | Medium | Tally export missing | Confirmed export gap |
+| BR-018 | Medium | AI assistant not functional | Requires provider/config/runtime audit; not an accounting source of truth |
+| BR-019 | Medium | File upload unavailable | Project/vendor upload routes exist; persistence/provider and UI flow need live verification |
+| BR-020 | Medium | Client portal link missing | Explicit share-token/link UI is implemented and deployed |
+| BR-021 | Medium | Search misses quotations/events | Confirmed partial gap: current global search omits advanced quotations and calendar events |
+| BR-022 | Medium | Slow page loading | Open as measured performance task DS-008; optimize only from traces |
+| BR-023 | Medium | Cash-flow split missing | Current report has source categories; required business breakdown needs specification/data comparison |
+| BR-024 | Medium | Draft invoice counts inconsistent | Requires query-by-query production trace; do not patch counts independently |
+| BR-025 | Low | Date formats inconsistent | Shared DD/MM/YYYY formatter exists; remaining raw-date surfaces need inventory |
+| BR-026 | Low | New-tenant PO dead-end | Send/GRN paths exist; empty master-data onboarding needs live workflow verification |
+| BR-027 | Low | Bill creation location confusing | UX review item; preserve vendor and PO context while improving discoverability |
+| BR-028 | Low | Unsafe automatic matching by name | Confirmed residual risk in selected legacy fallbacks; migrate to IDs where evidence permits |
+| BR-029 | Low | Large flat dropdowns | Confirmed usability gap; replace only high-volume selectors with searchable controls |
+| BR-030 | Low | System account codes missing | Current defaults have codes; audit legacy/generated accounts and fill only unambiguous gaps |
+| BR-031 | Low | Account edit/deactivate missing | Backend already supports it; DS-022 exposes safe UI controls |
+| BR-032 | Low | Gujarati text in English UI | Confirmed one Collections heading; removed under DS-022 while retaining English accounting terminology |
+| BR-033 | Low | Demo data unclean | Sample tenant only; clean via backup and explicit scoped scripts, never production tenants |
+| BR-034 | Low | Backup missing | Fixed: checksummed daily database/deployment backup and restore validation active on VPS; offsite copy remains |
+| BR-035 | Low | Help and audit-log screens missing | Audit API exists; tenant-facing audit/help navigation remains a UI gap |
+
+### Accounting workflow extension (DS-021/DS-022)
+
+- Reuse the existing journal, ledger, tenant scope, RBAC, reversal and audit mechanisms.
+- Add simple balance-sheet workflows for owner capital, owner drawings, gold purchase, money given, money received and repayments.
+- Person-wise balances use separate `Advance to - <name>` asset or `Loan from - <name>` liability accounts. Repayments cannot exceed the ledger outstanding amount.
+- Do not classify capital, investments, loans or advances as business income/expense.
+- Do not add gold sale/profit valuation until cost-basis and gain/loss treatment are explicitly designed and reviewed with the accountant.
+- Show derived current balance in Chart of Accounts, while preserving opening balance as accounting input.
+- Expose existing edit/deactivate/restore controls; posted account type/opening balance remain locked by the backend.
 
 ## Issue Log
 

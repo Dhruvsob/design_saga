@@ -29,9 +29,11 @@ from core.tenancy import user_org_id
 from core.audit import audit
 from models.base import FiniteModel
 from pymongo.errors import DuplicateKeyError
-from core.finance import resolve_period, current_fy_label, fy_choices, fy_range
+from core.finance import (
+    resolve_period, current_fy_label, fy_choices, fy_range, require_asset_account,
+)
 from models.accounting import (
-    AccountIn, JournalIn, IncomeIn, ExpenseIn,
+    AccountIn, JournalIn, IncomeIn, ExpenseIn, NonOperatingTransactionIn,
     MilestoneIn, MilestoneUpdate,
     ACCOUNT_TYPES, DEFAULT_COA, PAYMENT_METHODS,
 )
@@ -132,6 +134,7 @@ async def _seed_coa_if_empty():
 async def list_accounts(request: Request,
                         type: Optional[str] = None,
                         include_inactive: bool = False,
+                        include_balances: bool = False,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     """List accounts. By default only active accounts are returned so
@@ -142,6 +145,29 @@ async def list_accounts(request: Request,
     q: dict = {} if include_inactive else {"active": {"$ne": False}}
     if type: q["type"] = type
     rows = await sdb.accounts.find(q, {"_id": 0}).sort("code", 1).to_list(1000)
+    if include_balances and rows:
+        account_ids = [row["id"] for row in rows]
+        movements = await sdb.journal_entries.aggregate([
+            {"$unwind": "$lines"},
+            {"$match": {"lines.account_id": {"$in": account_ids}}},
+            {"$group": {
+                "_id": "$lines.account_id",
+                "debit": {"$sum": "$lines.debit"},
+                "credit": {"$sum": "$lines.credit"},
+            }},
+        ]).to_list(len(account_ids))
+        by_id = {item["_id"]: item for item in movements}
+        for row in rows:
+            movement = by_id.get(row["id"], {})
+            opening = float(row.get("opening_balance") or 0)
+            row["current_balance"] = round(
+                opening + _movement_for(
+                    row["type"],
+                    float(movement.get("debit") or 0),
+                    float(movement.get("credit") or 0),
+                ),
+                2,
+            )
     return rows
 
 
@@ -164,6 +190,12 @@ async def create_account(payload: AccountIn, request: Request,
     )
     if duplicate:
         raise HTTPException(status_code=409, detail="An account with this name already exists")
+    if doc.get("code"):
+        doc["code"] = str(doc["code"]).strip()
+        if await sdb.accounts.find_one(
+            {"code": doc["code"], "active": {"$ne": False}}, {"_id": 0, "id": 1}
+        ):
+            raise HTTPException(status_code=409, detail="This account code is already in use")
     opening = float(doc.get("opening_balance") or 0)
     if not math.isfinite(opening):
         raise HTTPException(status_code=400, detail="Opening balance must be finite")
@@ -203,6 +235,13 @@ async def update_account(acc_id: str, payload: AccountIn, request: Request,
     )
     if duplicate:
         raise HTTPException(status_code=409, detail="An account with this name already exists")
+    if upd.get("code"):
+        upd["code"] = str(upd["code"]).strip()
+        if await sdb.accounts.find_one(
+            {"id": {"$ne": acc_id}, "code": upd["code"], "active": {"$ne": False}},
+            {"_id": 0, "id": 1},
+        ):
+            raise HTTPException(status_code=409, detail="This account code is already in use")
     opening = float(upd.get("opening_balance") or 0)
     if not math.isfinite(opening):
         raise HTTPException(status_code=400, detail="Opening balance must be finite")
@@ -480,6 +519,181 @@ async def create_journal(payload: JournalIn, request: Request,
         client_id=payload.client_id, vendor_id=payload.vendor_id,
         employee_id=payload.employee_id,
     )
+
+
+def _party_ledger_name(prefix: str, party_name: Optional[str]) -> str:
+    party = " ".join(str(party_name or "").split())
+    if len(party) < 2:
+        raise HTTPException(status_code=400, detail="Person or party name is required")
+    return f"{prefix} - {party}"
+
+
+async def _ensure_named_account(
+    name: str, account_type: str, *, create_if_missing: bool = True
+) -> dict:
+    existing = await sdb.accounts.find_one(
+        {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+         "active": {"$ne": False}},
+        {"_id": 0},
+    )
+    if existing:
+        if existing.get("type") != account_type:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{name} already exists with account type {existing.get('type')}",
+            )
+        return existing
+
+    inactive = await sdb.accounts.find_one(
+        {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0}
+    )
+    if inactive:
+        raise HTTPException(status_code=409, detail=f"{name} is inactive; restore it first")
+    if not create_if_missing:
+        raise HTTPException(status_code=404, detail=f"No outstanding ledger exists for {name}")
+
+    org_id = current_org_id() or "org_default"
+    account_id = _default_account_id(org_id, name)
+    try:
+        await sdb.accounts.update_one(
+            {"id": account_id},
+            {"$setOnInsert": {
+                "id": account_id,
+                "name": name,
+                "type": account_type,
+                "code": await _next_account_code(account_type),
+                "is_bank": False,
+                "opening_balance": 0.0,
+                "active": True,
+                "created_at": iso_now(),
+                "system_generated": True,
+            }},
+            upsert=True,
+        )
+    except DuplicateKeyError:
+        pass
+    account = await sdb.accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account:
+        account = await sdb.accounts.find_one(
+            {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0}
+        )
+    if not account:
+        raise HTTPException(status_code=409, detail="Could not create the required ledger account")
+    return account
+
+
+async def _current_account_balance(account: dict) -> float:
+    movement = await sdb.journal_entries.aggregate([
+        {"$unwind": "$lines"},
+        {"$match": {"lines.account_id": account["id"]}},
+        {"$group": {
+            "_id": None,
+            "debit": {"$sum": "$lines.debit"},
+            "credit": {"$sum": "$lines.credit"},
+        }},
+    ]).to_list(1)
+    totals = movement[0] if movement else {}
+    return round(
+        float(account.get("opening_balance") or 0)
+        + _movement_for(
+            account["type"],
+            float(totals.get("debit") or 0),
+            float(totals.get("credit") or 0),
+        ),
+        2,
+    )
+
+
+@router.post("/accounting/non-operating")
+async def create_non_operating_transaction(
+    payload: NonOperatingTransactionIn,
+    request: Request,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Post common balance-sheet movements without exposing debit/credit mechanics."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+
+    bank = await require_asset_account(payload.bank_account_id, "Cash/bank account")
+    if not bank.get("is_bank") and bank.get("name") not in {"Cash", "Petty Cash"}:
+        raise HTTPException(status_code=400, detail="Select an actual cash or bank account")
+    await _seed_coa_if_empty()
+
+    amount = round(float(payload.amount), 2)
+    kind = payload.kind
+    if kind == "owner_investment":
+        counter = await _ensure_named_account("Owner Capital", "equity")
+        debit_account, credit_account = bank, counter
+        narration = "Capital introduced by owner"
+    elif kind == "owner_withdrawal":
+        counter = await _ensure_named_account("Owner Drawings", "equity")
+        debit_account, credit_account = counter, bank
+        narration = "Personal withdrawal by owner"
+    elif kind == "gold_purchase":
+        counter = await _ensure_named_account("Investments - Gold", "asset")
+        debit_account, credit_account = counter, bank
+        narration = "Gold investment purchased"
+    elif kind in {"money_given", "repayment_received"}:
+        name = _party_ledger_name("Advance to", payload.party_name)
+        counter = await _ensure_named_account(
+            name, "asset", create_if_missing=kind == "money_given"
+        )
+        debit_account, credit_account = (
+            (counter, bank) if kind == "money_given" else (bank, counter)
+        )
+        narration = (
+            f"Money given to {payload.party_name.strip()}"
+            if kind == "money_given"
+            else f"Repayment received from {payload.party_name.strip()}"
+        )
+    else:
+        name = _party_ledger_name("Loan from", payload.party_name)
+        counter = await _ensure_named_account(
+            name, "liability", create_if_missing=kind == "money_received"
+        )
+        debit_account, credit_account = (
+            (bank, counter) if kind == "money_received" else (counter, bank)
+        )
+        narration = (
+            f"Money received from {payload.party_name.strip()}"
+            if kind == "money_received"
+            else f"Repayment paid to {payload.party_name.strip()}"
+        )
+
+    if kind in {"repayment_received", "repayment_paid"}:
+        outstanding = await _current_account_balance(counter)
+        if amount > outstanding + 0.009:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Repayment exceeds the outstanding balance of {outstanding:.2f}",
+            )
+
+    if payload.notes and payload.notes.strip():
+        narration = f"{narration} - {payload.notes.strip()}"
+    journal = await _post_journal(
+        user,
+        payload.date,
+        narration,
+        [
+            {"account_id": debit_account["id"], "debit": amount, "credit": 0,
+             "description": narration},
+            {"account_id": credit_account["id"], "debit": 0, "credit": amount,
+             "description": narration},
+        ],
+        reference=payload.reference,
+        source="non_operating",
+    )
+    await audit(
+        user,
+        "accounting.non_operating.create",
+        target=journal["id"],
+        target_type="journal_entry",
+        meta={"kind": kind, "amount": amount, "counter_account_id": counter["id"]},
+        org_id=user_org_id(user),
+    )
+    return {"journal": journal, "counter_account": counter}
 
 
 @router.get("/journal-entries")

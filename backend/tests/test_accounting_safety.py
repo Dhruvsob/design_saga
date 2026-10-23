@@ -9,11 +9,14 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 import routes.accounting as accounting
-from models.accounting import IncomeIn, JournalLine, MilestoneIn
+from models.accounting import (
+    DEFAULT_COA, IncomeIn, JournalLine, MilestoneIn, NonOperatingTransactionIn,
+)
 from routes.accounting import (
     _cash_collection_source,
     _linked_journal_key,
     _milestone_due_bucket,
+    _party_ledger_name,
     _require_full_linked_payment,
 )
 from routes.finance_extras import _bank_match_error
@@ -66,6 +69,78 @@ def test_default_account_ids_are_stable_and_tenant_scoped():
         accounting._default_account_id("org_a", "owner drawings")
     assert accounting._default_account_id("org_a", "Owner Drawings") != \
         accounting._default_account_id("org_b", "Owner Drawings")
+
+
+def test_default_account_names_and_codes_are_unique():
+    names = [row[0].casefold() for row in DEFAULT_COA]
+    codes = [row[2] for row in DEFAULT_COA]
+    assert len(names) == len(set(names))
+    assert len(codes) == len(set(codes))
+    assert ("Investments - Gold", "asset", "1601") in DEFAULT_COA
+
+
+def test_non_operating_transactions_require_positive_finite_money():
+    valid = {
+        "kind": "money_given", "date": "2026-10-23", "amount": 100,
+        "bank_account_id": "bank", "party_name": "Ritesh Soni",
+    }
+    assert NonOperatingTransactionIn(**valid).amount == 100
+    for amount in (0, -1, float("nan"), float("inf")):
+        with pytest.raises(ValidationError):
+            NonOperatingTransactionIn(**{**valid, "amount": amount})
+
+
+def test_party_ledger_names_are_stable_and_require_a_name():
+    assert _party_ledger_name("Advance to", "  Ritesh   Soni ") == "Advance to - Ritesh Soni"
+    with pytest.raises(HTTPException) as exc:
+        _party_ledger_name("Loan from", " ")
+    assert exc.value.status_code == 400
+
+
+def test_non_operating_workflows_post_expected_debit_and_credit(monkeypatch):
+    posted = []
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin", "org_id": "org_a", "permissions": ["finance.create"]}
+
+    async def bank(*_args, **_kwargs):
+        return {"id": "bank", "name": "Cash", "type": "asset", "is_bank": True}
+
+    async def account(name, account_type, **_kwargs):
+        return {"id": name, "name": name, "type": account_type, "active": True}
+
+    async def post(_user, _date, narration, lines, **_kwargs):
+        posted.append({"narration": narration, "lines": lines})
+        return {"id": f"je_{len(posted)}", "lines": lines}
+
+    async def noop(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(accounting, "require_user", user)
+    monkeypatch.setattr(accounting, "has_permission", lambda *_args: True)
+    monkeypatch.setattr(accounting, "require_asset_account", bank)
+    monkeypatch.setattr(accounting, "_ensure_named_account", account)
+    monkeypatch.setattr(accounting, "_seed_coa_if_empty", noop)
+    monkeypatch.setattr(accounting, "_post_journal", post)
+    monkeypatch.setattr(accounting, "audit", noop)
+
+    cases = [
+        ("owner_investment", None, "bank", "Owner Capital"),
+        ("owner_withdrawal", None, "Owner Drawings", "bank"),
+        ("gold_purchase", None, "Investments - Gold", "bank"),
+        ("money_given", "Ritesh Soni", "Advance to - Ritesh Soni", "bank"),
+        ("money_received", "Ritesh Soni", "bank", "Loan from - Ritesh Soni"),
+    ]
+    for kind, party_name, debit_id, credit_id in cases:
+        payload = NonOperatingTransactionIn(
+            kind=kind, date="2026-10-23", amount=100,
+            bank_account_id="bank", party_name=party_name,
+        )
+        asyncio.run(accounting.create_non_operating_transaction(payload, None))
+        assert posted[-1]["lines"][0]["account_id"] == debit_id
+        assert posted[-1]["lines"][0]["debit"] == 100
+        assert posted[-1]["lines"][1]["account_id"] == credit_id
+        assert posted[-1]["lines"][1]["credit"] == 100
 
 
 def test_linked_payments_must_settle_the_full_source_amount():

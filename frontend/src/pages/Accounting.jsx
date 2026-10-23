@@ -11,7 +11,7 @@ import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
   Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
-  HandCoins,
+  HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -51,6 +51,7 @@ export default function Accounting() {
   const [validation, setValidation] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showWithdrawal, setShowWithdrawal] = useState(false);
+  const [showTransfers, setShowTransfers] = useState(false);
   const [meta, setMeta] = useState(null);
   const [ledgerAccount, setLedgerAccount] = useState(null);
   // Financial period: fy label OR explicit from/to date range
@@ -159,6 +160,10 @@ export default function Accounting() {
           className="btn-ghost" data-testid="owner-withdrawal-btn">
           <HandCoins size={14} /> Owner withdrawal
         </button>
+        <button onClick={() => setShowTransfers(true)}
+          className="btn-ghost" data-testid="capital-transfers-btn">
+          <ArrowsLeftRight size={14} /> Capital &amp; transfers
+        </button>
       </PageHero>
 
       {showWithdrawal && (
@@ -167,6 +172,18 @@ export default function Accounting() {
           banks={banks}
           onClose={() => setShowWithdrawal(false)}
           onSaved={() => { setShowWithdrawal(false); loadDashboard(); }}
+        />
+      )}
+
+      {showTransfers && (
+        <CapitalTransfersForm
+          banks={banks}
+          onClose={() => setShowTransfers(false)}
+          onSaved={() => {
+            setShowTransfers(false);
+            loadCommon();
+            loadDashboard();
+          }}
         />
       )}
 
@@ -343,14 +360,13 @@ function OwnerWithdrawalForm({ accounts, banks, onClose, onSaved }) {
     if (!Number.isFinite(amount) || amount <= 0) return setError("Enter an amount greater than zero.");
     setBusy(true); setError("");
     try {
-      await api.post("/journal-entries", {
+      await api.post("/accounting/non-operating", {
+        kind: "owner_withdrawal",
         date: form.date,
-        narration: form.narration.trim() || "Personal withdrawal by owner",
+        amount,
+        bank_account_id: form.paid_from_account_id,
         reference: form.reference.trim() || null,
-        lines: [
-          { account_id: drawings.id, debit: amount, credit: 0, description: "Owner withdrawal" },
-          { account_id: form.paid_from_account_id, debit: 0, credit: amount, description: "Paid to owner" },
-        ],
+        notes: form.narration.trim() === "Personal withdrawal by owner" ? null : form.narration.trim(),
       });
       toast.success("Owner withdrawal recorded");
       onSaved();
@@ -393,6 +409,106 @@ function OwnerWithdrawalForm({ accounts, banks, onClose, onSaved }) {
         <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
         <button className="btn-primary" disabled={busy || !drawings} data-testid="owner-withdrawal-submit">
           <HandCoins size={14} /> {busy ? "Recording..." : "Record withdrawal"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const TRANSFER_TYPES = [
+  ["owner_investment", "Owner adds capital"],
+  ["gold_purchase", "Buy gold investment"],
+  ["money_given", "Give money to a person"],
+  ["repayment_received", "Receive repayment from a person"],
+  ["money_received", "Receive money from a person"],
+  ["repayment_paid", "Repay money to a person"],
+];
+
+function CapitalTransfersForm({ banks, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    kind: "owner_investment",
+    date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+    amount: "",
+    bank_account_id: banks[0]?.id || "",
+    party_name: "",
+    reference: "",
+    notes: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const needsParty = ["money_given", "repayment_received", "money_received", "repayment_paid"].includes(form.kind);
+
+  useEffect(() => {
+    if (!form.bank_account_id && banks[0]?.id) {
+      setForm((current) => ({ ...current, bank_account_id: banks[0].id }));
+    }
+  }, [banks, form.bank_account_id]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const amount = Number(form.amount);
+    if (!form.bank_account_id) return setError("Select the cash or bank account used.");
+    if (!Number.isFinite(amount) || amount <= 0) return setError("Enter an amount greater than zero.");
+    if (needsParty && form.party_name.trim().length < 2) return setError("Enter the person or party name.");
+    setBusy(true); setError("");
+    try {
+      await api.post("/accounting/non-operating", {
+        ...form,
+        amount,
+        party_name: needsParty ? form.party_name.trim() : null,
+        reference: form.reference.trim() || null,
+        notes: form.notes.trim() || null,
+      });
+      toast.success("Transaction recorded in the correct ledgers");
+      onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Could not record the transaction.");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <form onSubmit={submit} className="border-y border-[#E5E5E5] py-4 space-y-3" data-testid="capital-transfers-form">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="overline">CAPITAL, INVESTMENTS &amp; PARTY MONEY</div>
+          <div className="text-xs text-[#5C5C5C] mt-1">Balance-sheet transactions that should not be recorded as income or expense.</div>
+        </div>
+        <button type="button" className="btn-icon" onClick={onClose} aria-label="Close capital and transfers form"><X size={14} /></button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Transaction</span>
+          <select className="input-flat w-full mt-1" value={form.kind}
+            onChange={(event) => setForm({ ...form, kind: event.target.value })} data-testid="transfer-kind">
+            {TRANSFER_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select></label>
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Date</span>
+          <input required type="date" className="input-flat w-full mt-1" value={form.date}
+            onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Amount</span>
+          <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
+            onChange={(event) => setForm({ ...form, amount: event.target.value })} data-testid="transfer-amount" /></label>
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Cash / Bank</span>
+          <select required className="input-flat w-full mt-1" value={form.bank_account_id}
+            onChange={(event) => setForm({ ...form, bank_account_id: event.target.value })}>
+            <option value="">Select cash or bank</option>
+            {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+          </select></label>
+        {needsParty && <label className="block"><span className="text-xs text-[#5C5C5C]">Person / party</span>
+          <input required className="input-flat w-full mt-1" value={form.party_name}
+            onChange={(event) => setForm({ ...form, party_name: event.target.value })}
+            placeholder="e.g. Ritesh Soni" data-testid="transfer-party" /></label>}
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Reference</span>
+          <input className="input-flat w-full mt-1" value={form.reference}
+            onChange={(event) => setForm({ ...form, reference: event.target.value })} placeholder="Optional" /></label>
+        <label className="block md:col-span-3"><span className="text-xs text-[#5C5C5C]">Notes</span>
+          <input className="input-flat w-full mt-1" value={form.notes}
+            onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Optional details" /></label>
+      </div>
+      {error && <div className="text-xs text-[#B4001C]" role="alert">{error}</div>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="btn-primary" disabled={busy} data-testid="transfer-submit">
+          <ArrowsLeftRight size={14} /> {busy ? "Recording..." : "Record transaction"}
         </button>
       </div>
     </form>
@@ -740,7 +856,7 @@ function CollectionsDue() {
     <div className="space-y-4" data-testid="collections-due-tab">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <div className="overline">PROJECT COLLECTIONS · ઉઘરાણી</div>
+          <div className="overline">PROJECT COLLECTIONS</div>
           <div className="text-xs text-[#5C5C5C] mt-1">As of {formatDate(data.as_of)} · next 30 days through {formatDate(data.horizon)}</div>
         </div>
         <input
@@ -987,13 +1103,16 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
   const [showInactive, setShowInactive] = useState(false);
   const [accounts, setAccounts] = useState(baseAccounts);
   const [form, setForm] = useState({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
+  const [editing, setEditing] = useState(null);
   const [favIds, setFavIds] = useState([]);
   useEffect(() => { setAccounts(baseAccounts); }, [baseAccounts]);
   useEffect(() => {
     api.get("/favorite-accounts").then(({ data }) => setFavIds(data.account_ids || [])).catch(() => {});
   }, []);
   useEffect(() => {
-    api.get(`/accounts${showInactive ? "?include_inactive=1" : ""}`)
+    const params = new URLSearchParams({ include_balances: "true" });
+    if (showInactive) params.set("include_inactive", "true");
+    api.get(`/accounts?${params.toString()}`)
        .then(({ data }) => setAccounts(data))
        .catch(() => {});
   }, [showInactive]);
@@ -1005,12 +1124,52 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
     const payload = { ...form, opening_balance: Number(form.opening_balance) || 0 };
     if (!payload.code) delete payload.code;
     try {
-      await api.post("/accounts", payload);
-      toast.success("Account created");
+      if (editing) {
+        await api.patch(`/accounts/${editing.id}`, { ...payload, active: editing.active !== false });
+        toast.success("Account updated");
+      } else {
+        await api.post("/accounts", payload);
+        toast.success("Account created");
+      }
       setForm({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
-      setShowForm(false); onReload();
+      setEditing(null); setShowForm(false); onReload();
+      const params = new URLSearchParams({ include_balances: "true" });
+      if (showInactive) params.set("include_inactive", "true");
+      setAccounts((await api.get(`/accounts?${params.toString()}`)).data);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Could not create account");
+      toast.error(err?.response?.data?.detail || "Could not save account");
+    }
+  };
+  const startEdit = (account, event) => {
+    event.stopPropagation();
+    setEditing(account);
+    setForm({
+      name: account.name || "", type: account.type || "asset", code: account.code || "",
+      is_bank: Boolean(account.is_bank), opening_balance: account.opening_balance || "",
+    });
+    setShowForm(true);
+  };
+  const toggleActive = async (account, event) => {
+    event.stopPropagation();
+    if (account.active !== false && !window.confirm(`Deactivate “${account.name}”? Its history will remain available.`)) return;
+    try {
+      if (account.active === false) {
+        await api.patch(`/accounts/${account.id}`, {
+          name: account.name, type: account.type, code: account.code || null,
+          is_bank: Boolean(account.is_bank), opening_balance: Number(account.opening_balance) || 0,
+          active: true, notes: account.notes || null,
+        });
+        toast.success("Account restored");
+      } else {
+        await api.delete(`/accounts/${account.id}`);
+        toast.success("Account deactivated");
+      }
+      const params = new URLSearchParams({ include_balances: "true" });
+      if (showInactive) params.set("include_inactive", "true");
+      setAccounts((await api.get(`/accounts?${params.toString()}`)).data);
+      onReload();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not update account");
     }
   };
   const toggleFav = async (a, e) => {
@@ -1035,7 +1194,11 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
             data-testid="coa-show-inactive" />
           Show inactive accounts
         </label>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-account-btn">
+        <button onClick={() => {
+          setEditing(null);
+          setForm({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
+          setShowForm(!showForm);
+        }} className="btn-primary" data-testid="new-account-btn">
           <Plus size={14} /> {showForm ? "Cancel" : "New account"}
         </button>
       </div>
@@ -1053,13 +1216,16 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
             <input type="checkbox" checked={form.is_bank} onChange={(e) => setForm({ ...form, is_bank: e.target.checked })} />
             Mark as bank / cash account
           </label>
-          <button className="btn-primary md:col-span-5" data-testid="account-submit">Create account</button>
+          <button className="btn-primary md:col-span-5" data-testid="account-submit">{editing ? "Save account" : "Create account"}</button>
         </form>
       )}
       {Object.entries(grouped).map(([type, list]) => (
         <div key={type} className="card-flat" data-testid={`coa-group-${type}`}>
           <div className="overline mb-2">{type.toUpperCase()} · {list.length}</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
+              <tr><th className="p-2" /><th className="p-2 text-left">Code</th><th className="p-2 text-left">Account</th><th className="p-2 text-right">Current balance</th><th className="p-2 text-right">Actions</th></tr>
+            </thead>
             <tbody>
               {list.map((a) => {
                 const isFav = favIds.includes(a.id);
@@ -1081,11 +1247,20 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
                       {a.name}
                       {a.active === false && <span className="ml-2 text-[10px] text-[#B87500]">INACTIVE</span>}
                     </td>
-                    <td className="p-2 text-right font-mono text-xs text-[#5C5C5C]">{CURRENCY(a.opening_balance)}</td>
-                    <td className="p-2 text-right w-24">
-                      <span className="inline-flex items-center gap-1 text-[10px] text-[#9A9A9A] group-hover:text-[#8B7F6A]">
-                        {a.is_bank && <Bank size={12} className="text-[#8B7F6A]" />}
-                        View ledger <CaretRight size={12} />
+                    <td className="p-2 text-right font-mono text-xs text-[#5C5C5C]">{CURRENCY(a.current_balance ?? a.opening_balance)}</td>
+                    <td className="p-2 text-right w-32">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        {a.is_bank && <Bank size={12} className="text-[#8B7F6A] mr-1" />}
+                        <button type="button" className="btn-ghost p-1.5" title="Edit account"
+                          onClick={(event) => startEdit(a, event)} data-testid={`account-edit-${a.id}`}>
+                          <PencilSimple size={12} />
+                        </button>
+                        <button type="button" className="btn-ghost p-1.5"
+                          title={a.active === false ? "Restore account" : "Deactivate account"}
+                          onClick={(event) => toggleActive(a, event)} data-testid={`account-active-${a.id}`}>
+                          {a.active === false ? <ArrowCounterClockwise size={12} /> : <Archive size={12} />}
+                        </button>
+                        <CaretRight size={12} className="text-[#9A9A9A]" />
                       </span>
                     </td>
                   </tr>

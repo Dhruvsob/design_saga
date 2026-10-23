@@ -1,6 +1,6 @@
 """Accounting models — double-entry compatible."""
 from pydantic import Field, field_validator, model_validator
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from core.url_security import external_http_url
 from models.base import FiniteModel
@@ -14,6 +14,7 @@ DEFAULT_COA = [
     ("Cash", "asset", "1001"), ("Petty Cash", "asset", "1002"),
     ("Bank - Primary", "asset", "1101"), ("Fixed Assets", "asset", "1201"),
     ("Accounts Receivable", "asset", "1301"), ("Security Deposits", "asset", "1401"),
+    ("Investments - Gold", "asset", "1601"),
     ("Input GST Credit", "asset", "1501"), ("Vendor Advances", "asset", "1502"),
     # Liabilities
     ("Accounts Payable", "liability", "2001"), ("GST Payable", "liability", "2101"),
@@ -74,6 +75,23 @@ class JournalIn(FiniteModel):
     vendor_id: Optional[str] = None
     employee_id: Optional[str] = None
     lines: List[JournalLine]
+
+
+class NonOperatingTransactionIn(FiniteModel):
+    """Simple capital, investment and party-money movements.
+
+    These are balance-sheet movements, not business income or expenses.
+    """
+    kind: Literal[
+        "owner_investment", "owner_withdrawal", "gold_purchase",
+        "money_given", "money_received", "repayment_received", "repayment_paid",
+    ]
+    date: str
+    amount: float = Field(gt=0)
+    bank_account_id: str
+    party_name: Optional[str] = Field(default=None, max_length=120)
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
 
 
 class IncomeIn(FiniteModel):
