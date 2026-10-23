@@ -20,7 +20,7 @@ const inr = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { hasPerm } = useAuth();
+  const { hasPerm, user } = useAuth();
   const { values } = useMasterData();
   const STAGES = values("project_stage", FALLBACK_STAGES);
   const TYPES = values("project_type", ["Residential", "Commercial"]);
@@ -28,7 +28,7 @@ export default function ProjectDetail() {
   const [p, setP] = useState(null);
   const [tab, setTab] = useState("Overview");
   const [loading, setLoading] = useState(true);
-  const [fileForm, setFileForm] = useState({ name: "", url: "", stage: "" });
+  const [fileForm, setFileForm] = useState({ name: "", url: "", stage: "", client_visible: false });
   const [showFileForm, setShowFileForm] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
@@ -80,7 +80,7 @@ export default function ProjectDetail() {
   const addFile = async (e) => {
     e.preventDefault();
     await api.post("/files", { ...fileForm, project_id: id });
-    setFileForm({ name: "", url: "", stage: "" });
+    setFileForm({ name: "", url: "", stage: "", client_visible: false });
     setShowFileForm(false);
     load();
   };
@@ -89,6 +89,21 @@ export default function ProjectDetail() {
     if (!window.confirm("Remove this file link?")) return;
     try { await api.delete(`/files/${fid}`); load(); }
     catch (ex) { alert(ex?.response?.data?.detail || "Delete failed"); }
+  };
+
+  const setFileClientVisibility = async (fid, clientVisible) => {
+    try {
+      await api.patch(`/files/${fid}/client-visibility`, { client_visible: clientVisible });
+      setP((current) => ({
+        ...current,
+        files: (current.files || []).map((file) => (
+          file.id === fid ? { ...file, client_visible: clientVisible } : file
+        )),
+      }));
+      toast.success(clientVisible ? "File shared in client portal" : "File hidden from client portal");
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not update client visibility");
+    }
   };
 
   const openEdit = () => {
@@ -447,6 +462,10 @@ export default function ProjectDetail() {
               <input className="input-flat" placeholder="File name" required value={fileForm.name} onChange={(e) => setFileForm({ ...fileForm, name: e.target.value })} />
               <input className="input-flat" placeholder="URL" required value={fileForm.url} onChange={(e) => setFileForm({ ...fileForm, url: e.target.value })} />
               <input className="input-flat" placeholder="Stage (e.g. Concept)" value={fileForm.stage} onChange={(e) => setFileForm({ ...fileForm, stage: e.target.value })} />
+              <label className="md:col-span-3 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={fileForm.client_visible} onChange={(e) => setFileForm({ ...fileForm, client_visible: e.target.checked })} />
+                Share this file in the client portal
+              </label>
               <button className="btn-primary md:col-span-3">Save</button>
             </form>
           )}
@@ -458,6 +477,12 @@ export default function ProjectDetail() {
                 <div className="text-xs text-[#5C5C5C]">{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
               </div>
               <div className="flex items-center gap-2">
+                {(f.created_by === user?.user_id || hasPerm("files.update")) && (
+                  <label className="flex items-center gap-2 text-xs text-[#5C5C5C]" title="Control whether this file appears in the public client portal">
+                    <input type="checkbox" checked={Boolean(f.client_visible)} onChange={(e) => setFileClientVisibility(f.id, e.target.checked)} />
+                    Client portal
+                  </label>
+                )}
                 {safeExternalUrl(f.url) ? <a href={safeExternalUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[#9A9A9A]">UNAVAILABLE</span>}
                 <button onClick={() => deleteFile(f.id)} className="btn-ghost p-1 text-[#B22B22] opacity-0 group-hover:opacity-100 transition" title="Remove" data-testid={`file-delete-${f.id}`}>
                   <Trash size={12} />

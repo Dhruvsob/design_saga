@@ -464,6 +464,11 @@ class FileIn(BaseModel):
     url: str
     stage: Optional[str] = None
     version: Optional[int] = 1
+    client_visible: bool = False
+
+
+class FileVisibilityUpdate(BaseModel):
+    client_visible: bool
 
 
 # ============================================================
@@ -1620,7 +1625,31 @@ async def create_file(payload: FileIn, request: Request,
     doc["created_by"] = user["user_id"]
     doc["uploader_name"] = user["name"]
     await sdb.files.insert_one(dict(doc))
+    await audit_log(user, "file.create", target=doc["id"], target_type="file",
+                    meta={"project_id": payload.project_id,
+                          "client_visible": payload.client_visible})
     return await sdb.files.find_one({"id": doc["id"]}, {"_id": 0})
+
+
+@api.patch("/files/{file_id}/client-visibility")
+async def update_file_client_visibility(
+        file_id: str, payload: FileVisibilityUpdate, request: Request,
+        session_token: Optional[str] = Cookie(default=None),
+        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    file_doc = await sdb.files.find_one({"id": file_id}, {"_id": 0})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    await get_visible_project(user, file_doc.get("project_id"))
+    if (file_doc.get("created_by") != user.get("user_id")
+            and not has_permission(user, "files.update")):
+        raise HTTPException(status_code=403, detail="Missing permission: files.update")
+    await sdb.files.update_one(
+        {"id": file_id}, {"$set": {"client_visible": payload.client_visible}})
+    await audit_log(user, "file.client_visibility", target=file_id, target_type="file",
+                    meta={"project_id": file_doc.get("project_id"),
+                          "client_visible": payload.client_visible})
+    return {"ok": True, "client_visible": payload.client_visible}
 
 
 @api.delete("/files/{file_id}")
@@ -1636,6 +1665,8 @@ async def delete_file(file_id: str, request: Request,
     if f.get("created_by") != user.get("user_id") and not has_permission(user, "files.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: files.delete")
     await sdb.files.delete_one({"id": file_id})
+    await audit_log(user, "file.delete", target=file_id, target_type="file",
+                    meta={"project_id": f.get("project_id"), "name": f.get("name")})
     return {"ok": True}
 
 
@@ -2283,6 +2314,7 @@ async def invoice_pdf(invoice_id: str, request: Request,
         project, org_id = await _public_project_by_token(token)
         doc = await db.invoices.find_one({
             "id": invoice_id, "project_id": project["id"], "org_id": org_id,
+            "status": {"$in": ["sent", "paid", "overdue"]},
         }, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
@@ -2329,8 +2361,11 @@ async def portal_view(token: str):
     project, org_id = await _public_project_by_token(token)
     owned_project = {"project_id": project["id"], "org_id": org_id}
     tasks = await db.tasks.find(owned_project, {"_id": 0}).to_list(200)
-    files = await db.files.find(owned_project, {"_id": 0}).to_list(200)
-    invoices = await db.invoices.find(owned_project, {"_id": 0}).to_list(200)
+    files = await db.files.find(
+        {**owned_project, "client_visible": True}, {"_id": 0}).to_list(200)
+    invoices = await db.invoices.find(
+        {**owned_project, "status": {"$in": ["sent", "paid", "overdue"]}},
+        {"_id": 0}).to_list(200)
     milestones = await db.payment_milestones.find(owned_project, {"_id": 0}).to_list(100)
 
     stage_index = PROJECT_STAGES.index(project.get("stage", "Requirement")) if project.get("stage") in PROJECT_STAGES else 0

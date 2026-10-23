@@ -95,9 +95,13 @@ def test_portal_child_queries_are_bound_to_token_owners_tenant(monkeypatch):
     result = asyncio.run(server.portal_view(TOKEN))
 
     assert result["project"]["id"] == "shared_project"
-    expected = {"project_id": "shared_project", "org_id": "org_a"}
-    for collection in children.values():
-        assert collection.find_queries == [expected]
+    owned = {"project_id": "shared_project", "org_id": "org_a"}
+    assert children["tasks"].find_queries == [owned]
+    assert children["payment_milestones"].find_queries == [owned]
+    assert children["files"].find_queries == [{**owned, "client_visible": True}]
+    assert children["invoices"].find_queries == [{
+        **owned, "status": {"$in": ["sent", "paid", "overdue"]},
+    }]
 
 
 def test_portal_milestones_expose_only_client_safe_fields(monkeypatch):
@@ -125,10 +129,11 @@ def test_portal_milestones_expose_only_client_safe_fields(monkeypatch):
 def test_shared_invoice_pdf_uses_project_and_tenant_in_same_lookup(monkeypatch):
     invoice = {
         "id": "invoice_collision", "project_id": "shared_project",
-        "org_id": "org_a", "number": "INV-1",
+        "org_id": "org_a", "number": "INV-1", "status": "sent",
     }
     invoices = _Collection(find_one=lambda query: invoice if query == {
         "id": "invoice_collision", "project_id": "shared_project", "org_id": "org_a",
+        "status": {"$in": ["sent", "paid", "overdue"]},
     } else None)
     fake_db = _active_db(invoices=invoices)
     monkeypatch.setattr(server, "db", fake_db)
@@ -151,4 +156,14 @@ def test_shared_invoice_pdf_uses_project_and_tenant_in_same_lookup(monkeypatch):
     assert response.media_type == "application/pdf"
     assert invoices.find_one_queries == [{
         "id": "invoice_collision", "project_id": "shared_project", "org_id": "org_a",
+        "status": {"$in": ["sent", "paid", "overdue"]},
     }]
+
+
+def test_new_file_links_are_private_by_default():
+    payload = server.FileIn(
+        project_id="project_1", name="Internal drawing",
+        url="https://files.example.test/drawing.pdf",
+    )
+
+    assert payload.client_visible is False
