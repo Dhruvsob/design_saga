@@ -4,7 +4,7 @@ import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import {
-  ArrowLeft, FloppyDisk, Plus, Trash, Warning, Trophy,
+  ArrowLeft, FloppyDisk, Plus, Trash, UserMinus, Warning, Trophy,
   FileText, ArrowSquareOut, ShieldWarning,
   TrendUp, ClockCounterClockwise, Key, Receipt,
 } from "@phosphor-icons/react";
@@ -95,7 +95,7 @@ export default function EmployeeDetail() {
   };
 
   const remove = async () => {
-    if (!window.confirm("Delete this employee record permanently?")) return;
+    if (!window.confirm("Terminate this employee? Their login will be disabled, while attendance, payroll, and accounting history will be retained.")) return;
     await api.delete(`/employees/${id}`);
     navigate("/employees");
   };
@@ -207,7 +207,7 @@ export default function EmployeeDetail() {
           </button>
           {canDelete && (
             <button onClick={remove} className="btn-ghost ml-auto" style={{ color: "#FF2A00", borderColor: "#FF2A00" }}>
-              <Trash size={14} /> Delete
+              <UserMinus size={14} /> Terminate
             </button>
           )}
         </div>

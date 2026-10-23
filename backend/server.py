@@ -2318,6 +2318,12 @@ def _public_file_projection(files: list[dict]) -> list[dict]:
     return result
 
 
+def _public_milestone_projection(milestones: list[dict]) -> list[dict]:
+    """Expose payment-plan fields without leaking tenant-internal metadata."""
+    allowed = ("id", "name", "amount", "percent", "due_date", "status")
+    return [{key: row.get(key) for key in allowed} for row in milestones]
+
+
 @api.get("/portal/{token}")
 async def portal_view(token: str):
     project, org_id = await _public_project_by_token(token)
@@ -2350,7 +2356,7 @@ async def portal_view(token: str):
         "invoices": [{"id": i["id"], "number": i.get("number"), "total": i.get("total"),
                       "status": i.get("status"), "due_date": i.get("due_date"),
                       "doc_type": i.get("doc_type")} for i in invoices],
-        "milestones": milestones,
+        "milestones": _public_milestone_projection(milestones),
     }
 
 
@@ -4776,6 +4782,12 @@ def _org_backfill_filter(collection: str, super_admin_emails: set[str]) -> dict:
     return missing_org
 
 
+async def _ensure_required_indexes():
+    """Establish integrity indexes or fail startup before serving traffic."""
+    from core.indexes import ensure_indexes
+    await ensure_indexes()
+
+
 @app.on_event("startup")
 async def _bootstrap_default_org():
     """Idempotently create the default Design Saga organisation and
@@ -4891,12 +4903,8 @@ async def _bootstrap_default_org():
     # ==============================================
     # Ensure Mongo indexes (idempotent)
     # ==============================================
-    try:
-        from core.indexes import ensure_indexes
-        await ensure_indexes()
-        logger.info("[Bootstrap] Mongo indexes ensured")
-    except Exception as e:
-        logger.warning("[Bootstrap] Index setup skipped: %s", e)
+    await _ensure_required_indexes()
+    logger.info("[Bootstrap] Mongo indexes ensured")
 
     # ==============================================
     # Production safety warning

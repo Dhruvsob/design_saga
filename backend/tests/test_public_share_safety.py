@@ -100,6 +100,28 @@ def test_portal_child_queries_are_bound_to_token_owners_tenant(monkeypatch):
         assert collection.find_queries == [expected]
 
 
+def test_portal_milestones_expose_only_client_safe_fields(monkeypatch):
+    children = {
+        "tasks": _Collection([]),
+        "files": _Collection([]),
+        "invoices": _Collection([]),
+        "payment_milestones": _Collection([{
+            "id": "ms_1", "org_id": "org_a", "project_id": "shared_project",
+            "name": "Design approval", "amount": 10000, "percent": 20,
+            "due_date": "2026-10-31", "status": "pending",
+            "notes": "Internal collection note", "created_by": "user_1",
+        }]),
+    }
+    monkeypatch.setattr(server, "db", _active_db(**children))
+
+    result = asyncio.run(server.portal_view(TOKEN))
+
+    assert result["milestones"] == [{
+        "id": "ms_1", "name": "Design approval", "amount": 10000,
+        "percent": 20, "due_date": "2026-10-31", "status": "pending",
+    }]
+
+
 def test_shared_invoice_pdf_uses_project_and_tenant_in_same_lookup(monkeypatch):
     invoice = {
         "id": "invoice_collision", "project_id": "shared_project",

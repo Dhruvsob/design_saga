@@ -9,11 +9,12 @@ from starlette.requests import Request
 import core.audit as audit_module
 import core.helpers as helpers_module
 import core.jobs as jobs_module
+import core.indexes as indexes_module
 from core.audit import audit_digest, verify_chain
 from core.http_security import rate_limit_decision, reset_rate_limits
 from core.indexes import _INDEXES
 from core.helpers import business_today
-from server import _demo_seeding_enabled
+from server import _demo_seeding_enabled, _ensure_required_indexes
 
 
 def _request(path: str) -> Request:
@@ -49,6 +50,15 @@ def test_integrity_indexes_are_unique():
     }
     found = {opts.get("name") for _, _, opts in _INDEXES if opts.get("unique")}
     assert required <= found
+
+
+def test_required_index_failure_aborts_startup(monkeypatch):
+    async def fail():
+        raise RuntimeError("duplicate integrity key")
+
+    monkeypatch.setattr(indexes_module, "ensure_indexes", fail)
+    with pytest.raises(RuntimeError, match="duplicate integrity key"):
+        asyncio.run(_ensure_required_indexes())
 
 
 def test_optional_unique_indexes_use_single_sparse_keys():

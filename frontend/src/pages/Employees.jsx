@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
-import { Plus, ArrowRight, MagnifyingGlass, Trash } from "@phosphor-icons/react";
+import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
 
 const STATUS_CHIP = {
   active: "chip-paid",
@@ -61,7 +61,7 @@ export default function Employees() {
 
   const remove = async (id, e) => {
     e.stopPropagation();
-    if (!window.confirm("Delete this employee record permanently?")) return;
+    if (!window.confirm("Terminate this employee? Their login will be disabled, while attendance, payroll, and accounting history will be retained.")) return;
     await api.delete(`/employees/${id}`);
     load();
   };
@@ -196,8 +196,8 @@ export default function Employees() {
                     <div className="flex items-center gap-2 justify-end">
                       <ArrowRight size={14} className="text-[#5C5C5C]" />
                       {canDelete && (
-                        <button onClick={(e) => remove(r.id, e)} className="text-[#FF2A00] hover:scale-110 transition" title="Delete">
-                          <Trash size={14} />
+                        <button onClick={(e) => remove(r.id, e)} className="text-[#FF2A00] hover:scale-110 transition" title="Terminate employee">
+                          <UserMinus size={14} />
                         </button>
                       )}
                     </div>
