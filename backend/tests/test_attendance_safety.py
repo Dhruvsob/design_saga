@@ -30,6 +30,16 @@ def test_punch_permission_distinguishes_self_service_from_approval_only():
         attendance._require_punch_permission({"permissions": ["attendance.approve"]})
 
 
+def test_geofence_read_permissions_match_attendance_access():
+    for permission in (
+        "attendance.read", "attendance.create", "attendance.update", "attendance.approve",
+    ):
+        attendance._require_attendance_access({"permissions": [permission]})
+    with pytest.raises(HTTPException) as exc:
+        attendance._require_attendance_access({"permissions": ["projects.read"]})
+    assert exc.value.status_code == 403
+
+
 def test_regular_employee_cannot_supply_a_coworker_id():
     user = {"user_id": "user_a", "permissions": ["attendance.create"]}
     assert attendance._select_employee_id(user, None, "emp_a") == "emp_a"

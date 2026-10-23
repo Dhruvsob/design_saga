@@ -3,6 +3,9 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 from routes import accounting, expenses
 from models.expense import ReimburseIn
 
@@ -24,6 +27,39 @@ class _Collection:
                 row.update(update.get("$set", {}))
                 return SimpleNamespace(matched_count=1)
         return SimpleNamespace(matched_count=0)
+
+
+def test_expense_visibility_separates_staff_from_managers():
+    staff = {"user_id": "employee", "role": "Employee", "permissions": ["expenses.read"]}
+    manager = {"user_id": "manager", "role": "Director", "permissions": ["expenses.approve"]}
+
+    assert expenses._can_view_all_expenses(staff) is False
+    assert expenses._own_or_pending_query(staff) == {
+        "$or": [
+            {"claimant_id": "employee"},
+            {"pending_approver_role": "Employee",
+             "status": {"$in": ["pending_l1", "pending_l2"]}},
+        ],
+    }
+    assert expenses._can_view_all_expenses(manager) is True
+    assert expenses._visible_expense_query(staff, {"status": "approved"}) == {
+        "$and": [
+            {"status": "approved"},
+            expenses._own_or_pending_query(staff),
+        ],
+    }
+    assert expenses._visible_expense_query(manager, {"status": "approved"}) == {
+        "status": "approved",
+    }
+
+
+def test_expense_status_filter_accepts_only_known_workflow_states():
+    assert expenses._status_filter("approved") == "approved"
+    assert expenses._status_filter("pending_l1,pending_l2") == {
+        "$in": ["pending_l1", "pending_l2"],
+    }
+    with pytest.raises(HTTPException):
+        expenses._status_filter("pending_l1,unknown")
 
 
 def test_reimbursement_retry_recovers_existing_journal(monkeypatch):

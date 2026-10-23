@@ -324,16 +324,20 @@ async def _validate_attendance_project(user: dict, project_id: Optional[str]) ->
     return project
 
 
+def _require_attendance_access(user: dict) -> None:
+    if not has_any_permission(
+        user, "attendance.read", "attendance.create", "attendance.update", "attendance.approve",
+    ):
+        raise HTTPException(403, "Missing attendance permission")
+
+
 @router.get("/attendance/project-options")
 async def attendance_project_options(request: Request,
                                      session_token: Optional[str] = Cookie(default=None),
                                      authorization: Optional[str] = Header(default=None)):
     """Minimal project choices for site attendance, without exposing project details."""
     user = await require_user(request, session_token, authorization)
-    if not has_any_permission(
-        user, "attendance.read", "attendance.create", "attendance.update", "attendance.approve",
-    ):
-        raise HTTPException(403, "Missing attendance permission")
+    _require_attendance_access(user)
     rows = await sdb.projects.find(
         await _attendance_project_query(user),
         {"_id": 0, "id": 1, "name": 1},
@@ -345,7 +349,8 @@ async def attendance_project_options(request: Request,
 async def list_locations(request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    _require_attendance_access(user)
     rows = await sdb.office_locations.find({}, {"_id": 0}).sort("kind", 1).to_list(200)
     return rows
 

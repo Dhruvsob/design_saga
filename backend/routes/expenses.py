@@ -36,6 +36,17 @@ from models.expense import (
 
 router = APIRouter()
 
+EXPENSE_STATUSES = {
+    "receipt_required", "pending_l1", "pending_l2", "approved", "rejected", "reimbursed",
+}
+
+
+def _status_filter(value: str):
+    statuses = [status.strip() for status in value.split(",") if status.strip()]
+    if not statuses or any(status not in EXPENSE_STATUSES for status in statuses):
+        raise HTTPException(400, "Invalid expense status")
+    return statuses[0] if len(statuses) == 1 else {"$in": statuses}
+
 
 DEFAULT_POLICY = {
     "auto_approve_below": 0,
@@ -124,7 +135,7 @@ async def approvers(request: Request,
         roles.append(policy["l2_approver_role"])
     users = await sdb.users.find(
         {"role": {"$in": roles}, "is_active": True},
-        {"_id": 0, "password_hash": 0}
+        {"_id": 0, "user_id": 1, "name": 1, "role": 1}
     ).to_list(50)
     return {"policy": policy, "users": users}
 
@@ -141,15 +152,15 @@ async def list_expenses(request: Request, status: Optional[str] = None,
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     q = {}
-    if status: q["status"] = status
+    if status:
+        q["status"] = _status_filter(status)
     if project_id: q["project_id"] = project_id
     if claimant_id: q["claimant_id"] = claimant_id
     if mine: q["claimant_id"] = user["user_id"]
     # Non-managers can only see their own + those they need to approve.
     # `expenses.read` is a self-service perm (all staff have it), so team-wide
     # visibility requires a manager perm (finance.read / expenses.update|approve).
-    if not _can_view_all_expenses(user):
-        q = {"$and": [q, _own_or_pending_query(user)]} if q else _own_or_pending_query(user)
+    q = _visible_expense_query(user, q)
     rows = await sdb.expenses.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return rows
 
@@ -159,9 +170,7 @@ async def get_expense(exp_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    q = {"id": exp_id}
-    if not _can_view_all_expenses(user):
-        q = {"$and": [q, _own_or_pending_query(user)]}
+    q = _visible_expense_query(user, {"id": exp_id})
     e = await sdb.expenses.find_one(q, {"_id": 0, "_lock": 0, "_lock_at": 0})
     if not e:
         raise HTTPException(404, "Expense not found")
@@ -178,6 +187,14 @@ def _own_or_pending_query(user: dict) -> dict:
     return {"$or": [{"claimant_id": user["user_id"]},
                     {"pending_approver_role": user.get("role"),
                      "status": {"$in": ["pending_l1", "pending_l2"]}}]}
+
+
+def _visible_expense_query(user: dict, query: Optional[dict] = None) -> dict:
+    query = query or {}
+    if _can_view_all_expenses(user):
+        return query
+    visibility = _own_or_pending_query(user)
+    return {"$and": [query, visibility]} if query else visibility
 
 
 def _decide_route(amount: float, has_receipt: bool, policy: dict) -> dict:
@@ -445,12 +462,14 @@ async def summary(request: Request,
                   session_token: Optional[str] = Cookie(default=None),
                   authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    pending = await sdb.expenses.count_documents({"status": {"$in": ["pending_l1", "pending_l2"]}})
-    approved = await sdb.expenses.count_documents({"status": "approved"})
-    reimbursed_month = await sdb.expenses.count_documents({
+    pending = await sdb.expenses.count_documents(_visible_expense_query(user,
+        {"status": {"$in": ["pending_l1", "pending_l2"]}}))
+    approved = await sdb.expenses.count_documents(
+        _visible_expense_query(user, {"status": "approved"}))
+    reimbursed_month = await sdb.expenses.count_documents(_visible_expense_query(user, {
         "status": "reimbursed",
         "reimbursed_at": {"$gte": business_today().replace(day=1).isoformat()},
-    })
+    }))
     my_pending = await sdb.expenses.count_documents({
         "claimant_id": user["user_id"],
         "status": {"$in": ["pending_l1", "pending_l2", "receipt_required"]},

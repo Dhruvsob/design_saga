@@ -2,7 +2,11 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 from core import notifications as notifications_module
+from routes import notifications as notification_routes
 
 
 class _Cursor:
@@ -81,3 +85,11 @@ def test_emit_hr_uses_current_tenant_scope(monkeypatch):
 
 async def _zero():
     return 0
+
+
+def test_manual_tenant_scan_requires_finance_or_admin_permission():
+    notification_routes._require_scan_permission({"permissions": ["finance.read"]})
+    notification_routes._require_scan_permission({"permissions": ["*.*"]})
+    with pytest.raises(HTTPException) as exc:
+        notification_routes._require_scan_permission({"permissions": ["tasks.read"]})
+    assert exc.value.status_code == 403

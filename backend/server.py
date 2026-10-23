@@ -3921,6 +3921,7 @@ async def adv_seed(request: Request, session_token: Optional[str] = Cookie(defau
         raise HTTPException(status_code=403,
                             detail="Demo seeding disabled. Set ENABLE_SEED_DEMO=true to enable.")
     user = await require_user(request, session_token, authorization)
+    _require_perm(user, "quotations.create")
     # find first project
     projects = await sdb.projects.find({}, {"_id": 0}).to_list(5)
     proj = projects[0] if projects else None

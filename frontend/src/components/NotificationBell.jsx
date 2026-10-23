@@ -100,7 +100,6 @@ export default function NotificationBell() {
   const scan = async () => {
     setBusy(true);
     try {
-      await api.post("/notifications/scan");
       await load();
     } finally { setBusy(false); }
   };
@@ -146,7 +145,7 @@ export default function NotificationBell() {
             <div className="flex items-center gap-1">
               <button
                 onClick={scan} disabled={busy}
-                title="Refresh & scan for new alerts"
+                title="Refresh notifications"
                 className="btn-ghost text-xs" data-testid="notif-scan-btn"
               ><ArrowClockwise size={12} /></button>
               {unread > 0 && (
@@ -164,7 +163,7 @@ export default function NotificationBell() {
               <div className="p-10 text-center">
                 <Bell size={24} className="mx-auto text-[#9A9A9A] mb-2" />
                 <div className="overline mb-1">EMPTY</div>
-                <div className="text-xs text-[#5C5C5C]">No notifications yet. Try Scan to check for due items.</div>
+                <div className="text-xs text-[#5C5C5C]">No notifications yet.</div>
               </div>
             )}
             {sorted.map((n) => (

@@ -45,7 +45,7 @@ export default function Expenses() {
       const [e, s, a] = await Promise.all([
         api.get("/expenses", { params }),
         api.get("/expenses/summary/dashboard"),
-        api.get("/accounts?type=asset"),
+        isFinance ? api.get("/accounts?type=asset") : Promise.resolve({ data: [] }),
       ]);
       let rows = e.data;
       if (tab === "approvals") {
@@ -117,7 +117,7 @@ export default function Expenses() {
         </div>
       </div>
 
-      {showCreate && <CreateExpense accounts={accounts} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
+      {showCreate && <CreateExpense onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
       {detail && <ExpenseDetail expId={detail} accounts={accounts} isAdmin={isAdmin} isFinance={isFinance} userRole={user?.role} onClose={() => setDetail(null)} onChange={load} />}
     </div>
   );
@@ -135,7 +135,7 @@ function KPI({ label, value, tone }) {
 
 const CATEGORIES = ["travel","meals","materials","utilities","site","office","other"];
 
-function CreateExpense({ accounts, onClose, onCreated }) {
+function CreateExpense({ onClose, onCreated }) {
   const [f, setF] = useState({
     title: "", payment_mode: "personal", notes: "",
     lines: [{ category: "travel", amount: 0, description: "", receipt_url: "", tax_rate: 0 }],

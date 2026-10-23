@@ -13,9 +13,15 @@ from core.helpers import business_today, iso_now, now_utc
 from core.deps import require_user
 from core.notifications import emit, emit_admins, emit_finance
 from core.tenancy import user_org_id
+from core.rbac import has_any_permission
 
 
 router = APIRouter()
+
+
+def _require_scan_permission(user: dict) -> None:
+    if not has_any_permission(user, "*.*", "finance.read"):
+        raise HTTPException(403, "Missing permission: finance.read")
 
 
 # ==================================================
@@ -237,9 +243,9 @@ async def run_scan(caller_org):
 async def scan_and_emit(request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
-    """Trigger a scan. Any authenticated user can hit this — it's cheap and
-    idempotent (each notification has a per-day dedup_key)."""
+    """Manually trigger the tenant scan; routine scans run in the scheduler."""
     user = await require_user(request, session_token, authorization)
+    _require_scan_permission(user)
     return await run_scan(user_org_id(user))
 
 
