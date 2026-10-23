@@ -90,7 +90,7 @@ yet received sufficient adversarial testing.
 | Accessibility | Keyboard navigation, labels, focus, contrast, table semantics and screen-reader checks | Audit |
 | Responsive layout | No clipped controls, overlapping text or unusable tables on supported mobile/desktop widths | Audit |
 | Browser compatibility | Current Chrome, Edge, Safari and mobile smoke tests | Audit |
-| Performance | Bundle size, lazy loading, pagination, large tenant datasets and API latency budgets | Accounting/Daybook pagination is active; production build reports a 1.49 MB main JavaScript chunk, so route-level lazy loading and measured API budgets remain open |
+| Performance | Bundle size, lazy loading, pagination, large tenant datasets and API latency budgets | Accounting/Daybook pagination and route-level lazy loading are active; initial JavaScript is reduced from 1.52 MB (372 KB gzip) to 495 KB (149 KB gzip). Large-data/API latency budgets remain open |
 
 ## Required Release Gates
 

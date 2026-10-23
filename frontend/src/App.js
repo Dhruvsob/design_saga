@@ -1,39 +1,44 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import "@/App.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
-import Dashboard from "./pages/Dashboard";
-import Leads from "./pages/Leads";
-import Projects from "./pages/Projects";
-import ProjectDetail from "./pages/ProjectDetail";
-import Tasks from "./pages/TasksBoard";
-import TaskDetail from "./pages/TaskDetail";
-import Attendance from "./pages/Attendance";
-import Holidays from "./pages/Holidays";
-import Accounting from "./pages/Accounting";
-import Clients from "./pages/Clients";
-import ClientDetail from "./pages/ClientDetail";
-import Invoices from "./pages/Invoices";
-import QuotationsAdv from "./pages/QuotationsAdv";
-import QuotationBuilder from "./pages/QuotationBuilder";
-import RBACAdmin from "./pages/RBACAdmin";
-import Employees from "./pages/Employees";
-import EmployeeDetail from "./pages/EmployeeDetail";
-import Vendors from "./pages/Vendors";
-import VendorDetail from "./pages/VendorDetail";
-import ClientPortal from "./pages/ClientPortal";
-import Loans from "./pages/Loans";
-import PurchaseOrders from "./pages/PurchaseOrders";
-import Expenses from "./pages/Expenses";
-import SuperAdminPanel from "./pages/SuperAdminPanel";
-import CalendarPage from "./pages/Calendar";
-import CompanySettings from "./pages/CompanySettings";
-import AuditLog from "./pages/AuditLog";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Layout from "./components/Layout";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Leads = lazy(() => import("./pages/Leads"));
+const Projects = lazy(() => import("./pages/Projects"));
+const ProjectDetail = lazy(() => import("./pages/ProjectDetail"));
+const Tasks = lazy(() => import("./pages/TasksBoard"));
+const TaskDetail = lazy(() => import("./pages/TaskDetail"));
+const Attendance = lazy(() => import("./pages/Attendance"));
+const Holidays = lazy(() => import("./pages/Holidays"));
+const Accounting = lazy(() => import("./pages/Accounting"));
+const Clients = lazy(() => import("./pages/Clients"));
+const ClientDetail = lazy(() => import("./pages/ClientDetail"));
+const Invoices = lazy(() => import("./pages/Invoices"));
+const QuotationsAdv = lazy(() => import("./pages/QuotationsAdv"));
+const QuotationBuilder = lazy(() => import("./pages/QuotationBuilder"));
+const RBACAdmin = lazy(() => import("./pages/RBACAdmin"));
+const Employees = lazy(() => import("./pages/Employees"));
+const EmployeeDetail = lazy(() => import("./pages/EmployeeDetail"));
+const Vendors = lazy(() => import("./pages/Vendors"));
+const VendorDetail = lazy(() => import("./pages/VendorDetail"));
+const ClientPortal = lazy(() => import("./pages/ClientPortal"));
+const Loans = lazy(() => import("./pages/Loans"));
+const PurchaseOrders = lazy(() => import("./pages/PurchaseOrders"));
+const Expenses = lazy(() => import("./pages/Expenses"));
+const SuperAdminPanel = lazy(() => import("./pages/SuperAdminPanel"));
+const CalendarPage = lazy(() => import("./pages/Calendar"));
+const CompanySettings = lazy(() => import("./pages/CompanySettings"));
+const AuditLog = lazy(() => import("./pages/AuditLog"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+
+const PageFallback = () => (
+  <div className="min-h-[40vh] flex items-center justify-center overline">LOADING...</div>
+);
 
 function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
   const { user, loading, hasPerm, isPending, isRejected, isSuperAdmin, logout } = useAuth();
@@ -103,7 +108,7 @@ function AppRouter() {
     return <AuthCallback />;
   }
   return (
-    <Routes>
+    <Suspense fallback={<PageFallback />}><Routes>
       <Route path="/" element={<PublicRoot />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/portal/:token" element={<ClientPortal />} />
@@ -134,7 +139,7 @@ function AppRouter() {
       <Route path="/settings/audit" element={<ProtectedShell requirePerm="*.*"><AuditLog /></ProtectedShell>} />
       <Route path="/super-admin" element={<ProtectedShell requireSuperAdmin><SuperAdminPanel /></ProtectedShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    </Routes></Suspense>
   );
 }
 

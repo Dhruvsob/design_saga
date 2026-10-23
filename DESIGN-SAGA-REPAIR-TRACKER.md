@@ -61,7 +61,7 @@ Last updated: 2026-10-23 (Asia/Calcutta)
 | DS-005 | High | Audit project/task/file authorization and unsafe attachment URLs | Fixed, deployed, and verified live |
 | DS-006 | High | Prevent cross-tenant account reset and tenant-to-SuperAdmin escalation | Fixed, deployed, and verified live |
 | DS-007 | High | Replace unsafe blanket Git redeploy hook with change-aware deployment | Fixed, installed, and verified live |
-| DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | Queued |
+| DS-008 | Medium | Measure endpoint/page performance and inspect indexes/N+1/pagination before optimizing | In progress: route-level code splitting reduces the initial JS bundle from 1.52 MB to 495 KB (372 KB to 149 KB gzip); API latency, index and large-data traces remain |
 | DS-009 | High | Employee/payroll endpoints expose compensation, bank, and private HR data through broad employee-read permission | Fixed, deployed, and verified live |
 | DS-010 | High | Prevent password-login identifier spraying from one network source | Fixed, deployed, and verified live |
 | DS-011 | High | Rejected punch retry, late-review races, manual-time integrity, weekly offs, and overlapping leave | Fixed, deployed, and verified live |
@@ -104,7 +104,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-019 | Medium | File upload unavailable | Project/vendor upload routes exist; persistence/provider and UI flow need live verification |
 | BR-020 | Medium | Client portal link missing | Explicit share-token/link UI is implemented and deployed |
 | BR-021 | Medium | Search misses quotations/events | Fixed and deployed: advanced quotations and privacy-filtered calendar events are included in global search |
-| BR-022 | Medium | Slow page loading | Open as measured performance task DS-008; optimize only from traces |
+| BR-022 | Medium | Slow page loading | Frontend route splitting implemented and smoke-tested across dashboard, accounting, attendance, calendar, audit and privacy; API tracing/pagination remains under DS-008 |
 | BR-023 | Medium | Cash-flow split missing | Fixed: report and CSV now split operating/investing/financing activities and reconcile every cash/bank account while preserving existing totals |
 | BR-024 | Medium | Draft invoice counts inconsistent | Not reproducible in the 24/10 production trace: the sole current invoice is one explicit sample-tenant draft and all active invoice queries count it consistently; monitor as data grows |
 | BR-025 | Low | Date formats inconsistent | Shared DD/MM/YYYY formatter exists; remaining raw-date surfaces need inventory |
