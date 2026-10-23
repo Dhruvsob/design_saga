@@ -75,6 +75,7 @@ Last updated: 2026-10-23 (Asia/Calcutta)
 | DS-021 | High | Capital, investment and person-wise receivable/payable workflows | Deployed and verified live with fully reversed sample-tenant journals |
 | DS-022 | Medium | Chart of Accounts current balances, editing, deactivation and future duplicate-code prevention | Deployed and verified; scoped duplicate-code cleanup completed after backup |
 | DS-023 | High | Invoice accrual, Accounts Receivable settlement and revenue/GST recognition | Fixed, deployed and verified live with a fully reversed sample-invoice lifecycle |
+| DS-024 | Medium | Private notification controls, complete search, tenant audit UI and cash-flow activity split | Fixed, regression-tested and deployed; cash-flow totals retain backward-compatible fields |
 
 ## User-Reported Master Backlog - 2026-10-23
 
@@ -88,7 +89,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-004 | High | Vendor ledger shows wrong balance | Verified live: sample vendor summary and full ledger both return ₹29,500 |
 | BR-005 | High | AR and client receivables not reflected | Fixed and verified live: issue posted ₹59,000 A/R against ₹50,000 revenue + ₹9,000 GST; payment settled A/R, and the full rollback returned every tested balance to baseline |
 | BR-006 | High | Attendance check-in and employee-login link broken | Fixed and deployed; attendance identity/project access/idempotency covered by current tests |
-| BR-007 | High | Notifications and settings unavailable | Notification generation/privacy fixed and deployed; end-user notification preferences screen remains a product gap |
+| BR-007 | High | Notifications and settings unavailable | Fixed and deployed: each user controls task, finance, attendance and calendar alerts; mandatory account notices remain enabled and preferences are tenant/user scoped |
 | BR-008 | Medium | Chart of Accounts balances show zero/opening only | Fixed and verified live: all listed accounts include journal-derived current balances |
 | BR-009 | Medium | Duplicate account codes | Future duplicates are rejected; exact unused live duplicates were safely deactivated/re-coded and both affected audit chains pass |
 | BR-010 | Medium | Inconsistent monthly balances | Requires exact screen/period data trace after DS-022 current-balance correction |
@@ -102,10 +103,10 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-018 | Medium | AI assistant not functional | Requires provider/config/runtime audit; not an accounting source of truth |
 | BR-019 | Medium | File upload unavailable | Project/vendor upload routes exist; persistence/provider and UI flow need live verification |
 | BR-020 | Medium | Client portal link missing | Explicit share-token/link UI is implemented and deployed |
-| BR-021 | Medium | Search misses quotations/events | Confirmed partial gap: current global search omits advanced quotations and calendar events |
+| BR-021 | Medium | Search misses quotations/events | Fixed and deployed: advanced quotations and privacy-filtered calendar events are included in global search |
 | BR-022 | Medium | Slow page loading | Open as measured performance task DS-008; optimize only from traces |
-| BR-023 | Medium | Cash-flow split missing | Current report has source categories; required business breakdown needs specification/data comparison |
-| BR-024 | Medium | Draft invoice counts inconsistent | Requires query-by-query production trace; do not patch counts independently |
+| BR-023 | Medium | Cash-flow split missing | Fixed: report and CSV now split operating/investing/financing activities and reconcile every cash/bank account while preserving existing totals |
+| BR-024 | Medium | Draft invoice counts inconsistent | Not reproducible in the 24/10 production trace: the sole current invoice is one explicit sample-tenant draft and all active invoice queries count it consistently; monitor as data grows |
 | BR-025 | Low | Date formats inconsistent | Shared DD/MM/YYYY formatter exists; remaining raw-date surfaces need inventory |
 | BR-026 | Low | New-tenant PO dead-end | Send/GRN paths exist; empty master-data onboarding needs live workflow verification |
 | BR-027 | Low | Bill creation location confusing | UX review item; preserve vendor and PO context while improving discoverability |
@@ -116,7 +117,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-032 | Low | Gujarati text in English UI | Confirmed one Collections heading; removed under DS-022 while retaining English accounting terminology |
 | BR-033 | Low | Demo data unclean | Sample tenant only; clean via backup and explicit scoped scripts, never production tenants |
 | BR-034 | Low | Backup missing | Fixed: checksummed daily database/deployment backup and restore validation active on VPS; offsite copy remains |
-| BR-035 | Low | Help and audit-log screens missing | Audit API exists; tenant-facing audit/help navigation remains a UI gap |
+| BR-035 | Low | Help and audit-log screens missing | Tenant-admin audit screen and integrity verification are deployed; a generic help manual remains a product-content decision, not a production defect |
 
 ### Accounting workflow extension (DS-021/DS-022)
 

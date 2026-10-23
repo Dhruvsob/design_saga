@@ -689,7 +689,7 @@ function CashFlowView({ cf, onDownload, periodQs }) {
     <div className="space-y-4" data-testid="cashflow-tab">
       <div className="flex items-center justify-between">
         <div className="overline">
-          {cf.from ? `${cf.from} → ${cf.to || "today"}` : "ALL TIME"}
+          {cf.from ? `${formatDate(cf.from)} to ${cf.to ? formatDate(cf.to) : "today"}` : "ALL TIME"}
         </div>
         <button className="btn-ghost text-xs" onClick={() => onDownload(`/accounting/reports/cash-flow.csv${periodQs}`, "cash-flow.csv")} data-testid="dl-cf-csv">
           <DownloadSimple size={12} /> CSV
@@ -725,6 +725,45 @@ function CashFlowView({ cf, onDownload, periodQs }) {
           </div>
         </div>
       </div>
+
+      {cf.activities && (
+        <div className="border border-[#E5E5E5] bg-white overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
+            <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+              <tr><th className="p-3 text-left overline">ACTIVITY</th><th className="p-3 text-left overline">DETAIL</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">NET</th></tr>
+            </thead>
+            <tbody>
+              {Object.entries(cf.activities).flatMap(([activity, detail]) => (
+                detail.lines?.length ? detail.lines.map((line, index) => (
+                  <tr key={`${activity}-${line.label}`} className="border-b border-[#F0F0F0]">
+                    <td className="p-3 font-semibold capitalize">{index === 0 ? activity : ""}</td>
+                    <td className="p-3 text-[#5C5C5C]">{line.label}</td>
+                    <td className="p-3 text-right font-mono text-[#1D633E]">{line.inflow ? CURRENCY(line.inflow) : "-"}</td>
+                    <td className="p-3 text-right font-mono text-[#B4001C]">{line.outflow ? CURRENCY(line.outflow) : "-"}</td>
+                    <td className="p-3 text-right font-mono font-semibold">{CURRENCY(line.net)}</td>
+                  </tr>
+                )) : [
+                  <tr key={`${activity}-empty`} className="border-b border-[#F0F0F0]">
+                    <td className="p-3 font-semibold capitalize">{activity}</td><td className="p-3 text-[#9A9A9A]">No movement</td><td className="p-3" colSpan="3" />
+                  </tr>,
+                ]
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {Array.isArray(cf.cash_accounts) && cf.cash_accounts.length > 0 && (
+        <div className="border border-[#E5E5E5] bg-white overflow-x-auto">
+          <div className="p-3 border-b border-[#E5E5E5] overline">CASH & BANK RECONCILIATION</div>
+          <table className="w-full min-w-[620px] text-sm">
+            <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]"><tr><th className="p-3 text-left overline">ACCOUNT</th><th className="p-3 text-right overline">OPENING</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">CLOSING</th></tr></thead>
+            <tbody>{cf.cash_accounts.map((account) => (
+              <tr key={account.account_id} className="border-b border-[#F0F0F0]"><td className="p-3 font-semibold">{account.name}</td><td className="p-3 text-right font-mono">{CURRENCY(account.opening_balance)}</td><td className="p-3 text-right font-mono text-[#1D633E]">{CURRENCY(account.inflow)}</td><td className="p-3 text-right font-mono text-[#B4001C]">{CURRENCY(account.outflow)}</td><td className="p-3 text-right font-mono font-semibold">{CURRENCY(account.closing_balance)}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
 
       <div className={`p-4 border text-sm ${cf.net_change >= 0 ? "border-[#1D633E] bg-[#EFF7EF] text-[#1D633E]" : "border-[#B4001C] bg-[#FCEEEC] text-[#B4001C]"}`}>
         <span className="overline">NET CHANGE FOR PERIOD</span>

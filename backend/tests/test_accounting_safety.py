@@ -13,6 +13,7 @@ from models.accounting import (
     DEFAULT_COA, IncomeIn, JournalLine, MilestoneIn, NonOperatingTransactionIn,
 )
 from routes.accounting import (
+    _cash_flow_bucket,
     _cash_collection_source,
     _invoice_accrual_amounts,
     _linked_journal_key,
@@ -86,6 +87,31 @@ def test_invoice_accrual_splits_receivable_revenue_and_tax():
     }) == (1000.0, 180.0, 1180.0)
     with pytest.raises(HTTPException):
         _invoice_accrual_amounts({"subtotal": 1000, "tax": 180, "total": 1000})
+
+
+@pytest.mark.parametrize(("source", "counter", "net", "expected"), [
+    ("invoice_payment", {"account_type": "asset", "account_name": "Accounts Receivable"},
+     1180, ("operating", "Client invoice collections")),
+    ("expense", {"account_type": "expense", "account_name": "Site Expense"},
+     -500, ("operating", "Operating expenses")),
+    ("loan_disbursement", {"account_type": "liability", "account_name": "Bank Loan"},
+     10000, ("financing", "Loan proceeds")),
+    ("non_operating", {"account_type": "equity", "account_name": "Owner Drawings"},
+     -2000, ("financing", "Owner drawings")),
+    ("non_operating", {"account_type": "asset", "account_name": "Investments - Gold"},
+     -3000, ("investing", "Gold investments")),
+    ("non_operating_reversal", {"account_type": "asset", "account_name": "Advance to - Person"},
+     1000, ("investing", "Advance repayments received")),
+])
+def test_cash_flow_activity_classification(source, counter, net, expected):
+    entry = {
+        "source": source,
+        "lines": [
+            {"account_id": "bank", "account_type": "asset", "account_name": "Bank"},
+            {"account_id": "counter", **counter},
+        ],
+    }
+    assert _cash_flow_bucket(entry, {"bank"}, net) == expected
 
 
 def test_invoice_issue_posts_to_receivable_revenue_and_gst(monkeypatch):

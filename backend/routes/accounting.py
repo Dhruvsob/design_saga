@@ -2028,6 +2028,60 @@ async def reconcile_balance_sheet(request: Request,
 # ==================================================
 # Cash Flow  (indirect-ish, aggregated by source)
 # ==================================================
+def _cash_flow_bucket(entry: dict, cash_ids: set[str], net: float) -> tuple[str, str]:
+    """Classify one cash-moving journal without changing accounting totals."""
+    source = entry.get("source") or "manual"
+    base_source = source[:-9] if source.endswith("_reversal") else source
+    counter_lines = [
+        line for line in (entry.get("lines") or [])
+        if line.get("account_id") not in cash_ids
+    ]
+    counter_types = {line.get("account_type") for line in counter_lines}
+    counter_names = " ".join(str(line.get("account_name") or "") for line in counter_lines).lower()
+
+    if base_source in {"loan_disbursement", "loan_emi", "loan_prepay"}:
+        activity = "financing"
+    elif base_source == "non_operating" and counter_types.intersection({"equity", "liability"}):
+        activity = "financing"
+    elif base_source == "non_operating" and "asset" in counter_types:
+        activity = "investing"
+    else:
+        activity = "operating"
+
+    labels = {
+        "income": "Direct income receipts",
+        "invoice_payment": "Client invoice collections",
+        "milestone_payment": "Project milestone collections",
+        "commission_income": "Commission receipts",
+        "expense": "Operating expenses",
+        "recurring_expense": "Recurring expenses",
+        "vendor_payment": "Vendor payments",
+        "payroll": "Payroll",
+        "salary": "Payroll",
+        "loan_disbursement": "Loan proceeds",
+        "loan_emi": "Loan repayments",
+        "loan_prepay": "Loan prepayments",
+        "bank_statement": "Bank statement entries",
+    }
+    label = labels.get(base_source)
+    if base_source == "non_operating":
+        if "owner capital" in counter_names:
+            label = "Owner capital introduced"
+        elif "owner drawings" in counter_names:
+            label = "Owner drawings"
+        elif "investments - gold" in counter_names:
+            label = "Gold investments"
+        elif "advance to -" in counter_names:
+            label = "Advance repayments received" if net > 0 else "Advances paid"
+        elif "loan from -" in counter_names:
+            label = "Loans received" if net > 0 else "Loan repayments"
+        else:
+            label = "Other balance-sheet movements"
+    if not label:
+        label = "Other operating receipts" if net > 0 else "Other operating payments"
+    return activity, label
+
+
 @router.get("/accounting/reports/cash-flow")
 async def cash_flow_statement(request: Request,
                               from_date: Optional[str] = None,
@@ -2046,6 +2100,14 @@ async def cash_flow_statement(request: Request,
                                                  {"name": "Petty Cash"}]},
                                        {"_id": 0}).to_list(50)
     cash_ids = {a["id"] for a in cash_accs}
+    account_split = {
+        a["id"]: {
+            "account_id": a["id"], "name": a.get("name") or "Cash account",
+            "opening_balance": float(a.get("opening_balance") or 0),
+            "inflow": 0.0, "outflow": 0.0,
+        }
+        for a in cash_accs
+    }
 
     opening_q: dict = {}
     if from_date: opening_q["date"] = {"$lt": from_date}
@@ -2064,16 +2126,23 @@ async def cash_flow_statement(request: Request,
         async for e in sdb.journal_entries.find(opening_q, {"_id": 0, "lines": 1}):
             for l in e["lines"]:
                 if l["account_id"] in cash_ids:
-                    opening += l["debit"] - l["credit"]
+                    movement = float(l.get("debit") or 0) - float(l.get("credit") or 0)
+                    opening += movement
+                    account_split[l["account_id"]]["opening_balance"] += movement
 
     # Inflows / outflows within the period, bucketed by journal source.
     inflows: dict = {"income": 0.0, "client_payment": 0.0, "other": 0.0}
     outflows: dict = {"expense": 0.0, "vendor_payment": 0.0, "payroll": 0.0, "other": 0.0}
+    activity_lines: dict = {"operating": {}, "investing": {}, "financing": {}}
     async for e in sdb.journal_entries.find(period_q, {"_id": 0}):
         net = 0.0
         for l in e["lines"]:
             if l["account_id"] in cash_ids:
-                net += l["debit"] - l["credit"]
+                debit = float(l.get("debit") or 0)
+                credit = float(l.get("credit") or 0)
+                net += debit - credit
+                account_split[l["account_id"]]["inflow"] += debit
+                account_split[l["account_id"]]["outflow"] += credit
         if abs(net) < 0.001:
             continue
         src = e.get("source") or "other"
@@ -2086,11 +2155,47 @@ async def cash_flow_statement(request: Request,
                    else "payroll" if src in ("payroll", "salary")
                    else "other")
             outflows[key] = outflows.get(key, 0.0) + (-net)
+        activity, label = _cash_flow_bucket(e, cash_ids, net)
+        line = activity_lines[activity].setdefault(label, {"inflow": 0.0, "outflow": 0.0})
+        if net > 0:
+            line["inflow"] += net
+        else:
+            line["outflow"] += -net
 
     total_in = round(sum(inflows.values()), 2)
     total_out = round(sum(outflows.values()), 2)
     net_change = round(total_in - total_out, 2)
     closing = round(opening + net_change, 2)
+
+    activities = {}
+    for activity, grouped in activity_lines.items():
+        lines = []
+        for label, values in grouped.items():
+            inflow = round(values["inflow"], 2)
+            outflow = round(values["outflow"], 2)
+            lines.append({"label": label, "inflow": inflow, "outflow": outflow,
+                          "net": round(inflow - outflow, 2)})
+        lines.sort(key=lambda row: (-abs(row["net"]), row["label"]))
+        activity_in = round(sum(row["inflow"] for row in lines), 2)
+        activity_out = round(sum(row["outflow"] for row in lines), 2)
+        activities[activity] = {
+            "inflow": activity_in, "outflow": activity_out,
+            "net": round(activity_in - activity_out, 2), "lines": lines,
+        }
+
+    cash_accounts = []
+    for split in account_split.values():
+        account_opening = round(split["opening_balance"], 2)
+        account_inflow = round(split["inflow"], 2)
+        account_outflow = round(split["outflow"], 2)
+        account_net = round(account_inflow - account_outflow, 2)
+        cash_accounts.append({
+            "account_id": split["account_id"], "name": split["name"],
+            "opening_balance": account_opening, "inflow": account_inflow,
+            "outflow": account_outflow, "net_change": account_net,
+            "closing_balance": round(account_opening + account_net, 2),
+        })
+    cash_accounts.sort(key=lambda row: row["name"].lower())
 
     return {
         "from": from_date, "to": to_date,
@@ -2101,6 +2206,8 @@ async def cash_flow_statement(request: Request,
         "total_outflow": total_out,
         "net_change": net_change,
         "closing_balance": closing,
+        "activities": activities,
+        "cash_accounts": cash_accounts,
     }
 
 
@@ -2287,6 +2394,15 @@ async def export_cf_csv(request: Request,
     rows.append({"section": "", "line": "Total inflow", "amount": data["total_inflow"]})
     for k, v in data["outflows"].items(): rows.append({"section": "Outflow", "line": k, "amount": v})
     rows.append({"section": "", "line": "Total outflow", "amount": data["total_outflow"]})
+    for activity, detail in data.get("activities", {}).items():
+        for line in detail.get("lines", []):
+            rows.append({"section": f"{activity.title()} activities",
+                         "line": line["label"], "amount": line["net"]})
+        rows.append({"section": f"{activity.title()} activities",
+                     "line": "Net cash flow", "amount": detail["net"]})
+    for account in data.get("cash_accounts", []):
+        rows.append({"section": "Cash and bank closing balances",
+                     "line": account["name"], "amount": account["closing_balance"]})
     rows.append({"section": "", "line": "Net change", "amount": data["net_change"]})
     rows.append({"section": "", "line": "Closing balance", "amount": data["closing_balance"]})
     return _csv_response("cash-flow.csv", rows, ["section", "line", "amount"])
