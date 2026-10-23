@@ -437,6 +437,7 @@ async def geo_check(lat: float, lng: float, kind: str = "office",
                     authorization: Optional[str] = Header(default=None)):
     """Quick check before check-in — tells UI whether user is inside a fence."""
     user = await require_user(request, session_token, authorization)
+    _require_punch_permission(user)
     await _validate_attendance_project(user, project_id)
     return await _resolve_geo_fence(kind, lat, lng, project_id, accuracy_m)
 
@@ -482,14 +483,23 @@ def _can_manage_attendance(user: dict) -> bool:
     return has_any_permission(user, "employees.update", "attendance.update", "attendance.approve")
 
 
+def _can_edit_punches(user: dict) -> bool:
+    return has_any_permission(user, "employees.update", "attendance.update")
+
+
+def _require_punch_permission(user: dict) -> None:
+    if not (has_permission(user, "attendance.create") or _can_edit_punches(user)):
+        raise HTTPException(403, "Missing permission: attendance.create")
+
+
 def _select_employee_id(user: dict, provided: Optional[str], own_id: Optional[str]) -> str:
-    if provided and _can_manage_attendance(user):
+    if provided and _can_edit_punches(user):
         return provided
     if provided and provided != own_id:
         raise HTTPException(403, "You can only manage your own attendance")
     if own_id:
         return own_id
-    if _can_manage_attendance(user):
+    if _can_edit_punches(user):
         raise HTTPException(400, "Select an employee or link an employee profile to this account")
     raise HTTPException(400, "No employee profile is linked to this account")
 
@@ -505,7 +515,7 @@ async def _resolve_employee_id(user: dict, provided: Optional[str]) -> str:
         links.append({"email": user["email"]})
     emp = await sdb.employees.find_one({"$or": links}, {"_id": 0, "id": 1})
     resolved = _select_employee_id(user, provided, (emp or {}).get("id"))
-    if provided and _can_manage_attendance(user):
+    if provided and _can_edit_punches(user):
         target = await sdb.employees.find_one({"id": resolved}, {"_id": 0, "id": 1})
         if not target:
             raise HTTPException(404, "Employee not found")
@@ -607,6 +617,7 @@ async def check_in(payload: CheckInIn, request: Request,
                    session_token: Optional[str] = Cookie(default=None),
                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_punch_permission(user)
     emp_id = await _resolve_employee_id(user, payload.employee_id)
     emp_doc = await sdb.employees.find_one(
         {"id": emp_id}, {"_id": 0, "shift_start": 1, "grace_minutes": 1,
@@ -838,6 +849,7 @@ async def check_out(payload: CheckOutIn, request: Request,
                     session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_punch_permission(user)
     emp_id = await _resolve_employee_id(user, payload.employee_id)
     today = _today()
 

@@ -26,7 +26,7 @@ ROLE_PERMISSIONS = {
         "clients.read", "clients.create", "clients.update",
         "files.*", "invoices.read",
         "quotations.read", "quotations.create", "quotations.update",
-        "employees.read", "attendance.read", "attendance.approve", "holidays.read",
+        "employees.read", "attendance.read", "attendance.create", "attendance.approve", "holidays.read",
         "expenses.read", "expenses.create",
         "vendors.read", "vendors.create", "vendors.update",   # assign vendors, no bills/payments
         "purchase_orders.read", "purchase_orders.create", "purchase_orders.update",
@@ -38,7 +38,7 @@ ROLE_PERMISSIONS = {
         "files.*", "calendar.read",
         "quotations.read", "quotations.create", "quotations.update",
         "clients.read", "leads.read",
-        "employees.read", "attendance.read", "holidays.read",
+        "employees.read", "attendance.read", "attendance.create", "holidays.read",
         "expenses.read", "expenses.create",
         "vendors.read", "purchase_orders.read",   # read-only for task assignment
         "dashboard.read", "ai.use",
@@ -47,7 +47,7 @@ ROLE_PERMISSIONS = {
         "invoices.*", "quotations.*", "calendar.read",
         "clients.read", "projects.read", "leads.read",
         "files.read", "dashboard.read", "ai.use",
-        "employees.read", "attendance.read", "holidays.read",
+        "employees.read", "attendance.read", "attendance.create", "holidays.read",
         "finance.*", "payroll.*", "loans.*", "expenses.*",
         "vendors.*", "purchase_orders.*",     # bills, payments, ledger, procurement
     ],

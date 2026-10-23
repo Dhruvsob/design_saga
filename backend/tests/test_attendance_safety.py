@@ -20,6 +20,16 @@ def test_attendance_manager_permission_is_explicit():
     assert attendance._can_manage_attendance({"permissions": ["attendance.create"]}) is False
 
 
+def test_punch_permission_distinguishes_self_service_from_approval_only():
+    attendance._require_punch_permission({"permissions": ["attendance.create"]})
+    attendance._require_punch_permission({"permissions": ["attendance.update"]})
+    with pytest.raises(HTTPException) as exc:
+        attendance._require_punch_permission({"permissions": ["attendance.read"]})
+    assert exc.value.status_code == 403
+    with pytest.raises(HTTPException):
+        attendance._require_punch_permission({"permissions": ["attendance.approve"]})
+
+
 def test_regular_employee_cannot_supply_a_coworker_id():
     user = {"user_id": "user_a", "permissions": ["attendance.create"]}
     assert attendance._select_employee_id(user, None, "emp_a") == "emp_a"
@@ -32,6 +42,13 @@ def test_regular_employee_cannot_supply_a_coworker_id():
 def test_attendance_manager_can_target_an_employee():
     user = {"user_id": "manager", "permissions": ["attendance.update"]}
     assert attendance._select_employee_id(user, "emp_b", "emp_a") == "emp_b"
+
+
+def test_attendance_approver_cannot_create_a_punch_for_coworker():
+    user = {"user_id": "manager", "permissions": ["attendance.approve"]}
+    with pytest.raises(HTTPException) as exc:
+        attendance._select_employee_id(user, "emp_b", "emp_a")
+    assert exc.value.status_code == 403
 
 
 def test_attendance_manager_without_profile_must_select_employee():
