@@ -127,6 +127,17 @@ def test_public_file_projection_drops_unsafe_legacy_urls():
     }]
 
 
+def test_public_file_projection_uses_guarded_route_for_uploaded_files():
+    visible = _public_file_projection([{
+        "id": "stored", "name": "Plan", "storage_key": "org/a.pdf",
+        "url": "/api/files/stored/content", "stage": "Concept",
+    }])
+    assert visible == [{
+        "id": "stored", "name": "Plan", "url": "/api/files/stored/content",
+        "stage": "Concept", "created_at": None,
+    }]
+
+
 def test_new_public_share_tokens_have_256_bits_of_entropy():
     first = new_share_token()
     second = new_share_token()

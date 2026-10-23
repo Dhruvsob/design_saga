@@ -2,8 +2,8 @@
 Design Saga - SaaS platform for architecture/interior design firms
 FastAPI backend with Google Auth, CRM, Projects, Tasks, Invoices, AI Assistant, Client Portal
 """
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header, File, Form, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -52,6 +52,7 @@ from core.access_control import (  # noqa: E402
 from core.url_security import external_http_url  # noqa: E402
 from core.tenancy import user_org_id  # noqa: E402
 from models.base import FiniteModel  # noqa: E402
+from services.local_files import remove_upload, resolve_storage_key, save_upload  # noqa: E402
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 EMERGENT_AUTH_BASE = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
@@ -1632,6 +1633,80 @@ async def create_file(payload: FileIn, request: Request,
     return await sdb.files.find_one({"id": doc["id"]}, {"_id": 0})
 
 
+@api.post("/files/upload")
+async def upload_project_file(
+        request: Request, project_id: str = Form(...), name: Optional[str] = Form(None),
+        stage: Optional[str] = Form(None), client_visible: bool = Form(False),
+        upload: UploadFile = File(...),
+        session_token: Optional[str] = Cookie(default=None),
+        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    enforce_permission(user, "files.create")
+    await get_visible_project(user, project_id)
+    try:
+        stored = await save_upload(upload, user_org_id(user))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OSError as exc:
+        logger.exception("Project file storage failed")
+        raise HTTPException(status_code=503, detail="File storage is unavailable") from exc
+
+    file_id = new_id("fil_")
+    doc = {
+        "id": file_id, "project_id": project_id,
+        "name": (name or stored["original_name"]).strip()[:180],
+        "url": f"/api/files/{file_id}/content",
+        "stage": (stage or "").strip()[:120] or None, "version": 1,
+        "client_visible": client_visible, "created_at": iso(now_utc()),
+        "created_by": user["user_id"], "uploader_name": user["name"],
+        **stored,
+    }
+    try:
+        await sdb.files.insert_one(dict(doc))
+    except Exception:
+        remove_upload(stored["storage_key"])
+        raise
+    await audit_log(user, "file.upload", target=file_id, target_type="file",
+                    meta={"project_id": project_id, "size": stored["size"],
+                          "sha256": stored["sha256"], "client_visible": client_visible})
+    return await sdb.files.find_one({"id": file_id}, {"_id": 0})
+
+
+@api.get("/files/{file_id}/content")
+async def project_file_content(
+        file_id: str, request: Request, token: Optional[str] = None,
+        session_token: Optional[str] = Cookie(default=None),
+        authorization: Optional[str] = Header(default=None)):
+    if token:
+        project, org_id = await _public_project_by_token(token)
+        file_doc = await db.files.find_one({
+            "id": file_id, "org_id": org_id, "project_id": project["id"],
+            "client_visible": True,
+        }, {"_id": 0})
+    else:
+        user = await require_user(request, session_token, authorization)
+        enforce_permission(user, "files.read")
+        file_doc = await sdb.files.find_one({"id": file_id}, {"_id": 0})
+        if file_doc:
+            await get_visible_project(user, file_doc.get("project_id"))
+    if not file_doc or not file_doc.get("storage_key"):
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        path = resolve_storage_key(file_doc["storage_key"])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="File not found") from exc
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Stored file is unavailable")
+    media_type = file_doc.get("content_type") or "application/octet-stream"
+    disposition = "inline" if media_type == "application/pdf" or media_type.startswith("image/") else "attachment"
+    return FileResponse(
+        path, media_type=media_type,
+        filename=file_doc.get("original_name") or file_doc.get("name") or "document",
+        content_disposition_type=disposition,
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
 @api.patch("/files/{file_id}/client-visibility")
 async def update_file_client_visibility(
         file_id: str, payload: FileVisibilityUpdate, request: Request,
@@ -1666,6 +1741,7 @@ async def delete_file(file_id: str, request: Request,
     if f.get("created_by") != user.get("user_id") and not has_permission(user, "files.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: files.delete")
     await sdb.files.delete_one({"id": file_id})
+    remove_upload(f.get("storage_key"))
     await audit_log(user, "file.delete", target=file_id, target_type="file",
                     meta={"project_id": f.get("project_id"), "name": f.get("name")})
     return {"ok": True}
@@ -2389,10 +2465,13 @@ def _public_file_projection(files: list[dict]) -> list[dict]:
     """Expose only browser-safe links from legacy project file records."""
     result = []
     for file_doc in files:
-        try:
-            safe_url = external_http_url(file_doc.get("url"))
-        except (TypeError, ValueError):
-            continue
+        if file_doc.get("storage_key"):
+            safe_url = f"/api/files/{file_doc['id']}/content"
+        else:
+            try:
+                safe_url = external_http_url(file_doc.get("url"))
+            except (TypeError, ValueError):
+                continue
         result.append({
             "id": file_doc["id"], "name": file_doc.get("name"), "url": safe_url,
             "stage": file_doc.get("stage"), "created_at": file_doc.get("created_at"),

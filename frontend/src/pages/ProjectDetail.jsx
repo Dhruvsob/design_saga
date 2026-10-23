@@ -7,7 +7,7 @@ import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import { empName } from "../lib/format";
-import { safeExternalUrl } from "../lib/url";
+import { safeFileUrl } from "../lib/url";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
   X, Warning, Trash, UsersThree, CaretRight,
@@ -28,7 +28,7 @@ export default function ProjectDetail() {
   const [p, setP] = useState(null);
   const [tab, setTab] = useState("Overview");
   const [loading, setLoading] = useState(true);
-  const [fileForm, setFileForm] = useState({ name: "", url: "", stage: "", client_visible: false });
+  const [fileForm, setFileForm] = useState({ name: "", url: "", stage: "", client_visible: false, file: null });
   const [showFileForm, setShowFileForm] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
@@ -79,10 +79,25 @@ export default function ProjectDetail() {
 
   const addFile = async (e) => {
     e.preventDefault();
-    await api.post("/files", { ...fileForm, project_id: id });
-    setFileForm({ name: "", url: "", stage: "", client_visible: false });
-    setShowFileForm(false);
-    load();
+    try {
+      if (fileForm.file) {
+        const body = new FormData();
+        body.append("project_id", id);
+        body.append("name", fileForm.name || fileForm.file.name);
+        body.append("stage", fileForm.stage);
+        body.append("client_visible", String(fileForm.client_visible));
+        body.append("upload", fileForm.file);
+        await api.post("/files/upload", body);
+      } else {
+        await api.post("/files", { ...fileForm, file: undefined, project_id: id });
+      }
+      setFileForm({ name: "", url: "", stage: "", client_visible: false, file: null });
+      setShowFileForm(false);
+      toast.success("File added");
+      load();
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not add file");
+    }
   };
 
   const deleteFile = async (fid) => {
@@ -454,13 +469,14 @@ export default function ProjectDetail() {
         <div className="space-y-3">
           <div className="flex justify-end">
             <button onClick={() => setShowFileForm(!showFileForm)} className="btn-primary" data-testid="add-file-btn">
-              <Plus size={14} /> Add file link
+              <Plus size={14} /> Add file
             </button>
           </div>
           {showFileForm && (
             <form onSubmit={addFile} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3">
-              <input className="input-flat" placeholder="File name" required value={fileForm.name} onChange={(e) => setFileForm({ ...fileForm, name: e.target.value })} />
-              <input className="input-flat" placeholder="URL" required value={fileForm.url} onChange={(e) => setFileForm({ ...fileForm, url: e.target.value })} />
+              <input className="input-flat" placeholder="Display name" value={fileForm.name} onChange={(e) => setFileForm({ ...fileForm, name: e.target.value })} />
+              <input className="input-flat" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.csv,.txt" onChange={(e) => setFileForm({ ...fileForm, file: e.target.files?.[0] || null })} />
+              <input className="input-flat" placeholder="Or paste an external URL" required={!fileForm.file} value={fileForm.url} onChange={(e) => setFileForm({ ...fileForm, url: e.target.value })} />
               <input className="input-flat" placeholder="Stage (e.g. Concept)" value={fileForm.stage} onChange={(e) => setFileForm({ ...fileForm, stage: e.target.value })} />
               <label className="md:col-span-3 flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={fileForm.client_visible} onChange={(e) => setFileForm({ ...fileForm, client_visible: e.target.checked })} />
@@ -483,7 +499,7 @@ export default function ProjectDetail() {
                     Client portal
                   </label>
                 )}
-                {safeExternalUrl(f.url) ? <a href={safeExternalUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[#9A9A9A]">UNAVAILABLE</span>}
+                {safeFileUrl(f.url) ? <a href={safeFileUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[#9A9A9A]">UNAVAILABLE</span>}
                 <button onClick={() => deleteFile(f.id)} className="btn-ghost p-1 text-[#B22B22] opacity-0 group-hover:opacity-100 transition" title="Remove" data-testid={`file-delete-${f.id}`}>
                   <Trash size={12} />
                 </button>

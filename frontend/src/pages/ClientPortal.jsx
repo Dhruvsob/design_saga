@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api, { API } from "../lib/api";
-import { safeExternalUrl } from "../lib/url";
+import { safeFileUrl } from "../lib/url";
 
 export default function ClientPortal() {
   const { token } = useParams();
@@ -126,7 +126,7 @@ export default function ClientPortal() {
         <div className="space-y-2">
           {files.length === 0 && <p className="text-[#5C5C5C] text-sm">No files shared yet.</p>}
           {files.map((f) => {
-            const fileUrl = safeExternalUrl(f.url);
+            const fileUrl = safeFileUrl(f.url, token);
             const body = (
               <div className="flex items-center justify-between">
                 <div>

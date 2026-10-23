@@ -27,7 +27,8 @@ RBAC
 * `finance.read`   – required for bills, payments, ledgers and commissions
 * `finance.create` – required for posting bills & payments (Admin, Director, Accountant)
 """
-from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from fastapi import APIRouter, HTTPException, Request, Cookie, Header, File, Form, UploadFile
+from fastapi.responses import FileResponse
 from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -41,6 +42,8 @@ from core.rbac import has_permission
 from core.locks import doc_lock
 from core.finance import require_asset_account
 from core.audit import audit
+from core.url_security import external_http_url
+from services.local_files import remove_upload, resolve_storage_key, save_upload
 from core.access_control import (
     get_visible_project, merge_query, project_visibility_query, task_visibility_query,
     visible_project_ids,
@@ -509,11 +512,81 @@ async def add_vendor_document(vendor_id: str, payload: VendorDocumentIn, request
     if not v:
         raise HTTPException(status_code=404, detail="Vendor not found")
     doc = payload.model_dump()
+    try:
+        doc["url"] = external_http_url(doc["url"])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     doc["id"] = new_id("vdoc_")
     doc["uploaded_at"] = iso_now()
     doc["uploaded_by"] = user["user_id"]
     await sdb.vendors_acc.update_one({"id": vendor_id}, {"$push": {"documents": doc}})
     return doc
+
+
+@router.post("/vendors/{vendor_id}/documents/upload")
+async def upload_vendor_document(
+        vendor_id: str, request: Request, label: Optional[str] = Form(None),
+        kind: Optional[str] = Form(None), expires_on: Optional[str] = Form(None),
+        upload: UploadFile = File(...),
+        session_token: Optional[str] = Cookie(default=None),
+        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.update")
+    vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    try:
+        stored = await save_upload(upload, user_org_id(user))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="File storage is unavailable") from exc
+
+    doc_id = new_id("vdoc_")
+    doc = {
+        "id": doc_id, "label": (label or stored["original_name"]).strip()[:180],
+        "url": f"/api/vendors/{vendor_id}/documents/{doc_id}/content",
+        "kind": (kind or "other").strip()[:60],
+        "expires_on": (expires_on or "").strip()[:10] or None,
+        "uploaded_at": iso_now(), "uploaded_by": user["user_id"], **stored,
+    }
+    try:
+        await sdb.vendors_acc.update_one({"id": vendor_id}, {"$push": {"documents": doc}})
+    except Exception:
+        remove_upload(stored["storage_key"])
+        raise
+    await audit(user, "vendor.document_upload", target=doc_id, target_type="vendor_document",
+                meta={"vendor_id": vendor_id, "size": stored["size"],
+                      "sha256": stored["sha256"]})
+    return doc
+
+
+@router.get("/vendors/{vendor_id}/documents/{doc_id}/content")
+async def vendor_document_content(
+        vendor_id: str, doc_id: str, request: Request,
+        session_token: Optional[str] = Cookie(default=None),
+        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not (_can_read_vendor_financials(user) or has_permission(user, "vendors.update")):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+    vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0, "documents": 1})
+    document = next((row for row in (vendor or {}).get("documents", []) if row.get("id") == doc_id), None)
+    if not document or not document.get("storage_key"):
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        path = resolve_storage_key(document["storage_key"])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Stored file is unavailable")
+    media_type = document.get("content_type") or "application/octet-stream"
+    disposition = "inline" if media_type == "application/pdf" or media_type.startswith("image/") else "attachment"
+    return FileResponse(
+        path, media_type=media_type,
+        filename=document.get("original_name") or document.get("label") or "document",
+        content_disposition_type=disposition,
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.delete("/vendors/{vendor_id}/documents/{doc_id}")
@@ -522,8 +595,17 @@ async def remove_vendor_document(vendor_id: str, doc_id: str, request: Request,
                                  authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require(user, "vendors.update")
+    vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0, "documents": 1})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    document = next((row for row in vendor.get("documents", []) if row.get("id") == doc_id), None)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
     await sdb.vendors_acc.update_one({"id": vendor_id},
                                     {"$pull": {"documents": {"id": doc_id}}})
+    remove_upload(document.get("storage_key"))
+    await audit(user, "vendor.document_delete", target=doc_id, target_type="vendor_document",
+                meta={"vendor_id": vendor_id, "name": document.get("label")})
     return {"ok": True}
 
 

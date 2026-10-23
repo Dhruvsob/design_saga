@@ -6,6 +6,7 @@ umask 077
 repo_root=${DESIGN_SAGA_ROOT:-/opt/design-saga-git}
 backup_root=${DESIGN_SAGA_BACKUP_ROOT:-/opt/design-saga-backups}
 retention_days=${DESIGN_SAGA_BACKUP_RETENTION_DAYS:-7}
+file_root="$repo_root/data/files"
 
 case "$retention_days" in
   ''|*[!0-9]*) echo "Retention must be a non-negative integer" >&2; exit 2 ;;
@@ -53,10 +54,22 @@ test -s "$temporary/postgres.dump"
 test -s "$temporary/postgres-globals.sql"
 test -s "$temporary/postgres-archive.list"
 
+mkdir -p "$file_root"
+chmod 700 "$file_root"
+mkdir "$temporary/file-storage"
+# Uploaded blobs are immutable. Hard-link snapshots preserve deleted files while
+# avoiding a full duplicate of every unchanged document on each daily backup.
+cp -al "$file_root"/. "$temporary/file-storage"/
+(
+  cd "$temporary/file-storage"
+  find . -type f -print0 | sort -z | xargs -0 -r sha256sum > ../file-storage.sha256
+  sha256sum -c ../file-storage.sha256 >/dev/null
+)
+
 (
   cd "$temporary"
   sha256sum Caddyfile Caddyfile.patch compose-images.txt git-commit.txt \
-    git-status.txt postgres.dump postgres-globals.sql postgres-archive.list \
+    git-status.txt postgres.dump postgres-globals.sql postgres-archive.list file-storage.sha256 \
     production.env > SHA256SUMS
   sha256sum -c SHA256SUMS >/dev/null
 )

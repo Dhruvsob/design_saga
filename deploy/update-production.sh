@@ -4,6 +4,10 @@ set -eu
 repo_root=${DESIGN_SAGA_ROOT:-/opt/design-saga-git}
 cd "$repo_root"
 
+mkdir -p data/files
+chown 10001:10001 data/files
+chmod 700 data/files
+
 exec 8>/var/lock/design-saga-deploy.lock
 if ! flock -n 8; then
   echo "Another Design Saga deployment is already running" >&2

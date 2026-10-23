@@ -22,10 +22,10 @@ Last updated: 2026-10-23 (Asia/Calcutta)
 | Tenancy | `org_id`, scoped DB wrapper, tenant filters, SuperAdmin exceptions | Strong prior evidence; requires continuing endpoint-by-endpoint audit |
 | RBAC | Server-side role/permission expansion with tenant-specific overrides | Implemented; coverage audit ongoing |
 | Background jobs | In-process notification due/overdue scheduler | Previously reported; runtime behavior not reverified in this pass |
-| File storage | URL metadata and local/generated documents; durable object storage remains unverified | Partial/unverified |
+| File storage | Tenant-scoped external links plus content-validated local binary storage on a dedicated persistent VPS mount | Implemented; deployment/live upload verification pending |
 | Reverse proxy/TLS | Caddy with automatic HTTPS; shared VPS routing file | Healthy; production file has protected external edits |
 | Deployment | Docker Compose; post-merge invokes tracked `deploy/update-production.sh` | Change-aware, backup-gated, health-checked, service-specific, and refuses automatic Compose/Caddy changes |
-| Backups | Dedicated daily PostgreSQL/FerretDB archive with checksums, catalogue validation, seven-day retention, and tested isolated restore | Active on VPS; same-host storage remains a disaster-recovery limitation |
+| Backups | Dedicated daily PostgreSQL/FerretDB and uploaded-file archive with checksums, catalogue validation, seven-day retention, and tested isolated database restore | Active on VPS; same-host storage remains a disaster-recovery limitation |
 
 ## Workflow Inventory
 
@@ -76,6 +76,7 @@ Last updated: 2026-10-23 (Asia/Calcutta)
 | DS-022 | Medium | Chart of Accounts current balances, editing, deactivation and future duplicate-code prevention | Deployed and verified; scoped duplicate-code cleanup completed after backup |
 | DS-023 | High | Invoice accrual, Accounts Receivable settlement and revenue/GST recognition | Fixed, deployed and verified live with a fully reversed sample-invoice lifecycle |
 | DS-024 | Medium | Private notification controls, complete search, tenant audit UI and cash-flow activity split | Fixed, regression-tested and deployed; cash-flow totals retain backward-compatible fields |
+| DS-025 | Medium | Durable project/vendor document uploads with tenant authorization, validation and backup | Implemented and regression-tested; production deployment/live verification pending |
 
 ## User-Reported Master Backlog - 2026-10-23
 
@@ -101,7 +102,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-016 | Medium | GST incomplete | Partial: input/output posting exists; tenant GST settings, split GST and GSTR reports remain |
 | BR-017 | Medium | Tally export missing | Confirmed export gap |
 | BR-018 | Medium | AI assistant not functional | Requires provider/config/runtime audit; not an accounting source of truth |
-| BR-019 | Medium | File upload unavailable | Project/vendor upload routes exist; persistence/provider and UI flow need live verification |
+| BR-019 | Medium | File upload unavailable | Fixed in code: project/vendor UI uploads to tenant-isolated persistent storage with permission checks, verified file signatures, 15 MB limits, safe delivery/deletion and backup inclusion; production verification pending |
 | BR-020 | Medium | Client portal link missing | Explicit share-token/link UI is implemented and deployed |
 | BR-021 | Medium | Search misses quotations/events | Fixed and deployed: advanced quotations and privacy-filtered calendar events are included in global search |
 | BR-022 | Medium | Slow page loading | Frontend route splitting implemented and smoke-tested across dashboard, accounting, attendance, calendar, audit and privacy; API tracing/pagination remains under DS-008 |

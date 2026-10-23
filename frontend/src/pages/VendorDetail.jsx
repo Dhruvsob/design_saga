@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../lib/api";
-import { safeExternalUrl } from "../lib/url";
+import { safeFileUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import {
@@ -107,7 +107,19 @@ export default function VendorDetail() {
   };
   const addDoc = async (form) => {
     setBusy(true);
-    try { await api.post(`/vendors/${id}/documents`, form); await load(); }
+    try {
+      if (form.file) {
+        const body = new FormData();
+        body.append("label", form.label || form.file.name);
+        body.append("kind", form.kind);
+        body.append("expires_on", form.expires_on || "");
+        body.append("upload", form.file);
+        await api.post(`/vendors/${id}/documents/upload`, body);
+      } else {
+        await api.post(`/vendors/${id}/documents`, { ...form, file: undefined });
+      }
+      await load();
+    }
     finally { setBusy(false); }
   };
   const delDoc = async (docId) => {
@@ -631,17 +643,24 @@ function ProjectsTasks({ v }) {
 
 /* -------------------- DOCUMENTS -------------------- */
 function Documents({ v, canEdit, onAdd, onDelete, busy }) {
-  const [f, setF] = useState({ label: "", url: "", kind: "gst_certificate", expires_on: "" });
+  const [f, setF] = useState({ label: "", url: "", kind: "gst_certificate", expires_on: "", file: null });
   return (
     <div className="space-y-4">
       {canEdit && (
         <form className="card-flat grid grid-cols-1 md:grid-cols-5 gap-2"
-          onSubmit={(e) => { e.preventDefault(); onAdd(f); setF({ label: "", url: "", kind: "gst_certificate", expires_on: "" }); }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await onAdd(f);
+            setF({ label: "", url: "", kind: "gst_certificate", expires_on: "", file: null });
+            e.currentTarget.reset();
+          }}
         >
           <input required className="input-flat md:col-span-2" placeholder="Label"
             value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} />
-          <input required className="input-flat md:col-span-2" placeholder="File URL"
+          <input className="input-flat md:col-span-2" placeholder="External URL (or upload below)" required={!f.file}
             value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} />
+          <input className="input-flat md:col-span-2" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.csv,.txt"
+            onChange={(e) => setF({ ...f, file: e.target.files?.[0] || null })} />
           <select className="input-flat" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
             {["gst_certificate", "pan", "agreement", "insurance", "cheque_leaf", "other"].map((k) => (
               <option key={k} value={k}>{k.replace("_", " ")}</option>
@@ -660,8 +679,8 @@ function Documents({ v, canEdit, onAdd, onDelete, busy }) {
           <div key={d.id} className="border border-[#E5E5E5] p-4 flex items-start gap-3">
             <FileText size={22} className="text-[#8B7F6A]" />
             <div className="flex-1 min-w-0">
-              {safeExternalUrl(d.url) ? (
-                <a href={safeExternalUrl(d.url)} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[#8B7F6A] break-all">
+              {safeFileUrl(d.url) ? (
+                <a href={safeFileUrl(d.url)} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[#8B7F6A] break-all">
                   {d.label}
                 </a>
               ) : <span className="font-semibold text-sm">{d.label}</span>}

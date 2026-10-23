@@ -49,6 +49,11 @@ services:
       GOOGLE_CALENDAR_REDIRECT_URI: ${GOOGLE_CALENDAR_REDIRECT_URI:-https://gamaa.in/api/calendar/google/callback}
       ENABLE_SEED_DEMO: "false"
       EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
+      FILE_STORAGE_ROOT: /data/files
+      FILE_STORAGE_MAX_BYTES: ${FILE_STORAGE_MAX_BYTES:-5368709120}
+      FILE_STORAGE_TENANT_MAX_BYTES: ${FILE_STORAGE_TENANT_MAX_BYTES:-536870912}
+    volumes:
+      - ./data/files:/data/files
     depends_on:
       ferretdb:
         condition: service_healthy

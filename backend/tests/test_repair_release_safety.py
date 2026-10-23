@@ -37,6 +37,17 @@ def test_every_password_reset_route_is_rate_limited(path):
     assert rate_limit_decision(_request(path))[0] == "password_reset"
 
 
+@pytest.mark.parametrize("path", [
+    "/api/files/upload",
+    "/api/vendors/vendor_1/documents/upload",
+])
+def test_binary_upload_routes_are_rate_limited(path):
+    reset_rate_limits()
+    for _ in range(20):
+        assert rate_limit_decision(_request(path)) is None
+    assert rate_limit_decision(_request(path))[0] == "upload"
+
+
 def test_integrity_indexes_are_unique():
     required = {
         "job_lock_name_unique", "job_status_name_unique",
