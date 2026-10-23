@@ -54,6 +54,7 @@ jobs:
           tests/test_google_calendar.py
           tests/test_notification_safety.py
           tests/test_public_share_safety.py
+          tests/test_attendance_safety.py
 
   frontend:
     runs-on: ubuntu-latest

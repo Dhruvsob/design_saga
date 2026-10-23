@@ -490,7 +490,7 @@ def _select_employee_id(user: dict, provided: Optional[str], own_id: Optional[st
     if own_id:
         return own_id
     if _can_manage_attendance(user):
-        return provided or user["user_id"]
+        raise HTTPException(400, "Select an employee or link an employee profile to this account")
     raise HTTPException(400, "No employee profile is linked to this account")
 
 
@@ -514,6 +514,16 @@ async def _resolve_employee_id(user: dict, provided: Optional[str]) -> str:
 
 def _today() -> str:
     return engine.now_ist().date().isoformat()
+
+
+def _attendance_employee_name(employee: dict, fallback: str) -> str:
+    name = str(employee.get("name") or "").strip()
+    if not name:
+        name = " ".join(filter(None, [
+            str(employee.get("first_name") or "").strip(),
+            str(employee.get("last_name") or "").strip(),
+        ])).strip()
+    return name or str(employee.get("employee_id") or fallback)
 
 
 async def _store_check_in(existing: Optional[dict], doc: dict,
@@ -600,7 +610,13 @@ async def check_in(payload: CheckInIn, request: Request,
     emp_id = await _resolve_employee_id(user, payload.employee_id)
     emp_doc = await sdb.employees.find_one(
         {"id": emp_id}, {"_id": 0, "shift_start": 1, "grace_minutes": 1,
-                         "weekly_offs": 1})
+                         "weekly_offs": 1, "first_name": 1, "last_name": 1,
+                         "name": 1, "employee_id": 1, "employment_status": 1})
+    if not emp_doc:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if emp_doc.get("employment_status") == "terminated":
+        raise HTTPException(status_code=403, detail="Terminated employees cannot check in")
+    employee_name = _attendance_employee_name(emp_doc, emp_id)
     today = _today()
 
     existing = await sdb.attendance.find_one({"employee_id": emp_id, "date": today}, {"_id": 0})
@@ -620,7 +636,7 @@ async def check_in(payload: CheckInIn, request: Request,
     if (is_holiday_today or is_weekly_off) and att_type == "office":
         holiday_doc = {
             "id": existing["id"] if existing else new_id("att_"),
-            "employee_id": emp_id, "employee_name": user.get("name"),
+            "employee_id": emp_id, "employee_name": employee_name,
             "date": today, "check_in": iso_now(),
             "attendance_type": att_type,
             "status": "holiday", "approval_status": "auto",
@@ -632,6 +648,10 @@ async def check_in(payload: CheckInIn, request: Request,
         if not existing:
             holiday_doc["created_at"] = iso_now()
         await _store_check_in(existing, holiday_doc, retry_rejected)
+        await audit(user, "attendance.check_in", target=holiday_doc["id"],
+                    target_type="attendance",
+                    meta={"employee_id": emp_id, "attendance_type": att_type,
+                          "status": "holiday"})
         return await sdb.attendance.find_one({"id": holiday_doc["id"]}, {"_id": 0})
 
     # ---- Geo-fence enforcement ----
@@ -753,7 +773,7 @@ async def check_in(payload: CheckInIn, request: Request,
     doc = {
         "id": existing["id"] if existing else new_id("att_"),
         "employee_id": emp_id,
-        "employee_name": user.get("name"),
+        "employee_name": employee_name,
         "date": today,
         "check_in": iso_now(),
         "check_in_ip": _client_ip(request),
@@ -788,6 +808,9 @@ async def check_in(payload: CheckInIn, request: Request,
     if not existing:
         doc["created_at"] = iso_now()
     await _store_check_in(existing, doc, retry_rejected)
+    await audit(user, "attendance.check_in", target=doc["id"], target_type="attendance",
+                meta={"employee_id": emp_id, "attendance_type": att_type,
+                      "project_id": payload.project_id, "status": status})
     # Notify HR/Admins when an approval is needed (out-of-zone or non-office)
     if approval_status == "pending":
         where = doc.get("site_location") or doc.get("geo_location_matched") or ""
@@ -799,7 +822,7 @@ async def check_in(payload: CheckInIn, request: Request,
             detail += f" · {round(dist)}m outside fence"
         await emit_admins(
             "attendance_pending",
-            f"Attendance approval: {user.get('name') or emp_id}",
+            f"Attendance approval: {employee_name}",
             body=detail,
             link="/attendance",
             priority="high",
@@ -857,6 +880,9 @@ async def check_out(payload: CheckOutIn, request: Request,
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=400, detail="Already checked out today")
+    await audit(user, "attendance.check_out", target=existing["id"], target_type="attendance",
+                meta={"employee_id": emp_id, "working_minutes": working_minutes,
+                      "status": status})
     return await sdb.attendance.find_one({"id": existing["id"]}, {"_id": 0})
 
 

@@ -34,6 +34,20 @@ def test_attendance_manager_can_target_an_employee():
     assert attendance._select_employee_id(user, "emp_b", "emp_a") == "emp_b"
 
 
+def test_attendance_manager_without_profile_must_select_employee():
+    user = {"user_id": "manager", "permissions": ["attendance.update"]}
+    with pytest.raises(HTTPException) as exc:
+        attendance._select_employee_id(user, None, None)
+    assert exc.value.status_code == 400
+
+
+def test_target_employee_name_does_not_fall_back_to_acting_manager():
+    assert attendance._attendance_employee_name({
+        "first_name": "Hiren", "last_name": "Panchal", "employee_id": "EMP-1",
+    }, "emp_1") == "Hiren Panchal"
+    assert attendance._attendance_employee_name({"employee_id": "EMP-1"}, "emp_1") == "EMP-1"
+
+
 def test_attendance_project_options_include_authorized_site_projects(monkeypatch):
     class Locations:
         async def distinct(self, field, query):
