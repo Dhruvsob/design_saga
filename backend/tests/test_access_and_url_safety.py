@@ -1,4 +1,7 @@
 """Focused regression tests for resource visibility and rendered URLs."""
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -10,6 +13,7 @@ from models.expense import ExpenseLineIn
 from models.task import Attachment, TaskIn
 from models.vendor import VendorDocumentIn
 from routes.organization import _pack_org, _sanitize_branding_update
+import routes.organization as organization_module
 from services.storage import LOGO_PATH_RE
 from server import (
     DocumentIn, _ai_user_message, _cors_origins, _public_file_projection,
@@ -64,6 +68,27 @@ def test_branding_update_cannot_replace_object_logo_with_inline_data():
     with pytest.raises(ValueError):
         _sanitize_branding_update(
             {"logo_url": "data:image/png;base64,AAAA"}, current, "org_1")
+
+
+def test_branding_upload_never_persists_inline_fallback(monkeypatch):
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin", "org_id": "org_1", "role": "Admin"}
+
+    class Organizations:
+        async def update_one(self, *_args, **_kwargs):
+            raise AssertionError("inline logo must not be written")
+
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("storage offline")
+
+    monkeypatch.setattr(organization_module, "require_user", user)
+    monkeypatch.setattr(organization_module, "db", SimpleNamespace(organizations=Organizations()))
+    monkeypatch.setattr(organization_module._storage, "upload_data_url", unavailable)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(organization_module.upload_logo(
+            None, payload={"logo_data_url": "data:image/png;base64,AAAA"}))
+    assert exc.value.status_code == 503
 
 
 def test_branding_update_accepts_only_own_internal_logo():

@@ -181,8 +181,9 @@ async def upload_logo(request: Request,
     Data-URL payloads are streamed straight into Emergent Object Storage; the
     org's `branding.logo_url` is then set to the internal proxy URL
     `/api/org/logo/{path}` (auth cookie required to view).
-    Falling back to inline base64 storage only if the object-storage upload
-    fails — that keeps the ERP usable in offline environments.
+    Storage failures are returned to the caller. Inline base64 is never
+    persisted because it bypasses the hardened raster-object path and can
+    bloat every organisation response.
     """
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "*.*"):
@@ -216,8 +217,9 @@ async def upload_logo(request: Request,
         except ValueError as e:
             raise HTTPException(400, str(e))
         except Exception as e:  # noqa: BLE001
-            _log.warning(f"Object-storage upload failed – falling back to inline: {e}")
-            stored_logo_value = logo  # inline fallback
+            _log.warning("Object-storage logo upload failed: %s", type(e).__name__)
+            raise HTTPException(
+                503, "Logo storage is temporarily unavailable. Try again later.") from e
     else:
         from core.url_security import external_http_url
         try:
