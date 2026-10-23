@@ -326,21 +326,99 @@ async def default_receipt_accounts():
     return bank, income
 
 
+async def _invoice_accrual_accounts():
+    """Resolve the control accounts used when an invoice is issued."""
+    await _seed_coa_if_empty()
+    receivable = await sdb.accounts.find_one(
+        {"name": "Accounts Receivable", "type": "asset", "active": {"$ne": False}},
+        {"_id": 0},
+    )
+    gst_payable = await sdb.accounts.find_one(
+        {"name": "GST Payable", "type": "liability", "active": {"$ne": False}},
+        {"_id": 0},
+    )
+    _bank, income = await default_receipt_accounts()
+    return receivable, income, gst_payable
+
+
+def _invoice_accrual_amounts(invoice: dict) -> tuple[float, float, float]:
+    total = round(float(invoice.get("total") or 0), 2)
+    tax = round(float(invoice.get("tax") or 0), 2)
+    subtotal = round(float(invoice.get("subtotal") or (total - tax)), 2)
+    if total <= 0 or subtotal < 0 or tax < 0 or round(subtotal + tax, 2) != total:
+        raise HTTPException(status_code=400, detail="Invoice totals are invalid for accounting")
+    return subtotal, tax, total
+
+
+async def post_invoice_accrual_je(user: dict, invoice: dict) -> dict:
+    """Recognise an issued invoice once, without touching cash."""
+    invoice_id = invoice.get("id")
+    existing = await sdb.journal_entries.find_one(
+        {"source": "invoice_issue", "source_id": invoice_id,
+         "reversed": {"$ne": True}}, {"_id": 0})
+    if existing:
+        return existing
+
+    receivable, income, gst_payable = await _invoice_accrual_accounts()
+    if not receivable or not income:
+        raise HTTPException(status_code=409, detail="Invoice accounting accounts are unavailable")
+    subtotal, tax, total = _invoice_accrual_amounts(invoice)
+    if tax > 0 and not gst_payable:
+        raise HTTPException(status_code=409, detail="GST Payable account is unavailable")
+
+    lines = [
+        {"account_id": receivable["id"], "debit": total, "credit": 0,
+         "description": "Invoice receivable"},
+        {"account_id": income["id"], "debit": 0, "credit": subtotal,
+         "description": "Invoice revenue"},
+    ]
+    if tax > 0:
+        lines.append({"account_id": gst_payable["id"], "debit": 0, "credit": tax,
+                      "description": "Output GST"})
+    return await _post_journal(
+        user,
+        invoice.get("issue_date") or business_today().isoformat(),
+        f"Invoice {invoice.get('number') or invoice_id} issued"
+        + (f" - {invoice.get('client_name')}" if invoice.get("client_name") else ""),
+        lines,
+        reference=invoice.get("number"), project_id=invoice.get("project_id"),
+        client_id=invoice.get("client_id"), source="invoice_issue", source_id=invoice_id,
+    )
+
+
+async def reverse_invoice_accrual_je(user: dict, invoice: dict) -> Optional[dict]:
+    """Reverse invoice recognition while retaining the immutable journal trail."""
+    return await reverse_receipt_je(
+        user, source="invoice_issue", source_id=invoice.get("id"),
+        narration=f"Invoice {invoice.get('number') or invoice.get('id')} issue reversed",
+        reset_source=False,
+    )
+
+
 async def post_receipt_je(user: dict, *, amount: float, date: str, narration: str,
                           source: str, source_id: str, reference: str = None,
                           project_id: str = None, client_id: str = None) -> Optional[dict]:
-    """Auto-post DR Bank / CR Income for a payment received (invoice/milestone).
-    Idempotent on (source, source_id). Returns the JE or None if COA missing."""
+    """Post a receipt once; issued invoices settle A/R, legacy flows credit income."""
     existing = await sdb.journal_entries.find_one(
         {"source": source, "source_id": source_id, "reversed": {"$ne": True}}, {"_id": 0})
     if existing:
         return existing
-    bank, income = await default_receipt_accounts()
-    if not bank or not income:
+    bank, credit_account = await default_receipt_accounts()
+    if source == "invoice_payment":
+        active_accrual = await sdb.journal_entries.find_one(
+            {"source": "invoice_issue", "source_id": source_id,
+             "reversed": {"$ne": True}}, {"_id": 0, "id": 1})
+        if active_accrual:
+            credit_account = await sdb.accounts.find_one(
+                {"name": "Accounts Receivable", "type": "asset",
+                 "active": {"$ne": False}}, {"_id": 0})
+    if not bank or not credit_account:
         return None
     lines = [
         {"account_id": bank["id"], "debit": amount, "credit": 0, "description": "Received"},
-        {"account_id": income["id"], "debit": 0, "credit": amount, "description": "Revenue"},
+        {"account_id": credit_account["id"], "debit": 0, "credit": amount,
+         "description": "Accounts receivable settled" if source == "invoice_payment" and
+         credit_account.get("name") == "Accounts Receivable" else "Revenue"},
     ]
     return await _post_journal(user, date, narration, lines, reference=reference,
                                project_id=project_id, client_id=client_id,
@@ -866,6 +944,11 @@ async def reverse_journal(je_id: str, request: Request,
         raise HTTPException(status_code=409, detail="This transaction has already been reversed.")
     if (je.get("source") or "").endswith(("_reversal", "_reinstatement")):
         raise HTTPException(status_code=409, detail="You cannot directly reverse a system reversal/reinstatement entry.")
+    if je.get("source") == "invoice_issue":
+        raise HTTPException(
+            status_code=409,
+            detail="Change the invoice to Draft or Cancelled so its receivable is reversed safely.",
+        )
 
     rev_lines = [
         {"account_id": l["account_id"], "debit": l.get("credit") or 0, "credit": l.get("debit") or 0,
@@ -1060,20 +1143,42 @@ async def create_income(payload: IncomeIn, request: Request,
         )
         if existing:
             raise HTTPException(status_code=409, detail="This linked payment has already been posted")
+    created_accrual = None
+    if payload.invoice_id:
+        prior_accrual = await sdb.journal_entries.find_one(
+            {"source": "invoice_issue", "source_id": payload.invoice_id,
+             "reversed": {"$ne": True}}, {"_id": 0, "id": 1})
+        if not prior_accrual:
+            created_accrual = await post_invoice_accrual_je(user, linked)
+        receivable = await sdb.accounts.find_one(
+            {"name": "Accounts Receivable", "type": "asset",
+             "active": {"$ne": False}}, {"_id": 0})
+        if not receivable:
+            if created_accrual:
+                await reverse_invoice_accrual_je(user, linked)
+            raise HTTPException(status_code=409, detail="Accounts Receivable account is unavailable")
+        income = receivable
+
     narration = payload.notes or f"Payment received via {payload.payment_method}"
     lines = [
         {"account_id": payload.bank_account_id, "debit": payload.amount, "credit": 0,
          "description": "Received"},
-        {"account_id": payload.income_account_id, "debit": 0, "credit": payload.amount,
-         "description": "Revenue"},
+        {"account_id": income["id"] if payload.invoice_id else payload.income_account_id,
+         "debit": 0, "credit": payload.amount,
+         "description": "Accounts receivable settled" if payload.invoice_id else "Revenue"},
     ]
-    je = await _post_journal(
-        user, payload.date, narration, lines,
-        reference=payload.reference, project_id=project_id,
-        client_id=client_id, vendor_id=payload.vendor_id,
-        employee_id=payload.employee_id,
-        source=source, source_id=source_id,
-    )
+    try:
+        je = await _post_journal(
+            user, payload.date, narration, lines,
+            reference=payload.reference, project_id=project_id,
+            client_id=client_id, vendor_id=payload.vendor_id,
+            employee_id=payload.employee_id,
+            source=source, source_id=source_id,
+        )
+    except Exception:
+        if created_accrual:
+            await reverse_invoice_accrual_je(user, linked)
+        raise
 
     # If linked to a milestone, mark it paid
     if payload.milestone_id:
@@ -1088,7 +1193,11 @@ async def create_income(payload: IncomeIn, request: Request,
         await sdb.invoices.update_one(
             {"id": payload.invoice_id},
             {"$set": {"status": "paid", "paid_date": payload.date,
-                      "journal_id": je["id"], "updated_at": iso_now()}}
+                      "journal_id": je["id"],
+                      "accrual_journal_id": (created_accrual or {}).get("id")
+                          or (prior_accrual or {}).get("id")
+                          or linked.get("accrual_journal_id"),
+                      "updated_at": iso_now()}}
         )
     return je
 

@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-10-22 (Asia/Kolkata)
+Last updated: 2026-10-23 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -49,10 +49,10 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Employee/user link | Employee creation must create/link exactly one active authentication user where requested | Tenant-bound account lookup, safe offboarding, active-session revocation and duplicate login-ID prevention are covered; production identity preflight is clean and user IDs are uniquely indexed |
-| Invoice lifecycle | Draft/issued/paid/reversed/deleted transitions and permissions | Fixed for linked payment path; full lifecycle audit required |
-| Invoice accrual / Accounts Receivable | Issued invoices must not leave AR at zero; payment must settle AR without double-counting revenue | Open: current paid-receipt path posts directly to income. Requires an evidence-gated historical migration and shadow reconciliation before changing production posting rules |
-| Capital and non-operating money | Owner capital/drawings, investments, advances and private loans must never be misclassified as operating income/expense | DS-021 adds guided balance-sheet journals, person-wise asset/liability ledgers, repayment balance floors, RBAC and audit events; production verification pending |
-| Chart of Accounts integrity | Current balances, unique names/codes, safe edits and non-destructive deactivation | DS-022 derives current balances from journals, rejects future duplicate manual codes and exposes existing edit/deactivate/restore controls; historical code audit pending |
+| Invoice lifecycle | Draft/issued/paid/reversed/deleted transitions and permissions | DS-023 adds accrual-aware issue, payment, draft and cancellation transitions; deployment verification pending |
+| Invoice accrual / Accounts Receivable | Issued invoices must not leave AR at zero; payment must settle AR without double-counting revenue | DS-023 implemented for future activity: issue posts A/R against revenue/GST, payment settles A/R, and rollback uses reversals. Production audit found no issued/paid invoices requiring migration; deployment pending |
+| Capital and non-operating money | Owner capital/drawings, investments, advances and private loans must never be misclassified as operating income/expense | Fixed, deployed and verified live through reversible owner capital, gold, advance and repayment tests |
+| Chart of Accounts integrity | Current balances, unique names/codes, safe edits and non-destructive deactivation | Fixed and deployed; live current balances verified, future duplicate codes rejected, exact unused duplicates cleaned after backup, and audit chains pass |
 | Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Idempotency, duplicate submission, claimant visibility, approval concurrency, receipt URLs and reimbursement accounts fixed/tested; broader workflow QA continues |
 | Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Status transitions, cancellation dependencies, over-receipt and bill/payment idempotency fixed/tested; broader workflow QA continues |
 | Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | EMI/prepayment locking, balance floors, journal cardinality and safe archive/reversal rules fixed/tested |

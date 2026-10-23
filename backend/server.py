@@ -1724,14 +1724,15 @@ async def create_invoice(payload: InvoiceIn, request: Request,
     doc = payload.model_dump()
     if not has_permission(user, "invoices.create"):
         raise HTTPException(status_code=403, detail="Missing permission: invoices.create")
-    if doc.get("status") == "paid" and doc.get("doc_type", "invoice") == "invoice" \
+    if doc.get("status") in {"sent", "overdue", "paid"} \
+            and doc.get("doc_type", "invoice") == "invoice" \
             and not has_permission(user, "finance.create"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
     requested_status = doc.get("status") or "draft"
-    if requested_status == "paid" and doc.get("doc_type", "invoice") == "invoice":
-        # Persist an unpaid source first. The shared status workflow posts the
-        # receipt before marking it paid, so a failed post remains retryable.
-        doc["status"] = "sent"
+    if requested_status != "draft" and doc.get("doc_type", "invoice") == "invoice":
+        # Persist a draft first. The shared status workflow then posts the
+        # invoice accrual (and, for paid, its receipt) before changing status.
+        doc["status"] = "draft"
     doc["id"] = new_id("inv_")
     # number — atomic per-org counter (never reused after delete); prefix from Company Settings
     from core.helpers import next_sequence, max_trailing_number
@@ -1760,9 +1761,9 @@ async def create_invoice(payload: InvoiceIn, request: Request,
         await sdb.invoices.insert_one(dict(doc))
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Invoice number already exists; retry creation")
-    if requested_status == "paid" and doc.get("doc_type", "invoice") == "invoice":
+    if requested_status != "draft" and doc.get("doc_type", "invoice") == "invoice":
         return await _update_invoice_status_locked(
-            user, doc["id"], InvoiceStatusUpdate(status="paid"))
+            user, doc["id"], InvoiceStatusUpdate(status=requested_status))
     return await sdb.invoices.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -1788,6 +1789,11 @@ async def update_invoice(invoice_id: str, payload: InvoiceUpdate, request: Reque
     doc = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
+    if doc.get("doc_type", "invoice") == "invoice" and doc.get("status") != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail="Issued invoices cannot be edited. Return the invoice to Draft first so its accounting is reversed.",
+        )
     if doc.get("status") in ("paid", "cancelled"):
         raise HTTPException(status_code=409, detail=f"{doc.get('status').title()} invoices cannot be edited")
     if doc.get("_lock"):
@@ -1863,34 +1869,73 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
     upd = {"status": payload.status, "updated_at": iso(now_utc())}
 
     # --- Accounting is the source of truth: keep books in sync ---
-    from routes.accounting import post_receipt_je, reverse_receipt_je
+    from routes.accounting import (
+        post_invoice_accrual_je, post_receipt_je,
+        reverse_invoice_accrual_je, reverse_receipt_je,
+    )
+    is_invoice = inv.get("doc_type", "invoice") == "invoice"
+    issued_states = {"sent", "overdue", "paid"}
+    current_is_issued = inv.get("status") in issued_states
+    target_is_issued = payload.status in issued_states
+    if is_invoice and target_is_issued and not current_is_issued \
+            and not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    if is_invoice and current_is_issued and not target_is_issued \
+            and not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    created_accrual = None
+    if is_invoice and target_is_issued:
+        prior_accrual = await sdb.journal_entries.find_one(
+            {"source": "invoice_issue", "source_id": invoice_id,
+             "reversed": {"$ne": True}}, {"_id": 0, "id": 1})
+        if not prior_accrual:
+            created_accrual = await post_invoice_accrual_je(user, inv)
+        upd["accrual_journal_id"] = (created_accrual or prior_accrual or {}).get("id")
+
     if payload.status == "paid" and inv.get("status") != "paid" \
-            and inv.get("doc_type", "invoice") == "invoice":
+            and is_invoice:
         from core.helpers import business_today
         upd["paid_date"] = business_today().isoformat()
         amount = float(inv.get("total") or 0)
         if amount > 0:
-            je = await post_receipt_je(
-                user, amount=amount, date=upd["paid_date"],
-                narration=f"Invoice {inv.get('number') or invoice_id} payment received"
-                          + (f" · {inv.get('client_name')}" if inv.get("client_name") else ""),
-                source="invoice_payment", source_id=invoice_id,
-                reference=inv.get("number"),
-                project_id=inv.get("project_id"), client_id=inv.get("client_id"))
+            try:
+                je = await post_receipt_je(
+                    user, amount=amount, date=upd["paid_date"],
+                    narration=f"Invoice {inv.get('number') or invoice_id} payment received"
+                              + (f" · {inv.get('client_name')}" if inv.get("client_name") else ""),
+                    source="invoice_payment", source_id=invoice_id,
+                    reference=inv.get("number"),
+                    project_id=inv.get("project_id"), client_id=inv.get("client_id"))
+                if not je:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Cash/bank or invoice accounting account is unavailable",
+                    )
+            except Exception:
+                if created_accrual:
+                    await reverse_invoice_accrual_je(user, inv)
+                raise
             if je:
                 upd["journal_id"] = je["id"]
     elif inv.get("status") == "paid" and payload.status != "paid" \
-            and inv.get("doc_type", "invoice") == "invoice":
+            and is_invoice:
         await reverse_receipt_je(
             user, source="invoice_payment", source_id=invoice_id,
             narration=f"Invoice {inv.get('number') or invoice_id} payment reversed")
         upd["paid_date"] = None
         upd["journal_id"] = None
 
+    if is_invoice and current_is_issued and not target_is_issued:
+        await reverse_invoice_accrual_je(user, inv)
+        upd["accrual_journal_id"] = None
+
     if payload.status == "cancelled":
         upd["cancelled_at"] = iso(now_utc())
         upd["cancelled_by"] = user["user_id"]
-    await sdb.invoices.update_one({"id": invoice_id}, {"$set": upd})
+    update_doc = {"$set": upd}
+    if inv.get("status") == "cancelled" and payload.status != "cancelled":
+        update_doc["$unset"] = {"cancelled_at": "", "cancelled_by": ""}
+    await sdb.invoices.update_one({"id": invoice_id}, update_doc)
     await audit_log(user, "invoice.status", target=invoice_id, target_type="invoice",
                     meta={"from": inv.get("status"), "to": payload.status,
                           "number": inv.get("number"), "total": inv.get("total")})
@@ -1915,6 +1960,18 @@ async def delete_invoice(invoice_id: str, request: Request,
         raise HTTPException(
             status_code=409,
             detail="Change the invoice from paid to sent before deleting it so the receipt is reversed",
+        )
+    if inv.get("doc_type", "invoice") == "invoice" and inv.get("status") != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail="Only draft invoices can be deleted. Cancel an issued invoice to preserve its accounting history.",
+        )
+    any_issue = await sdb.journal_entries.find_one(
+        {"source": "invoice_issue", "source_id": invoice_id}, {"_id": 0, "id": 1})
+    if any_issue:
+        raise HTTPException(
+            status_code=409,
+            detail="This invoice has accounting history and cannot be deleted.",
         )
     await sdb.invoices.delete_one({"id": invoice_id})
     await audit_log(user, "invoice.delete", target=invoice_id, target_type="invoice",

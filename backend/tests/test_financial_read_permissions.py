@@ -2,6 +2,7 @@
 
 import asyncio
 import math
+from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -107,3 +108,56 @@ def test_quotation_actuals_require_invoice_or_finance_read(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(server.adv_cost_vs_actual("quote_1", None))
     assert exc.value.status_code == 403
+
+
+def test_invoice_issue_and_draft_transitions_post_and_reverse_accrual(monkeypatch):
+    import routes.accounting as accounting
+
+    class Invoices:
+        def __init__(self):
+            self.row = {
+                "id": "inv_1", "number": "INV-1", "doc_type": "invoice",
+                "status": "draft", "subtotal": 1000, "tax": 180, "total": 1180,
+            }
+
+        async def find_one(self, *_args, **_kwargs):
+            return dict(self.row)
+
+        async def update_one(self, _query, update):
+            self.row.update(update.get("$set", {}))
+
+    class Journals:
+        async def find_one(self, *_args, **_kwargs):
+            return None
+
+    invoices = Invoices()
+    calls = []
+
+    async def post_accrual(_user, _invoice):
+        calls.append("post")
+        return {"id": "je_issue"}
+
+    async def reverse_accrual(_user, _invoice):
+        calls.append("reverse")
+        return {"id": "je_issue_reversal"}
+
+    async def noop(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        server, "sdb", SimpleNamespace(invoices=invoices, journal_entries=Journals()))
+    monkeypatch.setattr(server, "has_permission", lambda *_args: True)
+    monkeypatch.setattr(server, "audit_log", noop)
+    monkeypatch.setattr(accounting, "post_invoice_accrual_je", post_accrual)
+    monkeypatch.setattr(accounting, "reverse_invoice_accrual_je", reverse_accrual)
+
+    issued = asyncio.run(server._update_invoice_status_locked(
+        {"user_id": "admin"}, "inv_1", server.InvoiceStatusUpdate(status="sent")))
+    assert issued["status"] == "sent"
+    assert issued["accrual_journal_id"] == "je_issue"
+
+    draft = asyncio.run(server._update_invoice_status_locked(
+        {"user_id": "admin"}, "inv_1", server.InvoiceStatusUpdate(status="draft")))
+    assert draft["status"] == "draft"
+    assert draft["accrual_journal_id"] is None
+    assert calls == ["post", "reverse"]

@@ -14,6 +14,7 @@ from models.accounting import (
 )
 from routes.accounting import (
     _cash_collection_source,
+    _invoice_accrual_amounts,
     _linked_journal_key,
     _milestone_due_bucket,
     _party_ledger_name,
@@ -77,6 +78,50 @@ def test_default_account_names_and_codes_are_unique():
     assert len(names) == len(set(names))
     assert len(codes) == len(set(codes))
     assert ("Investments - Gold", "asset", "1601") in DEFAULT_COA
+
+
+def test_invoice_accrual_splits_receivable_revenue_and_tax():
+    assert _invoice_accrual_amounts({
+        "subtotal": 1000, "tax": 180, "total": 1180,
+    }) == (1000.0, 180.0, 1180.0)
+    with pytest.raises(HTTPException):
+        _invoice_accrual_amounts({"subtotal": 1000, "tax": 180, "total": 1000})
+
+
+def test_invoice_issue_posts_to_receivable_revenue_and_gst(monkeypatch):
+    class Journals:
+        async def find_one(self, *_args, **_kwargs):
+            return None
+
+    posted = []
+
+    async def accounts():
+        return (
+            {"id": "ar", "name": "Accounts Receivable", "type": "asset"},
+            {"id": "income", "name": "Consultancy Income", "type": "income"},
+            {"id": "gst", "name": "GST Payable", "type": "liability"},
+        )
+
+    async def post(_user, date, narration, lines, **kwargs):
+        posted.append({"date": date, "narration": narration, "lines": lines, **kwargs})
+        return {"id": "je_issue", "lines": lines}
+
+    monkeypatch.setattr(accounting, "sdb", SimpleNamespace(journal_entries=Journals()))
+    monkeypatch.setattr(accounting, "_invoice_accrual_accounts", accounts)
+    monkeypatch.setattr(accounting, "_post_journal", post)
+
+    invoice = {
+        "id": "inv_1", "number": "INV-1", "issue_date": "2026-10-23",
+        "subtotal": 1000, "tax": 180, "total": 1180,
+    }
+    result = asyncio.run(accounting.post_invoice_accrual_je({"user_id": "admin"}, invoice))
+    assert result["id"] == "je_issue"
+    assert posted[0]["source"] == "invoice_issue"
+    assert posted[0]["source_id"] == "inv_1"
+    assert [(line["account_id"], line["debit"], line["credit"])
+            for line in posted[0]["lines"]] == [
+        ("ar", 1180.0, 0), ("income", 0, 1000.0), ("gst", 0, 180.0),
+    ]
 
 
 def test_non_operating_transactions_require_positive_finite_money():
@@ -202,3 +247,20 @@ def test_posted_journal_delete_is_always_rejected(monkeypatch):
         asyncio.run(accounting.delete_journal("je_1", None))
     assert exc.value.status_code == 409
     assert "cannot be deleted" in exc.value.detail
+
+
+def test_invoice_issue_must_be_reversed_through_invoice_workflow(monkeypatch):
+    class JournalEntries:
+        async def find_one(self, *_args, **_kwargs):
+            return {"id": "je_issue", "source": "invoice_issue", "source_id": "inv_1"}
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin_a", "org_id": "org_a", "permissions": ["finance.update"]}
+
+    monkeypatch.setattr(accounting, "sdb", SimpleNamespace(journal_entries=JournalEntries()))
+    monkeypatch.setattr(accounting, "require_user", user)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(accounting.reverse_journal("je_issue", None))
+    assert exc.value.status_code == 409
+    assert "invoice" in exc.value.detail.lower()
