@@ -63,7 +63,9 @@ cp -al "$file_root"/. "$temporary/file-storage"/
 (
   cd "$temporary/file-storage"
   find . -type f -print0 | sort -z | xargs -0 -r sha256sum > ../file-storage.sha256
-  sha256sum -c ../file-storage.sha256 >/dev/null
+  if [ -s ../file-storage.sha256 ]; then
+    sha256sum -c ../file-storage.sha256 >/dev/null
+  fi
 )
 
 (
