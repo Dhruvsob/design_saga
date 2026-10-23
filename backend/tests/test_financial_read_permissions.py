@@ -1,12 +1,27 @@
 """Regression coverage for financial read authorization helpers."""
 
 import asyncio
+import math
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 import server
 from server import _can_read_invoices, _employee_for_user, _ensure_invoice_read
 from routes.vendors import _vendor_for_user
+
+
+def test_invoice_models_reject_invalid_status_and_non_finite_money():
+    with pytest.raises(ValidationError):
+        server.InvoiceIn(status="unexpected")
+    with pytest.raises(ValidationError):
+        server.InvoiceIn(items=[{"description": "Design", "quantity": 1,
+                                 "rate": math.inf}])
+    with pytest.raises(ValidationError):
+        server.InvoiceIn(items=[{"description": "Design", "quantity": 0,
+                                 "rate": 1000}])
+    with pytest.raises(ValidationError):
+        server.InvoiceIn(tax_rate=101)
 
 
 def test_invoice_read_allows_invoice_or_finance_permission():

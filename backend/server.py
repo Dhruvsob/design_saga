@@ -51,6 +51,7 @@ from core.access_control import (  # noqa: E402
 )
 from core.url_security import external_http_url  # noqa: E402
 from core.tenancy import user_org_id  # noqa: E402
+from models.base import FiniteModel  # noqa: E402
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 EMERGENT_AUTH_BASE = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
@@ -419,35 +420,35 @@ class TaskStatusUpdate(BaseModel):
     status_detail: Optional[str] = None
 
 
-class InvoiceItem(BaseModel):
+class InvoiceItem(FiniteModel):
     description: str
-    quantity: float = 1
-    rate: float = 0
-    amount: float = 0
+    quantity: float = Field(default=1, gt=0)
+    rate: float = Field(default=0, ge=0)
+    amount: float = Field(default=0, ge=0)
 
 
-class InvoiceIn(BaseModel):
+class InvoiceIn(FiniteModel):
     client_id: Optional[str] = None
     client_name: Optional[str] = None
     project_id: Optional[str] = None
     project_name: Optional[str] = None
     items: List[InvoiceItem] = []
-    tax_rate: float = 0
+    tax_rate: float = Field(default=0, ge=0, le=100)
     notes: Optional[str] = None
     due_date: Optional[str] = None
-    status: Optional[str] = "draft"
+    status: Optional[Literal["draft", "sent", "paid", "overdue", "cancelled"]] = "draft"
     doc_type: Optional[Literal["invoice", "quotation"]] = "invoice"
 
 
-class InvoiceStatusUpdate(BaseModel):
-    status: str
+class InvoiceStatusUpdate(FiniteModel):
+    status: Literal["draft", "sent", "paid", "overdue", "cancelled"]
 
 
-class InvoiceUpdate(BaseModel):
+class InvoiceUpdate(FiniteModel):
     client_id: Optional[str] = None
     project_id: Optional[str] = None
     items: Optional[List[InvoiceItem]] = None
-    tax_rate: Optional[float] = None
+    tax_rate: Optional[float] = Field(default=None, ge=0, le=100)
     notes: Optional[str] = None
     due_date: Optional[str] = None
 
@@ -1726,6 +1727,11 @@ async def create_invoice(payload: InvoiceIn, request: Request,
     if doc.get("status") == "paid" and doc.get("doc_type", "invoice") == "invoice" \
             and not has_permission(user, "finance.create"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    requested_status = doc.get("status") or "draft"
+    if requested_status == "paid" and doc.get("doc_type", "invoice") == "invoice":
+        # Persist an unpaid source first. The shared status workflow posts the
+        # receipt before marking it paid, so a failed post remains retryable.
+        doc["status"] = "sent"
     doc["id"] = new_id("inv_")
     # number — atomic per-org counter (never reused after delete); prefix from Company Settings
     from core.helpers import next_sequence, max_trailing_number
@@ -1750,26 +1756,13 @@ async def create_invoice(payload: InvoiceIn, request: Request,
         if p:
             doc["project_name"] = p.get("name")
     doc = compute_invoice_totals(doc)
-    if doc.get("status") == "paid" and doc.get("doc_type", "invoice") == "invoice":
-        doc["paid_date"] = business_today().isoformat()
     try:
         await sdb.invoices.insert_one(dict(doc))
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Invoice number already exists; retry creation")
-    # Invoice created directly as paid → post the receipt JE so the books match.
-    if doc.get("status") == "paid" and doc.get("doc_type", "invoice") == "invoice" \
-            and float(doc.get("total") or 0) > 0:
-        from routes.accounting import post_receipt_je
-        je = await post_receipt_je(
-            user, amount=float(doc["total"]), date=doc["paid_date"],
-            narration=f"Invoice {doc.get('number')} payment received"
-                      + (f" · {doc.get('client_name')}" if doc.get("client_name") else ""),
-            source="invoice_payment", source_id=doc["id"],
-            reference=doc.get("number"),
-            project_id=doc.get("project_id"), client_id=doc.get("client_id"))
-        if je:
-            await sdb.invoices.update_one({"id": doc["id"]},
-                                          {"$set": {"journal_id": je["id"]}})
+    if requested_status == "paid" and doc.get("doc_type", "invoice") == "invoice":
+        return await _update_invoice_status_locked(
+            user, doc["id"], InvoiceStatusUpdate(status="paid"))
     return await sdb.invoices.find_one({"id": doc["id"]}, {"_id": 0})
 
 
