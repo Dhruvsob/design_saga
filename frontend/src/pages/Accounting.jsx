@@ -11,6 +11,7 @@ import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
   Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
+  HandCoins,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -49,6 +50,7 @@ export default function Accounting() {
   const [commissions, setCommissions] = useState(null);
   const [validation, setValidation] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [showWithdrawal, setShowWithdrawal] = useState(false);
   const [meta, setMeta] = useState(null);
   const [ledgerAccount, setLedgerAccount] = useState(null);
   // Financial period: fy label OR explicit from/to date range
@@ -153,7 +155,20 @@ export default function Accounting() {
           className="btn-primary bg-[#B4001C]" data-testid="quick-expense-btn">
           <ArrowUp size={14} /> Record expense
         </button>
+        <button onClick={() => setShowWithdrawal(true)}
+          className="btn-ghost" data-testid="owner-withdrawal-btn">
+          <HandCoins size={14} /> Owner withdrawal
+        </button>
       </PageHero>
+
+      {showWithdrawal && (
+        <OwnerWithdrawalForm
+          accounts={accounts}
+          banks={banks}
+          onClose={() => setShowWithdrawal(false)}
+          onSaved={() => { setShowWithdrawal(false); loadDashboard(); }}
+        />
+      )}
 
       <div className="flex items-center gap-1 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0" data-testid="accounting-tabs">
         {TABS.map(({ id, label, Icon }) => (
@@ -304,6 +319,83 @@ export default function Accounting() {
           onClose={() => setLedgerAccount(null)} />
       )}
     </div>
+  );
+}
+
+// ================================================================
+function OwnerWithdrawalForm({ accounts, banks, onClose, onSaved }) {
+  const drawings = accounts.find((a) => a.name?.trim().toLowerCase() === "owner drawings" && a.active !== false);
+  const [form, setForm] = useState({
+    date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+    amount: "",
+    paid_from_account_id: banks[0]?.id || "",
+    reference: "",
+    narration: "Personal withdrawal by owner",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const amount = Number(form.amount);
+    if (!drawings) return setError("Owner Drawings account is unavailable. Open Chart of Accounts and refresh once.");
+    if (!form.paid_from_account_id) return setError("Select the cash or bank account used.");
+    if (!Number.isFinite(amount) || amount <= 0) return setError("Enter an amount greater than zero.");
+    setBusy(true); setError("");
+    try {
+      await api.post("/journal-entries", {
+        date: form.date,
+        narration: form.narration.trim() || "Personal withdrawal by owner",
+        reference: form.reference.trim() || null,
+        lines: [
+          { account_id: drawings.id, debit: amount, credit: 0, description: "Owner withdrawal" },
+          { account_id: form.paid_from_account_id, debit: 0, credit: amount, description: "Paid to owner" },
+        ],
+      });
+      toast.success("Owner withdrawal recorded");
+      onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Could not record the withdrawal.");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <form onSubmit={submit} className="border-y border-[#E5E5E5] py-4 space-y-3" data-testid="owner-withdrawal-form">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="overline">OWNER WITHDRAWAL</div>
+          <div className="text-xs text-[#5C5C5C] mt-1">Debit Owner Drawings and credit the selected cash or bank account.</div>
+        </div>
+        <button type="button" className="btn-icon" onClick={onClose} aria-label="Close owner withdrawal form"><X size={14} /></button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Date</span>
+          <input required type="date" className="input-flat w-full mt-1" value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Amount</span>
+          <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="owner-withdrawal-amount" /></label>
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Paid from</span>
+          <select required className="input-flat w-full mt-1" value={form.paid_from_account_id}
+            onChange={(e) => setForm({ ...form, paid_from_account_id: e.target.value })}>
+            <option value="">Select cash or bank</option>
+            {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+          </select></label>
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Reference</span>
+          <input className="input-flat w-full mt-1" value={form.reference}
+            onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Optional" /></label>
+        <label className="block"><span className="text-xs text-[#5C5C5C]">Narration</span>
+          <input required className="input-flat w-full mt-1" value={form.narration}
+            onChange={(e) => setForm({ ...form, narration: e.target.value })} /></label>
+      </div>
+      {error && <div className="text-xs text-[#B4001C]" role="alert">{error}</div>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="btn-primary" disabled={busy || !drawings} data-testid="owner-withdrawal-submit">
+          <HandCoins size={14} /> {busy ? "Recording..." : "Record withdrawal"}
+        </button>
+      </div>
+    </form>
   );
 }
 

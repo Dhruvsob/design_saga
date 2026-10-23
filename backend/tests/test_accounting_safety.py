@@ -61,6 +61,13 @@ def test_linked_journal_keys_are_stable_and_manual_entries_are_unkeyed():
         _linked_journal_key("org_b", "invoice_payment", "inv_1")
 
 
+def test_default_account_ids_are_stable_and_tenant_scoped():
+    assert accounting._default_account_id("org_a", "Owner Drawings") == \
+        accounting._default_account_id("org_a", "owner drawings")
+    assert accounting._default_account_id("org_a", "Owner Drawings") != \
+        accounting._default_account_id("org_b", "Owner Drawings")
+
+
 def test_linked_payments_must_settle_the_full_source_amount():
     _require_full_linked_payment("invoice", 1180, 1180.004)
     with pytest.raises(HTTPException) as exc:

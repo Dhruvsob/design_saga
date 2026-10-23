@@ -17,9 +17,10 @@ from typing import Optional
 from datetime import date as _date, timedelta
 import math
 import re
+import hashlib
 
 from core.db import db
-from core.scoped_db import sdb
+from core.scoped_db import current_org_id, sdb
 from core.helpers import business_today, now_utc, iso_now, new_id
 from core.deps import require_user
 from core.downloads import content_disposition
@@ -91,25 +92,40 @@ def _milestone_due_bucket(due_date: Optional[str], today: _date,
 # ==================================================
 # Chart of Accounts
 # ==================================================
+def _default_account_id(org_id: str, name: str) -> str:
+    digest = hashlib.sha256(f"{org_id}:{name.casefold()}".encode("utf-8")).hexdigest()[:20]
+    return f"acc_default_{digest}"
+
+
 async def _seed_coa_if_empty():
     """Idempotent seed — inserts only the DEFAULT_COA accounts that are missing.
     Runs on every /accounts fetch so newly-shipped default accounts (e.g. new
     income categories) show up on existing installations without a migration."""
     existing_names = {a["name"] async for a in sdb.accounts.find({}, {"_id": 0, "name": 1})}
+    org_id = current_org_id() or "org_default"
     for name, typ, code in DEFAULT_COA:
         if name in existing_names:
             continue
-        await sdb.accounts.insert_one({
-            "id": new_id("acc_"),
-            "name": name,
-            "type": typ,
-            "code": code,
-            "is_bank": name.lower().startswith("bank") or name.lower() in ("cash", "petty cash"),
-            "opening_balance": 0.0,
-            "active": True,
-            "created_at": iso_now(),
-            "seeded": True,
-        })
+        account_id = _default_account_id(org_id, name)
+        try:
+            await sdb.accounts.update_one(
+                {"id": account_id},
+                {"$setOnInsert": {
+                    "id": account_id,
+                    "name": name,
+                    "type": typ,
+                    "code": code,
+                    "is_bank": name.lower().startswith("bank") or name.lower() in ("cash", "petty cash"),
+                    "opening_balance": 0.0,
+                    "active": True,
+                    "created_at": iso_now(),
+                    "seeded": True,
+                }},
+                upsert=True,
+            )
+        except DuplicateKeyError:
+            # A concurrent first request inserted the same deterministic account.
+            pass
 
 
 @router.get("/accounts")
