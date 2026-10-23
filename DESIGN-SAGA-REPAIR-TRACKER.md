@@ -4,12 +4,12 @@ Last updated: 2026-10-23 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; deployed baseline `b84c37a` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; `b84c37a` verified on 2026-10-23 after DS-021/DS-022 deployment.
+- Local checkout: `codex/repair-release`; deployed application baseline `13424b6` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; `13424b6` verified on 2026-10-23 after DS-023 deployment.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API and key-only SSH are reachable again. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
 - Checksummed backup `/opt/design-saga-backups/20261023T164033Z` passed integrity verification before the live accounting checks and scoped account-metadata cleanup.
-- Current action: complete DS-023 invoice accrual/A/R regression verification and deploy it. The production audit found no issued or paid invoices, so no historical invoice migration is required at this checkpoint.
+- Current action: checkpoint and continue the remaining non-release-blocking backlog in priority order. The production audit found no issued or paid invoices requiring an A/R migration.
 
 ## System Inventory
 
@@ -74,7 +74,7 @@ Last updated: 2026-10-23 (Asia/Calcutta)
 | DS-020 | High | All-time accounting ranges and safe reversal undo | Deployed; exact historical correction remains record-specific and evidence-gated |
 | DS-021 | High | Capital, investment and person-wise receivable/payable workflows | Deployed and verified live with fully reversed sample-tenant journals |
 | DS-022 | Medium | Chart of Accounts current balances, editing, deactivation and future duplicate-code prevention | Deployed and verified; scoped duplicate-code cleanup completed after backup |
-| DS-023 | High | Invoice accrual, Accounts Receivable settlement and revenue/GST recognition | In implementation and regression verification; production has no issued/paid invoices requiring migration |
+| DS-023 | High | Invoice accrual, Accounts Receivable settlement and revenue/GST recognition | Fixed, deployed and verified live with a fully reversed sample-invoice lifecycle |
 
 ## User-Reported Master Backlog - 2026-10-23
 
@@ -86,7 +86,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-002 | High | PO/bill cannot link to project | API/UI support is deployed; a temporary project-linked sample bill was created and deleted live without a journal |
 | BR-003 | High | Collections Due empty | Deployed; production audit found four pending Design Saga milestones, all linked to projects |
 | BR-004 | High | Vendor ledger shows wrong balance | Verified live: sample vendor summary and full ledger both return ₹29,500 |
-| BR-005 | High | AR and client receivables not reflected | DS-023 posts issued invoices to A/R and settles A/R on payment without double-counting revenue; deployment pending |
+| BR-005 | High | AR and client receivables not reflected | Fixed and verified live: issue posted ₹59,000 A/R against ₹50,000 revenue + ₹9,000 GST; payment settled A/R, and the full rollback returned every tested balance to baseline |
 | BR-006 | High | Attendance check-in and employee-login link broken | Fixed and deployed; attendance identity/project access/idempotency covered by current tests |
 | BR-007 | High | Notifications and settings unavailable | Notification generation/privacy fixed and deployed; end-user notification preferences screen remains a product gap |
 | BR-008 | Medium | Chart of Accounts balances show zero/opening only | Fixed and verified live: all listed accounts include journal-derived current balances |
