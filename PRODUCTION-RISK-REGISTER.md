@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-10-23 (Asia/Kolkata)
+Last updated: 2026-10-24 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -33,7 +33,7 @@ yet received sufficient adversarial testing.
 | Approval races | Concurrent attendance, leave, correction, and late-arrival approvals must produce one final decision | Fixed, deployed, and verified live |
 | Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed and deployed |
 | Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed and deployed |
-| Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Project/task/file/search/comments/calendar/notification/public-share fixed; vendor financial/privacy and linked project/task visibility fixed; quotation cost-vs-actual now requires invoice/finance read; remaining route audit continues |
+| Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Project/task/file/search/comments/calendar/notification/public-share fixed; vendor financial/privacy and linked project/task visibility fixed; quotation cost-vs-actual requires invoice/finance read; quotation conversion now requires its underlying client/project/task create permissions; remaining route audit continues |
 | Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides are fail-closed; tenant user creation, approval, employee-account creation and role changes cannot mint a platform `SuperAdmin`; broader route audit continues |
 | Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Lifecycle gates fixed; password/reset/reassignment/offboarding and tenant suspension/deactivation revoke sessions; SuperAdmin impersonation is isolated to one session; production uses cookie-only sessions |
 | CSRF and cookies | Confirm `Secure`, `HttpOnly`, appropriate `SameSite`, origin checks and no state-changing GET routes | Secure HttpOnly SameSite=Lax cookies, unsafe-method Origin/Referer enforcement and a production fail-closed explicit-CORS guard are covered; ongoing route audit remains |

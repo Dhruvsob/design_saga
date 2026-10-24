@@ -1,15 +1,15 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-23 (Asia/Calcutta)
+Last updated: 2026-10-24 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; deployed application baseline `13424b6` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; `13424b6` verified on 2026-10-23 after DS-023 deployment.
+- Local checkout: `codex/repair-release`; deployed application baseline `fbbd7da` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; `fbbd7da` verified on 2026-10-24 after the quotation-conversion authorization repair.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
-- Live URL/API and key-only SSH are reachable again. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
-- Checksummed backup `/opt/design-saga-backups/20261023T164033Z` passed integrity verification before the live accounting checks and scoped account-metadata cleanup.
-- Current action: checkpoint and continue the remaining non-release-blocking backlog in priority order. The production audit found no issued or paid invoices requiring an A/R migration.
+- Live URL/API and key-only SSH are reachable. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
+- Checksummed backup `/opt/design-saga-backups/20261024T061330Z` completed before the latest backend replacement.
+- Current action: continue the remaining P0 operations dependencies, then the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
 
 ## System Inventory
 
@@ -77,6 +77,7 @@ Last updated: 2026-10-23 (Asia/Calcutta)
 | DS-023 | High | Invoice accrual, Accounts Receivable settlement and revenue/GST recognition | Fixed, deployed and verified live with a fully reversed sample-invoice lifecycle |
 | DS-024 | Medium | Private notification controls, complete search, tenant audit UI and cash-flow activity split | Fixed, regression-tested and deployed; cash-flow totals retain backward-compatible fields |
 | DS-025 | Medium | Durable project/vendor document uploads with tenant authorization, validation and backup | Implemented and regression-tested; production deployment/live verification pending |
+| DS-026 | High | Quotation conversion bypasses client/project/task create permissions | Fixed, covered by conversion/concurrency regressions, deployed and verified healthy at `fbbd7da` |
 
 ## User-Reported Master Backlog - 2026-10-23
 
