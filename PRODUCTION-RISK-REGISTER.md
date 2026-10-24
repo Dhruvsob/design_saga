@@ -21,7 +21,7 @@ yet received sufficient adversarial testing.
 | Host firewall | Deny unsolicited inbound traffic while preserving SSH, HTTP, HTTPS, and HTTP/3 | Fixed: UFW default-deny is active with only 22/tcp, 80/tcp, 443/tcp, and 443/udp allowed for IPv4/IPv6 |
 | Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Partial: daily checksummed archive, repeatable isolated restore validation and engineering RPO/RTO are documented; off-server encrypted retention remains open |
 | Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Fixed baseline: repeatable restore drill and incident runbook verified against the 2026-10-24 production backup; full provider-loss exercise remains dependent on off-server replication |
-| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/backup monitor is active; external notification delivery is parked pending Hostinger outbound IPv4 resolution; capacity/TLS/5xx alerting remains open |
+| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/memory/load/database-capacity/TLS/backup monitor is active; external notification delivery is parked pending Hostinger outbound IPv4 resolution, and 5xx-rate alerting remains open |
 
 ## P1 - Authorization and Data Protection
 
@@ -92,6 +92,7 @@ yet received sufficient adversarial testing.
 | Responsive layout | No clipped controls, overlapping text or unusable tables on supported mobile/desktop widths | Audit |
 | Browser compatibility | Current Chrome, Edge, Safari and mobile smoke tests | Audit |
 | Performance | Bundle size, lazy loading, pagination, large tenant datasets and API latency budgets | Accounting/Daybook pagination and route-level lazy loading are active; initial JavaScript is reduced from 1.52 MB (372 KB gzip) to 495 KB (149 KB gzip). Large-data/API latency budgets remain open |
+| Date presentation | Business dates should be DD/MM/YYYY without changing API/database date storage | Fixed on major ERP operational, accounting, attendance, project, vendor, client, task, HR and administration surfaces at `c89907d`; native date inputs and stored values remain ISO by design |
 
 ## Required Release Gates
 

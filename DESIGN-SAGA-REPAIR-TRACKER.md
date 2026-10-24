@@ -4,11 +4,11 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; deployed application baseline `3b95ca1` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; runtime commit `3b95ca1` was verified on 2026-10-24.
+- Local checkout: `codex/repair-release`; deployed application baseline `c89907d` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; runtime commit `c89907d` was verified on 2026-10-24.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API and key-only SSH are reachable. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
-- Checksummed backup `/opt/design-saga-backups/20261024T115729Z` completed before the latest backend/frontend replacement.
+- Checksummed backup `/opt/design-saga-backups/20261024T121328Z` completed before the latest frontend replacement.
 - Current action: continue the remaining P0 operations dependencies, then the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
 
 ## System Inventory
@@ -82,7 +82,9 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 | DS-028 | Medium | Production updater could repeat the same successful release because `ORIG_HEAD` was not advanced | Fixed and installed at `81b06f3`; replay now exits without backup, rebuild or restart |
 | DS-029 | High | Lead conversion allowed a lead editor to create a client and project without their create permissions | Fixed, regression-tested and deployed at `3b95ca1` |
 | DS-030 | High | Direct vendor commission receipts posted valid journals but disappeared from commission ledgers/dashboards when no bill earning was allocated | Fixed and deployed at `3b95ca1`; live ₹21,000 across three receipts reconciles between the vendor ledger and dashboard |
-| DS-031 | Low | Milestone, project financial, vendor commission and recent accounting dates displayed raw ISO dates | Fixed on the reported surfaces with the shared DD/MM/YYYY formatter and deployed at `3b95ca1` |
+| DS-031 | Low | Operational screens displayed inconsistent raw ISO dates | Fixed across accounting, milestones, projects, attendance, clients, vendors, invoices, expenses, POs, loans, tasks, employee/RBAC, portal and platform surfaces with the shared DD/MM/YYYY formatter; deployed and live-verified at `c89907d` |
+| DS-032 | High | Production monitor omitted memory/load/database-capacity and TLS-expiry checks | Fixed and active at `8669d1d`; the five-minute monitor now validates all four thresholds in addition to service, site, disk and backup health |
+| DS-033 | High | Long-running Caddy container retained a stale DNS upstream and could not reach the ACME renewal service | Corrected in production by a scoped Caddy restart; IPv6 DNS and ACME directory connectivity pass, certificate remains valid through 29/12/2026, and TLS-expiry monitoring is active |
 
 ## User-Reported Master Backlog - 2026-10-23
 
@@ -114,7 +116,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-022 | Medium | Slow page loading | Frontend route splitting implemented and smoke-tested across dashboard, accounting, attendance, calendar, audit and privacy; API tracing/pagination remains under DS-008 |
 | BR-023 | Medium | Cash-flow split missing | Fixed: report and CSV now split operating/investing/financing activities and reconcile every cash/bank account while preserving existing totals |
 | BR-024 | Medium | Draft invoice counts inconsistent | Not reproducible in the 24/10 production trace: the sole current invoice is one explicit sample-tenant draft and all active invoice queries count it consistently; monitor as data grows |
-| BR-025 | Low | Date formats inconsistent | Reported milestone, project due-date, vendor commission and recent accounting surfaces now use DD/MM/YYYY; remaining screen inventory continues |
+| BR-025 | Low | Date formats inconsistent | Fixed and deployed at `c89907d`: major ERP display surfaces consistently use DD/MM/YYYY while browser form controls and database/API values correctly retain ISO storage |
 | BR-026 | Low | New-tenant PO dead-end | Send/GRN paths exist; empty master-data onboarding needs live workflow verification |
 | BR-027 | Low | Bill creation location confusing | UX review item; preserve vendor and PO context while improving discoverability |
 | BR-028 | Low | Unsafe automatic matching by name | Confirmed residual risk in selected legacy fallbacks; migrate to IDs where evidence permits |
