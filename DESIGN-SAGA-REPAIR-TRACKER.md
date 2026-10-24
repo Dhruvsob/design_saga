@@ -56,7 +56,7 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 |---|---|---|---|
 | DS-001 | High | Server-side invoice/dashboard financial-read authorization bypass | Fixed, deployed, and verified live |
 | DS-002 | High | Verify attendance identity, idempotency, timezone boundary, approval audit, and payroll consistency end to end | Fixed, deployed, and verified live |
-| DS-003 | High | Establish a validated backup and restore path for Design Saga PostgreSQL/FerretDB data and deployment state | Fixed and active; offsite copy remains a follow-up |
+| DS-003 | High | Establish a validated backup and restore path for Design Saga PostgreSQL/FerretDB data and deployment state | Fixed and active with repeatable restore drill and recovery runbook; offsite copy remains a follow-up |
 | DS-004 | High | Reconcile dashboard revenue/outstanding figures with journal/invoice sources and permission boundaries | Fixed, deployed, and verified live |
 | DS-005 | High | Audit project/task/file authorization and unsafe attachment URLs | Fixed, deployed, and verified live |
 | DS-006 | High | Prevent cross-tenant account reset and tenant-to-SuperAdmin escalation | Fixed, deployed, and verified live |
@@ -255,6 +255,12 @@ This is the canonical intake list supplied after the repair-release deployment. 
 - Current state: deployed at `1bafdea` and verified. No application/database restart or data mutation was required.
 - Limitation: dedicated archives currently remain on the same VPS. Configure an independently controlled offsite destination before treating this as host-loss disaster recovery.
 - Rollback: disable/remove `design-saga-backup.timer` and its two units, then revert `1bafdea`. Existing archives can remain for recovery or be removed separately after explicit approval.
+
+#### 2026-10-24 recovery revalidation
+
+- Added `deploy/restore-drill.sh`, which accepts only a timestamped archive directly under the configured backup root, verifies database and uploaded-file checksums, restores into a memory/CPU-limited container with no published ports, compares non-system table and DocumentDB row counts with production, and always removes its temporary container and volume.
+- Backup `/opt/design-saga-backups/20261024T062601Z` passed the drill: 106 non-system tables and 1,015 document rows matched production; database restore completed in 2 seconds.
+- Added `docs/runbooks/DISASTER-RECOVERY.md` with the initial 24-hour engineering RPO, 8-hour engineering RTO, restore validation sequence, and explicit provider-loss limitation. Encrypted off-server replication still requires a destination and credentials.
 
 ### DS-002A: Attendance identity, punch idempotency, and business date
 

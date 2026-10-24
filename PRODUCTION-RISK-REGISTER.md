@@ -19,8 +19,8 @@ yet received sufficient adversarial testing.
 | Super Admin allowlist | Require an explicit production identity, prevent tenant role escalation, and keep platform owners outside tenant scope | Fixed and deployed at `e086089` |
 | SSH access | Key-only login, disabled password/root remote login where operationally safe, restricted users, firewall, brute-force protection | Fixed baseline: passwords and keyboard-interactive auth disabled, root is key-only, three-attempt/30-second limits active; dedicated non-root operator and fail2ban remain defense-in-depth follow-ups |
 | Host firewall | Deny unsolicited inbound traffic while preserving SSH, HTTP, HTTPS, and HTTP/3 | Fixed: UFW default-deny is active with only 22/tcp, 80/tcp, 443/tcp, and 443/udp allowed for IPv4/IPv6 |
-| Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Partial: daily checksummed archive and restore validation pass; off-server encrypted retention and documented RPO/RTO remain open |
-| Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Partially fixed; test a complete restore drill |
+| Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Partial: daily checksummed archive, repeatable isolated restore validation and engineering RPO/RTO are documented; off-server encrypted retention remains open |
+| Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Fixed baseline: repeatable restore drill and incident runbook verified against the 2026-10-24 production backup; full provider-loss exercise remains dependent on off-server replication |
 | Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/backup monitor is active; external notification delivery is parked pending Hostinger outbound IPv4 resolution; capacity/TLS/5xx alerting remains open |
 
 ## P1 - Authorization and Data Protection
