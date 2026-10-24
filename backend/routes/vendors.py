@@ -1639,6 +1639,34 @@ async def list_vendor_commissions(vendor_id: str, request: Request,
     return rows
 
 
+async def _active_commission_settlements(query: dict) -> tuple[list[dict], set[str]]:
+    """Return visible receipts whose accounting journal is still active.
+
+    Settlements are the authoritative cash-receipt records. Commission rows only
+    describe bill-based earnings and therefore cannot represent direct or excess
+    receipts. Keep every settlement journal id for legacy de-duplication, even
+    when that journal has subsequently been reversed.
+    """
+    settlements = await sdb.commission_settlements.find(query, {"_id": 0}) \
+        .sort("received_date", -1).to_list(20000)
+    journal_ids = {
+        row.get("journal_entry_id") for row in settlements if row.get("journal_entry_id")
+    }
+    reversed_ids: set[str] = set()
+    if journal_ids:
+        async for journal in sdb.journal_entries.find(
+            {"id": {"$in": list(journal_ids)}, "reversed": True},
+            {"_id": 0, "id": 1},
+        ):
+            reversed_ids.add(journal["id"])
+    active = [
+        row for row in settlements
+        if row.get("status") not in ("cancelled", "reversed")
+        and row.get("journal_entry_id") not in reversed_ids
+    ]
+    return active, journal_ids
+
+
 # ---------- Vendor commission ledger (running totals) ----------
 @router.get("/vendors/{vendor_id}/commission-ledger")
 async def vendor_commission_ledger(vendor_id: str, request: Request,
@@ -1652,16 +1680,48 @@ async def vendor_commission_ledger(vendor_id: str, request: Request,
 
     rows = await sdb.vendor_commissions.find({"vendor_id": vendor_id}, {"_id": 0}) \
                                       .sort("bill_date", 1).to_list(5000)
+    receipts, settlement_journal_ids = await _active_commission_settlements(
+        {"vendor_id": vendor_id}
+    )
+    allocated_by_commission: dict[str, float] = {}
+    for receipt in receipts:
+        for allocation in receipt.get("commissions") or []:
+            cid = allocation.get("id")
+            if cid:
+                allocated_by_commission[cid] = round(
+                    allocated_by_commission.get(cid, 0.0)
+                    + float(allocation.get("applied") or 0),
+                    2,
+                )
+
     total_purchase = 0.0
     total_earned = 0.0
-    total_received = 0.0
-    for r in rows:
+    legacy_received = 0.0
+    display_rows = []
+    for source_row in rows:
+        r = dict(source_row)
         if r.get("status") in ("cancelled", "reversed"):
+            display_rows.append(r)
             continue
         total_purchase += float(r.get("purchase_amount") or 0)
         total_earned += float(r.get("amount") or 0)
-        if r.get("status") == "received":
-            total_received += float(r.get("received_amount") or r.get("amount") or 0)
+        received = allocated_by_commission.get(r.get("id"), 0.0)
+        # Preserve pre-settlement-schema receipts without counting modern rows twice.
+        if r.get("journal_entry_id") not in settlement_journal_ids:
+            legacy = float(r.get("received_amount") or 0)
+            received += legacy
+            legacy_received += legacy
+        r["received_amount"] = round(received, 2)
+        r["status"] = (
+            "received" if received + 0.01 >= float(r.get("amount") or 0)
+            else "invoiced" if received > 0.001
+            else "pending"
+        )
+        display_rows.append(r)
+
+    receipt_total = sum(float(row.get("amount") or 0) for row in receipts)
+    total_received = receipt_total + legacy_received
+    unallocated_received = sum(float(row.get("unallocated") or 0) for row in receipts)
 
     return {
         "vendor_id": vendor_id,
@@ -1671,9 +1731,11 @@ async def vendor_commission_ledger(vendor_id: str, request: Request,
             "total_purchase": round(total_purchase, 2),
             "total_earned": round(total_earned, 2),
             "total_received": round(total_received, 2),
-            "pending": round(total_earned - total_received, 2),
+            "pending": round(max(0.0, total_earned - total_received), 2),
+            "unallocated_received": round(unallocated_received, 2),
         },
-        "entries": rows,
+        "entries": display_rows,
+        "receipts": receipts,
     }
 
 
@@ -1753,6 +1815,7 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
         {"account_id": inc["id"], "debit": 0.0, "credit": float(payload.amount),
          "description": income_label},
     ]
+    settlement_id = new_id("vcpay_")
     je = await _post_journal(
         user, payload.received_date,
         f"Vendor commission – {vendor.get('name')}",
@@ -1760,7 +1823,7 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
         project_id=single_project,
         vendor_id=vendor_id,
         source="commission_income",
-        source_id=None,
+        source_id=settlement_id,
     )
     # If commission covers multiple projects, retain all links for reporting.
     if project_ids and not single_project:
@@ -1771,7 +1834,6 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
     je_id = je["id"]
 
     # Persist a payment record + update settled commission rows
-    settlement_id = new_id("vcpay_")
     await sdb.commission_settlements.insert_one({
         "id": settlement_id,
         "vendor_id": vendor_id,
@@ -1783,6 +1845,7 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
         "reference": payload.reference,
         "notes": payload.notes,
         "journal_entry_id": je_id,
+        "status": "received",
         "commissions": settled,
         "project_ids": list(set(project_ids)) if project_ids else [],
         "unallocated": round(remaining, 2),
@@ -1828,24 +1891,64 @@ async def commissions_dashboard(request: Request,
                                       .to_list(20000)
     for r in rows:
         earned = float(r.get("amount") or 0)
-        received = float(r.get("received_amount") or 0)
         totals["total_earned"] += earned
-        totals["total_received"] += received
         if (r.get("bill_date") or "") >= month_start:
             totals["this_month"] += earned
-            totals["this_month_received"] += received
         vid = r.get("vendor_id")
         by_vendor.setdefault(vid, {"vendor_id": vid, "vendor_name": r.get("vendor_name"),
                                     "earned": 0.0, "received": 0.0})
         by_vendor[vid]["earned"] += earned
-        by_vendor[vid]["received"] += received
         pid = r.get("project_id")
         if pid:
             by_project.setdefault(pid, {"project_id": pid, "earned": 0.0, "received": 0.0})
             by_project[pid]["earned"] += earned
-            by_project[pid]["received"] += received
 
-    top_vendors = sorted(by_vendor.values(), key=lambda x: -x["earned"])[:10]
+    receipts, settlement_journal_ids = await _active_commission_settlements({})
+    totals["unallocated_received"] = 0.0
+    for receipt in receipts:
+        received = float(receipt.get("amount") or 0)
+        totals["total_received"] += received
+        totals["unallocated_received"] += float(receipt.get("unallocated") or 0)
+        if (receipt.get("received_date") or "") >= month_start:
+            totals["this_month_received"] += received
+        vid = receipt.get("vendor_id")
+        by_vendor.setdefault(vid, {
+            "vendor_id": vid,
+            "vendor_name": receipt.get("vendor_name"),
+            "earned": 0.0,
+            "received": 0.0,
+        })
+        by_vendor[vid]["received"] += received
+        for allocation in receipt.get("commissions") or []:
+            pid = allocation.get("project_id")
+            if not pid:
+                continue
+            by_project.setdefault(pid, {
+                "project_id": pid, "earned": 0.0, "received": 0.0,
+            })
+            by_project[pid]["received"] += float(allocation.get("applied") or 0)
+
+    # Preserve historical commission rows created before settlement records.
+    for r in rows:
+        if r.get("journal_entry_id") in settlement_journal_ids:
+            continue
+        legacy_received = float(r.get("received_amount") or 0)
+        if legacy_received <= 0:
+            continue
+        totals["total_received"] += legacy_received
+        vid = r.get("vendor_id")
+        by_vendor.setdefault(vid, {"vendor_id": vid, "vendor_name": r.get("vendor_name"),
+                                    "earned": 0.0, "received": 0.0})
+        by_vendor[vid]["received"] += legacy_received
+        pid = r.get("project_id")
+        if pid:
+            by_project.setdefault(pid, {"project_id": pid, "earned": 0.0, "received": 0.0})
+            by_project[pid]["received"] += legacy_received
+
+    top_vendors = sorted(
+        by_vendor.values(),
+        key=lambda x: -(float(x["earned"]) + float(x["received"])),
+    )[:10]
     # Enrich projects with names
     project_ids = list(by_project.keys())
     proj_names = {}
@@ -1860,7 +1963,7 @@ async def commissions_dashboard(request: Request,
 
     for k in list(totals.keys()):
         totals[k] = round(totals[k], 2)
-    totals["pending"] = round(totals["total_earned"] - totals["total_received"], 2)
+    totals["pending"] = round(max(0.0, totals["total_earned"] - totals["total_received"]), 2)
 
     return {"totals": totals,
             "top_vendors": [{"vendor_id": v["vendor_id"],

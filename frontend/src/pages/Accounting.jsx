@@ -11,7 +11,7 @@ import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
   Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
-  HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise,
+  HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -524,16 +524,17 @@ function CommissionsDashboard({ data, onDownload }) {
       <div className="flex items-center justify-between">
         <div>
           <div className="overline">VENDOR COMMISSION INCOME</div>
-          <div className="text-xs text-[#5C5C5C] mt-0.5">Earned = booked to income · Received = actual cash · Pending = Earned − Received</div>
+          <div className="text-xs text-[#5C5C5C] mt-0.5">Earned = expected from vendor bills · Received = cash posted to income · Unallocated = receipt not matched to a bill</div>
         </div>
         <button className="btn-ghost text-xs" onClick={() => onDownload("/commissions/report.csv", "commissions.csv")} data-testid="dl-cm-csv">
           <DownloadSimple size={12} /> CSV
         </button>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KPI label="Total earned" value={CURRENCY(t.total_earned)} Icon={Coins} tint="#8B7F6A" />
         <KPI label="Received" value={CURRENCY(t.total_received)} Icon={TrendUp} tint="#1D633E" />
         <KPI label="Pending" value={CURRENCY(t.pending)} Icon={TrendDown} tint={t.pending > 0 ? "#B22B22" : "#5C5C5C"} />
+        <KPI label="Unallocated" value={CURRENCY(t.unallocated_received)} Icon={WarningCircle} tint={t.unallocated_received > 0 ? "#7A4E1A" : "#5C5C5C"} />
         <KPI label="This month" value={CURRENCY(t.this_month)} Icon={ChartLine} tint="#7A4E1A" />
       </div>
 
@@ -812,7 +813,7 @@ function Dashboard({ d, onRefresh }) {
             <div key={m.id ?? i} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
               <div>
                 <div className="font-semibold">{m.name}</div>
-                <div className="text-xs font-mono text-[#5C5C5C]">DUE · {m.due_date || "—"}</div>
+                <div className="text-xs font-mono text-[#5C5C5C]">DUE · {formatDate(m.due_date)}</div>
               </div>
               <span className="font-mono font-semibold">{CURRENCY(m.amount)}</span>
             </div>
@@ -829,7 +830,7 @@ function Dashboard({ d, onRefresh }) {
           <tbody>
             {d.recent_transactions.map((t, i) => (
               <tr key={t.id ?? i} className="border-t border-[#F0F0F0]" data-testid={`recent-${t.id}`}>
-                <td className="p-2 font-mono text-xs">{t.date}</td>
+                <td className="p-2 font-mono text-xs">{formatDate(t.date)}</td>
                 <td className="p-2">{t.narration}</td>
                 <td className="p-2 text-xs uppercase">{t.source}</td>
                 <td className="p-2 text-right font-mono font-semibold">{CURRENCY(t.total)}</td>

@@ -169,6 +169,40 @@ def test_concurrent_lead_conversion_has_exactly_one_winner(monkeypatch):
     assert "conversion_claim" not in leads.row
 
 
+@pytest.mark.parametrize(
+    ("permissions", "missing"),
+    [
+        (["leads.update"], "clients.create"),
+        (["leads.update", "clients.create"], "projects.create"),
+    ],
+)
+def test_lead_conversion_requires_client_and_project_create_permissions(
+    monkeypatch, permissions, missing,
+):
+    leads = _LeadCollection()
+    clients, projects = _Rows(), _Rows()
+    monkeypatch.setattr(
+        server, "sdb", SimpleNamespace(leads=leads, clients=clients, projects=projects),
+    )
+
+    async def user(*_args, **_kwargs):
+        return {
+            "user_id": "lead_editor", "name": "Lead Editor", "org_id": "org_a",
+            "permissions": permissions,
+        }
+
+    monkeypatch.setattr(server, "require_user", user)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.convert_lead_to_project("lead_1", _request()))
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == f"Missing permission: {missing}"
+    assert not leads.row.get("conversion_claim")
+    assert clients.rows == []
+    assert projects.rows == []
+
+
 def test_concurrent_quotation_conversion_has_one_project_and_task_set(monkeypatch):
     quotations = _QuotationCollection()
     clients, projects, tasks = _Rows(), _Rows(), _Rows()

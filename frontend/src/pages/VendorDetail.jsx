@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../lib/api";
+import { formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -868,6 +869,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
               <Row label="Total earned" value={INR(ledger.totals.total_earned)} />
               <Row label="Received" value={INR(ledger.totals.total_received)} />
               <Row label="Pending" value={INR(ledger.totals.pending)} accent={ledger.totals.pending > 0} />
+              <Row label="Unallocated" value={INR(ledger.totals.unallocated_received)} accent={ledger.totals.unallocated_received > 0} />
             </>
           ) : (
             <div className="text-sm text-[#5C5C5C]">Save the config to see numbers.</div>
@@ -975,7 +977,7 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
                     }} />
                   <span className="font-mono text-xs">{r.bill_number}</span>
                   <span className="text-[#9A9A9A]">·</span>
-                  <span>{r.bill_date}</span>
+                  <span>{formatDate(r.bill_date)}</span>
                   <span className="ml-auto font-mono">{INR_D(r.amount - (r.received_amount || 0))} due</span>
                 </label>
               ))}
@@ -1004,7 +1006,7 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
             )}
             {(ledger.entries || []).map((r) => (
               <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`cm-row-${r.id}`}>
-                <Td className="font-mono text-xs">{r.bill_date}</Td>
+                <Td className="font-mono text-xs">{formatDate(r.bill_date)}</Td>
                 <Td className="font-mono text-xs">{r.bill_number}</Td>
                 <Td className="text-right font-mono">{INR_D(r.purchase_amount)}</Td>
                 <Td>
@@ -1020,6 +1022,33 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
           </tbody>
         </table></div>
       </div>
+
+      {(ledger.receipts || []).length > 0 && (
+        <div className="border border-[#E5E5E5]" data-testid="commission-receipts">
+          <div className="overline px-3 pt-3">RECEIPT HISTORY</div>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
+              <tr>
+                <Th>Date</Th><Th>Method / reference</Th>
+                <Th className="text-right">Received</Th><Th className="text-right">Unallocated</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {ledger.receipts.map((receipt) => (
+                <tr key={receipt.id} className="border-t border-[#F0F0F0]">
+                  <Td className="font-mono text-xs">{formatDate(receipt.received_date)}</Td>
+                  <Td>
+                    <div className="capitalize">{(receipt.payment_method || "other").replaceAll("_", " ")}</div>
+                    {receipt.reference && <div className="text-xs text-[#5C5C5C]">{receipt.reference}</div>}
+                  </Td>
+                  <Td className="text-right font-mono text-[#1D633E]">{INR_D(receipt.amount)}</Td>
+                  <Td className="text-right font-mono">{INR_D(receipt.unallocated || 0)}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </div>
+      )}
     </div>
   );
 }

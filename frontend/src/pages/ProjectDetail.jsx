@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
-import { empName } from "../lib/format";
+import { empName, formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
@@ -386,7 +386,7 @@ export default function ProjectDetail() {
                 <div className="text-xs text-[#5C5C5C]">
                   {[t.area, t.category].filter(Boolean).join(" · ") || null}
                   {(t.area || t.category) && " · "}
-                  Due {t.due_date || "—"} · {t.assignee_name || "Unassigned"}
+                  Due {formatDate(t.due_date)} · {t.assignee_name || "Unassigned"}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -421,7 +421,7 @@ export default function ProjectDetail() {
             <div key={m.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
               <div>
                 <div className="font-semibold text-sm">{m.name}</div>
-                <div className="text-xs text-[#5C5C5C]">Due {m.due_date || "—"}</div>
+                <div className="text-xs text-[#5C5C5C]">Due {formatDate(m.due_date)}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold">{inr(m.amount)}</span>
@@ -526,7 +526,7 @@ export default function ProjectDetail() {
             <div key={i.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
-                <div className="text-xs text-[#5C5C5C]">{i.doc_type} · Due {i.due_date || "—"}</div>
+                <div className="text-xs text-[#5C5C5C]">{i.doc_type} · Due {formatDate(i.due_date)}</div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="font-mono font-semibold">{inr(i.total)}</div>

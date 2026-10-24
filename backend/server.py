@@ -995,8 +995,11 @@ async def convert_lead_to_project(lead_id: str, request: Request,
                                    session_token: Optional[str] = Cookie(default=None),
                                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    if not has_permission(user, "leads.update"):
-        raise HTTPException(status_code=403, detail="Missing permission: leads.update")
+    _require_perm(user, "leads.update")
+    # Conversion always creates both records. Lead-edit access must not become
+    # an indirect way to bypass the client and project creation boundaries.
+    _require_perm(user, "clients.create")
+    _require_perm(user, "projects.create")
     # Reserve this conversion atomically. Without this claim, two near-simultaneous
     # requests can both pass the read check and create duplicate clients/projects.
     conversion_claim = uuid.uuid4().hex
