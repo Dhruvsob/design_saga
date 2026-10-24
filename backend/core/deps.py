@@ -5,7 +5,10 @@ from fastapi import HTTPException, Request, Cookie, Header
 
 from .db import db
 from .helpers import now_utc
-from .rbac import has_permission, normalize_role, expand_permissions, PROTECTED_ROLES
+from .rbac import (
+    ROLE_PERMISSIONS_SCHEMA_VERSION, PROTECTED_ROLES, expand_permissions,
+    has_permission, normalize_role, upgrade_legacy_permissions,
+)
 from .scoped_db import set_scope_from_user, clear_scope
 
 
@@ -20,11 +23,24 @@ async def resolve_permissions(role, org_id):
         return expand_permissions(role)
     try:
         doc = await db.role_permissions.find_one(
-            {"org_id": org_id, "role": role}, {"_id": 0, "permissions": 1})
+            {"org_id": org_id, "role": role},
+            {"_id": 0, "permissions": 1, "schema_version": 1},
+        )
     except Exception:
         doc = None
     if doc and isinstance(doc.get("permissions"), list):
-        return list(doc["permissions"])
+        permissions = upgrade_legacy_permissions(
+            role, doc["permissions"], doc.get("schema_version"),
+        )
+        if doc.get("schema_version") != ROLE_PERMISSIONS_SCHEMA_VERSION:
+            await db.role_permissions.update_one(
+                {"org_id": org_id, "role": role},
+                {"$set": {
+                    "permissions": permissions,
+                    "schema_version": ROLE_PERMISSIONS_SCHEMA_VERSION,
+                }},
+            )
+        return permissions
     return expand_permissions(role)
 
 

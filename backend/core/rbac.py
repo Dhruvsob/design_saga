@@ -161,6 +161,31 @@ ACTION_LABELS = {"read": "View", "create": "Create", "update": "Edit",
 # Roles whose permissions are locked (cannot be edited via the matrix).
 PROTECTED_ROLES = {"SuperAdmin", "Admin"}
 
+# Increment only when an existing saved role override needs a compatibility
+# upgrade. New edits are stamped with this version and remain fully under the
+# tenant admin's control.
+ROLE_PERMISSIONS_SCHEMA_VERSION = 2
+
+
+def upgrade_legacy_permissions(role: str, permissions: List[str],
+                               schema_version: Optional[int]) -> List[str]:
+    """Upgrade stale permission snapshots without overriding future edits.
+
+    Attendance self check-in was added after some tenants had already saved
+    complete role snapshots. Those snapshots contained ``attendance.read`` but
+    never inherited ``attendance.create``, leaving the page visible while every
+    punch was rejected. Versioned upgrades fix only those legacy snapshots.
+    """
+    try:
+        version = int(schema_version or 0)
+    except (TypeError, ValueError):
+        version = 0
+    grants = set(permissions or [])
+    if version < 2 and normalize_role(role) != "Client" \
+            and "attendance.read" in grants:
+        grants.add("attendance.create")
+    return sorted(grants)
+
 
 def valid_permission_keys() -> set:
     """All permission strings the matrix may legitimately set."""

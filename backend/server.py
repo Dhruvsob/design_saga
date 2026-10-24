@@ -176,6 +176,7 @@ from core.rbac import (
     has_permission,
     PERMISSION_CATALOG,
     PROTECTED_ROLES,
+    ROLE_PERMISSIONS_SCHEMA_VERSION,
     valid_permission_keys,
 )
 
@@ -673,6 +674,7 @@ async def set_role_permissions(role: str, payload: RolePermsIn, request: Request
     await db.role_permissions.update_one(
         {"org_id": org_id, "role": role},
         {"$set": {"org_id": org_id, "role": role, "permissions": perms,
+                  "schema_version": ROLE_PERMISSIONS_SCHEMA_VERSION,
                   "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": actor["user_id"]}},
         upsert=True)
     prev = set((before or {}).get("permissions") or [])

@@ -6,7 +6,10 @@ import pytest
 from fastapi import HTTPException
 
 import core.deps as deps
-from core.rbac import has_permission, user_with_perms
+from core.rbac import (
+    ROLE_PERMISSIONS_SCHEMA_VERSION, has_permission, upgrade_legacy_permissions,
+    user_with_perms,
+)
 from routes.auth import _ensure_assignable_role, _pack_user
 from server import _employee_account_filter, _org_backfill_filter, _user_with_perms
 
@@ -18,6 +21,44 @@ def test_empty_permission_override_is_fail_closed_everywhere():
     assert user_with_perms(user)["permissions"] == []
     assert _pack_user(user)["permissions"] == []
     assert _user_with_perms(user)["permissions"] == []
+
+
+def test_legacy_attendance_reader_is_upgraded_for_self_check_in():
+    grants = upgrade_legacy_permissions(
+        "Designer", ["projects.read", "attendance.read"], None,
+    )
+    assert grants == ["attendance.create", "attendance.read", "projects.read"]
+
+
+def test_current_permission_override_respects_explicit_check_in_removal():
+    grants = upgrade_legacy_permissions(
+        "Designer", ["projects.read", "attendance.read"],
+        ROLE_PERMISSIONS_SCHEMA_VERSION,
+    )
+    assert grants == ["attendance.read", "projects.read"]
+
+
+def test_resolve_permissions_persists_legacy_attendance_upgrade(monkeypatch):
+    class RolePermissions:
+        update = None
+
+        async def find_one(self, query, projection):
+            assert query == {"org_id": "org_a", "role": "ProjectManager"}
+            assert projection["schema_version"] == 1
+            return {"permissions": ["projects.*", "attendance.read"]}
+
+        async def update_one(self, query, update):
+            self.update = (query, update)
+
+    role_permissions = RolePermissions()
+    monkeypatch.setattr(deps, "db", SimpleNamespace(role_permissions=role_permissions))
+
+    grants = asyncio.run(deps.resolve_permissions("ProjectManager", "org_a"))
+
+    assert "attendance.create" in grants
+    assert role_permissions.update[1]["$set"]["schema_version"] == \
+        ROLE_PERMISSIONS_SCHEMA_VERSION
+    assert role_permissions.update[1]["$set"]["permissions"] == grants
 
 
 def test_missing_tenant_is_denied(monkeypatch):
