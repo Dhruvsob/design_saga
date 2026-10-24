@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { PERIOD_PRESETS, computeRange, periodLabel } from "../lib/period";
 import { downloadFile } from "../lib/download";
+import { formatDate } from "../lib/format";
 import { TransactionDetail } from "./TransactionDetail";
 import {
   MagnifyingGlass, ArrowDown, ArrowUp, ArrowsLeftRight,
@@ -309,7 +310,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
                 className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7] cursor-pointer"
                 data-testid={`daybook-row-${e.id}`}
               >
-                <td className="p-3 font-mono text-xs whitespace-nowrap">{e.date}</td>
+                <td className="p-3 font-mono text-xs whitespace-nowrap">{formatDate(e.date)}</td>
                 <td className="p-3"><DirBadge dir={e._dir} /></td>
                 <td className="p-3 max-w-[280px]">
                   <div className="truncate">{e.narration || "—"}</div>

@@ -365,9 +365,9 @@ export default function ProjectDetail() {
               <dl className="space-y-2 text-sm">
                 <Row k="Site address" v={p.site_address || "—"} />
                 <Row k="Site area" v={p.site_area_sqft ? `${p.site_area_sqft} sq.ft` : "—"} />
-                <Row k="Start date" v={p.start_date || "—"} />
-                <Row k="End date" v={p.end_date || "—"} />
-                <Row k="Created" v={(p.created_at || "").slice(0, 10)} />
+                <Row k="Start date" v={formatDate(p.start_date)} />
+                <Row k="End date" v={formatDate(p.end_date)} />
+                <Row k="Created" v={formatDate(p.created_at)} />
               </dl>
             </div>
           </div>
@@ -462,7 +462,7 @@ export default function ProjectDetail() {
                   className="w-full text-left border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition">
                   <div>
                     <div className="font-mono font-semibold text-sm">{b.bill_number || b.id}</div>
-                    <div className="text-xs text-[#5C5C5C]">{b.vendor_name || "—"} · {b.bill_date || "—"}</div>
+                    <div className="text-xs text-[#5C5C5C]">{b.vendor_name || "—"} · {formatDate(b.bill_date)}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-semibold">{inr(b.total)}</span>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
+import { formatDate } from "../lib/format";
 import {
   Package, Plus, Warning, CheckSquare, PaperPlaneTilt, X, ArrowsClockwise, Truck, ClipboardText,
 } from "@phosphor-icons/react";
@@ -73,7 +74,7 @@ export default function PurchaseOrders() {
                     onClick={() => setDetail(po.id)} data-testid={`po-row-${po.id}`}>
                   <Td className="font-mono text-sm accent-blue font-semibold">{po.po_number}</Td>
                   <Td className="text-sm">{po.vendor_name}</Td>
-                  <Td className="font-mono text-xs">{po.order_date}</Td>
+                  <Td className="font-mono text-xs">{formatDate(po.order_date)}</Td>
                   <Td className="font-mono text-xs">{po.expected_delivery || "—"}</Td>
                   <Td className="font-mono text-sm">{fmtMoney(po.grand_total)}</Td>
                   <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[po.status] || "bg-[#F0F0F0]"}`}>{po.status}</span></Td>
@@ -197,7 +198,7 @@ function PODetail({ poId, onClose, onChange }) {
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <span className={`text-[10px] font-mono uppercase px-3 py-1 ${STATUS_TONE[po.status]}`}>{po.status}</span>
-        <span className="text-sm text-[#5C5C5C]">Order: {po.order_date}</span>
+        <span className="text-sm text-[#5C5C5C]">Order: {formatDate(po.order_date)}</span>
         <span className="text-sm text-[#5C5C5C]">Expected: {po.expected_delivery || "—"}</span>
         <span className="font-mono font-bold text-lg ml-auto accent-blue">{fmtMoney(po.grand_total)}</span>
       </div>
@@ -240,7 +241,7 @@ function PODetail({ poId, onClose, onChange }) {
           {grns.map((g) => (
             <div key={g.id} className="border border-[#E5E5E5] p-3 flex items-center gap-3 text-sm">
               <div className="font-mono accent-blue font-semibold">{g.grn_number}</div>
-              <div className="text-[#5C5C5C]">{g.received_date}</div>
+              <div className="text-[#5C5C5C]">{formatDate(g.received_date)}</div>
               <div className="font-mono ml-auto">{fmtMoney(g.total_value)}</div>
             </div>
           ))}

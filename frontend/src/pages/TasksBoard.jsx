@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
-import { empName } from "../lib/format";
+import { empName, formatDate } from "../lib/format";
 import {
   Plus, X, Trash, DotsSixVertical, MagnifyingGlass, ListChecks,
   Table as TableIcon, SquaresFour, Warning, Bell, DownloadSimple,
@@ -437,12 +437,12 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                     )}
                     {(t.follow_up_date || t.reminder_date) && (
                       <div className="flex items-center gap-1 text-[10px] font-mono text-[#8A6DFF] mt-2">
-                        <Bell size={10} /> FOLLOW-UP {t.follow_up_date || t.reminder_date}
+                        <Bell size={10} /> FOLLOW-UP {formatDate(t.follow_up_date || t.reminder_date)}
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#F0F0F0]">
                       <div className="text-[10px] font-mono tracking-wider uppercase text-[#5C5C5C]">
-                        {t.due_date ? `DUE ${t.due_date}` : "NO DUE"}
+                        {t.due_date ? `DUE ${formatDate(t.due_date)}` : "NO DUE"}
                         {(t.assignee_name || t.vendor_contact?.vendor_name) && (
                           <span className="ml-2 text-[#0A0A0A]">· {t.task_type === "vendor" ? t.vendor_contact?.vendor_name : t.assignee_name}</span>
                         )}
@@ -538,8 +538,8 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
                 <td className="p-2 text-xs">
                   {t.task_type === "vendor" ? (t.vendor_contact?.phone || "—") : "—"}
                 </td>
-                <td className="p-2 text-xs font-mono">{t.follow_up_date || t.reminder_date || "—"}</td>
-                <td className={`p-2 text-xs font-mono ${overdue ? "text-[#FF2A00] font-semibold" : ""}`}>{t.due_date || "—"}</td>
+                <td className="p-2 text-xs font-mono">{formatDate(t.follow_up_date || t.reminder_date)}</td>
+                <td className={`p-2 text-xs font-mono ${overdue ? "text-[#FF2A00] font-semibold" : ""}`}>{formatDate(t.due_date)}</td>
                 <td className="p-2 text-xs text-[#5C5C5C] max-w-[200px] truncate" title={t.remarks || ""}>{t.remarks || "—"}</td>
                 <td className="p-2">
                   <button onClick={() => onDelete(t.id)} className="text-[#FF2A00] hover:scale-110" data-testid={`row-del-${t.id}`}>

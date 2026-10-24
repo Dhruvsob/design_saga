@@ -311,7 +311,7 @@ function Ledger({ data }) {
             )}
             {data.entries.map((e, i) => (
               <tr key={i} className="border-b border-[#F0F0F0]" data-testid={`ledger-row-${i}`}>
-                <Td className="font-mono text-xs">{e.date}</Td>
+                <Td className="font-mono text-xs">{formatDate(e.date)}</Td>
                 <Td>
                   <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 ${
                     e.type === "bill" ? "bg-[#FCEEEC] text-[#B22B22]" : "bg-[#EFF7EF] text-[#1D633E]"
@@ -452,8 +452,8 @@ function Bills({ v, accounts, purchaseOrders, canBill, onCreate, busy }) {
             {(v.bills || []).map((b) => (
               <tr key={b.id} className="border-b border-[#F0F0F0]" data-testid={`bill-row-${b.id}`}>
                 <Td className="font-mono text-xs">{b.bill_number}</Td>
-                <Td>{b.bill_date}</Td>
-                <Td>{b.due_date || "—"}</Td>
+                <Td>{formatDate(b.bill_date)}</Td>
+                <Td>{formatDate(b.due_date)}</Td>
                 <Td><BillStatus s={b.status} /></Td>
                 <Td className="text-right font-mono">{INR_D(b.total)}</Td>
                 <Td className="text-right font-mono text-[#1D633E]">{INR_D(b.paid_amount || 0)}</Td>
@@ -560,7 +560,7 @@ function Payments({ v, accounts, canBill, onCreate, busy }) {
                     }} />
                   <span className="font-mono text-xs">{b.bill_number}</span>
                   <span className="text-[#9A9A9A]">·</span>
-                  <span>{b.bill_date}</span>
+                  <span>{formatDate(b.bill_date)}</span>
                   <span className="ml-auto font-mono">{INR_D(b.outstanding || b.total)}</span>
                 </label>
               ))}
@@ -586,7 +586,7 @@ function Payments({ v, accounts, canBill, onCreate, busy }) {
             )}
             {(v.payments || []).map((p) => (
               <tr key={p.id} className="border-b border-[#F0F0F0]" data-testid={`payment-row-${p.id}`}>
-                <Td className="font-mono text-xs">{p.payment_date}</Td>
+                <Td className="font-mono text-xs">{formatDate(p.payment_date)}</Td>
                 <Td>{(p.payment_method || "").replace("_", " ")}</Td>
                 <Td className="font-mono text-xs">{p.reference || "—"}</Td>
                 <Td className="text-right font-mono font-semibold text-[#1D633E]">{INR_D(p.amount)}</Td>
@@ -628,7 +628,7 @@ function ProjectsTasks({ v }) {
               <div className="min-w-0">
                 <div className="text-sm font-semibold truncate">{t.title}</div>
                 <div className="text-xs text-[#9A9A9A]">
-                  {t.category || "—"} · due {t.due_date || "—"}
+                  {t.category || "—"} · due {formatDate(t.due_date)}
                 </div>
               </div>
               <span className="text-[10px] font-mono uppercase text-[#5C5C5C] shrink-0">

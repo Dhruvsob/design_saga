@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
+import { formatDate } from "../lib/format";
 import {
   Bank, Plus, Warning, Check, CurrencyInr, CalendarBlank, X,
   ChartLineUp, TrendUp, PencilSimple,
@@ -13,7 +14,7 @@ function fmtErr(d, fb = "Failed") {
   return d?.msg || String(d);
 }
 const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
-const fmtDate = (d) => (d || "").slice(0, 10);
+const fmtDate = formatDate;
 
 export default function Loans() {
   const [loans, setLoans] = useState([]);
@@ -62,7 +63,7 @@ export default function Loans() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPI icon={Bank} label="ACTIVE LOANS" value={summary.active_loans} tone="#8B7F6A" />
           <KPI icon={CurrencyInr} label="TOTAL OUTSTANDING" display={fmtMoney(summary.total_outstanding)} tone="#B22B22" />
-          <KPI icon={CalendarBlank} label="NEXT EMI DUE" display={summary.next_emi_due_date || "—"} tone="#B87500" />
+          <KPI icon={CalendarBlank} label="NEXT EMI DUE" display={formatDate(summary.next_emi_due_date)} tone="#B87500" />
           <KPI icon={ChartLineUp} label="NEXT EMI AMOUNT" display={fmtMoney(summary.next_emi_amount)} tone="#1D633E" />
         </div>
       )}
@@ -302,7 +303,7 @@ function LoanDetailModal({ loanId, accounts, onClose, onChange }) {
               <tr key={row.index} className={`border-b border-[#F0F0F0] ${row.paid ? "opacity-60" : ""}`}
                   data-testid={`schedule-row-${row.index}`}>
                 <Td className="font-mono text-xs">{row.index + 1}</Td>
-                <Td className="font-mono text-xs">{row.due_date}</Td>
+                <Td className="font-mono text-xs">{formatDate(row.due_date)}</Td>
                 <Td className="font-mono">{fmtMoney(row.principal)}</Td>
                 <Td className="font-mono text-[#B22B22]">{fmtMoney(row.interest)}</Td>
                 <Td className="font-mono font-semibold">{fmtMoney(row.emi)}</Td>

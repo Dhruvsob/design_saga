@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { formatDate } from "../lib/format";
 import {
   ArrowUpRight, TrendUp, Warning, Clock, Money, Briefcase, Sparkle,
   CaretRight, ChartBar, Lightning,
@@ -60,7 +61,7 @@ export default function Dashboard() {
         <div>
           <div className="overline mb-3 flex items-center gap-3">
             <span className="live-dot" />
-            OVERVIEW · {new Date().toDateString().toUpperCase()}
+            OVERVIEW · {formatDate(new Date())}
           </div>
           <h1 className="font-display font-bold tracking-tighter text-5xl lg:text-6xl leading-[0.95]">
             The control<br/>room.

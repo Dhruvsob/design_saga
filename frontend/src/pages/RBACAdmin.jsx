@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
+import { formatDate } from "../lib/format";
 import {
   ShieldCheck, CaretDown, Info, UserPlus, Key, Check, X, Warning,
   LockKeyOpen, FloppyDisk, ArrowCounterClockwise, Sliders,
@@ -207,7 +208,7 @@ export default function RBACAdmin() {
                       )}
                     </div>
                   </Td>
-                  <Td className="font-mono text-xs">{(u.created_at || "").slice(0, 10) || "—"}</Td>
+                  <Td className="font-mono text-xs">{formatDate(u.created_at)}</Td>
                   <Td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button

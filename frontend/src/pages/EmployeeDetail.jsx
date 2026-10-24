@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
+import { formatDate } from "../lib/format";
 import {
   ArrowLeft, FloppyDisk, Plus, Trash, UserMinus, Warning, Trophy,
   FileText, ArrowSquareOut, ShieldWarning,
@@ -171,7 +172,7 @@ export default function EmployeeDetail() {
             </h1>
             <div className="mt-2 text-sm text-[#5C5C5C]">
               {emp.designation || "—"} · {emp.department}
-              {emp.joining_date && <> · joined {emp.joining_date}</>}
+              {emp.joining_date && <> · joined {formatDate(emp.joining_date)}</>}
             </div>
           </div>
         </div>
@@ -437,7 +438,7 @@ export default function EmployeeDetail() {
                     <div className="font-semibold text-sm">{d.label}</div>
                     <div className="text-xs text-[#5C5C5C] font-mono truncate">{d.url}</div>
                     <div className="text-[10px] text-[#9A9A9A] font-mono tracking-widest uppercase mt-1">
-                      UPLOADED {(d.uploaded_at || "").slice(0, 10)} · {d.uploaded_by || "—"}
+                      UPLOADED {formatDate(d.uploaded_at)} · {d.uploaded_by || "—"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -490,7 +491,7 @@ export default function EmployeeDetail() {
                     <div className="font-semibold text-sm">{w.reason}</div>
                     {w.note && <p className="text-xs text-[#5C5C5C] mt-1">{w.note}</p>}
                     <div className="text-[10px] font-mono tracking-widest uppercase text-[#9A9A9A] mt-1">
-                      {(w.at || "").slice(0, 10)} · {w.by || "—"}
+                      {formatDate(w.at)} · {w.by || "—"}
                     </div>
                   </div>
                 ))}
@@ -509,7 +510,7 @@ export default function EmployeeDetail() {
                     <div className="font-semibold text-sm">{r.title}</div>
                     {r.note && <p className="text-xs text-[#5C5C5C] mt-1">{r.note}</p>}
                     <div className="text-[10px] font-mono tracking-widest uppercase text-[#9A9A9A] mt-1">
-                      {(r.at || "").slice(0, 10)} · {r.by || "—"}
+                      {formatDate(r.at)} · {r.by || "—"}
                     </div>
                   </div>
                 ))}
@@ -649,7 +650,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
       {paid && (
         <div className="mt-2 flex items-center justify-between gap-3" data-testid="paid-badge">
           <div className="text-xs text-[#5C5C5C] font-mono">
-            PAID ON {paid.paid_at?.slice(0, 10)} · NET {fmt(paid.net)} · Run {paid.id}
+            PAID ON {formatDate(paid.paid_at)} · NET {fmt(paid.net)} · Run {paid.id}
           </div>
           <a
             href={`${api.defaults.baseURL}/payroll/runs/${paid.id}/slip.pdf`}
@@ -975,7 +976,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
                   {h.reason || "Salary revision"}
                 </div>
                 <div className="text-[11px] text-[#5C5C5C] font-mono">
-                  Effective {h.effective_date} · by {h.changed_by_name || "—"}
+                  Effective {formatDate(h.effective_date)} · by {h.changed_by_name || "—"}
                   {h.note ? ` · ${h.note}` : ""}
                 </div>
               </div>
@@ -1040,7 +1041,7 @@ function PaymentHistoryBlock({ employeeId }) {
                 <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`payment-run-${r.id}`}>
                   <td className="py-2 pr-3 font-mono">{MONTHS[(r.month || 1) - 1]} {r.year}</td>
                   <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(r.net)}</td>
-                  <td className="py-2 pr-3 font-mono text-xs">{(r.paid_at || "").slice(0, 10)}</td>
+                  <td className="py-2 pr-3 font-mono text-xs">{formatDate(r.paid_at)}</td>
                   <td className="py-2 pr-3 text-xs">{(r.payment_method || "—").replace(/_/g, " ")}</td>
                   <td className="py-2 pr-3">
                     <a href={`${api.defaults.baseURL}/payroll/runs/${r.id}/slip.pdf`} target="_blank" rel="noreferrer"

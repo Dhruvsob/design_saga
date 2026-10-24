@@ -4,6 +4,7 @@ import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
 import PageHero from "../components/PageHero";
 import CommentsPanel from "../components/CommentsPanel";
+import { formatDate, formatDateTime } from "../lib/format";
 import {
   ArrowLeft, Trash, Bell, Clock, Plus, PaperclipHorizontal, LinkSimple,
   ClockCounterClockwise, Users, Buildings, Warning, ChatCircleText,
@@ -219,8 +220,8 @@ function Overview({ task, meta, onSave }) {
 
         <div className="card-flat space-y-2 text-xs text-[#5C5C5C] font-mono">
           <div>ID · {task.id}</div>
-          <div>CREATED · {task.created_at?.slice(0, 16).replace("T", " ")}</div>
-          <div>UPDATED · {task.updated_at?.slice(0, 16).replace("T", " ")}</div>
+          <div>CREATED · {formatDateTime(task.created_at)}</div>
+          <div>UPDATED · {formatDateTime(task.updated_at)}</div>
         </div>
       </div>
     </div>
@@ -316,7 +317,7 @@ function FollowUps({ task, reload }) {
               <div className="flex items-center gap-2 text-xs">
                 <Bell size={12} className="text-[#8A6DFF]" />
                 <span className="font-mono">
-                  {fu.follow_up_date || fu.reminder_date || "—"}
+                  {formatDate(fu.follow_up_date || fu.reminder_date)}
                   {fu.reminder_time ? ` · ${fu.reminder_time}` : ""}
                 </span>
                 {fu.status === "done" && <span className="status-chip">DONE</span>}
@@ -335,9 +336,9 @@ function FollowUps({ task, reload }) {
             {fu.notes && <p className="text-sm">{fu.notes}</p>}
             <div className="flex items-center gap-4 mt-2 text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
               {fu.assigned_employee_name && <span>ASSIGNED · {fu.assigned_employee_name}</span>}
-              {fu.next_follow_up_date && <span>NEXT · {fu.next_follow_up_date}</span>}
+              {fu.next_follow_up_date && <span>NEXT · {formatDate(fu.next_follow_up_date)}</span>}
               {fu.created_by_name && <span>BY · {fu.created_by_name}</span>}
-              {fu.created_at && <span>· {fu.created_at.slice(0, 10)}</span>}
+              {fu.created_at && <span>· {formatDate(fu.created_at)}</span>}
             </div>
           </div>
         ))}

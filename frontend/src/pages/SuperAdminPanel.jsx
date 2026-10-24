@@ -174,7 +174,7 @@ export default function SuperAdminPanel() {
                   <div className="text-xs text-[#5C5C5C]">{u.email}</div>
                 </div>
                 <div className="text-xs font-mono text-[#5C5C5C]">
-                  Signed up {(u.created_at || "").slice(0,10)}
+                  Signed up {formatDate(u.created_at)}
                 </div>
                 <button onClick={() => setReassignUser(u)} className="btn-primary text-xs" data-testid={`assign-${u.user_id}`}>
                   <UserCirclePlus size={12}/> Assign to workspace

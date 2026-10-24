@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { formatDate, formatDateTime } from "../lib/format";
 import {
   Plus, X, PencilSimple, Trash, Play, ClockCounterClockwise, Warning, Pause,
   DownloadSimple, ClockClockwise, CaretDown, CaretRight,
@@ -131,7 +132,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
                   <td className="p-3 text-xs">{expName}</td>
                   <td className="p-3 text-right font-mono">{CURRENCY(r.amount)}</td>
                   <td className={`p-3 font-mono text-xs ${isDue && r.active ? "text-[#B4001C] font-semibold" : "text-[#5C5C5C]"}`}>
-                    {r.next_run_date}
+                    {formatDate(r.next_run_date)}
                     {isDue && r.active && <span className="ml-1 text-[10px] font-semibold">DUE</span>}
                   </td>
                   <td className="p-3 text-xs">{r.run_count || 0}</td>
@@ -463,7 +464,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
                   return (
                     <tr key={b.id} className="border-t border-[#F0F0F0]" data-testid={`import-batch-${b.id}`}>
                       <td className="p-3 text-xs">
-                        <div className="font-mono">{(b.created_at || "").slice(0, 16).replace("T", " ")}</div>
+                        <div className="font-mono">{formatDateTime(b.created_at)}</div>
                         <div className="text-[10px] text-[#9A9A9A]">{b.created_by_name || "—"}</div>
                       </td>
                       <td className="p-3 text-xs max-w-[220px] truncate" title={b.filename}>{b.filename || "—"}</td>
@@ -510,7 +511,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
           <tbody data-testid="bank-rec-rows">
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-[#F0F0F0]" data-testid={`bank-row-${r.id}`}>
-                <td className="p-3 font-mono text-xs">{r.date}</td>
+                <td className="p-3 font-mono text-xs">{formatDate(r.date)}</td>
                 <td className="p-3 max-w-[280px] truncate">{r.description || "—"}</td>
                 <td className="p-3 font-mono text-xs text-[#5C5C5C]">{r.reference || "—"}</td>
                 <td className={`p-3 text-right font-mono font-semibold ${r.amount > 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
@@ -609,7 +610,7 @@ const LinkJEDialog = ({ row, accountId, onClose, onLinked }) => {
           <div>
             <div className="overline text-[#8B7F6A]">LINK BANK ROW TO JOURNAL ENTRY</div>
             <div className="font-semibold mt-1">{row.description}</div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5">{row.date} · {CURRENCY(row.amount)}</div>
+            <div className="text-xs text-[#5C5C5C] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)}</div>
           </div>
           <button onClick={onClose} className="btn-ghost"><X size={14} /></button>
         </div>
@@ -622,7 +623,7 @@ const LinkJEDialog = ({ row, accountId, onClose, onLinked }) => {
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold truncate">{je.narration || "—"}</div>
-                  <div className="text-xs text-[#5C5C5C]">{je.date} · {je.reference || ""} · {je.source}</div>
+                  <div className="text-xs text-[#5C5C5C]">{formatDate(je.date)} · {je.reference || ""} · {je.source}</div>
                 </div>
                 <div className="font-mono font-semibold text-sm">{CURRENCY(je.total)}</div>
               </div>
@@ -661,7 +662,7 @@ const CreateJEDialog = ({ row, accounts, onClose, onCreated }) => {
           <div>
             <div className="overline text-[#8B7F6A]">CREATE JOURNAL ENTRY</div>
             <div className="font-semibold mt-1">{row.description}</div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5">{row.date} · {CURRENCY(row.amount)} · {wantType.toUpperCase()}</div>
+            <div className="text-xs text-[#5C5C5C] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)} · {wantType.toUpperCase()}</div>
           </div>
           <button onClick={onClose} className="btn-ghost"><X size={14} /></button>
         </div>

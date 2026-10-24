@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api, { API } from "../lib/api";
+import { formatDate } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple } from "@phosphor-icons/react";
 
 export default function Invoices({ docType = "invoice" }) {
@@ -172,8 +173,8 @@ export default function Invoices({ docType = "invoice" }) {
                 <div className="text-xs font-mono mt-1">DESIGN SAGA · Studio OS</div>
               </div>
               <div className="text-right text-xs font-mono">
-                <div>DATE · {new Date().toLocaleDateString()}</div>
-                <div>DUE · {form.due_date || "—"}</div>
+                <div>DATE · {formatDate(new Date())}</div>
+                <div>DUE · {formatDate(form.due_date)}</div>
               </div>
             </div>
             <div className="border-t border-b border-[#0A0A0A] py-2 grid grid-cols-12 text-[10px] font-mono tracking-widest uppercase font-semibold">
@@ -217,7 +218,7 @@ export default function Invoices({ docType = "invoice" }) {
                 <Td className="font-mono font-semibold">{r.number}</Td>
                 <Td>{r.client_name || "—"}</Td>
                 <Td>{r.project_name || "—"}</Td>
-                <Td className="font-mono text-xs">{r.due_date || "—"}</Td>
+                <Td className="font-mono text-xs">{formatDate(r.due_date)}</Td>
                 <Td className="font-mono font-semibold">₹{(r.total || 0).toLocaleString("en-IN")}</Td>
                 <Td>
                   <select className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>

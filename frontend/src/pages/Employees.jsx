@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
+import { formatDate } from "../lib/format";
 import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
 
 const STATUS_CHIP = {
@@ -191,7 +192,7 @@ export default function Employees() {
                   <Td className="text-sm">{r.designation || "—"}</Td>
                   {canPayrollRead && <Td className="font-mono text-right font-semibold">₹{(r.salary?.net_monthly || 0).toLocaleString("en-IN")}</Td>}
                   <Td><span className={`status-chip ${STATUS_CHIP[r.employment_status] || "chip-draft"}`}>{r.employment_status}</span></Td>
-                  <Td className="font-mono text-xs">{r.joining_date || "—"}</Td>
+                  <Td className="font-mono text-xs">{formatDate(r.joining_date)}</Td>
                   <Td>
                     <div className="flex items-center gap-2 justify-end">
                       <ArrowRight size={14} className="text-[#5C5C5C]" />

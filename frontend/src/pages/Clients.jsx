@@ -4,6 +4,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import PageHero from "../components/PageHero";
+import { formatDate } from "../lib/format";
 import {
   Plus, MagnifyingGlass, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X,
 } from "@phosphor-icons/react";
@@ -168,7 +169,7 @@ export default function Clients() {
                 <Td>{c.company || "—"}</Td>
                 <Td className="font-mono text-xs">{c.email || "—"}</Td>
                 <Td className="font-mono text-xs">{c.phone || "—"}</Td>
-                <Td className="font-mono text-xs">{(c.created_at || "").slice(0, 10)}</Td>
+                <Td className="font-mono text-xs">{formatDate(c.created_at)}</Td>
                 <Td>
                   <div className="flex items-center justify-end gap-1">
                     {hasPerm("clients.update") && (

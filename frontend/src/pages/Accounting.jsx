@@ -663,7 +663,7 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
               <tbody>
                 {bs.unbalanced_journal_entries.slice(0, 10).map((e) => (
                   <tr key={e.id} className="border-b border-[#F5F5F5]">
-                    <td className="py-1">{e.date}</td>
+                    <td className="py-1">{formatDate(e.date)}</td>
                     <td className="py-1">{e.narration}</td>
                     <td className="py-1 text-right font-mono">{CURRENCY(e.diff)}</td>
                   </tr>
@@ -1513,7 +1513,7 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
                 )}
                 {(ledger.entries || []).map((e) => (
                   <tr key={e.id} className="border-b border-[#F5F5F5]" data-testid="ledger-row">
-                    <td className="py-1.5 font-mono text-xs">{e.date}</td>
+                    <td className="py-1.5 font-mono text-xs">{formatDate(e.date)}</td>
                     <td className="py-1.5">{e.narration}</td>
                     <td className="py-1.5 text-xs text-[#5C5C5C]">{e.source || "-"}</td>
                     <td className="py-1.5 text-right font-mono text-[#1D633E]">{e.inflow ? CURRENCY(e.inflow) : "-"}</td>
@@ -1586,7 +1586,7 @@ function ValidationReport({ data }) {
               {data.diagnostics.orphan_paid_invoices.map((i) => (
                 <tr key={i.id} className="border-b border-[#F5F5F5]">
                   <td className="py-1">{i.invoice_number}</td>
-                  <td className="py-1 text-xs">{i.issue_date}</td>
+                  <td className="py-1 text-xs">{formatDate(i.issue_date)}</td>
                   <td className="py-1 text-right font-mono">{CURRENCY(i.total)}</td>
                 </tr>
               ))}
@@ -1604,7 +1604,7 @@ function ValidationReport({ data }) {
             <tbody>
               {data.diagnostics.orphan_income_je.map((e) => (
                 <tr key={e.id} className="border-b border-[#F5F5F5]">
-                  <td className="py-1 text-xs">{e.date}</td>
+                  <td className="py-1 text-xs">{formatDate(e.date)}</td>
                   <td className="py-1">{e.narration}</td>
                   <td className="py-1 text-right font-mono">{CURRENCY(e.total)}</td>
                 </tr>

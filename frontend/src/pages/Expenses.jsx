@@ -3,6 +3,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { safeExternalUrl } from "../lib/url";
+import { formatDate } from "../lib/format";
 import {
   Receipt, Plus, Warning, Check, X, ArrowsClockwise, CurrencyInr, ThumbsUp, ThumbsDown, Wallet,
 } from "@phosphor-icons/react";
@@ -108,7 +109,7 @@ export default function Expenses() {
                   <Td className="font-mono">{fmtMoney(e.total)}</Td>
                   <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[e.status]}`}>{e.status}</span></Td>
                   <Td className="text-xs">{e.pending_approver_role || "—"}</Td>
-                  <Td className="font-mono text-xs">{(e.created_at || "").slice(0,10)}</Td>
+                  <Td className="font-mono text-xs">{formatDate(e.created_at)}</Td>
                 </tr>
               ))}
               {expenses.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[#5C5C5C]">No expenses yet.</td></tr>}
@@ -294,7 +295,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, userRole, onClose,
 
       {exp.status === "reimbursed" && (
         <div className="border border-[#1D633E] bg-[#EFF7EF] p-3 text-sm text-[#1D633E]">
-          <Check size={13} className="inline mr-1"/> Reimbursed on {(exp.reimbursed_at || "").slice(0,10)} · JE {exp.reimbursement_journal_id}
+          <Check size={13} className="inline mr-1"/> Reimbursed on {formatDate(exp.reimbursed_at)} · JE {exp.reimbursement_journal_id}
         </div>
       )}
     </Modal>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api, { API } from "../lib/api";
 import { safeFileUrl } from "../lib/url";
+import { formatDate } from "../lib/format";
 
 export default function ClientPortal() {
   const { token } = useParams();
@@ -131,7 +132,7 @@ export default function ClientPortal() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold">{f.name}</div>
-                  <div className="text-xs text-[#5C5C5C] mt-1">{f.stage || "—"} · {(f.created_at || "").slice(0, 10)}</div>
+                  <div className="text-xs text-[#5C5C5C] mt-1">{f.stage || "—"} · {formatDate(f.created_at)}</div>
                 </div>
                 <div className="overline">{fileUrl ? "OPEN →" : "UNAVAILABLE"}</div>
               </div>
@@ -154,7 +155,7 @@ export default function ClientPortal() {
             <div key={i.id} className="border border-[#E5E5E5] p-4 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold">{i.number}</div>
-                <div className="text-xs text-[#5C5C5C]">{i.doc_type} · Due {i.due_date || "—"}</div>
+                <div className="text-xs text-[#5C5C5C]">{i.doc_type} · Due {formatDate(i.due_date)}</div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="font-mono font-semibold">₹{(i.total || 0).toLocaleString("en-IN")}</div>

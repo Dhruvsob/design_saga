@@ -8,6 +8,7 @@ import {
   DownloadSimple, Clock, ArrowsClockwise,
 } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
+import { formatDate, formatDateTime } from "../lib/format";
 
 const STATUS_COLORS = {
   present: "#1D633E", late: "#B87500", absent: "#B4001C", half_day: "#F0A93A",
@@ -250,7 +251,7 @@ export default function Attendance() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="card-flat">
-              <div className="overline mb-3">TODAY · {new Date().toDateString()}</div>
+              <div className="overline mb-3">TODAY · {formatDate(new Date())}</div>
 
               {!checkedIn && (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -436,7 +437,7 @@ export default function Attendance() {
                   {mySalary.daily.map((d) => (
                     <div key={d.date} className="border border-[#F0F0F0] p-1.5 text-center"
                       style={{ background: `${STATUS_COLORS[d.status] || "#EEE"}12` }}
-                      title={`${d.date} · ${d.status}${d.check_in ? ` · in ${d.check_in}` : ""}${d.check_out ? ` · out ${d.check_out}` : ""}`}>
+                      title={`${formatDate(d.date)} · ${d.status}${d.check_in ? ` · in ${d.check_in}` : ""}${d.check_out ? ` · out ${d.check_out}` : ""}`}>
                       <div className="text-[10px] font-mono">{Number(d.date.slice(8, 10))}</div>
                       <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[d.status] || "#9A9A9A" }}>
                         {d.status.replace(/_/g, " ")}
@@ -471,7 +472,7 @@ export default function Attendance() {
                     <tbody>
                       {summary.records.slice().reverse().map((r) => (
                         <tr key={r.id} className="border-t border-[#F0F0F0]">
-                          <td className="p-1 font-mono">{r.date}</td>
+                          <td className="p-1 font-mono">{formatDate(r.date)}</td>
                           <td className="p-1"><span className="status-chip" style={{ background: `${STATUS_COLORS[r.status]}15`, color: STATUS_COLORS[r.status] }}>{r.status}</span></td>
                           <td className="p-1 text-center font-mono">{fmtT(r.check_in) || "—"}</td>
                           <td className="p-1 text-center font-mono">{fmtT(r.check_out) || "—"}</td>
@@ -570,8 +571,8 @@ export default function Attendance() {
                   <tr key={l.id} className="border-t border-[#F0F0F0]" data-testid={`leave-${l.id}`}>
                     <td className="p-2 font-semibold" data-testid={`leave-emp-${l.id}`}>{l.employee_name || "—"}</td>
                     <td className="p-2 capitalize">{l.leave_type}</td>
-                    <td className="p-2 font-mono text-xs">{l.from_date}</td>
-                    <td className="p-2 font-mono text-xs">{l.to_date}</td>
+                    <td className="p-2 font-mono text-xs">{formatDate(l.from_date)}</td>
+                    <td className="p-2 font-mono text-xs">{formatDate(l.to_date)}</td>
                     <td className="p-2 font-mono">{l.days}</td>
                     <td className="p-2 text-xs text-[#5C5C5C] truncate max-w-[300px]">{l.reason}</td>
                     <td className="p-2"><LeaveStatus s={l.status} /></td>
@@ -587,7 +588,7 @@ export default function Attendance() {
               {myCorrections.map((c) => (
                 <div key={c.id} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
                   <div>
-                    <span className="font-mono text-xs">{c.date}</span>
+                    <span className="font-mono text-xs">{formatDate(c.date)}</span>
                     <span className="text-[#5C5C5C] text-xs ml-2">{c.reason}</span>
                   </div>
                   <LeaveStatus s={c.status} />
@@ -866,7 +867,7 @@ function LiveBoardTab() {
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1D633E] opacity-50" />
           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1D633E]" />
         </span>
-        LIVE · updated {data.generated_at} IST · auto-refresh 15s
+        LIVE · updated {formatDateTime(data.generated_at)} IST · auto-refresh 15s
       </div>
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
         {chips.map(([l, v, col]) => (
@@ -1054,7 +1055,7 @@ function RequestsTab({ canWrite }) {
               <div className="flex-1 min-w-[220px]">
                 <div className="font-semibold" data-testid={`late-emp-${l.id}`}>{l.employee_name}</div>
                 <div className="text-xs font-mono text-[#5C5C5C]">
-                  {l.date} · {l.late_minutes}m late
+                  {formatDate(l.date)} · {l.late_minutes}m late
                   {l.late_fine_amount > 0 && <span className="text-[#B87500]"> · Fine {inr(l.late_fine_amount)} — approve to waive</span>}
                 </div>
                 <div className="text-xs text-[#5C5C5C] mt-0.5">
@@ -1092,7 +1093,7 @@ function RequestsTab({ canWrite }) {
                     </div>
                     <div className="text-xs font-mono text-[#5C5C5C] mt-0.5">
                       <span className="capitalize text-[#8A6DFF] font-semibold">{l.leave_type}</span>
-                      {" · "}{l.from_date} → {l.to_date} · {l.days} day{l.days !== 1 ? "s" : ""}
+                      {" · "}{formatDate(l.from_date)} → {formatDate(l.to_date)} · {l.days} day{l.days !== 1 ? "s" : ""}
                     </div>
                     {l.reason && <div className="text-xs text-[#5C5C5C] mt-1">“{l.reason}”</div>}
                   </div>
@@ -1120,7 +1121,7 @@ function RequestsTab({ canWrite }) {
             {corrections.map((c) => (
               <div key={c.id} className="border border-[#F0F0F0] p-3" data-testid={`corr-${c.id}`}>
                 <div className="font-semibold">{c.employee_name}</div>
-                <div className="text-xs font-mono text-[#5C5C5C]">{c.date}
+                <div className="text-xs font-mono text-[#5C5C5C]">{formatDate(c.date)}
                   {c.requested_check_in ? ` · in ${fmtT(c.requested_check_in)}` : ""}
                   {c.requested_check_out ? ` · out ${fmtT(c.requested_check_out)}` : ""}
                 </div>
@@ -1151,7 +1152,7 @@ function RequestsTab({ canWrite }) {
               <div className="flex-1 min-w-[240px]">
                 <div className="font-semibold">{r.employee_name}</div>
                 <div className="text-xs font-mono text-[#5C5C5C]">
-                  {r.date} · {fmtT(r.check_in)}
+                  {formatDate(r.date)} · {fmtT(r.check_in)}
                   {r.geo_distance_m && r.geo_inside === false ? ` · ${Math.round(r.geo_distance_m)}m outside fence` : ""}
                 </div>
                 <div className="text-xs text-[#5C5C5C] mt-1">

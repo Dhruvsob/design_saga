@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import { PERIOD_PRESETS, computeRange, periodLabel } from "../lib/period";
 import { downloadFile } from "../lib/download";
+import { formatDate } from "../lib/format";
 import { TransactionDetail } from "./TransactionDetail";
 import {
   X, MagnifyingGlass, Bank, ArrowSquareOut, DownloadSimple, Printer, Plus,
@@ -266,7 +267,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
                   onClick={() => openTxn(r.journal_id)}
                   className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7] cursor-pointer"
                   data-testid={`ledger-row-${r.journal_id}`}>
-                  <td className="p-3 font-mono text-xs whitespace-nowrap">{r.date}</td>
+                  <td className="p-3 font-mono text-xs whitespace-nowrap">{formatDate(r.date)}</td>
                   <td className="p-3">
                     <div>{r.narration || "—"}</div>
                     {r.reference && <div className="text-[10px] text-[#9A9A9A] font-mono">Ref: {r.reference}</div>}

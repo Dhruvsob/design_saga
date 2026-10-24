@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
+import { formatDate } from "../lib/format";
 import {
   ArrowLeft, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X, Warning,
 } from "@phosphor-icons/react";
@@ -169,7 +170,7 @@ export default function ClientDetail() {
             <div key={i.id} className="border border-[#E5E5E5] p-4 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
-                <div className="text-xs text-[#5C5C5C] mt-0.5">{i.doc_type} · {i.project_name || "—"} · Due {i.due_date || "—"}</div>
+                <div className="text-xs text-[#5C5C5C] mt-0.5">{i.doc_type} · {i.project_name || "—"} · Due {formatDate(i.due_date)}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold">{inr(i.total)}</span>
@@ -206,7 +207,7 @@ export default function ClientDetail() {
                   <tbody>
                     {(ledger.entries || []).map((e, i) => (
                       <tr key={i} className="border-b border-[#F0F0F0]">
-                        <td className="px-4 py-2 font-mono text-xs">{(e.date || "").slice(0, 10)}</td>
+                        <td className="px-4 py-2 font-mono text-xs">{formatDate(e.date)}</td>
                         <td className="px-4 py-2 text-sm">{e.narration || e.memo || "—"}</td>
                         <td className="px-4 py-2 font-mono text-xs text-right text-[#1D633E]">{e.inflow ? inr(e.inflow) : "—"}</td>
                         <td className="px-4 py-2 font-mono text-xs text-right text-[#B22B22]">{e.outflow ? inr(e.outflow) : "—"}</td>
