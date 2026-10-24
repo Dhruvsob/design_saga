@@ -30,9 +30,27 @@ const pad = (n) => String(n).padStart(2, "0");
 
 // DD/MM/YYYY
 export function formatDate(value, fallback = "—") {
+  if (typeof value === "string") {
+    const calendar = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (calendar) {
+      const year = Number(calendar[1]);
+      const month = Number(calendar[2]);
+      const day = Number(calendar[3]);
+      const check = new Date(Date.UTC(year, month - 1, day));
+      if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1
+          || check.getUTCDate() !== day) return fallback;
+      return `${calendar[3]}/${calendar[2]}/${calendar[1]}`;
+    }
+  }
   const d = toDate(value);
   if (!d) return fallback;
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: IST_TZ, day: "2-digit", month: "2-digit", year: "numeric",
+    }).format(d);
+  } catch {
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  }
 }
 
 // DD/MM/YYYY, HH:MM (24h) rendered in IST
@@ -80,9 +98,18 @@ export function formatDateLong(value, fallback = "—") {
 
 // yyyy-mm-dd for <input type="date"> values (never throws)
 export function dateForInput(value) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const d = toDate(value);
   if (!d) return "";
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: IST_TZ, day: "2-digit", month: "2-digit", year: "numeric",
+    }).formatToParts(d);
+    const part = (type) => parts.find((item) => item.type === type)?.value;
+    return `${part("year")}-${part("month")}-${part("day")}`;
+  } catch {
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
 }
 
 // ₹ 1,23,456.78  (2 decimals only when needed)
