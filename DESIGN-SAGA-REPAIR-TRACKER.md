@@ -4,11 +4,11 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; deployed application baseline `81b06f3` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; runtime commit `949c372` and replay-safe updater commit `81b06f3` were verified on 2026-10-24.
+- Local checkout: `codex/repair-release`; deployed application baseline `3b95ca1` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; runtime commit `3b95ca1` was verified on 2026-10-24.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API and key-only SSH are reachable. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
-- Checksummed backup `/opt/design-saga-backups/20261024T062601Z` completed before the latest backend/frontend replacement.
+- Checksummed backup `/opt/design-saga-backups/20261024T115729Z` completed before the latest backend/frontend replacement.
 - Current action: continue the remaining P0 operations dependencies, then the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
 
 ## System Inventory
@@ -80,6 +80,9 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 | DS-026 | High | Quotation conversion bypasses client/project/task create permissions | Fixed, covered by conversion/concurrency regressions, deployed and verified healthy at `fbbd7da` |
 | DS-027 | High | Vendor permissions and broad tenant reads exposed purchase orders/GRNs outside visible projects; project invoice access exposed vendor bills/costs | Fixed, covered by permission and project-finance regressions, deployed and verified healthy at `949c372` |
 | DS-028 | Medium | Production updater could repeat the same successful release because `ORIG_HEAD` was not advanced | Fixed and installed at `81b06f3`; replay now exits without backup, rebuild or restart |
+| DS-029 | High | Lead conversion allowed a lead editor to create a client and project without their create permissions | Fixed, regression-tested and deployed at `3b95ca1` |
+| DS-030 | High | Direct vendor commission receipts posted valid journals but disappeared from commission ledgers/dashboards when no bill earning was allocated | Fixed and deployed at `3b95ca1`; live ₹21,000 across three receipts reconciles between the vendor ledger and dashboard |
+| DS-031 | Low | Milestone, project financial, vendor commission and recent accounting dates displayed raw ISO dates | Fixed on the reported surfaces with the shared DD/MM/YYYY formatter and deployed at `3b95ca1` |
 
 ## User-Reported Master Backlog - 2026-10-23
 
@@ -111,7 +114,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-022 | Medium | Slow page loading | Frontend route splitting implemented and smoke-tested across dashboard, accounting, attendance, calendar, audit and privacy; API tracing/pagination remains under DS-008 |
 | BR-023 | Medium | Cash-flow split missing | Fixed: report and CSV now split operating/investing/financing activities and reconcile every cash/bank account while preserving existing totals |
 | BR-024 | Medium | Draft invoice counts inconsistent | Not reproducible in the 24/10 production trace: the sole current invoice is one explicit sample-tenant draft and all active invoice queries count it consistently; monitor as data grows |
-| BR-025 | Low | Date formats inconsistent | Shared DD/MM/YYYY formatter exists; remaining raw-date surfaces need inventory |
+| BR-025 | Low | Date formats inconsistent | Reported milestone, project due-date, vendor commission and recent accounting surfaces now use DD/MM/YYYY; remaining screen inventory continues |
 | BR-026 | Low | New-tenant PO dead-end | Send/GRN paths exist; empty master-data onboarding needs live workflow verification |
 | BR-027 | Low | Bill creation location confusing | UX review item; preserve vendor and PO context while improving discoverability |
 | BR-028 | Low | Unsafe automatic matching by name | Confirmed residual risk in selected legacy fallbacks; migrate to IDs where evidence permits |
