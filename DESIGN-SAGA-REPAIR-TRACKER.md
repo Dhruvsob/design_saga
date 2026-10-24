@@ -4,11 +4,11 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; deployed application baseline `c89907d` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; runtime commit `c89907d` was verified on 2026-10-24.
+- Local checkout: `codex/repair-release`; deployed application baseline `8e1ec41` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; runtime commit `8e1ec41` was verified on 2026-10-24.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API and key-only SSH are reachable. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
-- Checksummed backup `/opt/design-saga-backups/20261024T121328Z` completed before the latest frontend replacement.
+- Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: continue the remaining P0 operations dependencies, then the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
 
 ## System Inventory
@@ -82,7 +82,7 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 | DS-028 | Medium | Production updater could repeat the same successful release because `ORIG_HEAD` was not advanced | Fixed and installed at `81b06f3`; replay now exits without backup, rebuild or restart |
 | DS-029 | High | Lead conversion allowed a lead editor to create a client and project without their create permissions | Fixed, regression-tested and deployed at `3b95ca1` |
 | DS-030 | High | Direct vendor commission receipts posted valid journals but disappeared from commission ledgers/dashboards when no bill earning was allocated | Fixed and deployed at `3b95ca1`; live ₹21,000 across three receipts reconciles between the vendor ledger and dashboard |
-| DS-031 | Low | Operational screens displayed inconsistent raw ISO dates | Fixed across accounting, milestones, projects, attendance, clients, vendors, invoices, expenses, POs, loans, tasks, employee/RBAC, portal and platform surfaces with the shared DD/MM/YYYY formatter; deployed and live-verified at `c89907d` |
+| DS-031 | Low | Operational screens displayed inconsistent raw ISO dates | Fixed across accounting, milestones, projects, attendance, clients, vendors, invoices, expenses, POs, loans, tasks, employee/RBAC, portal and platform surfaces with the shared DD/MM/YYYY formatter; timestamp boundaries are rendered in IST and pure calendar dates remain stable; deployed and live-verified at `8e1ec41` |
 | DS-032 | High | Production monitor omitted memory/load/database-capacity and TLS-expiry checks | Fixed and active at `8669d1d`; the five-minute monitor now validates all four thresholds in addition to service, site, disk and backup health |
 | DS-033 | High | Long-running Caddy container retained a stale DNS upstream and could not reach the ACME renewal service | Corrected in production by a scoped Caddy restart; IPv6 DNS and ACME directory connectivity pass, certificate remains valid through 29/12/2026, and TLS-expiry monitoring is active |
 

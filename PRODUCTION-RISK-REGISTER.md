@@ -92,7 +92,7 @@ yet received sufficient adversarial testing.
 | Responsive layout | No clipped controls, overlapping text or unusable tables on supported mobile/desktop widths | Audit |
 | Browser compatibility | Current Chrome, Edge, Safari and mobile smoke tests | Audit |
 | Performance | Bundle size, lazy loading, pagination, large tenant datasets and API latency budgets | Accounting/Daybook pagination and route-level lazy loading are active; initial JavaScript is reduced from 1.52 MB (372 KB gzip) to 495 KB (149 KB gzip). Large-data/API latency budgets remain open |
-| Date presentation | Business dates should be DD/MM/YYYY without changing API/database date storage | Fixed on major ERP operational, accounting, attendance, project, vendor, client, task, HR and administration surfaces at `c89907d`; native date inputs and stored values remain ISO by design |
+| Date presentation | Business dates should be DD/MM/YYYY without changing API/database date storage | Fixed on major ERP operational, accounting, attendance, project, vendor, client, task, HR and administration surfaces at `8e1ec41`; timestamp boundaries render in IST while native date inputs and stored values remain ISO by design |
 
 ## Required Release Gates
 
