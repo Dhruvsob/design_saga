@@ -275,7 +275,13 @@ export default function Accounting() {
         />
       )}
 
-      {tab === "receivables" && <CollectionsDue />}
+      {tab === "receivables" && (
+        <CollectionsDue
+          banks={banks}
+          incomeAccounts={incomeAccs}
+          onSaved={() => { loadDashboard(); loadCommon(); }}
+        />
+      )}
 
       {tab === "daybook" && (
         <Daybook
@@ -865,16 +871,55 @@ function SubKPI({ label, value, tint }) {
   );
 }
 
-function CollectionsDue() {
+function CollectionsDue({ banks, incomeAccounts, onSaved }) {
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [collecting, setCollecting] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [receipt, setReceipt] = useState({
+    date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+    bank_account_id: "", income_account_id: "", payment_method: "bank_transfer",
+    reference: "", notes: "",
+  });
 
-  useEffect(() => {
-    api.get("/accounting/receivables")
+  const load = () => api.get("/accounting/receivables")
       .then(({ data: result }) => setData(result))
       .catch((error) => toast.error(error?.response?.data?.detail || "Could not load collections"));
-  }, []);
+  useEffect(() => { load(); }, []);
+
+  const openReceipt = (row) => {
+    setCollecting(row);
+    setReceipt((current) => ({
+      ...current,
+      bank_account_id: current.bank_account_id || banks[0]?.id || "",
+      income_account_id: current.income_account_id || incomeAccounts[0]?.id || "",
+      notes: `Milestone collection · ${row.name || row.project_name}`,
+    }));
+  };
+
+  const saveReceipt = async (event) => {
+    event.preventDefault();
+    if (!collecting || saving) return;
+    setSaving(true);
+    try {
+      await api.post("/accounting/income", {
+        ...receipt,
+        amount: collecting.outstanding,
+        milestone_id: collecting.id,
+        project_id: collecting.project_id,
+        client_id: collecting.client_id || undefined,
+      });
+      toast.success("Milestone receipt recorded");
+      setCollecting(null);
+      await load();
+      onSaved?.();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not record receipt");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!data) return <div className="overline">LOADING COLLECTIONS…</div>;
   const term = query.trim().toLowerCase();
@@ -950,7 +995,11 @@ function CollectionsDue() {
                 <td className="p-3">{row.name || "Payment milestone"}</td>
                 <td className="p-3"><span className={`status-chip chip-${row.status}`}>{row.status}</span></td>
                 <td className="p-3 text-right font-mono font-semibold">{CURRENCY(row.outstanding)}</td>
-                <td className="p-3 text-right">
+                <td className="p-3 text-right whitespace-nowrap">
+                  <button type="button" className="btn-primary text-xs mr-2"
+                    onClick={() => openReceipt(row)} disabled={!banks.length || !incomeAccounts.length}>
+                    <Money size={12} /> Receive
+                  </button>
                   {row.project_id && <a href={`/projects/${row.project_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>}
                 </td>
               </tr>
@@ -961,6 +1010,29 @@ function CollectionsDue() {
           </tbody>
         </table>
       </div>
+
+      {collecting && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <form onSubmit={saveReceipt} className="bg-white border border-[#E5E5E5] w-full max-w-lg p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="overline">RECORD MILESTONE RECEIPT</div>
+                <h3 className="font-display text-xl mt-1">{collecting.name || "Payment milestone"}</h3>
+                <p className="text-sm text-[#5C5C5C] mt-1">{collecting.project_name} · {CURRENCY(collecting.outstanding)}</p>
+              </div>
+              <button type="button" className="btn-ghost" onClick={() => setCollecting(null)} aria-label="Close"><X size={16} /></button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-xs">Receipt date<input required type="date" className="input-flat mt-1 w-full" value={receipt.date} onChange={(e) => setReceipt({ ...receipt, date: e.target.value })} /></label>
+              <label className="text-xs">Payment method<select className="input-flat mt-1 w-full" value={receipt.payment_method} onChange={(e) => setReceipt({ ...receipt, payment_method: e.target.value })}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="online">Online</option><option value="other">Other</option></select></label>
+              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={receipt.bank_account_id} onChange={(e) => setReceipt({ ...receipt, bank_account_id: e.target.value })}><option value="" disabled>Select cash / bank</option>{banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+              <label className="text-xs">Income account<select required className="input-flat mt-1 w-full" value={receipt.income_account_id} onChange={(e) => setReceipt({ ...receipt, income_account_id: e.target.value })}><option value="" disabled>Select income account</option>{incomeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+              <label className="text-xs sm:col-span-2">Reference<input className="input-flat mt-1 w-full" value={receipt.reference} onChange={(e) => setReceipt({ ...receipt, reference: e.target.value })} placeholder="Bank / UPI / cheque reference" /></label>
+            </div>
+            <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setCollecting(null)}>Cancel</button><button type="submit" className="btn-primary" disabled={saving}>{saving ? "Recording…" : "Record receipt"}</button></div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

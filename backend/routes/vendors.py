@@ -32,6 +32,7 @@ from fastapi.responses import FileResponse
 from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import datetime, timezone
+import hashlib
 
 from core.db import db
 from core.scoped_db import sdb
@@ -1524,7 +1525,7 @@ async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
     #     longer applies. Idempotent — skips if a reversal_je_id already exists.
     if bill.get("status") == "cancelled":
         if existing:
-            if existing.get("status") == "received":
+            if float(existing.get("received_amount") or 0) > 0:
                 await _reverse_commission_je(existing)
             else:
                 await sdb.vendor_commissions.update_one(
@@ -1659,12 +1660,67 @@ async def _active_commission_settlements(query: dict) -> tuple[list[dict], set[s
             {"_id": 0, "id": 1},
         ):
             reversed_ids.add(journal["id"])
-    active = [
-        row for row in settlements
-        if row.get("status") not in ("cancelled", "reversed")
-        and row.get("journal_entry_id") not in reversed_ids
-    ]
+    reversed_commission_ids: set[str] = set()
+    allocation_ids = {
+        allocation.get("id")
+        for row in settlements
+        for allocation in (row.get("commissions") or [])
+        if allocation.get("id")
+    }
+    if allocation_ids:
+        async for commission in sdb.vendor_commissions.find(
+                {"id": {"$in": list(allocation_ids)}, "status": "reversed"},
+                {"_id": 0, "id": 1}):
+            reversed_commission_ids.add(commission["id"])
+
+    active = []
+    for row in settlements:
+        if (row.get("status") in ("cancelled", "reversed")
+                or row.get("journal_entry_id") in reversed_ids):
+            continue
+        visible = dict(row)
+        allocations = []
+        reversed_amount = 0.0
+        for allocation in row.get("commissions") or []:
+            if allocation.get("id") in reversed_commission_ids:
+                reversed_amount += float(allocation.get("applied") or 0)
+            else:
+                allocations.append(allocation)
+        visible["commissions"] = allocations
+        visible["original_amount"] = float(row.get("amount") or 0)
+        visible["reversed_amount"] = round(reversed_amount, 2)
+        visible["amount"] = round(max(0.0, visible["original_amount"] - reversed_amount), 2)
+        active.append(visible)
     return active, journal_ids
+
+
+async def _refresh_commission_allocations(commission_ids: list[str]) -> None:
+    """Rebuild receipt totals from settlement rows so retries cannot double-apply cash."""
+    for commission_id in set(commission_ids):
+        row = await sdb.vendor_commissions.find_one({"id": commission_id}, {"_id": 0})
+        if not row or row.get("status") in ("cancelled", "reversed"):
+            continue
+        received = 0.0
+        latest = None
+        async for settlement in sdb.commission_settlements.find(
+                {"status": {"$nin": ["cancelled", "reversed"]},
+                 "commissions.id": commission_id}, {"_id": 0}):
+            for allocation in settlement.get("commissions") or []:
+                if allocation.get("id") == commission_id:
+                    received += float(allocation.get("applied") or 0)
+                    latest = settlement
+        received = round(received, 2)
+        status = ("received" if received + 0.01 >= float(row.get("amount") or 0)
+                  else "invoiced" if received > 0.001 else "pending")
+        update = {"received_amount": received, "status": status, "updated_at": iso_now()}
+        if latest:
+            update.update({
+                "received_date": latest.get("received_date"),
+                "payment_method": latest.get("payment_method"),
+                "reference": latest.get("reference"),
+                "journal_entry_id": latest.get("journal_entry_id"),
+            })
+        await sdb.vendor_commissions.update_one({"id": commission_id}, {"$set": update})
 
 
 # ---------- Vendor commission ledger (running totals) ----------
@@ -1721,6 +1777,9 @@ async def vendor_commission_ledger(vendor_id: str, request: Request,
 
     receipt_total = sum(float(row.get("amount") or 0) for row in receipts)
     total_received = receipt_total + legacy_received
+    allocated_received = legacy_received + sum(
+        float(allocation.get("applied") or 0)
+        for receipt in receipts for allocation in (receipt.get("commissions") or []))
     unallocated_received = sum(float(row.get("unallocated") or 0) for row in receipts)
 
     return {
@@ -1731,7 +1790,8 @@ async def vendor_commission_ledger(vendor_id: str, request: Request,
             "total_purchase": round(total_purchase, 2),
             "total_earned": round(total_earned, 2),
             "total_received": round(total_received, 2),
-            "pending": round(max(0.0, total_earned - total_received), 2),
+            "allocated_received": round(allocated_received, 2),
+            "pending": round(max(0.0, total_earned - allocated_received), 2),
             "unallocated_received": round(unallocated_received, 2),
         },
         "entries": display_rows,
@@ -1751,12 +1811,26 @@ async def receive_commission(vendor_id: str, payload: CommissionReceiveIn, reque
     bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
     if payload.commission_ids and len(set(payload.commission_ids)) != len(payload.commission_ids):
         raise HTTPException(status_code=400, detail="Duplicate commission IDs in request")
+    idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
+    request_key = f"{user_org_id(user)}:{vendor_id}:{idem}" if idem else None
     async with doc_lock(sdb.vendors_acc, vendor_id):
-        return await _receive_commission_locked(user, vendor_id, payload, bank)
+        if request_key:
+            prior = await sdb.commission_settlements.find_one(
+                {"request_key": request_key}, {"_id": 0})
+            if prior:
+                await _refresh_commission_allocations(
+                    [row.get("id") for row in prior.get("commissions") or [] if row.get("id")])
+                return {"ok": True, "settlement_id": prior["id"],
+                        "journal_entry_id": prior.get("journal_entry_id"),
+                        "settled": prior.get("commissions") or [],
+                        "unallocated": float(prior.get("unallocated") or 0)}
+        return await _receive_commission_locked(
+            user, vendor_id, payload, bank, idem=idem, request_key=request_key)
 
 
 async def _receive_commission_locked(user: dict, vendor_id: str, payload: CommissionReceiveIn,
-                                     bank: dict):
+                                     bank: dict, idem: Optional[str] = None,
+                                     request_key: Optional[str] = None):
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -1809,13 +1883,25 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
     # Post the journal through the central engine so audit + balanced-check +
     # reversal flow works exactly like every other JE.
     from routes.accounting import _post_journal
-    je_lines = [
-        {"account_id": bank["id"], "debit": float(payload.amount), "credit": 0.0,
-         "description": f"Commission received from {vendor.get('name')}"},
-        {"account_id": inc["id"], "debit": 0.0, "credit": float(payload.amount),
-         "description": income_label},
-    ]
-    settlement_id = new_id("vcpay_")
+    allocated = round(float(payload.amount) - remaining, 2)
+    je_lines = [{"account_id": bank["id"], "debit": float(payload.amount), "credit": 0.0,
+                 "description": f"Commission received from {vendor.get('name')}"}]
+    if allocated > 0:
+        je_lines.append({"account_id": inc["id"], "debit": 0.0, "credit": allocated,
+                         "description": income_label})
+    if remaining > 0.001:
+        from routes.accounting import _seed_coa_if_empty
+        await _seed_coa_if_empty()
+        advance = await sdb.accounts.find_one(
+            {"name": "Commission Advances", "type": "liability", "active": {"$ne": False}},
+            {"_id": 0, "id": 1})
+        if not advance:
+            raise HTTPException(status_code=500, detail="Commission Advances account missing")
+        je_lines.append({"account_id": advance["id"], "debit": 0.0,
+                         "credit": round(remaining, 2),
+                         "description": f"Unallocated commission advance from {vendor.get('name')}"})
+    settlement_id = (f"vcpay_{hashlib.sha256(request_key.encode('utf-8')).hexdigest()[:24]}"
+                     if request_key else new_id("vcpay_"))
     je = await _post_journal(
         user, payload.received_date,
         f"Vendor commission – {vendor.get('name')}",
@@ -1834,7 +1920,7 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
     je_id = je["id"]
 
     # Persist a payment record + update settled commission rows
-    await sdb.commission_settlements.insert_one({
+    settlement_doc = {
         "id": settlement_id,
         "vendor_id": vendor_id,
         "vendor_name": vendor.get("name"),
@@ -1851,23 +1937,22 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
         "unallocated": round(remaining, 2),
         "created_at": iso_now(),
         "created_by": user["user_id"],
-    })
-    for s in settled:
-        row = await sdb.vendor_commissions.find_one({"id": s["id"]}, {"_id": 0})
-        already = float(row.get("received_amount") or 0)
-        new_received = round(already + s["applied"], 2)
-        status = "received" if new_received + 0.01 >= float(row.get("amount") or 0) else "invoiced"
-        await sdb.vendor_commissions.update_one(
-            {"id": s["id"]}, {"$set": {
-                "received_amount": new_received,
-                "received_date": payload.received_date,
-                "payment_method": payload.payment_method,
-                "reference": payload.reference,
-                "journal_entry_id": je_id,
-                "status": status,
-                "updated_at": iso_now(),
-            }}
-        )
+    }
+    if idem:
+        settlement_doc["client_request_id"] = idem
+        settlement_doc["request_key"] = request_key
+    try:
+        await sdb.commission_settlements.insert_one(settlement_doc)
+    except Exception:
+        # A lost database acknowledgement can raise even after persistence.
+        # Only remove the technical journal when the settlement truly is absent.
+        persisted = await sdb.commission_settlements.find_one(
+            {"id": settlement_id}, {"_id": 0})
+        if not persisted:
+            await sdb.journal_entries.delete_one({"id": je_id})
+            raise
+        settlement_doc = persisted
+    await _refresh_commission_allocations([s["id"] for s in settled])
     return {"ok": True, "settlement_id": settlement_id, "journal_entry_id": je_id,
             "settled": settled, "unallocated": round(remaining, 2)}
 
@@ -1883,7 +1968,8 @@ async def commissions_dashboard(request: Request,
     today = business_today()
     month_start = f"{today.year:04d}-{today.month:02d}-01"
 
-    totals = {"total_earned": 0.0, "total_received": 0.0, "pending": 0.0,
+    totals = {"total_earned": 0.0, "total_received": 0.0,
+              "allocated_received": 0.0, "pending": 0.0,
               "this_month": 0.0, "this_month_received": 0.0}
     by_vendor: dict = {}
     by_project: dict = {}
@@ -1920,6 +2006,7 @@ async def commissions_dashboard(request: Request,
         })
         by_vendor[vid]["received"] += received
         for allocation in receipt.get("commissions") or []:
+            totals["allocated_received"] += float(allocation.get("applied") or 0)
             pid = allocation.get("project_id")
             if not pid:
                 continue
@@ -1936,6 +2023,7 @@ async def commissions_dashboard(request: Request,
         if legacy_received <= 0:
             continue
         totals["total_received"] += legacy_received
+        totals["allocated_received"] += legacy_received
         vid = r.get("vendor_id")
         by_vendor.setdefault(vid, {"vendor_id": vid, "vendor_name": r.get("vendor_name"),
                                     "earned": 0.0, "received": 0.0})
@@ -1963,7 +2051,8 @@ async def commissions_dashboard(request: Request,
 
     for k in list(totals.keys()):
         totals[k] = round(totals[k], 2)
-    totals["pending"] = round(max(0.0, totals["total_earned"] - totals["total_received"]), 2)
+    totals["pending"] = round(
+        max(0.0, totals["total_earned"] - totals["allocated_received"]), 2)
 
     return {"totals": totals,
             "top_vendors": [{"vendor_id": v["vendor_id"],

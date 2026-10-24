@@ -1131,7 +1131,8 @@ async def create_income(payload: IncomeIn, request: Request,
             raise HTTPException(status_code=404, detail="Milestone not found")
         if linked.get("status") == "paid":
             raise HTTPException(status_code=409, detail="Milestone is already paid")
-        expected = float(linked.get("amount") or 0)
+        expected = max(0.0, float(linked.get("amount") or 0)
+                       - float(linked.get("paid_amount") or 0))
         _require_full_linked_payment("milestone", payload.amount, expected)
         source, source_id = "milestone_payment", payload.milestone_id
         project_id = linked.get("project_id")
@@ -1142,6 +1143,25 @@ async def create_income(payload: IncomeIn, request: Request,
             {"_id": 0, "id": 1},
         )
         if existing:
+            # Recover the source document if a worker stopped after the
+            # balanced journal insert but before its final status update.
+            if payload.milestone_id:
+                paid_total = round(float(linked.get("paid_amount") or 0) + payload.amount, 2)
+                await sdb.payment_milestones.update_one(
+                    {"id": payload.milestone_id, "status": {"$ne": "paid"}},
+                    {"$set": {"status": "paid", "paid_amount": paid_total,
+                              "paid_at": iso_now(), "journal_id": existing["id"]}},
+                )
+                return await sdb.journal_entries.find_one(
+                    {"id": existing["id"]}, {"_id": 0})
+            if payload.invoice_id:
+                await sdb.invoices.update_one(
+                    {"id": payload.invoice_id, "status": {"$ne": "paid"}},
+                    {"$set": {"status": "paid", "paid_date": payload.date,
+                              "journal_id": existing["id"], "updated_at": iso_now()}},
+                )
+                return await sdb.journal_entries.find_one(
+                    {"id": existing["id"]}, {"_id": 0})
             raise HTTPException(status_code=409, detail="This linked payment has already been posted")
     created_accrual = None
     if payload.invoice_id:
@@ -1182,9 +1202,10 @@ async def create_income(payload: IncomeIn, request: Request,
 
     # If linked to a milestone, mark it paid
     if payload.milestone_id:
+        paid_total = round(float(linked.get("paid_amount") or 0) + payload.amount, 2)
         await sdb.payment_milestones.update_one(
             {"id": payload.milestone_id},
-            {"$set": {"status": "paid", "paid_amount": payload.amount,
+            {"$set": {"status": "paid", "paid_amount": paid_total,
                       "paid_at": iso_now(), "journal_id": je["id"]}}
         )
     # If linked to an invoice, mark it paid (closes the

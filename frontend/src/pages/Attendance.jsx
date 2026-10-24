@@ -142,11 +142,17 @@ export default function Attendance() {
     setAccuracyBlock(null);
     try {
       let gps = {};
-      try { gps = await _getGPS(); }
-      catch (ge) {
-        setCheckInBusy(false);
-        alert(ge.message || "GPS required for check-in");
-        return;
+      if (policy?.geo_fencing_enabled) {
+        try { gps = await _getGPS(); }
+        catch (ge) {
+          setCheckInBusy(false);
+          alert(ge.message || "GPS required for check-in");
+          return;
+        }
+      } else {
+        // Location is useful evidence when available, but must not block a
+        // tenant that has explicitly disabled geo-fencing.
+        try { gps = await _getGPS(); } catch (_) { /* optional */ }
       }
       const base = {
         attendance_type: attType, ...gps,
@@ -173,7 +179,8 @@ export default function Attendance() {
       } else if (detail && typeof detail === "object" && detail.code === "late_reason_required") {
         setLateReasonNeeded(detail);
       } else {
-        const msg = typeof detail === "string" ? detail : (detail?.message || "Check-in failed");
+        const msg = typeof detail === "string" ? detail
+          : (detail?.message || e?.message || "Check-in failed");
         alert(msg);
       }
     } finally { setCheckInBusy(false); }

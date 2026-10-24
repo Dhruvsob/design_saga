@@ -16,6 +16,8 @@ from fastapi import APIRouter, HTTPException, Request, Cookie, Header
 from typing import Optional, List
 from datetime import date as _date, datetime, timedelta
 from calendar import monthrange
+import hashlib
+from pymongo.errors import DuplicateKeyError
 
 from core.db import db
 from core.scoped_db import sdb
@@ -197,6 +199,15 @@ async def create_loan(payload: LoanCreateIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_any_permission(user, "finance.create", "loans.create"):
         raise HTTPException(403, "Missing permission: finance.create")
+    idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
+    request_key = f"{user_org_id(user)}:{idem}" if idem else None
+    if request_key:
+        prior = await sdb.loans.find_one({"request_key": request_key}, {"_id": 0})
+        if prior:
+            prior["outstanding"] = _outstanding(prior.get("schedule", []))
+            prior["next_due_date"] = _next_due(prior.get("schedule", []))
+            prior["totals"] = _totals(prior.get("schedule", []))
+            return prior
 
     # Resolve accounts
     loan_acc_id = payload.loan_account_id or await _ensure_account(
@@ -213,7 +224,8 @@ async def create_loan(payload: LoanCreateIn, request: Request,
     )
     emi_amt = _emi_amount(payload.principal, payload.interest_rate_pa, payload.tenure_months)
 
-    loan_id = new_id("loan_")
+    loan_id = (f"loan_{hashlib.sha256(request_key.encode('utf-8')).hexdigest()[:24]}"
+               if request_key else new_id("loan_"))
     doc = {
         "id": loan_id,
         "org_id": user_org_id(user),
@@ -238,23 +250,45 @@ async def create_loan(payload: LoanCreateIn, request: Request,
         "created_at": iso_now(),
         "created_by": user["user_id"],
     }
+    if request_key:
+        doc["client_request_id"] = idem
+        doc["request_key"] = request_key
 
     # Post disbursement JE: DR Bank / CR Loan Liability
-    je = await _post_journal(
-        user, payload.start_date,
-        f"Loan disbursement – {payload.lender_name}",
-        [
-            {"account_id": payload.disbursement_account_id, "debit": payload.principal, "credit": 0,
-             "description": f"Loan received from {payload.lender_name}"},
-            {"account_id": loan_acc_id, "debit": 0, "credit": payload.principal,
-             "description": f"Loan liability – {payload.lender_name}"},
-        ],
-        reference=payload.reference or f"LOAN-{loan_id}",
-        source="loan_disbursement", source_id=loan_id,
-    )
+    journal_key = f"{user_org_id(user) or 'org_default'}:loan_disbursement:{loan_id}"
+    je = await sdb.journal_entries.find_one({"idempotency_key": journal_key}, {"_id": 0})
+    if not je:
+        je = await _post_journal(
+            user, payload.start_date,
+            f"Loan disbursement – {payload.lender_name}",
+            [
+                {"account_id": payload.disbursement_account_id, "debit": payload.principal, "credit": 0,
+                 "description": f"Loan received from {payload.lender_name}"},
+                {"account_id": loan_acc_id, "debit": 0, "credit": payload.principal,
+                 "description": f"Loan liability – {payload.lender_name}"},
+            ],
+            reference=payload.reference or f"LOAN-{loan_id}",
+            source="loan_disbursement", source_id=loan_id,
+        )
     doc["disbursement_journal_id"] = je["id"]
 
-    await sdb.loans.insert_one(dict(doc))
+    try:
+        await sdb.loans.insert_one(dict(doc))
+    except DuplicateKeyError:
+        prior = await sdb.loans.find_one(
+            {"request_key": request_key} if request_key else {"id": loan_id}, {"_id": 0})
+        if not prior:
+            raise
+        doc = prior
+    except Exception:
+        # Do not delete a journal after a lost insert acknowledgement. Recover
+        # the loan if it exists; otherwise remove the unlinked technical JE.
+        prior = await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
+        if prior:
+            doc = prior
+        else:
+            await sdb.journal_entries.delete_one({"id": je["id"]})
+            raise
     await audit(user, "loan.create", target=loan_id, target_type="loan",
                 meta={"lender": payload.lender_name, "principal": payload.principal,
                       "tenure": payload.tenure_months, "rate": payload.interest_rate_pa})
@@ -339,14 +373,17 @@ async def _pay_emi_locked(user: dict, loan_id: str, payload: PayEMIIn):
         "debit": 0, "credit": total_amt,
         "description": f"EMI #{idx+1} paid",
     })
-    je = await _post_journal(
-        user, paid_on,
-        f"EMI #{idx+1} – {loan['lender_name']}",
-        lines,
-        reference=payload.reference or f"EMI-{loan_id}-{idx+1}",
-        source="loan_emi", source_id=loan_id,
-        idempotency_suffix=f"emi{idx}",
-    )
+    journal_key = f"{user_org_id(user) or 'org_default'}:loan_emi:{loan_id}:emi{idx}"
+    je = await sdb.journal_entries.find_one({"idempotency_key": journal_key}, {"_id": 0})
+    if not je:
+        je = await _post_journal(
+            user, paid_on,
+            f"EMI #{idx+1} – {loan['lender_name']}",
+            lines,
+            reference=payload.reference or f"EMI-{loan_id}-{idx+1}",
+            source="loan_emi", source_id=loan_id,
+            idempotency_suffix=f"emi{idx}",
+        )
 
     # Mark row paid + apply extra principal reduction on the next row's balance
     schedule[idx]["paid"] = True
@@ -420,19 +457,22 @@ async def _prepay_locked(user: dict, loan_id: str, payload: PrepayIn):
 
     paid_on = payload.paid_on or business_today().isoformat()
     # Post JE: DR Loan Liability / CR Bank
-    je = await _post_journal(
-        user, paid_on,
-        f"Loan prepayment – {loan['lender_name']}",
-        [
-            {"account_id": loan["loan_account_id"], "debit": payload.amount, "credit": 0,
-             "description": "Principal prepayment"},
-            {"account_id": payload.paid_from_account_id, "debit": 0, "credit": payload.amount,
-             "description": "Prepayment"},
-        ],
-        reference=f"PREPAY-{loan_id}-{prepay_no}",
-        source="loan_prepay", source_id=loan_id,
-        idempotency_suffix=f"prepay{prepay_no}",
-    )
+    journal_key = f"{user_org_id(user) or 'org_default'}:loan_prepay:{loan_id}:prepay{prepay_no}"
+    je = await sdb.journal_entries.find_one({"idempotency_key": journal_key}, {"_id": 0})
+    if not je:
+        je = await _post_journal(
+            user, paid_on,
+            f"Loan prepayment – {loan['lender_name']}",
+            [
+                {"account_id": loan["loan_account_id"], "debit": payload.amount, "credit": 0,
+                 "description": "Principal prepayment"},
+                {"account_id": payload.paid_from_account_id, "debit": 0, "credit": payload.amount,
+                 "description": "Prepayment"},
+            ],
+            reference=f"PREPAY-{loan_id}-{prepay_no}",
+            source="loan_prepay", source_id=loan_id,
+            idempotency_suffix=f"prepay{prepay_no}",
+        )
 
     # Reduce upcoming principal
     remaining = float(payload.amount)

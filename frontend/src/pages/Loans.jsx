@@ -131,6 +131,7 @@ function KPI({ icon: Icon, label, value, display, tone }) {
 }
 
 function CreateLoanModal({ accounts, onClose, onCreated }) {
+  const [requestKey] = useState(() => crypto.randomUUID());
   const [f, setF] = useState({
     lender_name: "", loan_type: "business", principal: 500000, interest_rate_pa: 9.5,
     tenure_months: 36, start_date: new Date().toISOString().slice(0,10), emi_day: 5,
@@ -149,7 +150,7 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
   const submit = async (e) => {
     e.preventDefault(); setErr(""); setBusy(true);
     try {
-      await api.post("/loans", f);
+      await api.post("/loans", f, { headers: { "Idempotency-Key": requestKey } });
       onCreated();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Create failed"));

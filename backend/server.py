@@ -1493,6 +1493,11 @@ async def delete_project(project_id: str, request: Request,
         ("purchase order(s)", sdb.purchase_orders, {"project_id": project_id}),
         ("file(s)", sdb.files, {"project_id": project_id}),
         ("attendance record(s)", sdb.attendance, {"project_id": project_id}),
+        ("task(s)", sdb.tasks, {"project_id": project_id}),
+        ("calendar event(s)", sdb.calendar_events, {"project_id": project_id}),
+        ("project message(s)", sdb.chat_messages, {"project_id": project_id}),
+        ("project comment(s)", sdb.comments,
+         {"entity_type": "project", "entity_id": project_id}),
     ]
     blockers = []
     for label, coll, q in dependency_checks:
@@ -1503,11 +1508,9 @@ async def delete_project(project_id: str, request: Request,
         raise HTTPException(
             status_code=409,
             detail=f"Project has {', '.join(blockers)}. Archive it instead to preserve history.")
-    n_tasks = await sdb.tasks.count_documents({"project_id": project_id})
     await sdb.projects.delete_one({"id": project_id})
-    await sdb.tasks.delete_many({"project_id": project_id})
     await audit_log(user, "project.delete", target=project_id, target_type="project",
-                    meta={"name": proj.get("name"), "tasks_deleted": n_tasks})
+                    meta={"name": proj.get("name")})
     return {"ok": True}
 
 

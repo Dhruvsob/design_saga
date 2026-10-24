@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-10-24 (Asia/Kolkata)
+Last updated: 2026-10-25 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -31,8 +31,8 @@ yet received sufficient adversarial testing.
 | Attendance identity | Employees may check in/out only for themselves except explicit managers; geofence/site authorization enforced; rejected punches can be retried without losing audit history | Fixed, deployed, and verified live |
 | Attendance data integrity | Validate geo/type/schedule inputs, manual punch dates/order, employee references, overlapping leave, and employee-specific weekly offs | Fixed, deployed, and verified live |
 | Approval races | Concurrent attendance, leave, correction, and late-arrival approvals must produce one final decision | Fixed, deployed, and verified live |
-| Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed and deployed |
-| Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed and deployed |
+| Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed; interrupted finalization recovery tested locally, deployment pending |
+| Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed; interrupted receipt/loan and commission-allocation recovery tested locally, deployment pending |
 | Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Project/task/file/search/comments/calendar/notification/public-share fixed; vendor financial/privacy and linked project/task visibility fixed; quotation and lead composite-create permission boundaries fixed; purchase/GRN/search/comment/audit reads now follow visible projects and project detail separates invoice, procurement and vendor-cost permissions; remaining route audit continues |
 | Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides are fail-closed; tenant user creation, approval, employee-account creation and role changes cannot mint a platform `SuperAdmin`; broader route audit continues |
 | Session lifecycle | Expiry, logout invalidation, password-change revocation, inactive/suspended tenant revocation, stolen-token resistance | Lifecycle gates fixed; password/reset/reassignment/offboarding and tenant suspension/deactivation revoke sessions; SuperAdmin impersonation is isolated to one session; production uses cookie-only sessions |
@@ -55,8 +55,8 @@ yet received sufficient adversarial testing.
 | Chart of Accounts integrity | Current balances, unique names/codes, safe edits and non-destructive deactivation | Fixed and deployed; live current balances verified, future duplicate codes rejected, exact unused duplicates cleaned after backup, and audit chains pass |
 | Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Idempotency, duplicate submission, claimant visibility, approval concurrency, receipt URLs and reimbursement accounts fixed/tested; broader workflow QA continues |
 | Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Status transitions, cancellation dependencies, over-receipt and bill/payment idempotency fixed/tested; broader workflow QA continues |
-| Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | EMI/prepayment locking, balance floors, journal cardinality and safe archive/reversal rules fixed/tested |
-| Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Settlement locking/idempotency and accounting linkage fixed/tested; finance-only read/update authorization fixed 2026-10-22; tax-policy review remains |
+| Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | EMI/prepayment locking, balance floors, journal cardinality, request idempotency and interrupted-write recovery fixed/tested; deployment pending |
+| Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Stable request idempotency, partial reversal allocation and excess-as-liability accounting fixed/tested; tax-policy review remains and deployment is pending |
 | Commission visibility | Direct/excess receipts must reconcile across journals, vendor ledger and commission dashboard without double counting allocations | Fixed and deployed at `3b95ca1`; live three-receipt/₹21,000 production reconciliation passes and reversed settlement journals are excluded |
 | Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Dependency matrix blocks deletion when operational, attendance or financial history exists; archive path is available and tested |
 | Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | User ID, tenant employee counter, employee/document counters and key finance identifiers are protected; production duplicate preflight is clean; broader normalization audit continues |

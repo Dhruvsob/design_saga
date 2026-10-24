@@ -20,6 +20,7 @@ DEFAULT_COA = [
     ("Accounts Payable", "liability", "2001"), ("GST Payable", "liability", "2101"),
     ("TDS Payable", "liability", "2102"), ("Loans", "liability", "2201"),
     ("Employee Payables", "liability", "2301"),
+    ("Commission Advances", "liability", "2302"),
     # Income
     ("Consultancy Income", "income", "3001"), ("Design Fees", "income", "3002"),
     ("Site Supervision Fees", "income", "3003"), ("Project Revenue", "income", "3004"),

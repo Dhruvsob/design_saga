@@ -282,9 +282,26 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         await sdb.payroll_runs.insert_one(dict(run))
     except DuplicateKeyError:
         prior = await sdb.payroll_runs.find_one(
-            {"period_key": run["period_key"]}, {"_id": 0, "status": 1})
+            {"period_key": run["period_key"]}, {"_id": 0})
         if prior and prior.get("status") == "paid":
             raise HTTPException(400, f"Salary already paid for {payload.year}-{payload.month:02d}")
+        if prior and prior.get("status") == "processing":
+            # A process can stop after the balanced journal is inserted but
+            # before the payroll row is finalized. Recover that exact run
+            # instead of posting salary twice or leaving it stuck forever.
+            je = await sdb.journal_entries.find_one(
+                {"source": "payroll", "source_id": prior["id"],
+                 "reversed": {"$ne": True}}, {"_id": 0})
+            if je:
+                paid_at = prior.get("paid_at") or iso_now()
+                await sdb.payroll_runs.update_one(
+                    {"id": prior["id"], "status": "processing"},
+                    {"$set": {"journal_id": je["id"], "status": "paid",
+                              "paid_at": paid_at}},
+                )
+                prior.update({"journal_id": je["id"], "status": "paid",
+                              "paid_at": paid_at})
+                return {"run": prior, "journal": je, "recovered": True}
         raise HTTPException(409, "Salary payment for this period is already being processed")
 
     try:

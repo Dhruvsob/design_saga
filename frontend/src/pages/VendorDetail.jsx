@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { formatDate } from "../lib/format";
@@ -39,6 +39,9 @@ export default function VendorDetail() {
   const [accounts, setAccounts] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [busy, setBusy] = useState(false);
+  const commissionRequestKey = useRef(crypto.randomUUID());
+  const billRequestKey = useRef(crypto.randomUUID());
+  const paymentRequestKey = useRef(crypto.randomUUID());
 
   const load = useCallback(async () => {
     const [{ data }, { data: acc }] = await Promise.all([
@@ -75,7 +78,9 @@ export default function VendorDetail() {
   const receiveCommission = async (form) => {
     setBusy(true);
     try {
-      await api.post(`/vendors/${id}/commissions/receive`, form);
+      await api.post(`/vendors/${id}/commissions/receive`, form,
+        { headers: { "Idempotency-Key": commissionRequestKey.current } });
+      commissionRequestKey.current = crypto.randomUUID();
       const { data } = await api.get(`/vendors/${id}/commission-ledger`);
       setCommissionLedger(data);
     } finally { setBusy(false); }
@@ -87,7 +92,8 @@ export default function VendorDetail() {
     setBusy(true);
     try {
       await api.post("/vendor-bills", { ...form, vendor_id: id },
-        { headers: { "Idempotency-Key": crypto.randomUUID() } });
+        { headers: { "Idempotency-Key": billRequestKey.current } });
+      billRequestKey.current = crypto.randomUUID();
       await load();
     }
     finally { setBusy(false); }
@@ -96,7 +102,8 @@ export default function VendorDetail() {
     setBusy(true);
     try {
       await api.post("/vendor-payments", { ...form, vendor_id: id },
-        { headers: { "Idempotency-Key": crypto.randomUUID() } });
+        { headers: { "Idempotency-Key": paymentRequestKey.current } });
+      paymentRequestKey.current = crypto.randomUUID();
       await load();
     }
     finally { setBusy(false); }

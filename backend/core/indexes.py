@@ -52,6 +52,9 @@ _INDEXES = [
     ("vendor_bills",       [("org_id", 1), ("po_id", 1), ("status", 1)], {}),
     ("vendor_payments",    [("org_id", 1), ("vendor_id", 1)], {}),
     ("vendor_commissions", [("org_id", 1), ("vendor_id", 1), ("status", 1)], {}),
+    ("commission_settlements", [("request_key", 1)],
+                            {"name": "commission_settlement_request_unique", "unique": True,
+                             "sparse": True}),
     ("vendor_ratings",     [("org_id", 1), ("vendor_id", 1), ("created_at", -1)], {}),
     # People
     ("employees",          [("org_id", 1), ("employee_id", 1)],
@@ -101,6 +104,8 @@ _INDEXES = [
     # NEW modules
     ("loans",              [("org_id", 1), ("status", 1)], {}),
     ("loans",              [("org_id", 1), ("next_due_date", 1)], {}),
+    ("loans",              [("request_key", 1)],
+                            {"name": "loan_request_unique", "unique": True, "sparse": True}),
     ("audit_log",          [("org_id", 1), ("at", -1)], {}),
     ("audit_log",          [("actor_id", 1), ("at", -1)], {}),
     ("audit_log",          [("chain", 1), ("seq", 1)], {}),

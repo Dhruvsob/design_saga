@@ -1,6 +1,6 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-24 (Asia/Calcutta)
+Last updated: 2026-10-25 (Asia/Calcutta)
 
 ## Current Checkpoint
 
@@ -10,6 +10,15 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 - Live URL/API and key-only SSH are reachable. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: continue the remaining P0 operations dependencies, then the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
+
+### DS-020: Posting recovery, attendance availability and milestone collection
+
+- Accounting integrity: commission receipts now use stable request keys, allocate only earned commission to income, hold excess cash in `Commission Advances`, recalculate allocation totals after retries, and exclude reversed bill allocations. Loan creation, EMI and prepayment retries recover existing journals instead of posting duplicates.
+- Payroll and receipts: interrupted payroll, invoice and milestone finalization recovers from the already-posted journal. Milestone collections can now be recorded directly from Collections Due with an explicit cash/bank and income account.
+- Attendance: when tenant geofencing is disabled, unavailable browser GPS is optional instead of blocking every employee punch. Enabled geofencing remains mandatory and the existing supervisor all-active-project rule remains enforced server-side.
+- Lifecycle and files: projects with tasks, events, project messages or comments must be archived rather than hard-deleted. Nginx now accepts the backend's 15 MiB file limit with multipart overhead.
+- Local verification: 171 backend security/integrity tests, frontend lint, frontend production build, Python compilation and diff checks pass. Production deployment evidence is pending.
+- Database effect: startup adds sparse unique request-key indexes and seeds the new liability account per tenant on normal account access. No historical journal or business row is rewritten.
 
 ## System Inventory
 
