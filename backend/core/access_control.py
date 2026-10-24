@@ -1,7 +1,7 @@
 """Shared same-tenant project and task visibility rules."""
 from fastapi import HTTPException
 
-from core.rbac import has_permission
+from core.rbac import has_any_permission, has_permission
 from core.scoped_db import sdb
 
 
@@ -57,6 +57,43 @@ async def get_visible_project(user: dict, project_id: str, permission: str = "pr
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+def can_view_all_purchase_orders(user: dict) -> bool:
+    return has_any_permission(
+        user,
+        "*.*",
+        "finance.read",
+        "purchase_orders.create",
+        "purchase_orders.update",
+        "purchase_orders.approve",
+    )
+
+
+async def purchase_order_visibility_query(user: dict) -> dict:
+    """Limit read-only procurement users to purchase orders for visible projects."""
+    if can_view_all_purchase_orders(user):
+        return {}
+    return {"project_id": {"$in": await visible_project_ids(user)}}
+
+
+async def visible_purchase_order_ids(user: dict) -> list[str] | None:
+    if can_view_all_purchase_orders(user):
+        return None
+    rows = await sdb.purchase_orders.find(
+        await purchase_order_visibility_query(user), {"_id": 0, "id": 1}
+    ).to_list(2000)
+    return [row["id"] for row in rows if row.get("id")]
+
+
+async def get_visible_purchase_order(user: dict, po_id: str,
+                                     projection: dict | None = None) -> dict:
+    require_permission(user, "purchase_orders.read")
+    query = merge_query({"id": po_id}, await purchase_order_visibility_query(user))
+    po = await sdb.purchase_orders.find_one(query, projection or {"_id": 0})
+    if not po:
+        raise HTTPException(status_code=404, detail="PO not found")
+    return po
 
 
 async def task_visibility_query(user: dict) -> dict:

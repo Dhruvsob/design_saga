@@ -13,7 +13,7 @@ from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import is_super_admin, user_org_id
 from core.audit import verify_chain
-from core.access_control import get_visible_project, get_visible_task
+from core.access_control import get_visible_project, get_visible_purchase_order, get_visible_task
 
 
 router = APIRouter()
@@ -26,8 +26,6 @@ _ACTIVITY_PERMS = {
     "journal_entry": ("finance.read",),
     "bank_batch": ("finance.read",),
     "loan": ("finance.read", "loans.read"),
-    "po": ("purchase_orders.read", "vendors.read"),
-    "grn": ("purchase_orders.read", "vendors.read"),
     "vendor": ("vendors.read",),
     "holiday": ("holidays.read",),
     "employee": ("employees.update", "hr.read"),
@@ -91,6 +89,15 @@ async def record_activity(target_type: str, target_id: str, request: Request,
             await get_visible_project(user, target_id)
         elif target_type == "task":
             await get_visible_task(user, target_id)
+        elif target_type == "po":
+            await get_visible_purchase_order(user, target_id)
+        elif target_type == "grn":
+            if not has_permission(user, "purchase_orders.read"):
+                raise HTTPException(404, "Not found")
+            grn = await sdb.goods_receipts.find_one({"id": target_id}, {"_id": 0, "po_id": 1})
+            if not grn or not grn.get("po_id"):
+                raise HTTPException(404, "Not found")
+            await get_visible_purchase_order(user, grn["po_id"], projection={"_id": 0, "id": 1})
         elif target_type == "expense":
             if not has_any_permission(user, "finance.read", "expenses.update", "expenses.approve"):
                 own = await sdb.expenses.find_one({"id": target_id, "claimant_id": user["user_id"]},

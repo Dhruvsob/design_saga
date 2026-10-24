@@ -4,6 +4,12 @@ import asyncio
 import hashlib
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
+
+from core import access_control
+from core.indexes import _INDEXES
 from routes import purchase
 from models.purchase import GRNCreateIn
 
@@ -123,3 +129,53 @@ def test_grn_retry_recovers_existing_journal_without_reposting(monkeypatch):
     assert len(receipts.rows) == 1
     assert pos.rows[0]["lines"][0]["received_qty_total"] == 4
     assert pos.rows[0]["status"] == "partial"
+
+
+def test_read_only_purchase_visibility_is_limited_to_visible_projects(monkeypatch):
+    async def visible_projects(_user):
+        return ["project_visible"]
+
+    monkeypatch.setattr(access_control, "visible_project_ids", visible_projects)
+    user = {
+        "user_id": "employee_1", "role": "Employee",
+        "permissions": ["purchase_orders.read", "projects.read"],
+    }
+
+    query = asyncio.run(access_control.purchase_order_visibility_query(user))
+
+    assert query == {"project_id": {"$in": ["project_visible"]}}
+
+
+def test_finance_or_purchase_manager_can_read_all_purchase_orders():
+    for permission in ("finance.read", "purchase_orders.update"):
+        user = {"user_id": "manager", "permissions": [permission]}
+        assert asyncio.run(access_control.purchase_order_visibility_query(user)) == {}
+
+
+def test_vendor_permission_cannot_bypass_purchase_order_permission(monkeypatch):
+    async def user(*_args, **_kwargs):
+        return {"user_id": "vendor_manager", "permissions": ["vendors.read"]}
+
+    async def module_enabled(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(purchase, "require_user", user)
+    monkeypatch.setattr(purchase, "require_module", module_enabled)
+    request = Request({
+        "type": "http", "method": "GET", "path": "/api/purchase-orders",
+        "headers": [], "client": ("203.0.113.10", 1234),
+        "scheme": "https", "server": ("gamaa.in", 443),
+    })
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(purchase.list_pos(request))
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Missing permission: purchase_orders.read"
+
+
+def test_purchase_project_visibility_query_is_indexed():
+    assert any(
+        collection == "purchase_orders" and keys == [("org_id", 1), ("project_id", 1)]
+        for collection, keys, _options in _INDEXES
+    )

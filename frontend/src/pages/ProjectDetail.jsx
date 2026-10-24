@@ -198,7 +198,17 @@ export default function ProjectDetail() {
   const canSeeFinancials = (p.can_view_financials !== undefined)
     ? !!p.can_view_financials
     : (hasPerm("*.*") || hasPerm("finance.read") || hasPerm("invoices.read"));
-  const visibleTabs = TABS.filter((t) => canSeeFinancials || (t !== "Milestones" && t !== "Invoices"));
+  const canSeeProcurement = (p.can_view_procurement !== undefined)
+    ? !!p.can_view_procurement
+    : hasPerm("purchase_orders.read");
+  const canSeeVendorCosts = (p.can_view_vendor_costs !== undefined)
+    ? !!p.can_view_vendor_costs
+    : (hasPerm("*.*") || hasPerm("finance.read"));
+  const visibleTabs = TABS.filter((t) => {
+    if ((t === "Milestones" || t === "Invoices") && !canSeeFinancials) return false;
+    if (t === "Vendors" && !canSeeProcurement && !canSeeVendorCosts) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-8" data-testid="project-detail">
@@ -302,7 +312,7 @@ export default function ProjectDetail() {
               <MiniStat label="Invoiced" value={inr(fin.invoiced)} />
               <MiniStat label="Collected" value={inr(fin.collected)} accent="#1D633E" />
               <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B22B22" : undefined} />
-              <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />
+              {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-t border-l border-[#E5E5E5]" data-testid="project-operational-stats">
@@ -424,7 +434,7 @@ export default function ProjectDetail() {
 
       {tab === "Vendors" && (
         <div className="space-y-6">
-          <div>
+          {canSeeProcurement && <div>
             <div className="overline mb-3">PURCHASE ORDERS</div>
             {(p.purchase_orders || []).length === 0 && <Empty text="No purchase orders linked to this project." />}
             <div className="space-y-2">
@@ -442,8 +452,8 @@ export default function ProjectDetail() {
                 </button>
               ))}
             </div>
-          </div>
-          <div>
+          </div>}
+          {canSeeVendorCosts && <div>
             <div className="overline mb-3">VENDOR BILLS</div>
             {(p.vendor_bills || []).length === 0 && <Empty text="No vendor bills linked to this project." />}
             <div className="space-y-2">
@@ -461,7 +471,7 @@ export default function ProjectDetail() {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 

@@ -24,6 +24,13 @@ from core.tenancy import user_org_id
 from core.features import require_module
 from core.audit import audit
 from core.locks import doc_lock
+from core.access_control import (
+    get_visible_project,
+    get_visible_purchase_order,
+    merge_query,
+    purchase_order_visibility_query,
+    visible_purchase_order_ids,
+)
 from models.purchase import POCreateIn, POUpdateIn, GRNCreateIn
 
 
@@ -91,11 +98,12 @@ async def list_pos(request: Request, vendor_id: Optional[str] = None,
                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.read", "purchase_orders.read"):
-        raise HTTPException(403, "Missing permission: vendors.read")
+    if not has_permission(user, "purchase_orders.read"):
+        raise HTTPException(403, "Missing permission: purchase_orders.read")
     q = {}
     if vendor_id: q["vendor_id"] = vendor_id
     if status: q["status"] = status
+    q = merge_query(q, await purchase_order_visibility_query(user))
     rows = await sdb.purchase_orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return rows
 
@@ -106,12 +114,7 @@ async def get_po(po_id: str, request: Request,
                  authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.read", "purchase_orders.read"):
-        raise HTTPException(403, "Missing permission")
-    po = await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
-    if not po:
-        raise HTTPException(404, "PO not found")
-    return po
+    return await get_visible_purchase_order(user, po_id)
 
 
 @router.post("/purchase-orders")
@@ -120,8 +123,10 @@ async def create_po(payload: POCreateIn, request: Request,
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.create", "purchase_orders.create"):
-        raise HTTPException(403, "Missing permission: vendors.create")
+    if not has_permission(user, "purchase_orders.create"):
+        raise HTTPException(403, "Missing permission: purchase_orders.create")
+    if payload.project_id:
+        await get_visible_project(user, payload.project_id)
     vendor = await sdb.vendors_acc.find_one({"id": payload.vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(404, "Vendor not found")
@@ -166,14 +171,18 @@ async def update_po(po_id: str, payload: POUpdateIn, request: Request,
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.update", "purchase_orders.update"):
-        raise HTTPException(403, "Missing permission")
+    if not has_permission(user, "purchase_orders.update"):
+        raise HTTPException(403, "Missing permission: purchase_orders.update")
     po = await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
     if not po:
         raise HTTPException(404, "PO not found")
     if po["status"] in ("closed", "cancelled"):
         raise HTTPException(400, f"Cannot edit PO in status: {po['status']}")
     up = {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None}
+    if "project_id" in up:
+        if po["status"] != "draft":
+            raise HTTPException(400, "Project can only be changed while the PO is a draft")
+        await get_visible_project(user, up["project_id"])
     # Status is derived from the workflow (send / GRN / cancel). PATCH may only
     # close a PO that has started receiving; it can never fabricate
     # sent/partial/received states or bypass the GRN-aware cancel route.
@@ -216,8 +225,8 @@ async def send_po(po_id: str, request: Request,
                   authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.update", "purchase_orders.update", "purchase_orders.approve"):
-        raise HTTPException(403, "Missing permission")
+    if not has_any_permission(user, "purchase_orders.update", "purchase_orders.approve"):
+        raise HTTPException(403, "Missing permission: purchase_orders.update")
     po = await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
     if not po:
         raise HTTPException(404, "PO not found")
@@ -240,8 +249,8 @@ async def cancel_po(po_id: str, request: Request,
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.update", "purchase_orders.update"):
-        raise HTTPException(403, "Missing permission")
+    if not has_permission(user, "purchase_orders.update"):
+        raise HTTPException(403, "Missing permission: purchase_orders.update")
     async with doc_lock(sdb.purchase_orders, po_id):
         return await _cancel_po_locked(user, po_id)
 
@@ -294,10 +303,13 @@ async def list_grns(request: Request, po_id: Optional[str] = None,
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.read", "purchase_orders.read"):
-        raise HTTPException(403, "Missing permission")
+    if not has_permission(user, "purchase_orders.read"):
+        raise HTTPException(403, "Missing permission: purchase_orders.read")
     q = {}
     if po_id: q["po_id"] = po_id
+    visible_ids = await visible_purchase_order_ids(user)
+    if visible_ids is not None:
+        q = merge_query(q, {"po_id": {"$in": visible_ids}})
     rows = await sdb.goods_receipts.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return rows
 
@@ -308,8 +320,8 @@ async def create_grn(payload: GRNCreateIn, request: Request,
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.create", "purchase_orders.create"):
-        raise HTTPException(403, "Missing permission")
+    if not has_permission(user, "purchase_orders.create"):
+        raise HTTPException(403, "Missing permission: purchase_orders.create")
     header_key = (request.headers.get("idempotency-key") or "").strip()[:100]
     challan_key = (payload.delivery_challan_no or "").strip().lower()[:100]
     client_key = f"header:{header_key}" if header_key else (
@@ -503,11 +515,7 @@ async def three_way_match(po_id: str, request: Request,
     """Returns per-line variance across PO / GRN / Bill quantities & amounts."""
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
-    if not has_any_permission(user, "vendors.read", "purchase_orders.read"):
-        raise HTTPException(403, "Missing permission")
-    po = await sdb.purchase_orders.find_one({"id": po_id}, {"_id": 0})
-    if not po:
-        raise HTTPException(404, "PO not found")
+    po = await get_visible_purchase_order(user, po_id)
 
     # Aggregate all GRN lines per po_line_id
     grn_agg = {}   # pol_id -> {received, rejected}

@@ -1387,13 +1387,19 @@ async def get_project(project_id: str, request: Request,
                   if has_permission(user, "tasks.read") else [])
     p["files"] = (await sdb.files.find({"project_id": project_id}, {"_id": 0}).to_list(500)
                   if has_permission(user, "files.read") else [])
-    p["invoices"] = await sdb.invoices.find({"project_id": project_id}, {"_id": 0}).to_list(500)
-    p["milestones"] = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).to_list(200)
-    # --- connected records: vendors / purchase orders / bills ---
-    p["purchase_orders"] = await sdb.purchase_orders.find(
+    can_invoice = _can_read_invoices(user)
+    can_procurement = has_permission(user, "purchase_orders.read")
+    can_vendor_cost = has_permission(user, "*.*") or has_permission(user, "finance.read")
+    p["invoices"] = (await sdb.invoices.find(
+        {"project_id": project_id}, {"_id": 0}).to_list(500) if can_invoice else [])
+    p["milestones"] = (await sdb.payment_milestones.find(
+        {"project_id": project_id}, {"_id": 0}).to_list(200) if can_invoice else [])
+    p["purchase_orders"] = (await sdb.purchase_orders.find(
         {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    p["vendor_bills"] = await sdb.vendor_bills.find(
+        if can_procurement else [])
+    p["vendor_bills"] = (await sdb.vendor_bills.find(
         {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        if can_vendor_cost else [])
     # --- team enrichment ---
     team_ids = [i for i in (p.get("team_ids") or []) if i]
     pm_id = p.get("project_manager_id")
@@ -1418,28 +1424,26 @@ async def get_project(project_id: str, request: Request,
                    if i.get("doc_type") != "quotation" and i.get("status") == "paid")
     ms_total = sum(m.get("amount", 0) or 0 for m in p["milestones"])
     ms_paid = sum(m.get("amount", 0) or 0 for m in p["milestones"] if m.get("status") == "paid")
-    vendor_cost = sum(b.get("total", 0) or 0 for b in p["vendor_bills"]
-                      if b.get("status") not in ("cancelled", "draft"))
-    p["financials"] = {
-        "budget": p.get("budget", 0) or 0,
-        "invoiced": round(inv_total, 2),
-        "collected": round(inv_paid, 2),
-        "outstanding": round(inv_total - inv_paid, 2),
-        "milestones_value": round(ms_total, 2),
-        "milestones_collected": round(ms_paid, 2),
-        "vendor_cost": round(vendor_cost, 2),
-    }
-    # --- financial privacy: hide money items from non-finance project staff ---
-    # Admin/Finance/Accounting (finance.read or invoices.read) keep full visibility;
-    # regular project employees only see the operational project (tasks/files/team).
-    can_fin = (has_permission(user, "*.*")
-               or has_permission(user, "finance.read")
-               or has_permission(user, "invoices.read"))
-    p["can_view_financials"] = bool(can_fin)
-    if not can_fin:
-        for _k in ("invoices", "milestones", "purchase_orders", "vendor_bills", "financials"):
-            p.pop(_k, None)
+    if can_invoice:
+        financials = {
+            "budget": p.get("budget", 0) or 0,
+            "invoiced": round(inv_total, 2),
+            "collected": round(inv_paid, 2),
+            "outstanding": round(inv_total - inv_paid, 2),
+            "milestones_value": round(ms_total, 2),
+            "milestones_collected": round(ms_paid, 2),
+        }
+        if can_vendor_cost:
+            financials["vendor_cost"] = round(sum(
+                b.get("total", 0) or 0 for b in p["vendor_bills"]
+                if b.get("status") not in ("cancelled", "draft")
+            ), 2)
+        p["financials"] = financials
+    else:
         p.pop("budget", None)
+    p["can_view_financials"] = bool(can_invoice)
+    p["can_view_procurement"] = bool(can_procurement)
+    p["can_view_vendor_costs"] = bool(can_vendor_cost)
     if not has_permission(user, "projects.update"):
         p.pop("share_token", None)
     return p

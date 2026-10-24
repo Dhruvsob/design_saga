@@ -11,7 +11,7 @@ from core.scoped_db import sdb
 from core.deps import require_user
 from core.helpers import iso_now, new_id
 from core.rbac import has_permission
-from core.access_control import get_visible_project, get_visible_task
+from core.access_control import get_visible_project, get_visible_purchase_order, get_visible_task
 
 router = APIRouter()
 
@@ -43,6 +43,9 @@ async def _require_entity_access(user: dict, entity_type: str, entity_id: str) -
         return
     if entity_type == "task":
         await get_visible_task(user, entity_id, projection={"_id": 0, "id": 1})
+        return
+    if entity_type == "purchase_order":
+        await get_visible_purchase_order(user, entity_id, projection={"_id": 0, "id": 1})
         return
 
     collection_name, permission = ENTITY_RULES[entity_type]

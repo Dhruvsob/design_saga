@@ -10,7 +10,12 @@ from fastapi import APIRouter, Request, Cookie, Header, Query
 from core.deps import require_user
 from core.scoped_db import sdb
 from core.rbac import has_permission
-from core.access_control import merge_query, project_visibility_query, task_visibility_query
+from core.access_control import (
+    merge_query,
+    project_visibility_query,
+    purchase_order_visibility_query,
+    task_visibility_query,
+)
 from routes.calendar import event_visibility_query
 
 router = APIRouter()
@@ -115,11 +120,16 @@ async def global_search(request: Request, q: str = Query(default="", max_length=
                lambda r: " \u00b7 ".join(x for x in [r.get("employee_id"), r.get("designation")] if x),
                "employees.read")
 
-    await push(sdb.purchase_orders, {"$or": [{"po_number": rx}, {"vendor_name": rx}]},
-               "purchase_order", "po_number",
-               lambda r: "/purchase-orders",
-               lambda r: " \u00b7 ".join(x for x in [r.get("vendor_name"), r.get("status")] if x),
-               "purchase_orders.read")
+    if has_permission(user, "purchase_orders.read"):
+        po_query = merge_query(
+            {"$or": [{"po_number": rx}, {"vendor_name": rx}]},
+            await purchase_order_visibility_query(user),
+        )
+        await push(sdb.purchase_orders, po_query,
+                   "purchase_order", "po_number",
+                   lambda r: "/purchase-orders",
+                   lambda r: " \u00b7 ".join(x for x in [r.get("vendor_name"), r.get("status")] if x),
+                   "purchase_orders.read")
 
     # Accounting transactions (journal entries) — by description/reference, and
     # by amount when the query is numeric (e.g. "30000" or "₹30,000").

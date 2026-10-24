@@ -123,6 +123,7 @@ _INDEXES = [
     # Purchase Orders + GRN
     ("purchase_orders",    [("org_id", 1), ("status", 1)], {}),
     ("purchase_orders",    [("org_id", 1), ("vendor_id", 1)], {}),
+    ("purchase_orders",    [("org_id", 1), ("project_id", 1)], {}),
     ("purchase_orders",    [("po_number", 1)], {"sparse": True}),
     ("goods_receipts",     [("org_id", 1), ("po_id", 1)], {}),
     ("goods_receipts",     [("grn_number", 1)], {"sparse": True}),

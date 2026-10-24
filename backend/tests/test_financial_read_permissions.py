@@ -12,6 +12,27 @@ from server import _can_read_invoices, _employee_for_user, _ensure_invoice_read
 from routes.vendors import _vendor_for_user
 
 
+class _Cursor:
+    def __init__(self, rows):
+        self.rows = [dict(row) for row in rows]
+
+    def sort(self, *_args):
+        return self
+
+    async def to_list(self, limit):
+        return self.rows[:limit]
+
+
+class _Collection:
+    def __init__(self, rows=()):
+        self.rows = list(rows)
+        self.find_calls = 0
+
+    def find(self, *_args, **_kwargs):
+        self.find_calls += 1
+        return _Cursor(self.rows)
+
+
 def test_invoice_models_reject_invalid_status_and_non_finite_money():
     with pytest.raises(ValidationError):
         server.InvoiceIn(status="unexpected")
@@ -108,6 +129,61 @@ def test_quotation_actuals_require_invoice_or_finance_read(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(server.adv_cost_vs_actual("quote_1", None))
     assert exc.value.status_code == 403
+
+
+def test_project_detail_separates_invoice_procurement_and_vendor_cost_access(monkeypatch):
+    collections = SimpleNamespace(
+        tasks=_Collection(), files=_Collection(), employees=_Collection(),
+        invoices=_Collection([{"id": "invoice_1", "total": 1000, "status": "sent"}]),
+        payment_milestones=_Collection([{"id": "milestone_1", "amount": 500}]),
+        purchase_orders=_Collection([{"id": "po_1", "grand_total": 600}]),
+        vendor_bills=_Collection([{"id": "bill_1", "total": 400, "status": "received"}]),
+    )
+
+    async def visible_project(_user, _project_id):
+        return {"id": "project_1", "name": "Residence", "budget": 2000, "team_ids": []}
+
+    monkeypatch.setattr(server, "sdb", collections)
+    monkeypatch.setattr(server, "get_visible_project", visible_project)
+
+    async def load(user):
+        async def authenticated(*_args, **_kwargs):
+            return user
+
+        monkeypatch.setattr(server, "require_user", authenticated)
+        return await server.get_project("project_1", None)
+
+    employee = asyncio.run(load({
+        "user_id": "employee_1", "permissions": ["projects.read", "purchase_orders.read"],
+    }))
+    assert employee["purchase_orders"][0]["id"] == "po_1"
+    assert employee["invoices"] == []
+    assert employee["milestones"] == []
+    assert employee["vendor_bills"] == []
+    assert "financials" not in employee and "budget" not in employee
+
+    project_manager = asyncio.run(load({
+        "user_id": "pm_1",
+        "permissions": ["projects.read", "invoices.read", "purchase_orders.read"],
+    }))
+    assert project_manager["invoices"][0]["id"] == "invoice_1"
+    assert project_manager["purchase_orders"][0]["id"] == "po_1"
+    assert project_manager["vendor_bills"] == []
+    assert "vendor_cost" not in project_manager["financials"]
+    assert project_manager["can_view_vendor_costs"] is False
+
+    accountant = asyncio.run(load({
+        "user_id": "accountant_1",
+        "permissions": ["projects.read", "invoices.read", "purchase_orders.read", "finance.read"],
+    }))
+    assert accountant["vendor_bills"][0]["id"] == "bill_1"
+    assert accountant["financials"]["vendor_cost"] == 400
+    assert accountant["can_view_vendor_costs"] is True
+
+    assert collections.invoices.find_calls == 2
+    assert collections.payment_milestones.find_calls == 2
+    assert collections.purchase_orders.find_calls == 3
+    assert collections.vendor_bills.find_calls == 1
 
 
 def test_invoice_issue_and_draft_transitions_post_and_reverse_accrual(monkeypatch):
