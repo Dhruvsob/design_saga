@@ -4,11 +4,11 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; deployed application baseline `fbbd7da` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; `fbbd7da` verified on 2026-10-24 after the quotation-conversion authorization repair.
+- Local checkout: `codex/repair-release`; deployed application baseline `81b06f3` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; runtime commit `949c372` and replay-safe updater commit `81b06f3` were verified on 2026-10-24.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Live URL/API and key-only SSH are reachable. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
-- Checksummed backup `/opt/design-saga-backups/20261024T061330Z` completed before the latest backend replacement.
+- Checksummed backup `/opt/design-saga-backups/20261024T062601Z` completed before the latest backend/frontend replacement.
 - Current action: continue the remaining P0 operations dependencies, then the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
 
 ## System Inventory
@@ -78,6 +78,8 @@ Last updated: 2026-10-24 (Asia/Calcutta)
 | DS-024 | Medium | Private notification controls, complete search, tenant audit UI and cash-flow activity split | Fixed, regression-tested and deployed; cash-flow totals retain backward-compatible fields |
 | DS-025 | Medium | Durable project/vendor document uploads with tenant authorization, validation and backup | Implemented and regression-tested; production deployment/live verification pending |
 | DS-026 | High | Quotation conversion bypasses client/project/task create permissions | Fixed, covered by conversion/concurrency regressions, deployed and verified healthy at `fbbd7da` |
+| DS-027 | High | Vendor permissions and broad tenant reads exposed purchase orders/GRNs outside visible projects; project invoice access exposed vendor bills/costs | Fixed, covered by permission and project-finance regressions, deployed and verified healthy at `949c372` |
+| DS-028 | Medium | Production updater could repeat the same successful release because `ORIG_HEAD` was not advanced | Fixed and installed at `81b06f3`; replay now exits without backup, rebuild or restart |
 
 ## User-Reported Master Backlog - 2026-10-23
 
