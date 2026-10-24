@@ -37,6 +37,7 @@ if printf '%s\n' "$changed" | grep -Eq '^(backend/|\.dockerignore$)'; then backe
 if printf '%s\n' "$changed" | grep -Eq '^(frontend/|deploy/nginx\.conf$|\.dockerignore$)'; then web=true; fi
 
 if [ "$backend" = false ] && [ "$web" = false ]; then
+  git update-ref ORIG_HEAD "$new_rev"
   echo "No runtime files changed; deployment skipped"
   exit 0
 fi
@@ -92,4 +93,5 @@ docker exec design-saga-backend-1 python -c \
 docker exec design-saga-backend-1 python -c \
   "import http.client; c=http.client.HTTPConnection('127.0.0.1', 8000, timeout=5); c.request('GET', '/api/auth/me'); r=c.getresponse(); assert r.status == 401, r.status"
 
+git update-ref ORIG_HEAD "$new_rev"
 echo "Design Saga deployment completed: $(printf '%s' "$new_rev" | cut -c1-7)"
