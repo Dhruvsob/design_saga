@@ -3479,6 +3479,10 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "quotations.update")
+    # Conversion is a composite create operation. Quotation edit rights alone
+    # must not bypass the normal project/task creation permissions.
+    _require_perm(user, "projects.create")
+    _require_perm(user, "tasks.create")
     conversion_claim = uuid.uuid4().hex
     q = await sdb.quotations_adv.find_one_and_update(
         {
@@ -3508,6 +3512,12 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
     client_id = q.get("client_id")
     created_client = False
     if not client_id:
+        if not has_permission(user, "clients.create"):
+            await sdb.quotations_adv.update_one(
+                {"id": qid, "conversion_claim": conversion_claim},
+                {"$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
+            )
+            raise HTTPException(status_code=403, detail="Missing permission: clients.create")
         client_id = new_id("cli_")
         created_client = True
     elif not await sdb.clients.find_one({"id": client_id}, {"_id": 0, "id": 1}):

@@ -2,6 +2,7 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -180,6 +181,7 @@ def test_concurrent_quotation_conversion_has_one_project_and_task_set(monkeypatc
 
     monkeypatch.setattr(server, "require_user", user)
     monkeypatch.setattr(server, "_require_perm", lambda *_args: None)
+    monkeypatch.setattr(server, "has_permission", lambda *_args: True)
     request = Request({
         "type": "http", "method": "POST",
         "path": "/api/quotations-adv/quote_1/convert-to-project",
@@ -204,6 +206,59 @@ def test_concurrent_quotation_conversion_has_one_project_and_task_set(monkeypatc
     assert {task["project_id"] for task in tasks.rows} == {projects.rows[0]["id"]}
     assert quotations.row["status"] == "converted"
     assert "conversion_claim" not in quotations.row
+
+
+def test_quotation_conversion_requires_project_and_task_create_permissions(monkeypatch):
+    quotations = _QuotationCollection()
+    clients, projects, tasks = _Rows(), _Rows(), _Rows()
+    monkeypatch.setattr(server, "sdb", SimpleNamespace(
+        quotations_adv=quotations, clients=clients, projects=projects, tasks=tasks,
+    ))
+
+    async def user(*_args, **_kwargs):
+        return {
+            "user_id": "designer", "name": "Designer", "org_id": "org_a",
+            "role": "Designer", "permissions": ["quotations.update"],
+        }
+
+    monkeypatch.setattr(server, "require_user", user)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.adv_convert("quote_1", _request()))
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Missing permission: projects.create"
+    assert not quotations.row.get("conversion_claim")
+    assert clients.rows == []
+    assert projects.rows == []
+    assert tasks.rows == []
+
+
+def test_quotation_conversion_requires_client_create_only_for_new_client(monkeypatch):
+    quotations = _QuotationCollection()
+    clients, projects, tasks = _Rows(), _Rows(), _Rows()
+    monkeypatch.setattr(server, "sdb", SimpleNamespace(
+        quotations_adv=quotations, clients=clients, projects=projects, tasks=tasks,
+    ))
+
+    async def user(*_args, **_kwargs):
+        return {
+            "user_id": "project_user", "name": "Project User", "org_id": "org_a",
+            "permissions": ["quotations.update", "projects.create", "tasks.create"],
+        }
+
+    monkeypatch.setattr(server, "require_user", user)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.adv_convert("quote_1", _request()))
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Missing permission: clients.create"
+    assert not quotations.row.get("conversion_claim")
+    assert "conversion_claimed_at" not in quotations.row
+    assert clients.rows == []
+    assert projects.rows == []
+    assert tasks.rows == []
 
 
 def test_converted_quotation_remains_readable_but_cannot_be_mutated(monkeypatch):
