@@ -7,7 +7,7 @@ import re
 _STRONG_PW = re.compile(r"^(?=.*[A-Za-z])(?=.*\d).{8,128}$")
 
 
-def _validate_password(v: str) -> str:
+def validate_password_strength(v: str) -> str:
     if not _STRONG_PW.match(v or ""):
         raise ValueError(
             "Password must be at least 8 characters and contain both letters and digits."
@@ -26,7 +26,7 @@ class RegisterIn(BaseModel):
     @field_validator("password")
     @classmethod
     def _pw(cls, v):
-        return _validate_password(v)
+        return validate_password_strength(v)
 
 
 class LoginPasswordIn(BaseModel):
@@ -41,7 +41,7 @@ class ChangePasswordIn(BaseModel):
     @field_validator("new_password")
     @classmethod
     def _pw(cls, v):
-        return _validate_password(v)
+        return validate_password_strength(v)
 
 
 class ResetPasswordIn(BaseModel):
@@ -50,7 +50,7 @@ class ResetPasswordIn(BaseModel):
     @field_validator("new_password")
     @classmethod
     def _pw(cls, v):
-        return _validate_password(v)
+        return validate_password_strength(v)
 
 
 class ApprovalDecisionIn(BaseModel):

@@ -210,6 +210,21 @@ async def _clear_lockout_for_user(user: dict):
         await db.login_attempts.delete_many({"identifier": {"$in": idents}})
 
 
+async def reset_user_security_after_admin_password_change(user: dict) -> bool:
+    """Revoke sessions and clear credentials that could block account recovery.
+
+    An administrator who can replace a user's login password already controls
+    that account's recovery. Keeping a forgotten app PIN after that reset would
+    make the new password unusable, so the PIN is removed and must be configured
+    again after the user signs in.
+    """
+    user_id = user["user_id"]
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await _clear_lockout_for_user(user)
+    result = await db.user_app_locks.delete_one({"user_id": user_id})
+    return bool(getattr(result, "deleted_count", 0))
+
+
 def _validate_app_pin(pin: str) -> str:
     value = str(pin or "").strip()
     if len(value) != 6 or not value.isdigit():
@@ -631,14 +646,11 @@ async def admin_reset_password(user_id: str, payload: ResetPasswordIn, request: 
                   "password_updated_at": iso_now(),
                   "password_reset_by": admin["user_id"]}}
     )
-    # Invalidate every active session of the target so they must re-login.
-    await db.user_sessions.delete_many({"user_id": user_id})
-    # Clear any brute-force lockout so the NEW password works immediately
-    # (otherwise a previously locked user stays blocked for 15 min after reset).
-    await _clear_lockout_for_user(target)
+    app_pin_reset = await reset_user_security_after_admin_password_change(target)
     await audit(admin, "user.password_reset", target=user_id, target_type="user",
-                meta={"sessions_revoked": True}, org_id=target.get("org_id"))
-    return {"ok": True, "unlocked": True}
+                meta={"sessions_revoked": True, "app_pin_reset": app_pin_reset},
+                org_id=target.get("org_id"))
+    return {"ok": True, "unlocked": True, "app_pin_reset": app_pin_reset}
 
 
 # ==================================================

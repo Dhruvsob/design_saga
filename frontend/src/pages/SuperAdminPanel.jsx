@@ -480,7 +480,10 @@ function CreateOrgModal({ onClose, onCreated }) {
                  value={f.admin_name} onChange={(e) => setF({...f, admin_name: e.target.value})} />
           <input required type="email" data-testid="co-admin-email" className="input-flat" placeholder="Admin email *"
                  value={f.admin_email} onChange={(e) => setF({...f, admin_email: e.target.value})} />
-          <input required minLength={8} data-testid="co-admin-password" className="input-flat" placeholder="Password (letters + digits, min 8) *"
+          <input required type="password" minLength={8} maxLength={128} autoComplete="new-password"
+                 pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
+                 title="Use at least 8 characters with at least one letter and one digit"
+                 data-testid="co-admin-password" className="input-flat" placeholder="Password (letters + digits, min 8) *"
                  value={f.admin_password} onChange={(e) => setF({...f, admin_password: e.target.value})} />
         </div>
         {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
@@ -678,7 +681,10 @@ function OrgAdminsModal({ org, onClose }) {
                  onChange={(e) => setNewAdmin({...newAdmin, name: e.target.value})} />
           <input required type="email" className="input-flat" placeholder="Email" value={newAdmin.email}
                  onChange={(e) => setNewAdmin({...newAdmin, email: e.target.value})} />
-          <input required minLength={6} className="input-flat" placeholder="Password" value={newAdmin.password}
+          <input required type="password" minLength={8} maxLength={128} autoComplete="new-password"
+                 pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
+                 title="Use at least 8 characters with at least one letter and one digit"
+                 className="input-flat" placeholder="Password (letters + digits, min 8)" value={newAdmin.password}
                  onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})} />
           <button disabled={busy} className="btn-primary text-xs">{busy ? "…" : "Create Admin"}</button>
         </form>
@@ -714,9 +720,13 @@ function ResetInline({ onCancel, onConfirm }) {
   const [pw, setPw] = useState("");
   return (
     <div className="mt-2 flex items-center gap-2 justify-end">
-      <input type="text" className="input-flat text-xs" placeholder="New password"
+      <input type="password" minLength={8} maxLength={128} autoComplete="new-password"
+             pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
+             title="Use at least 8 characters with at least one letter and one digit"
+             className="input-flat text-xs" placeholder="Letters + digits, min 8"
              value={pw} onChange={(e) => setPw(e.target.value)} style={{ width: 160 }} />
-      <button onClick={() => onConfirm(pw)} className="btn-primary text-xs" disabled={pw.length < 6}>Set</button>
+      <button onClick={() => onConfirm(pw)} className="btn-primary text-xs"
+              disabled={!/^(?=.*[A-Za-z])(?=.*\d).{8,128}$/.test(pw)}>Set</button>
       <button onClick={onCancel} className="btn-ghost text-xs">Cancel</button>
     </div>
   );

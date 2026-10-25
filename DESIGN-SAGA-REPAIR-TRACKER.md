@@ -1,15 +1,23 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-25 (Asia/Calcutta)
+Last updated: 2026-10-26 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; deployed application baseline `8e1ec41` is pushed to GitHub `main`, `production`, `repair`, and `codex/repair-release`.
+- Local checkout: `codex/repair-release`; the latest tested repair baseline before the current password hardening is `dcba5f8` and is pushed to GitHub `repair` and `codex/repair-release`.
 - Production checkout: `/opt/design-saga-git`; runtime commit `8e1ec41` was verified on 2026-10-24.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
-- Live URL/API and key-only SSH are reachable. Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification.
+- Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
-- Current action: continue the remaining P0 operations dependencies, then the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
+- Current action: preserve and push the verified password/PIN hardening, restore stable VPS access, then deploy with backup and health checks before continuing the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
+
+### DS-034: Unified password policy and recoverable personal app lock
+
+- Every tenant-owner, tenant-user and employee account creation/reset path now enforces the same 8-128 character letter-and-digit password policy on both API models and UI forms.
+- Admin password inputs are masked and use new-password autocomplete semantics; the remaining six-character UI rules were removed.
+- Privileged password recovery always revokes every user session, clears login lockouts and removes a forgotten app PIN. The reset is tenant-scoped and audited, and the user must sign in and configure a new PIN. Self-service password changes preserve the existing PIN.
+- Local verification: 43 focused password/auth/tenant/PIN/release tests pass; Python compilation, frontend ESLint, production build and diff checks pass. A broader legacy run passed 212 tests; its remaining live-integration tests are not runnable locally because they depend on `/app/frontend/.env`, `REACT_APP_BACKEND_URL`, and an unavailable Emergent preview TLS endpoint.
+- Deployment: pending stable Hostinger SSH or console access. Production remains unchanged.
 
 ### DS-020: Posting recovery, attendance availability and milestone collection
 
@@ -94,6 +102,7 @@ Last updated: 2026-10-25 (Asia/Calcutta)
 | DS-031 | Low | Operational screens displayed inconsistent raw ISO dates | Fixed across accounting, milestones, projects, attendance, clients, vendors, invoices, expenses, POs, loans, tasks, employee/RBAC, portal and platform surfaces with the shared DD/MM/YYYY formatter; timestamp boundaries are rendered in IST and pure calendar dates remain stable; deployed and live-verified at `8e1ec41` |
 | DS-032 | High | Production monitor omitted memory/load/database-capacity and TLS-expiry checks | Fixed and active at `8669d1d`; the five-minute monitor now validates all four thresholds in addition to service, site, disk and backup health |
 | DS-033 | High | Long-running Caddy container retained a stale DNS upstream and could not reach the ACME renewal service | Corrected in production by a scoped Caddy restart; IPv6 DNS and ACME directory connectivity pass, certificate remains valid through 29/12/2026, and TLS-expiry monitoring is active |
+| DS-034 | High | Password rules differed by account-creation path and admin reset could leave a user trapped behind a forgotten app PIN | Fixed and regression-tested locally; pushed repair deployment pending stable VPS access |
 
 ## User-Reported Master Backlog - 2026-10-23
 

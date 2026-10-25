@@ -739,12 +739,15 @@ function ErpAccessTab({ employeeId, isAdmin }) {
   };
 
   const resetPassword = async () => {
-    if (!newPass || newPass.length < 8) { setPwMsg("Password must be at least 8 characters"); return; }
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,128}$/.test(newPass)) {
+      setPwMsg("Password must be 8–128 characters and include a letter and a digit");
+      return;
+    }
     setPwMsg("");
     try {
       await api.post(`/employees/${employeeId}/account/reset-password`, { password: newPass });
       setNewPass("");
-      setPwMsg("Password reset — the employee will need to sign in again.");
+      setPwMsg("Password reset. All sessions and the old app PIN were cleared; the employee must sign in again.");
     } catch (ex) {
       setPwMsg(ex?.response?.data?.detail || "Reset failed");
     }
@@ -781,10 +784,12 @@ function ErpAccessTab({ employeeId, isAdmin }) {
                 <div className="border-t border-[#E5E5E5] pt-3 mt-1 space-y-2">
                   <div className="overline flex items-center gap-1.5"><Key size={12} /> Reset password</div>
                   <div className="flex items-center gap-2">
-                    <input type="text" className="input-flat flex-1" placeholder="New password (min 8 chars)"
+                    <input type="password" minLength={8} maxLength={128} autoComplete="new-password"
+                           className="input-flat flex-1" placeholder="Letters + digits, min 8"
                            value={newPass} onChange={(e) => setNewPass(e.target.value)}
                            data-testid="erp-reset-password-input" />
-                    <button type="button" onClick={resetPassword} disabled={newPass.length < 8}
+                    <button type="button" onClick={resetPassword}
+                            disabled={!/^(?=.*[A-Za-z])(?=.*\d).{8,128}$/.test(newPass)}
                             className="btn-ghost text-xs disabled:opacity-40" data-testid="erp-reset-password-btn">Set</button>
                   </div>
                   {pwMsg && <div className="text-[11px] text-[#8B7F6A]" data-testid="erp-reset-password-msg">{pwMsg}</div>}
@@ -806,8 +811,11 @@ function ErpAccessTab({ employeeId, isAdmin }) {
                      onChange={(e) => setForm({ ...form, email: e.target.value })}
                      placeholder="Leave blank to use employee email" />
             </Row>
-            <Row label="Temporary password (min 8 chars)">
-              <input className="input-flat" type="text" required minLength={8} value={form.password}
+            <Row label="Temporary password (letters + digits, min 8)">
+              <input className="input-flat" type="password" required minLength={8} maxLength={128}
+                     autoComplete="new-password" pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
+                     title="Use at least 8 characters with at least one letter and one digit"
+                     value={form.password}
                      onChange={(e) => setForm({ ...form, password: e.target.value })}
                      data-testid="erp-create-password" />
             </Row>
@@ -828,7 +836,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
           <li>Each employee can have one ERP login tied to their Employee ID.</li>
           <li>The role controls what they can see and do — enforced by the server on every request.</li>
           <li>Deactivating a login instantly ends all of that person's sessions.</li>
-          <li>Passwords can be reset here by an Admin — the employee is signed out everywhere.</li>
+          <li>An Admin password reset signs the employee out everywhere and clears any old app PIN.</li>
         </ul>
       </Card>
     </div>

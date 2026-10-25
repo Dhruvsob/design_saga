@@ -503,7 +503,10 @@ function CreateUserForm({ roles, onDone }) {
           value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         <input required type="email" data-testid="cu-email" className="input-flat" placeholder="Email *"
           value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-        <input required data-testid="cu-password" type="text" className="input-flat" placeholder="Initial password *"
+        <input required data-testid="cu-password" type="password" minLength={8} maxLength={128}
+          autoComplete="new-password" pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
+          title="Use at least 8 characters with at least one letter and one digit"
+          className="input-flat" placeholder="Password (letters + digits, min 8) *"
           value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
         <input className="input-flat" placeholder="Phone"
           value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
@@ -546,11 +549,14 @@ function ResetPasswordModal({ userId, user, onClose }) {
         <div className="overline">RESET PASSWORD</div>
         <div className="font-display font-bold tracking-tight text-2xl">{user?.name || "User"}</div>
         <div className="text-xs text-[#5C5C5C]">{user?.email} · {user?.employee_id}</div>
-        <input required minLength={6} type="text" data-testid="reset-pwd-input"
-          className="input-flat w-full" placeholder="New password (min 6 chars)"
+        <input required minLength={8} maxLength={128} type="password" autoComplete="new-password"
+          pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
+          title="Use at least 8 characters with at least one letter and one digit"
+          data-testid="reset-pwd-input" className="input-flat w-full"
+          placeholder="New password (letters + digits, min 8)"
           value={pw} onChange={(e) => setPw(e.target.value)} />
         <p className="text-xs text-[#9A9A9A]">
-          All active sessions for this user will be logged out. They'll need to sign in again with the new password.
+          All active sessions will be logged out. An existing app PIN will also be cleared so the user can sign in and set a new one.
         </p>
         {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">

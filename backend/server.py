@@ -52,6 +52,7 @@ from core.access_control import (  # noqa: E402
 from core.url_security import external_http_url  # noqa: E402
 from core.tenancy import user_org_id  # noqa: E402
 from models.base import FiniteModel  # noqa: E402
+from models.user import validate_password_strength  # noqa: E402
 from services.local_files import remove_upload, resolve_storage_key, save_upload  # noqa: E402
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
@@ -4560,6 +4561,11 @@ class EmployeeAccountIn(BaseModel):
     role: str = "Employee"
     email: Optional[str] = None       # defaults to the employee's email
 
+    @field_validator("password")
+    @classmethod
+    def _password_strength(cls, value: str) -> str:
+        return validate_password_strength(value)
+
 
 @api.post("/employees/{eid}/account")
 async def create_employee_account(eid: str, payload: EmployeeAccountIn, request: Request,
@@ -4657,7 +4663,12 @@ async def set_employee_account_status(eid: str, payload: EmployeeAccountStatusIn
 
 class EmployeePasswordResetIn(BaseModel):
     password: str = Field(min_length=8, max_length=128)
-    sign_out_everywhere: Optional[bool] = True
+    sign_out_everywhere: Literal[True] = True
+
+    @field_validator("password")
+    @classmethod
+    def _password_strength(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 @api.post("/employees/{eid}/account/reset-password")
@@ -4674,7 +4685,7 @@ async def reset_employee_account_password(eid: str, payload: EmployeePasswordRes
     target_filter = _employee_account_filter(emp, user)
     org_id = target_filter["org_id"]
     target = await db.users.find_one(
-        target_filter, {"_id": 0, "user_id": 1})
+        target_filter, {"_id": 0, "user_id": 1, "email": 1, "employee_id": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Linked user not found")
     from routes.auth import hash_password as _hash_pw
@@ -4682,15 +4693,15 @@ async def reset_employee_account_password(eid: str, payload: EmployeePasswordRes
                               {"$set": {"password_hash": _hash_pw(payload.password),
                                         "password_reset_at": iso(now_utc()),
                                         "password_reset_by": user["user_id"]}})
-    # Force re-login on all devices unless explicitly skipped, but keep the admin's own session.
-    if payload.sign_out_everywhere:
-        await db.user_sessions.delete_many({"user_id": emp["user_id"]})
+    from routes.auth import reset_user_security_after_admin_password_change
+    app_pin_reset = await reset_user_security_after_admin_password_change(target)
     await audit_log(user, "employee.account_password_reset", target=emp["user_id"],
                     target_type="user",
                     meta={"employee_id": eid,
-                          "sessions_revoked": bool(payload.sign_out_everywhere)},
+                          "sessions_revoked": True,
+                          "app_pin_reset": app_pin_reset},
                     org_id=org_id)
-    return {"ok": True}
+    return {"ok": True, "app_pin_reset": app_pin_reset}
 
 
 # ---------------- Salary revisions / effective-dated increments ----------------

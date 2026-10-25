@@ -392,10 +392,12 @@ async def reset_org_user_password(org_id: str, user_id: str, payload: ResetPassw
                   "password_updated_at": iso_now(),
                   "password_reset_by": sa["user_id"]}}
     )
-    await db.user_sessions.delete_many({"user_id": user_id})
+    from routes.auth import reset_user_security_after_admin_password_change
+    app_pin_reset = await reset_user_security_after_admin_password_change(user)
     await audit(sa, "user.password_reset", target=user_id, target_type="user",
-                meta={"sessions_revoked": True}, org_id=org_id)
-    return {"ok": True}
+                meta={"sessions_revoked": True, "app_pin_reset": app_pin_reset},
+                org_id=org_id)
+    return {"ok": True, "app_pin_reset": app_pin_reset}
 
 
 # ------------------------------------------------------------------

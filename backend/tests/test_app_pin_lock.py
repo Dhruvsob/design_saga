@@ -116,3 +116,38 @@ def test_incorrect_pin_attempts_are_counted_and_lock_after_five(monkeypatch):
     assert exc.value.status_code == 429
     assert locks.doc["failed_attempts"] == 5
     assert locks.doc.get("locked_until") is not None
+
+
+def test_admin_password_reset_revokes_sessions_lockout_and_app_pin(monkeypatch):
+    class Collection:
+        def __init__(self, deleted_count=0):
+            self.queries = []
+            self.deleted_count = deleted_count
+
+        async def delete_many(self, query):
+            self.queries.append(query)
+            return SimpleNamespace(deleted_count=self.deleted_count)
+
+        async def delete_one(self, query):
+            self.queries.append(query)
+            return SimpleNamespace(deleted_count=self.deleted_count)
+
+    sessions = Collection(2)
+    attempts = Collection(3)
+    locks = Collection(1)
+    monkeypatch.setattr(auth, "db", SimpleNamespace(
+        user_sessions=sessions,
+        login_attempts=attempts,
+        user_app_locks=locks,
+    ))
+
+    reset = asyncio.run(auth.reset_user_security_after_admin_password_change({
+        "user_id": "user_a",
+        "email": "Person@Example.com",
+        "employee_id": "DS0007",
+    }))
+
+    assert reset is True
+    assert sessions.queries == [{"user_id": "user_a"}]
+    assert attempts.queries == [{"identifier": {"$in": ["person@example.com", "ds0007"]}}]
+    assert locks.queries == [{"user_id": "user_a"}]
