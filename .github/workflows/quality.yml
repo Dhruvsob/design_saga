@@ -47,6 +47,8 @@ jobs:
           tests/test_visibility_surfaces.py
           tests/test_tenant_lookup_scoping.py
           tests/test_auth_tenant_safety.py
+          tests/test_password_policy.py
+          tests/test_app_pin_lock.py
           tests/test_rbac_session_safety.py
           tests/test_conversion_safety.py
           tests/test_repair_release_safety.py
@@ -54,6 +56,8 @@ jobs:
           tests/test_expense_safety.py
           tests/test_google_calendar.py
           tests/test_notification_safety.py
+          tests/test_notification_tenant_safety.py
+          tests/test_monitor_safety.py
           tests/test_public_share_safety.py
           tests/test_attendance_safety.py
 
