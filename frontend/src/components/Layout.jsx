@@ -5,13 +5,14 @@ import {
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard,
   Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn,
-  Scroll,
+  Scroll, LockKey,
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
 import CalendarReminders from "./CalendarReminders";
 import { useEffect, useState } from "react";
 import { formatDate, formatTime } from "../lib/format";
+import { PinSecurityDialog } from "./AppPinLock";
 
 const NAV = [
   { to: "/dashboard",   label: "Dashboard",    section: "01", perm: "dashboard.read", Icon: SquaresFour },
@@ -45,6 +46,7 @@ export default function Layout({ children }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pinSettingsOpen, setPinSettingsOpen] = useState(false);
 
   // Close the mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -195,6 +197,13 @@ export default function Layout({ children }) {
             </div>
           </div>
           <button
+            onClick={() => setPinSettingsOpen(true)}
+            data-testid="sidebar-app-lock-btn"
+            className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-2.5 mb-2 rounded-xl border border-[#E8E6E1] bg-white text-[#6B6B6B] hover:text-[#1A1A1A] hover:border-[#8B7F6A] transition"
+          >
+            <LockKey size={14} /> {user?.app_pin_enabled ? "App lock" : "Set app PIN"}
+          </button>
+          <button
             onClick={logout}
             data-testid="sidebar-logout-btn"
             className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-xl border border-[#E8E6E1] bg-white text-[#6B6B6B] hover:text-[#1A1A1A] hover:border-[#8B7F6A] transition"
@@ -203,6 +212,8 @@ export default function Layout({ children }) {
           </button>
         </div>
       </aside>
+
+      {pinSettingsOpen && <PinSecurityDialog onClose={() => setPinSettingsOpen(false)} />}
 
       {/* ============== MAIN ============== */}
       <main className="flex-1 min-w-0">

@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
 import Layout from "./components/Layout";
+import { PinLockOverlay } from "./components/AppPinLock";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Leads = lazy(() => import("./pages/Leads"));
@@ -41,13 +42,16 @@ const PageFallback = () => (
 );
 
 function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
-  const { user, loading, hasPerm, isPending, isRejected, isSuperAdmin, logout } = useAuth();
+  const { user, loading, pinLocked, hasPerm, isPending, isRejected, isSuperAdmin, logout } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
     if (!loading && !user) navigate("/", { replace: true });
   }, [user, loading, navigate]);
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (!user) return null;
+  // Unmount protected screens while locked so previously loaded business data
+  // is not left rendered beneath the opaque lock screen.
+  if (pinLocked) return <div className="min-h-screen bg-[#F7F6F2]" aria-hidden="true" />;
 
   // Pending / rejected: block ERP access entirely.
   if (isPending || isRejected) {
@@ -159,6 +163,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <AppRouter />
+          <PinLockOverlay />
         </BrowserRouter>
       </AuthProvider>
       <Toaster

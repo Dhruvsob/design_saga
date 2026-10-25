@@ -26,6 +26,7 @@ Design decisions
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
 import bcrypt
 import hashlib
 import uuid
@@ -47,6 +48,17 @@ router = APIRouter()
 MAX_FAILED = 5
 MAX_FAILED_PER_IP = 30
 LOCKOUT_MINUTES = 15
+PIN_MAX_FAILED = 5
+PIN_LOCKOUT_MINUTES = 15
+
+
+class AppPinIn(BaseModel):
+    pin: str
+
+
+class AppPinSetupIn(BaseModel):
+    pin: str
+    current_pin: Optional[str] = None
 
 
 # ==================================================
@@ -97,7 +109,7 @@ async def _next_employee_id(org_id: str) -> str:
 
 def _pack_user(u: dict) -> dict:
     """Public projection: strips password_hash, adds `permissions`, `org_id`."""
-    out = {k: v for k, v in u.items() if k != "password_hash"}
+    out = {k: v for k, v in u.items() if k not in {"password_hash", "app_pin_hash"}}
     role = normalize_role(u.get("role"))
     out["role"] = role
     if isinstance(u.get("permissions"), list):
@@ -120,12 +132,17 @@ async def _set_session_cookie(response: Response, user_id: str) -> str:
     import secrets
     from core.helpers import session_digest
     token = secrets.token_hex(32)
-    await db.user_sessions.insert_one({
+    pin_required = bool(await db.user_app_locks.find_one(
+        {"user_id": user_id, "enabled": True}, {"_id": 1}))
+    session = {
         "user_id": user_id,
         "session_token": session_digest(token),
         "expires_at": now_utc() + timedelta(days=7),
         "created_at": now_utc(),
-    })
+    }
+    if pin_required:
+        session["pin_required"] = True
+    await db.user_sessions.insert_one(session)
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     response.set_cookie(
         key="session_token", value=token,
@@ -191,6 +208,75 @@ async def _clear_lockout_for_user(user: dict):
         idents.append(str(user["employee_id"]).lower())
     if idents:
         await db.login_attempts.delete_many({"identifier": {"$in": idents}})
+
+
+def _validate_app_pin(pin: str) -> str:
+    value = str(pin or "").strip()
+    if len(value) != 6 or not value.isdigit():
+        raise HTTPException(status_code=400, detail="App PIN must contain exactly 6 digits")
+    return value
+
+
+def _current_auth_session(request: Request) -> dict:
+    session = getattr(request.state, "auth_session", None)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return session
+
+
+def _utc_datetime(value):
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+async def _verify_app_pin(user: dict, pin: str) -> dict:
+    doc = await db.user_app_locks.find_one(
+        {"user_id": user["user_id"], "enabled": True}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=409, detail="App PIN is not configured")
+    locked_until = _utc_datetime(doc.get("locked_until"))
+    if locked_until and locked_until > now_utc():
+        seconds = max(1, int((locked_until - now_utc()).total_seconds()))
+        raise HTTPException(status_code=429, detail=f"Too many incorrect PIN attempts. Try again in {seconds} seconds")
+    if verify_password(str(pin or ""), doc.get("pin_hash") or ""):
+        await db.user_app_locks.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {"failed_attempts": 0, "last_unlocked_at": now_utc()},
+             "$unset": {"locked_until": ""}},
+        )
+        return doc
+
+    # Increment atomically so parallel guesses cannot overwrite one another and
+    # evade the attempt limit.
+    await db.user_app_locks.update_one(
+        {"user_id": user["user_id"], "enabled": True},
+        {"$inc": {"failed_attempts": 1}, "$set": {"last_failed_at": now_utc()}},
+    )
+    current = await db.user_app_locks.find_one(
+        {"user_id": user["user_id"], "enabled": True},
+        {"_id": 0, "failed_attempts": 1},
+    )
+    failures = int((current or {}).get("failed_attempts") or 0)
+    if failures >= PIN_MAX_FAILED:
+        await db.user_app_locks.update_one(
+            {"user_id": user["user_id"], "enabled": True},
+            {"$set": {
+                "locked_until": now_utc() + timedelta(minutes=PIN_LOCKOUT_MINUTES),
+            }},
+        )
+        raise HTTPException(status_code=429, detail="Too many incorrect PIN attempts. Try again in 15 minutes")
+    raise HTTPException(
+        status_code=401,
+        detail=f"Incorrect PIN. {PIN_MAX_FAILED - failures} attempt(s) remaining",
+    )
 
 
 def _identifier_query(identifier: str) -> dict:
@@ -284,7 +370,161 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
         fresh["permissions"] = await resolve_permissions(fresh.get("role"), user_org_id(fresh))
     except Exception:
         pass
-    return {"user": _pack_user(fresh), "session_token": token}
+    packed = _pack_user(fresh)
+    pin_required = bool(await db.user_app_locks.find_one(
+        {"user_id": user["user_id"], "enabled": True}, {"_id": 1}))
+    packed["app_pin_enabled"] = pin_required
+    packed["app_pin_locked"] = pin_required
+    return {"user": packed, "session_token": token}
+
+
+# ==================================================
+# PERSONAL APP PIN / ONE-MINUTE INACTIVITY LOCK
+# ==================================================
+@router.get("/auth/pin/status")
+async def app_pin_status(request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await get_current_user(request, session_token, authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await ensure_user_access(user)
+    from core.session_lock import PIN_TIMEOUT_SECONDS, session_pin_locked
+    session = _current_auth_session(request)
+    return {
+        "enabled": bool(session.get("pin_required")),
+        "locked": session_pin_locked(session),
+        "timeout_seconds": PIN_TIMEOUT_SECONDS,
+    }
+
+
+@router.post("/auth/pin/setup")
+async def setup_app_pin(payload: AppPinSetupIn, request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await get_current_user(request, session_token, authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await ensure_user_access(user)
+    session = _current_auth_session(request)
+    pin = _validate_app_pin(payload.pin)
+    existing = await db.user_app_locks.find_one(
+        {"user_id": user["user_id"], "enabled": True}, {"_id": 0})
+    if existing:
+        await _verify_app_pin(user, payload.current_pin or "")
+    else:
+        from core.session_lock import session_is_recent
+        if not session_is_recent(session):
+            raise HTTPException(
+                status_code=401,
+                detail="For security, sign out and sign in again before setting your App PIN",
+            )
+
+    now = now_utc()
+    await db.user_app_locks.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {
+            "user_id": user["user_id"],
+            "org_id": user.get("org_id"),
+            "enabled": True,
+            "pin_hash": hash_password(pin),
+            "failed_attempts": 0,
+            "updated_at": now,
+            "updated_by": user["user_id"],
+        }, "$setOnInsert": {"created_at": now},
+         "$unset": {"locked_until": ""}},
+        upsert=True,
+    )
+    await db.user_sessions.update_many(
+        {"user_id": user["user_id"]},
+        {"$set": {"pin_required": True}, "$unset": {"pin_unlocked_until": ""}},
+    )
+    from core.session_lock import PIN_TIMEOUT_SECONDS
+    unlocked_until = now_utc() + timedelta(seconds=PIN_TIMEOUT_SECONDS)
+    await db.user_sessions.update_one(
+        {"session_token": session["session_token"]},
+        {"$set": {"pin_required": True, "pin_unlocked_until": unlocked_until}},
+    )
+    await audit(user, "auth.app_pin.setup", target=user["user_id"], target_type="user",
+                meta={"changed": bool(existing), "timeout_seconds": PIN_TIMEOUT_SECONDS})
+    return {"ok": True, "enabled": True, "locked": False,
+            "timeout_seconds": PIN_TIMEOUT_SECONDS}
+
+
+@router.post("/auth/pin/unlock")
+async def unlock_app_pin(payload: AppPinIn, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await get_current_user(request, session_token, authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await ensure_user_access(user)
+    session = _current_auth_session(request)
+    await _verify_app_pin(user, _validate_app_pin(payload.pin))
+    from core.session_lock import PIN_TIMEOUT_SECONDS
+    unlocked_until = now_utc() + timedelta(seconds=PIN_TIMEOUT_SECONDS)
+    await db.user_sessions.update_one(
+        {"session_token": session["session_token"]},
+        {"$set": {"pin_required": True, "pin_unlocked_until": unlocked_until}},
+    )
+    await audit(user, "auth.app_pin.unlock", target=user["user_id"], target_type="user")
+    return {"ok": True, "locked": False, "timeout_seconds": PIN_TIMEOUT_SECONDS}
+
+
+@router.post("/auth/pin/touch")
+async def touch_app_pin(request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await get_current_user(request, session_token, authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await ensure_user_access(user)
+    session = _current_auth_session(request)
+    if not session.get("pin_required"):
+        return {"ok": True, "enabled": False}
+    from core.session_lock import PIN_TIMEOUT_SECONDS, session_pin_locked
+    if session_pin_locked(session):
+        raise HTTPException(status_code=423, detail="App PIN required")
+    await db.user_sessions.update_one(
+        {"session_token": session["session_token"]},
+        {"$set": {"pin_unlocked_until": now_utc() + timedelta(seconds=PIN_TIMEOUT_SECONDS)}},
+    )
+    return {"ok": True, "locked": False}
+
+
+@router.post("/auth/pin/lock")
+async def lock_app_pin(request: Request,
+                       session_token: Optional[str] = Cookie(default=None),
+                       authorization: Optional[str] = Header(default=None)):
+    user = await get_current_user(request, session_token, authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await ensure_user_access(user)
+    session = _current_auth_session(request)
+    if session.get("pin_required"):
+        await db.user_sessions.update_one(
+            {"session_token": session["session_token"]},
+            {"$unset": {"pin_unlocked_until": ""}},
+        )
+    return {"ok": True, "locked": bool(session.get("pin_required"))}
+
+
+@router.post("/auth/pin/disable")
+async def disable_app_pin(payload: AppPinIn, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    user = await get_current_user(request, session_token, authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await ensure_user_access(user)
+    await _verify_app_pin(user, _validate_app_pin(payload.pin))
+    await db.user_app_locks.delete_one({"user_id": user["user_id"]})
+    await db.user_sessions.update_many(
+        {"user_id": user["user_id"]},
+        {"$unset": {"pin_required": "", "pin_unlocked_until": ""}},
+    )
+    await audit(user, "auth.app_pin.disable", target=user["user_id"], target_type="user")
+    return {"ok": True, "enabled": False, "locked": False}
 
 
 # ==================================================

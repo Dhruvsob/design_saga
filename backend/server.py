@@ -132,6 +132,8 @@ async def get_current_user(
         clear_scope()
         return None
 
+    request.state.auth_session = session
+
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
     from core.deps import apply_session_context
     user = apply_session_context(user, session)
@@ -158,6 +160,8 @@ async def require_user(request: Request, session_token: Optional[str] = Cookie(d
         raise HTTPException(status_code=401, detail="Not authenticated")
     from core.deps import ensure_user_access
     await ensure_user_access(user)
+    from core.session_lock import enforce_session_pin
+    await enforce_session_pin(request)
     return user
 
 
@@ -199,7 +203,7 @@ def _user_with_perms(user: dict) -> dict:
     Always strips `password_hash` — never leak the bcrypt digest."""
     if not user:
         return user
-    out = {k: v for k, v in user.items() if k != "password_hash"}
+    out = {k: v for k, v in user.items() if k not in {"password_hash", "app_pin_hash"}}
     out["role"] = _normalize_role(user.get("role"))
     if isinstance(user.get("permissions"), list):
         out["permissions"] = list(user["permissions"])
@@ -554,12 +558,17 @@ async def create_session(request: Request, response: Response):
     # Store session
     expires_at = now_utc() + timedelta(days=7)
     from core.helpers import session_digest
-    await db.user_sessions.insert_one({
+    pin_required = bool(await db.user_app_locks.find_one(
+        {"user_id": user_id, "enabled": True}, {"_id": 1}))
+    session_doc = {
         "user_id": user_id,
         "session_token": session_digest(session_token),
         "expires_at": expires_at,
         "created_at": now_utc(),
-    })
+    }
+    if pin_required:
+        session_doc["pin_required"] = True
+    await db.user_sessions.insert_one(session_doc)
 
     # httpOnly cookie
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
@@ -580,15 +589,27 @@ async def create_session(request: Request, response: Response):
         user_out["permissions"] = await _resolve_perms(user_out.get("role"), _uoid_sess(user_out))
     except Exception:
         pass
-    return {"user": _user_with_perms(user_out), "session_token": session_token}
+    packed = _user_with_perms(user_out)
+    packed["app_pin_enabled"] = pin_required
+    packed["app_pin_locked"] = pin_required
+    return {"user": packed, "session_token": session_token}
 
 
 @api.get("/auth/me")
 async def auth_me(user=None, request: Request = None,
                   session_token: Optional[str] = Cookie(default=None),
                   authorization: Optional[str] = Header(default=None)):
-    user = await require_user(request, session_token, authorization)
-    return _user_with_perms(user)
+    user = await get_current_user(request, session_token, authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    from core.deps import ensure_user_access
+    from core.session_lock import session_pin_locked
+    await ensure_user_access(user)
+    packed = _user_with_perms(user)
+    session = getattr(request.state, "auth_session", {})
+    packed["app_pin_enabled"] = bool(session.get("pin_required"))
+    packed["app_pin_locked"] = session_pin_locked(session)
+    return packed
 
 
 @api.post("/auth/logout")

@@ -17,6 +17,8 @@ _INDEXES = [
     ("user_sessions",      [("session_token", 1)], {"unique": True}),
     ("user_sessions",      [("user_id", 1)], {}),
     ("user_sessions",      [("expires_at", 1)], {"expireAfterSeconds": 0}),
+    ("user_app_locks",     [("user_id", 1)],
+                            {"name": "user_app_lock_unique", "unique": True}),
     ("login_attempts",     [("identifier", 1), ("at", -1)], {}),
     ("login_attempts",     [("ip_hash", 1), ("at", -1)], {}),
     ("login_attempts",     [("at", 1)], {"expireAfterSeconds": 86400}),

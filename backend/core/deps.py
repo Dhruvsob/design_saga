@@ -90,6 +90,8 @@ async def get_current_user(
         clear_scope()
         return None
 
+    request.state.auth_session = session
+
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
     user = apply_session_context(user, session)
     if user:
@@ -141,6 +143,8 @@ async def require_user(
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     await ensure_user_access(user)
+    from .session_lock import enforce_session_pin
+    await enforce_session_pin(request)
     # Tenant scope re-affirmed (get_current_user already set it)
     set_scope_from_user(user)
     return user

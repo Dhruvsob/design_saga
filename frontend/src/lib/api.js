@@ -48,4 +48,14 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 423 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("app-pin-locked"));
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

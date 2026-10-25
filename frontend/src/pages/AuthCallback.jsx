@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { refresh } = useAuth();
   const hasProcessed = useRef(false);
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function AuthCallback() {
           { headers: { "X-Session-ID": sessionId } }
         );
         if (data.session_token) setSessionToken(data.session_token);
-        setUser(data.user);
+        await refresh();
         // clear hash
         window.history.replaceState(null, "", "/dashboard");
         navigate("/dashboard", { replace: true, state: { user: data.user } });
@@ -38,7 +38,7 @@ export default function AuthCallback() {
         navigate("/", { replace: true });
       }
     })();
-  }, [navigate, setUser]);
+  }, [navigate, refresh]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
