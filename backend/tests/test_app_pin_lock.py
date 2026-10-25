@@ -12,7 +12,7 @@ from core.session_lock import (
     session_is_recent,
     session_pin_locked,
 )
-from routes.auth import _validate_app_pin
+from routes.auth import _validate_app_pin, _validate_new_app_pin
 
 
 NOW = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
@@ -46,12 +46,24 @@ def test_pin_lock_accepts_iso_dates_and_rejects_invalid_dates():
     }, at=NOW) is True
 
 
-def test_pin_must_be_exactly_six_numeric_digits():
+def test_pin_must_be_four_or_six_numeric_digits():
+    assert _validate_app_pin("0123") == "0123"
     assert _validate_app_pin("012345") == "012345"
-    for invalid in ("1234", "1234567", "12a456", "", None):
+    for invalid in ("123", "12345", "1234567", "12a456", "", None):
         with pytest.raises(HTTPException) as exc:
             _validate_app_pin(invalid)
         assert exc.value.status_code == 400
+
+
+def test_new_pin_rejects_shared_or_predictable_defaults_without_breaking_unlock_validation():
+    assert _validate_app_pin("1234") == "1234"
+    assert _validate_app_pin("123456") == "123456"
+    for weak in ("1234", "123456", "0000", "999999"):
+        with pytest.raises(HTTPException) as exc:
+            _validate_new_app_pin(weak)
+        assert exc.value.status_code == 400
+    assert _validate_new_app_pin("4826") == "4826"
+    assert _validate_new_app_pin("482615") == "482615"
 
 
 def test_recent_login_window_is_bounded_and_rejects_future_timestamps():
@@ -69,6 +81,17 @@ def test_server_guard_blocks_expired_pin_session():
     with pytest.raises(HTTPException) as exc:
         asyncio.run(enforce_session_pin(request))
     assert exc.value.status_code == 423
+
+
+def test_server_guard_requires_pin_setup_before_business_access():
+    request = SimpleNamespace(state=SimpleNamespace(auth_session={
+        "pin_required": True,
+        "pin_setup_required": True,
+    }))
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(enforce_session_pin(request))
+    assert exc.value.status_code == 428
+    assert "personal App PIN" in exc.value.detail
 
 
 def test_server_guard_allows_unlocked_or_non_pin_session():

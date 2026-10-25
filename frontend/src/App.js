@@ -6,7 +6,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
 import Layout from "./components/Layout";
-import { PinLockOverlay } from "./components/AppPinLock";
+import { MandatoryPinSetupOverlay, PinLockOverlay } from "./components/AppPinLock";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Leads = lazy(() => import("./pages/Leads"));
@@ -49,10 +49,6 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
   }, [user, loading, navigate]);
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (!user) return null;
-  // Unmount protected screens while locked so previously loaded business data
-  // is not left rendered beneath the opaque lock screen.
-  if (pinLocked) return <div className="min-h-screen bg-[#F7F6F2]" aria-hidden="true" />;
-
   // Pending / rejected: block ERP access entirely.
   if (isPending || isRejected) {
     return (
@@ -79,6 +75,10 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
       </div>
     );
   }
+
+  // Unmount protected screens while locked so previously loaded business data
+  // is not left rendered beneath the opaque lock screen.
+  if (pinLocked || user.app_pin_setup_required) return <div className="min-h-screen bg-[#F7F6F2]" aria-hidden="true" />;
 
   if (requireSuperAdmin && !isSuperAdmin) {
     return (
@@ -163,6 +163,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <AppRouter />
+          <MandatoryPinSetupOverlay />
           <PinLockOverlay />
         </BrowserRouter>
       </AuthProvider>

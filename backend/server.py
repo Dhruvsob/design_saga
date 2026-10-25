@@ -133,6 +133,8 @@ async def get_current_user(
         clear_scope()
         return None
 
+    from core.session_lock import ensure_session_pin_policy
+    session = await ensure_session_pin_policy(session, session["user_id"])
     request.state.auth_session = session
 
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
@@ -559,7 +561,7 @@ async def create_session(request: Request, response: Response):
     # Store session
     expires_at = now_utc() + timedelta(days=7)
     from core.helpers import session_digest
-    pin_required = bool(await db.user_app_locks.find_one(
+    pin_configured = bool(await db.user_app_locks.find_one(
         {"user_id": user_id, "enabled": True}, {"_id": 1}))
     session_doc = {
         "user_id": user_id,
@@ -567,8 +569,9 @@ async def create_session(request: Request, response: Response):
         "expires_at": expires_at,
         "created_at": now_utc(),
     }
-    if pin_required:
-        session_doc["pin_required"] = True
+    session_doc["pin_required"] = True
+    if not pin_configured:
+        session_doc["pin_setup_required"] = True
     await db.user_sessions.insert_one(session_doc)
 
     # httpOnly cookie
@@ -591,8 +594,9 @@ async def create_session(request: Request, response: Response):
     except Exception:
         pass
     packed = _user_with_perms(user_out)
-    packed["app_pin_enabled"] = pin_required
-    packed["app_pin_locked"] = pin_required
+    packed["app_pin_enabled"] = pin_configured
+    packed["app_pin_setup_required"] = not pin_configured
+    packed["app_pin_locked"] = pin_configured
     return {"user": packed, "session_token": session_token}
 
 
@@ -608,8 +612,10 @@ async def auth_me(user=None, request: Request = None,
     await ensure_user_access(user)
     packed = _user_with_perms(user)
     session = getattr(request.state, "auth_session", {})
-    packed["app_pin_enabled"] = bool(session.get("pin_required"))
-    packed["app_pin_locked"] = session_pin_locked(session)
+    setup_required = bool(session.get("pin_setup_required"))
+    packed["app_pin_enabled"] = bool(session.get("pin_required")) and not setup_required
+    packed["app_pin_setup_required"] = setup_required
+    packed["app_pin_locked"] = not setup_required and session_pin_locked(session)
     return packed
 
 

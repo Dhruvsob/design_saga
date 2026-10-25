@@ -90,6 +90,8 @@ async def get_current_user(
         clear_scope()
         return None
 
+    from .session_lock import ensure_session_pin_policy
+    session = await ensure_session_pin_policy(session, session["user_id"])
     request.state.auth_session = session
 
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})

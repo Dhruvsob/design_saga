@@ -535,6 +535,14 @@ This is the canonical intake list supplied after the repair-release deployment. 
 
 ## Deployment Safety
 
+### DS-020: Mandatory personal App PIN and one-minute lock
+
+- Root cause: the inactivity lock was server-enforced but optional, accepted only six-digit PINs, and could be disabled by the user. Accounts without a configured PIN and sessions created before rollout could continue without the second local security step.
+- Correction: every active approved user must create a separate 4- or 6-digit PIN before business APIs or screens are available. New and existing sessions are upgraded fail-closed, existing PINs remain valid, PINs stay bcrypt-hashed, predictable shared defaults are rejected for new PINs, and users can no longer disable the control. The existing five-attempt/15-minute lockout, one-minute inactivity timeout, manual Lock now action, session isolation, and audit logging remain in place.
+- Safety: no shared `1234`/`123456` credential is assigned and no existing password or PIN is overwritten. Pending and deactivated users retain their existing lifecycle screens. An administrator password reset still clears the old PIN as an account-recovery action, after which the user must enroll a new personal PIN at next login.
+- Verification: 196 backend security/integrity regressions passed, full frontend lint passed with zero warnings, and the production frontend bundle built successfully.
+- Database effect: no migration or business-data rewrite. Session rows are upgraded lazily on first authenticated request; PIN hashes are written only when each user completes enrollment.
+
 ### DS-019: Attendance project selection for authorized sites
 
 - Root cause: the Attendance page reused the general `/projects` list, whose project-team visibility correctly hid projects from unassigned employees. Hiren Panchal is in the `Site Execution` department but was not a project team member, leaving his site-project selector empty despite his cross-site supervision duties.

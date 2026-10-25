@@ -132,7 +132,7 @@ async def _set_session_cookie(response: Response, user_id: str) -> str:
     import secrets
     from core.helpers import session_digest
     token = secrets.token_hex(32)
-    pin_required = bool(await db.user_app_locks.find_one(
+    pin_configured = bool(await db.user_app_locks.find_one(
         {"user_id": user_id, "enabled": True}, {"_id": 1}))
     session = {
         "user_id": user_id,
@@ -140,8 +140,9 @@ async def _set_session_cookie(response: Response, user_id: str) -> str:
         "expires_at": now_utc() + timedelta(days=7),
         "created_at": now_utc(),
     }
-    if pin_required:
-        session["pin_required"] = True
+    session["pin_required"] = True
+    if not pin_configured:
+        session["pin_setup_required"] = True
     await db.user_sessions.insert_one(session)
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     response.set_cookie(
@@ -227,8 +228,21 @@ async def reset_user_security_after_admin_password_change(user: dict) -> bool:
 
 def _validate_app_pin(pin: str) -> str:
     value = str(pin or "").strip()
-    if len(value) != 6 or not value.isdigit():
-        raise HTTPException(status_code=400, detail="App PIN must contain exactly 6 digits")
+    if len(value) not in {4, 6} or not value.isdigit():
+        raise HTTPException(status_code=400, detail="App PIN must contain 4 or 6 digits")
+    return value
+
+
+def _validate_new_app_pin(pin: str) -> str:
+    value = _validate_app_pin(pin)
+    weak_values = {
+        "0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999",
+        "0123", "1234", "4321", "9876",
+        "000000", "111111", "222222", "333333", "444444", "555555", "666666",
+        "777777", "888888", "999999", "012345", "123456", "654321", "987654",
+    }
+    if value in weak_values:
+        raise HTTPException(status_code=400, detail="Choose a less predictable personal App PIN")
     return value
 
 
@@ -386,10 +400,11 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
     except Exception:
         pass
     packed = _pack_user(fresh)
-    pin_required = bool(await db.user_app_locks.find_one(
+    pin_configured = bool(await db.user_app_locks.find_one(
         {"user_id": user["user_id"], "enabled": True}, {"_id": 1}))
-    packed["app_pin_enabled"] = pin_required
-    packed["app_pin_locked"] = pin_required
+    packed["app_pin_enabled"] = pin_configured
+    packed["app_pin_setup_required"] = not pin_configured
+    packed["app_pin_locked"] = pin_configured
     return {"user": packed, "session_token": token}
 
 
@@ -407,8 +422,9 @@ async def app_pin_status(request: Request,
     from core.session_lock import PIN_TIMEOUT_SECONDS, session_pin_locked
     session = _current_auth_session(request)
     return {
-        "enabled": bool(session.get("pin_required")),
-        "locked": session_pin_locked(session),
+        "enabled": bool(session.get("pin_required")) and not session.get("pin_setup_required"),
+        "setup_required": bool(session.get("pin_setup_required")),
+        "locked": not session.get("pin_setup_required") and session_pin_locked(session),
         "timeout_seconds": PIN_TIMEOUT_SECONDS,
     }
 
@@ -422,7 +438,7 @@ async def setup_app_pin(payload: AppPinSetupIn, request: Request,
         raise HTTPException(status_code=401, detail="Not authenticated")
     await ensure_user_access(user)
     session = _current_auth_session(request)
-    pin = _validate_app_pin(payload.pin)
+    pin = _validate_new_app_pin(payload.pin)
     existing = await db.user_app_locks.find_one(
         {"user_id": user["user_id"], "enabled": True}, {"_id": 0})
     if existing:
@@ -452,13 +468,15 @@ async def setup_app_pin(payload: AppPinSetupIn, request: Request,
     )
     await db.user_sessions.update_many(
         {"user_id": user["user_id"]},
-        {"$set": {"pin_required": True}, "$unset": {"pin_unlocked_until": ""}},
+        {"$set": {"pin_required": True},
+         "$unset": {"pin_unlocked_until": "", "pin_setup_required": ""}},
     )
     from core.session_lock import PIN_TIMEOUT_SECONDS
     unlocked_until = now_utc() + timedelta(seconds=PIN_TIMEOUT_SECONDS)
     await db.user_sessions.update_one(
         {"session_token": session["session_token"]},
-        {"$set": {"pin_required": True, "pin_unlocked_until": unlocked_until}},
+        {"$set": {"pin_required": True, "pin_unlocked_until": unlocked_until},
+         "$unset": {"pin_setup_required": ""}},
     )
     await audit(user, "auth.app_pin.setup", target=user["user_id"], target_type="user",
                 meta={"changed": bool(existing), "timeout_seconds": PIN_TIMEOUT_SECONDS})
@@ -532,14 +550,7 @@ async def disable_app_pin(payload: AppPinIn, request: Request,
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     await ensure_user_access(user)
-    await _verify_app_pin(user, _validate_app_pin(payload.pin))
-    await db.user_app_locks.delete_one({"user_id": user["user_id"]})
-    await db.user_sessions.update_many(
-        {"user_id": user["user_id"]},
-        {"$unset": {"pin_required": "", "pin_unlocked_until": ""}},
-    )
-    await audit(user, "auth.app_pin.disable", target=user["user_id"], target_type="user")
-    return {"ok": True, "enabled": False, "locked": False}
+    raise HTTPException(status_code=403, detail="App Lock is required for every account")
 
 
 # ==================================================

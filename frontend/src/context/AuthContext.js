@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
       // missing org gracefully (catches + sets null), and the backend resolves
       // a default org even for SuperAdmins without an org_id — so the Company
       // settings page loads instead of being stuck on a skeleton.
-      if (!data?.app_pin_locked) await fetchOrg();
+      if (!data?.app_pin_locked && !data?.app_pin_setup_required) await fetchOrg();
     } catch {
       setUser(null);
       setCurrentOrg(null);
@@ -146,7 +146,7 @@ export function AuthProvider({ children }) {
     if (data.session_token) setSessionToken(data.session_token);
     setUser(data.user);
     setPinLocked(Boolean(data.user?.app_pin_locked));
-    if (!data.user?.app_pin_locked) await fetchOrg();
+    if (!data.user?.app_pin_locked && !data.user?.app_pin_setup_required) await fetchOrg();
     return data.user;
   };
 
@@ -155,7 +155,7 @@ export function AuthProvider({ children }) {
       pin, current_pin: currentPin || null,
     });
     setUser((current) => current ? {
-      ...current, app_pin_enabled: true, app_pin_locked: false,
+      ...current, app_pin_enabled: true, app_pin_setup_required: false, app_pin_locked: false,
     } : current);
     setPinLocked(false);
     broadcastPinState(false);
@@ -178,16 +178,6 @@ export function AuthProvider({ children }) {
     try { await api.post("/auth/pin/lock"); } catch { /* server lease expires independently */ }
   };
 
-  const disablePin = async (pin) => {
-    const { data } = await api.post("/auth/pin/disable", { pin });
-    setUser((current) => current ? {
-      ...current, app_pin_enabled: false, app_pin_locked: false,
-    } : current);
-    setPinLocked(false);
-    broadcastPinState(false);
-    return data;
-  };
-
   const hasPerm = useCallback((perm) => checkPerm(user?.permissions, perm), [user]);
   const isPending = user?.approval_status === "pending";
   const isRejected =
@@ -201,7 +191,7 @@ export function AuthProvider({ children }) {
         user, setUser, loading, logout, refresh: checkAuth, hasPerm,
         loginWithPassword, isPending, isRejected, isSuperAdmin,
         currentOrg, refreshOrg: fetchOrg,
-        pinLocked, setupPin, unlockPin, lockNow, disablePin,
+        pinLocked, setupPin, unlockPin, lockNow,
       }}
     >
       {children}
