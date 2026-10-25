@@ -19,6 +19,13 @@ Last updated: 2026-10-26 (Asia/Calcutta)
 - Local verification: 43 focused password/auth/tenant/PIN/release tests pass; Python compilation, frontend ESLint, production build and diff checks pass. A broader legacy run passed 212 tests; its remaining live-integration tests are not runnable locally because they depend on `/app/frontend/.env`, `REACT_APP_BACKEND_URL`, and an unavailable Emergent preview TLS endpoint.
 - Deployment: pending stable Hostinger SSH or console access. Production remains unchanged.
 
+### DS-035: Notification ownership after tenant reassignment
+
+- Notification list, unread count, read, mark-all-read and dismiss operations now require both the authenticated `user_id` and effective `org_id`.
+- Notification deduplication now includes `org_id`, so an old tenant's notification cannot suppress a valid notification after reassignment.
+- This prevents notifications from a user's former company remaining visible or mutable after a Super Admin reassigns the user to another tenant. Legacy rows without tenant ownership fail closed.
+- Local verification is covered by focused tenant-filter regression tests; deployment is pending stable VPS access.
+
 ### DS-020: Posting recovery, attendance availability and milestone collection
 
 - Accounting integrity: commission receipts now use stable request keys, allocate only earned commission to income, hold excess cash in `Commission Advances`, recalculate allocation totals after retries, and exclude reversed bill allocations. Loan creation, EMI and prepayment retries recover existing journals instead of posting duplicates.
@@ -103,6 +110,7 @@ Last updated: 2026-10-26 (Asia/Calcutta)
 | DS-032 | High | Production monitor omitted memory/load/database-capacity and TLS-expiry checks | Fixed and active at `8669d1d`; the five-minute monitor now validates all four thresholds in addition to service, site, disk and backup health |
 | DS-033 | High | Long-running Caddy container retained a stale DNS upstream and could not reach the ACME renewal service | Corrected in production by a scoped Caddy restart; IPv6 DNS and ACME directory connectivity pass, certificate remains valid through 29/12/2026, and TLS-expiry monitoring is active |
 | DS-034 | High | Password rules differed by account-creation path and admin reset could leave a user trapped behind a forgotten app PIN | Fixed and regression-tested locally; pushed repair deployment pending stable VPS access |
+| DS-035 | High | Reassigned users could retain notifications from their previous tenant because personal notification queries omitted `org_id` | Fixed and regression-tested locally; deployment pending stable VPS access |
 
 ## User-Reported Master Backlog - 2026-10-23
 

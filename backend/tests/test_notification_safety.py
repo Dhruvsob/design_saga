@@ -75,7 +75,7 @@ def test_emit_dedup_is_atomic_and_excludes_inactive_users(monkeypatch):
 
     assert first == 1
     assert second == 0
-    assert list(notifications.rows) == ["active:daily:1"]
+    assert list(notifications.rows) == ["org_a:active:daily:1"]
     assert users.queries[0]["is_active"] == {"$ne": False}
 
 
@@ -114,7 +114,7 @@ def test_emit_honours_tenant_scoped_user_preferences(monkeypatch):
         ["quiet", "enabled"], "task_due", "Task due", dedup_key="task:1"))
 
     assert inserted == 1
-    assert list(notifications.rows) == ["enabled:task:1"]
+    assert list(notifications.rows) == ["org_a:enabled:task:1"]
     assert preferences.queries[0]["$or"] == [
         {"user_id": "quiet", "org_id": "org_a"},
         {"user_id": "enabled", "org_id": "org_a"},

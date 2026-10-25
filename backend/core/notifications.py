@@ -23,7 +23,7 @@ Notification schema
   priority,              # low | normal | high | urgent
   read,                  # bool
   meta,                  # dict — free-form context (amount, project_id, …)
-  dedup_key,             # optional; unique per (user_id, dedup_key) to avoid dupes
+  dedup_key,             # optional; unique per (org_id, user_id, dedup_key)
   created_at, expires_at (optional)
 }
 """
@@ -122,7 +122,10 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
             "expires_at": expires_at,
         }
         if dedup_key:
-            doc["dedup_id"] = f"{uid}:{dedup_key}"
+            # Include tenant ownership so reassignment cannot let a stale row
+            # in the previous company suppress a valid notification in the
+            # user's new company.
+            doc["dedup_id"] = f"{doc['org_id'] or 'org_default'}:{uid}:{dedup_key}"
         docs.append(doc)
     if not docs:
         return 0

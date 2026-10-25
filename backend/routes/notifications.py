@@ -42,6 +42,20 @@ def _require_scan_permission(user: dict) -> None:
         raise HTTPException(403, "Missing permission: finance.read")
 
 
+def notification_owner_filter(user: dict, **extra) -> dict:
+    """Bind personal notifications to both identity and current tenant.
+
+    User IDs are globally random, but a platform administrator can reassign a
+    user to another tenant. Filtering only by user_id would expose stale
+    notifications from the previous company after that reassignment.
+    """
+    return {
+        "user_id": user["user_id"],
+        "org_id": user_org_id(user),
+        **extra,
+    }
+
+
 # ==================================================
 # List / count / mark read / dismiss
 # ==================================================
@@ -81,7 +95,7 @@ async def list_notifications(request: Request,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    q: dict = {"user_id": user["user_id"]}
+    q = notification_owner_filter(user)
     if unread_only:
         q["read"] = False
     if kind:
@@ -90,8 +104,7 @@ async def list_notifications(request: Request,
                                  .sort("created_at", -1) \
                                  .limit(min(max(limit, 1), 500)).to_list(500)
     unread = await db.notifications.count_documents(
-        {"user_id": user["user_id"], "read": False}
-    )
+        notification_owner_filter(user, read=False))
     return {"unread_count": unread, "notifications": rows}
 
 
@@ -101,8 +114,7 @@ async def unread_count(request: Request,
                        authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     n = await db.notifications.count_documents(
-        {"user_id": user["user_id"], "read": False}
-    )
+        notification_owner_filter(user, read=False))
     return {"unread_count": n}
 
 
@@ -112,7 +124,7 @@ async def mark_read(ntf_id: str, request: Request,
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     res = await db.notifications.update_one(
-        {"id": ntf_id, "user_id": user["user_id"]},
+        notification_owner_filter(user, id=ntf_id),
         {"$set": {"read": True, "read_at": iso_now()}},
     )
     if res.matched_count == 0:
@@ -126,7 +138,7 @@ async def mark_all_read(request: Request,
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     res = await db.notifications.update_many(
-        {"user_id": user["user_id"], "read": False},
+        notification_owner_filter(user, read=False),
         {"$set": {"read": True, "read_at": iso_now()}},
     )
     return {"ok": True, "marked": res.modified_count}
@@ -137,7 +149,7 @@ async def dismiss_notification(ntf_id: str, request: Request,
                                session_token: Optional[str] = Cookie(default=None),
                                authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    await db.notifications.delete_one({"id": ntf_id, "user_id": user["user_id"]})
+    await db.notifications.delete_one(notification_owner_filter(user, id=ntf_id))
     return {"ok": True}
 
 
