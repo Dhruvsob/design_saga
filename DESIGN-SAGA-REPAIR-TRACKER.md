@@ -26,6 +26,12 @@ Last updated: 2026-10-26 (Asia/Calcutta)
 - This prevents notifications from a user's former company remaining visible or mutable after a Super Admin reassigns the user to another tenant. Legacy rows without tenant ownership fail closed.
 - Local verification is covered by focused tenant-filter regression tests; deployment is pending stable VPS access.
 
+### DS-036: Repeated backend 5xx monitoring
+
+- The five-minute production monitor now counts backend HTTP 5xx responses from the previous five minutes and raises a deduplicated alert when the configurable threshold is reached.
+- The default threshold is five responses and can be changed with `DESIGN_SAGA_MAX_BACKEND_5XX_COUNT`. Threshold validation and monitor wiring have regression coverage.
+- Deployment and external alert delivery verification remain pending stable VPS access.
+
 ### DS-020: Posting recovery, attendance availability and milestone collection
 
 - Accounting integrity: commission receipts now use stable request keys, allocate only earned commission to income, hold excess cash in `Commission Advances`, recalculate allocation totals after retries, and exclude reversed bill allocations. Loan creation, EMI and prepayment retries recover existing journals instead of posting duplicates.
@@ -111,6 +117,7 @@ Last updated: 2026-10-26 (Asia/Calcutta)
 | DS-033 | High | Long-running Caddy container retained a stale DNS upstream and could not reach the ACME renewal service | Corrected in production by a scoped Caddy restart; IPv6 DNS and ACME directory connectivity pass, certificate remains valid through 29/12/2026, and TLS-expiry monitoring is active |
 | DS-034 | High | Password rules differed by account-creation path and admin reset could leave a user trapped behind a forgotten app PIN | Fixed and regression-tested locally; pushed repair deployment pending stable VPS access |
 | DS-035 | High | Reassigned users could retain notifications from their previous tenant because personal notification queries omitted `org_id` | Fixed and regression-tested locally; deployment pending stable VPS access |
+| DS-036 | High | Production monitor did not detect repeated backend HTTP 5xx responses | Fixed and regression-tested locally; deployment pending stable VPS access |
 
 ## User-Reported Master Backlog - 2026-10-23
 

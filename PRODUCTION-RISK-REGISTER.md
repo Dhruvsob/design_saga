@@ -21,7 +21,7 @@ yet received sufficient adversarial testing.
 | Host firewall | Deny unsolicited inbound traffic while preserving SSH, HTTP, HTTPS, and HTTP/3 | Fixed: UFW default-deny is active with only 22/tcp, 80/tcp, 443/tcp, and 443/udp allowed for IPv4/IPv6 |
 | Backups | Encrypted automated database backups, off-server retention, restore drill, documented RPO/RTO | Partial: daily checksummed archive, repeatable isolated restore validation and engineering RPO/RTO are documented; off-server encrypted retention remains open |
 | Disaster rollback | Known image tags, database compatibility, service-specific rollback, preserved Caddy configuration | Fixed baseline: repeatable restore drill and incident runbook verified against the 2026-10-24 production backup; full provider-loss exercise remains dependent on off-server replication |
-| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/memory/load/database-capacity/TLS/backup monitor is active; external notification delivery is parked pending Hostinger outbound IPv4 resolution, and 5xx-rate alerting remains open |
+| Monitoring | Uptime, container health, disk, memory, CPU, database capacity, TLS expiry, 5xx rate and backup-failure alerts | Partial: five-minute container/site/API/disk/memory/load/database-capacity/TLS/backup monitor is active; repeated backend 5xx detection is implemented and pending deployment; external notification delivery remains blocked by Hostinger outbound IPv4 resolution |
 
 ## P1 - Authorization and Data Protection
 

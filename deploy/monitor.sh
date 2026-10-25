@@ -10,6 +10,7 @@ max_memory_percent=${DESIGN_SAGA_MAX_MEMORY_PERCENT:-90}
 max_load_per_cpu_percent=${DESIGN_SAGA_MAX_LOAD_PER_CPU_PERCENT:-200}
 max_db_connection_percent=${DESIGN_SAGA_MAX_DB_CONNECTION_PERCENT:-80}
 min_tls_valid_seconds=${DESIGN_SAGA_MIN_TLS_VALID_SECONDS:-1209600}
+max_backend_5xx_count=${DESIGN_SAGA_MAX_BACKEND_5XX_COUNT:-5}
 public_host=${DESIGN_SAGA_PUBLIC_HOST:-gamaa.in}
 webhook=${DESIGN_SAGA_ALERT_WEBHOOK_URL:-}
 
@@ -26,7 +27,8 @@ add_problem() {
 }
 
 for setting in "$max_backup_age" "$max_disk_percent" "$max_memory_percent" \
-  "$max_load_per_cpu_percent" "$max_db_connection_percent" "$min_tls_valid_seconds"; do
+  "$max_load_per_cpu_percent" "$max_db_connection_percent" "$min_tls_valid_seconds" \
+  "$max_backend_5xx_count"; do
   case "$setting" in
     ''|*[!0-9]*) echo "Monitor thresholds must be non-negative integers" >&2; exit 2 ;;
   esac
@@ -50,6 +52,19 @@ docker exec design-saga-web-1 wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || \
 docker exec design-saga-backend-1 python -c \
   "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/', timeout=5)" \
   >/dev/null 2>&1 || add_problem "API origin did not respond"
+
+backend_cid=$(docker compose ps -q backend 2>/dev/null || true)
+if [ -n "$backend_cid" ]; then
+  backend_5xx_count=$(docker logs --since 5m "$backend_cid" 2>&1 | \
+    grep -Ec 'HTTP/[0-9.]+" 5[0-9][0-9]( |$)' || true)
+  case "$backend_5xx_count" in
+    ''|*[!0-9]*) add_problem "backend 5xx rate could not be read" ;;
+    *)
+      [ "$backend_5xx_count" -lt "$max_backend_5xx_count" ] || \
+        add_problem "backend returned ${backend_5xx_count} HTTP 5xx responses in five minutes"
+      ;;
+  esac
+fi
 
 if command -v openssl >/dev/null 2>&1; then
   cert_path=$(docker exec design-saga-caddy-1 find /data/caddy/certificates -type f \
