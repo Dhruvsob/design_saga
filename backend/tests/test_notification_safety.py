@@ -137,6 +137,22 @@ def test_mandatory_account_notices_ignore_optional_preferences(monkeypatch):
     assert inserted == 1
 
 
+def test_emit_normalizes_legacy_default_tenant_ownership(monkeypatch):
+    users = _Users([{"user_id": "legacy", "org_id": None, "is_active": True}])
+    notifications = _Notifications()
+    monkeypatch.setattr(
+        notifications_module, "db",
+        SimpleNamespace(users=users, notifications=notifications),
+    )
+
+    inserted = asyncio.run(notifications_module.emit(
+        ["legacy"], "info", "Status", dedup_key="legacy:1"))
+
+    assert inserted == 1
+    row = notifications.rows["org_default:legacy:legacy:1"]
+    assert row["org_id"] == "org_default"
+
+
 async def _zero():
     return 0
 

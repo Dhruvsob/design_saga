@@ -79,7 +79,7 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
             "approval_status": {"$nin": ["pending", "rejected"]},
         },
                                  {"_id": 0, "user_id": 1, "org_id": 1}):
-        org_by_uid[u["user_id"]] = u.get("org_id")
+        org_by_uid[u["user_id"]] = u.get("org_id") or "org_default"
     # Tenant isolation: inside a tenant request, recipients from any other
     # organisation (or unknown users) are silently dropped.
     from core.scoped_db import current_org_id
@@ -88,7 +88,7 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
     candidate_ids = list(org_by_uid)
     if kind not in MANDATORY_KINDS and candidate_ids:
         preference_keys = [
-            {"user_id": uid, "org_id": org_by_uid.get(uid) or "org_default"}
+            {"user_id": uid, "org_id": org_by_uid[uid]}
             for uid in candidate_ids
         ]
         async for pref in db.notification_preferences.find(
@@ -101,15 +101,15 @@ async def emit(user_ids: List[str], kind: str, title: str, body: str = "",
             continue
         if uid not in org_by_uid:
             continue
-        if scope_org and (org_by_uid.get(uid) or "org_default") != scope_org:
+        if scope_org and org_by_uid[uid] != scope_org:
             continue
-        pref_key = (uid, org_by_uid.get(uid) or "org_default")
+        pref_key = (uid, org_by_uid[uid])
         if category and preferences.get(pref_key, {}).get(category) is False:
             continue
         doc = {
             "id": new_id("ntf_"),
             "user_id": uid,
-            "org_id": org_by_uid.get(uid),
+            "org_id": org_by_uid[uid],
             "kind": kind,
             "title": title,
             "body": body,
