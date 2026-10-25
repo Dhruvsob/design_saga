@@ -6,7 +6,7 @@ import api from "../lib/api";
 import { formatDate } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import {
-  X, ArrowSquareOut, PencilSimple, ArrowUUpLeft, FloppyDisk, Warning,
+  X, ArrowSquareOut, PencilSimple, ArrowUUpLeft, FloppyDisk, Warning, Trash,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) =>
@@ -21,6 +21,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const [mode, setMode] = useState("view");
   const [busy, setBusy] = useState(false);
   const [confirmReverse, setConfirmReverse] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmUndo, setConfirmUndo] = useState(false);
   const [form, setForm] = useState({
     date: entry.date || "",
@@ -38,10 +39,17 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const isReinstatement = source.endsWith("_reinstatement");
   const isReversed = !!entry.reversed;
   const canUpdate = hasPerm("finance.update");
+  const canDeletePermission = hasPerm("finance.delete");
   const canUndoReversal = canUpdate && isReversal && !entry.undone &&
-    ["manual_reversal", "income_reversal", "expense_reversal"].includes(source);
+    ["manual_reversal", "income_reversal", "expense_reversal", "non_operating_reversal"].includes(source);
   const canModify = canUpdate && !isReversal && !isReinstatement && !isReversed;
-  const canEditAmount = false;
+  const canCorrect = canModify && !entry.source_id && lines.length === 2 &&
+    ["", "manual", "income", "expense", "non_operating"].includes(source);
+  const canEditAmount = canCorrect;
+  const canDelete = canDeletePermission && !isReversal && !isReinstatement && !isReversed && (
+    (!entry.source_id && ["", "manual", "income", "expense", "non_operating"].includes(source)) ||
+    ["invoice_payment", "milestone_payment"].includes(source)
+  );
   // Drill-through: open the most relevant source record.
   const drillTarget = (() => {
     if (source.startsWith("loan_")) return { label: "Open loan", path: `/loans/${entry.source_id || ""}` };
@@ -74,13 +82,35 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
         narration: form.narration,
         reference: form.reference,
       };
-      if (canEditAmount) payload.amount = Number(form.amount);
-      await api.patch(`/journal-entries/${entry.id}`, payload);
-      toast.success("Transaction updated");
+      const protectedFieldsChanged = canCorrect && (
+        form.date !== entry.date || Number(form.amount) !== Number(entry.total)
+      );
+      if (protectedFieldsChanged) {
+        payload.amount = Number(form.amount);
+        await api.post(`/journal-entries/${entry.id}/correct`, payload);
+        toast.success("Transaction corrected with a complete audit trail");
+      } else {
+        await api.patch(`/journal-entries/${entry.id}`, payload);
+        toast.success("Transaction updated");
+      }
       onChanged && onChanged();
       onClose();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not update transaction");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doDelete = async () => {
+    setBusy(true);
+    try {
+      await api.delete(`/journal-entries/${entry.id}`);
+      toast.success("Transaction deleted from the books; audit history retained");
+      onChanged && onChanged();
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete transaction");
     } finally {
       setBusy(false);
     }
@@ -153,7 +183,8 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
             <div>
               <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Date</label>
               <input type="date" className="input-flat w-full" value={form.date}
-                disabled data-testid="txn-edit-date" />
+                disabled={!canCorrect}
+                onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="txn-edit-date" />
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Description</label>
@@ -170,10 +201,16 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
               <input type="number" step="0.01" className="input-flat w-full" value={form.amount}
                 disabled={!canEditAmount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="txn-edit-amount" />
-              {!canEditAmount && (
+              {!canCorrect && (
                 <div className="text-[11px] text-[#9A9A9A] mt-1 flex items-start gap-1">
                   <Warning size={13} className="mt-0.5 shrink-0" />
-                  Posted dates and amounts are corrected by reversal so the audit trail remains complete.
+                  Linked dates and amounts must be corrected from their original invoice, expense, payroll, vendor, or loan record.
+                </div>
+              )}
+              {canCorrect && (
+                <div className="text-[11px] text-[#9A9A9A] mt-1 flex items-start gap-1">
+                  <Warning size={13} className="mt-0.5 shrink-0" />
+                  Changing the date or amount creates a balanced correction and keeps the audit history.
                 </div>
               )}
             </div>
@@ -244,10 +281,29 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                     <button
                       onClick={() => setConfirmReverse(true)}
                       className="btn-ghost text-sm"
-                      title="Posted transactions cannot be deleted. Reverse creates a balancing audit entry."
+                      title="Post a visible balancing entry while keeping the original transaction in the books."
                       data-testid="txn-reverse-btn"
                     >
                       <ArrowUUpLeft size={14} /> Reverse
+                    </button>
+                  )
+                )}
+                {canDelete && (
+                  confirmDelete ? (
+                    <span className="flex items-center gap-1">
+                      <button onClick={doDelete} disabled={busy} className="btn-primary bg-[#B4001C] text-sm" data-testid="txn-delete-confirm">
+                        {busy ? "Deleting…" : "Confirm delete"}
+                      </button>
+                      <button onClick={() => setConfirmDelete(false)} className="btn-ghost text-sm">No</button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => { setConfirmDelete(true); setConfirmReverse(false); }}
+                      className="btn-ghost text-sm text-[#B4001C]"
+                      title="Remove a mistaken transaction from normal books using an audit-safe balancing entry."
+                      data-testid="txn-delete-btn"
+                    >
+                      <Trash size={14} /> Delete
                     </button>
                   )
                 )}

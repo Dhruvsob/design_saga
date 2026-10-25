@@ -801,7 +801,7 @@ async def list_journal(request: Request,
     """
     await require_user(request, session_token, authorization)
     fd, td, _ = resolve_period(fy, from_date, to_date)
-    query: dict = {}
+    query: dict = {"voided_from_view": {"$ne": True}}
     if fd or td:
         d = {}
         if fd: d["$gte"] = fd
@@ -858,6 +858,104 @@ class JournalEditIn(FiniteModel):
     narration: Optional[str] = None
     reference: Optional[str] = None
     amount: Optional[float] = None
+
+
+class JournalCorrectionIn(FiniteModel):
+    date: str
+    narration: str
+    reference: Optional[str] = None
+    amount: float
+
+
+def _can_void_from_journal(je: dict) -> bool:
+    """Return whether a journal can be cancelled without orphaning its source record."""
+    source = je.get("source") or "manual"
+    if source in {"invoice_issue"} or source.endswith(("_reversal", "_reinstatement")):
+        return False
+    if not je.get("source_id"):
+        return source in {"manual", "income", "expense", "non_operating"}
+    return source in {"invoice_payment", "milestone_payment"}
+
+
+async def _reverse_journal_entry(user: dict, je: dict, *, action: str = "reverse",
+                                 reversal_date: Optional[str] = None,
+                                 hide_from_books: bool = False) -> dict:
+    """Create the balancing entry used by Reverse, Delete and Correct."""
+    if je.get("reversed"):
+        raise HTTPException(status_code=409, detail="This transaction has already been reversed.")
+    source = je.get("source") or "manual"
+    if source.endswith(("_reversal", "_reinstatement")):
+        raise HTTPException(
+            status_code=409,
+            detail="You cannot directly reverse a system reversal/reinstatement entry.",
+        )
+    if source == "invoice_issue":
+        raise HTTPException(
+            status_code=409,
+            detail="Change the invoice to Draft or Cancelled so its receivable is reversed safely.",
+        )
+
+    rev_lines = [
+        {
+            "account_id": line["account_id"],
+            "debit": line.get("credit") or 0,
+            "credit": line.get("debit") or 0,
+            "description": f"Reversal · {line.get('description') or ''}".strip(),
+        }
+        for line in je.get("lines") or []
+    ]
+    rev = await _post_journal(
+        user,
+        reversal_date or business_today().isoformat(),
+        f"Reversal of: {je.get('narration') or je['id']}",
+        rev_lines,
+        reference=je.get("reference"),
+        project_id=je.get("project_id"),
+        client_id=je.get("client_id"),
+        vendor_id=je.get("vendor_id"),
+        employee_id=je.get("employee_id"),
+        source=f"{source}_reversal",
+        source_id=je["id"],
+    )
+    changed_at = iso_now()
+    original_updates = {
+        "reversed": True,
+        "reversal_je_id": rev["id"],
+        "reversed_at": changed_at,
+        "reversed_by": user["user_id"],
+    }
+    reversal_updates = {"reversal_action": action}
+    if hide_from_books:
+        original_updates.update({
+            "voided_from_view": True,
+            "voided_at": changed_at,
+            "voided_by": user["user_id"],
+            "void_reason": action,
+        })
+        reversal_updates.update({
+            "voided_from_view": True,
+            "voided_at": changed_at,
+            "voided_by": user["user_id"],
+            "void_reason": action,
+        })
+    await sdb.journal_entries.update_one(
+        {"id": je["id"]},
+        {"$set": original_updates, "$unset": {"idempotency_key": ""}},
+    )
+    await sdb.journal_entries.update_one(
+        {"id": rev["id"]}, {"$set": reversal_updates},
+    )
+    if source in {"invoice_payment", "milestone_payment"} and je.get("source_id"):
+        await _reset_source_after_reversal(source, je["source_id"])
+    await audit(
+        user,
+        f"journal.{action}",
+        target=je["id"],
+        target_type="journal_entry",
+        meta={"reversal_je_id": rev["id"], "total": je.get("total")},
+        org_id=user_org_id(user),
+    )
+    return rev
 
 
 @router.get("/journal-entries/{je_id}")
@@ -923,11 +1021,153 @@ async def delete_journal(je_id: str, request: Request,
     je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
     if not je:
         raise HTTPException(status_code=404, detail="Transaction not found")
-
-    raise HTTPException(
-        status_code=409,
-        detail="Posted transactions cannot be deleted. Use Reverse to preserve the accounting audit trail.",
+    if not _can_void_from_journal(je):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This entry is controlled by its invoice, expense, payroll, vendor, loan, or other "
+                "source record. Cancel or delete it from that record so both records remain consistent."
+            ),
+        )
+    reversal = await _reverse_journal_entry(
+        user,
+        je,
+        action="delete",
+        reversal_date=je.get("date"),
+        hide_from_books=True,
     )
+    return {
+        "ok": True,
+        "deleted": True,
+        "reversal_je_id": reversal["id"],
+        "detail": "Transaction removed from normal books; its balancing audit record was retained.",
+    }
+
+
+@router.post("/journal-entries/{je_id}/correct")
+async def correct_journal(je_id: str, payload: JournalCorrectionIn, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    """Correct a simple posted entry by reversal and replacement, never mutation."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
+    if not je:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    source = je.get("source") or "manual"
+    if (source not in {"manual", "income", "expense", "non_operating"}
+            or je.get("source_id") or len(je.get("lines") or []) != 2):
+        raise HTTPException(
+            status_code=409,
+            detail="Correct this transaction from its original business record so linked data remains consistent.",
+        )
+    try:
+        _date.fromisoformat(payload.date)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Journal date must be YYYY-MM-DD")
+    narration = str(payload.narration or "").strip()
+    reference = str(payload.reference or "").strip() or None
+    amount = round(float(payload.amount), 2)
+    if not narration:
+        raise HTTPException(status_code=400, detail="Narration is required")
+    if len(narration) > 500:
+        raise HTTPException(status_code=400, detail="Narration must be 500 characters or fewer")
+    if reference and len(reference) > 120:
+        raise HTTPException(status_code=400, detail="Reference must be 120 characters or fewer")
+    if not math.isfinite(amount) or amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+
+    corrected_lines = []
+    for line in je["lines"]:
+        corrected_lines.append({
+            "account_id": line["account_id"],
+            "debit": amount if float(line.get("debit") or 0) > 0 else 0,
+            "credit": amount if float(line.get("credit") or 0) > 0 else 0,
+            "description": narration,
+        })
+    reversal = await _reverse_journal_entry(
+        user,
+        je,
+        action="correction",
+        reversal_date=je.get("date"),
+        hide_from_books=True,
+    )
+    try:
+        replacement = await _post_journal(
+            user,
+            payload.date,
+            narration,
+            corrected_lines,
+            reference=reference,
+            project_id=je.get("project_id"),
+            client_id=je.get("client_id"),
+            vendor_id=je.get("vendor_id"),
+            employee_id=je.get("employee_id"),
+            source=source,
+        )
+    except Exception:
+        # Compensate a rare insert failure so the original financial effect remains intact.
+        reinstatement = await _post_journal(
+            user,
+            je.get("date"),
+            f"Correction rollback: {je.get('narration') or je_id}",
+            [
+                {
+                    "account_id": line["account_id"],
+                    "debit": line.get("debit") or 0,
+                    "credit": line.get("credit") or 0,
+                    "description": "Correction rollback",
+                }
+                for line in je["lines"]
+            ],
+            reference=je.get("reference"),
+            project_id=je.get("project_id"),
+            client_id=je.get("client_id"),
+            vendor_id=je.get("vendor_id"),
+            employee_id=je.get("employee_id"),
+            source=f"{source}_reinstatement",
+            source_id=reversal["id"],
+        )
+        changed_at = iso_now()
+        await sdb.journal_entries.update_one(
+            {"id": reinstatement["id"]},
+            {"$set": {"voided_from_view": True, "void_reason": "correction_rollback"}},
+        )
+        await sdb.journal_entries.update_one(
+            {"id": reversal["id"]},
+            {"$set": {"undone": True, "undo_je_id": reinstatement["id"],
+                      "undone_at": changed_at, "undone_by": user["user_id"]}},
+        )
+        await sdb.journal_entries.update_one(
+            {"id": je_id},
+            {"$set": {"reversed": False, "reinstatement_je_id": reinstatement["id"]},
+             "$unset": {"reversal_je_id": "", "reversed_at": "", "reversed_by": "",
+                        "voided_from_view": "", "voided_at": "", "voided_by": "",
+                        "void_reason": ""}},
+        )
+        raise
+
+    changed_at = iso_now()
+    await sdb.journal_entries.update_one(
+        {"id": je_id},
+        {"$set": {"corrected": True, "corrected_at": changed_at,
+                  "corrected_by": user["user_id"], "corrected_je_id": replacement["id"]}},
+    )
+    await sdb.journal_entries.update_one(
+        {"id": replacement["id"]},
+        {"$set": {"corrected_from_je_id": je_id}},
+    )
+    await audit(
+        user,
+        "journal.correct",
+        target=je_id,
+        target_type="journal_entry",
+        meta={"reversal_je_id": reversal["id"], "replacement_je_id": replacement["id"],
+              "old_total": je.get("total"), "new_total": amount},
+        org_id=user_org_id(user),
+    )
+    return {"ok": True, "replacement": replacement, "reversal_je_id": reversal["id"]}
 
 
 @router.post("/journal-entries/{je_id}/reverse")
@@ -940,43 +1180,7 @@ async def reverse_journal(je_id: str, request: Request,
     je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
     if not je:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    if je.get("reversed"):
-        raise HTTPException(status_code=409, detail="This transaction has already been reversed.")
-    if (je.get("source") or "").endswith(("_reversal", "_reinstatement")):
-        raise HTTPException(status_code=409, detail="You cannot directly reverse a system reversal/reinstatement entry.")
-    if je.get("source") == "invoice_issue":
-        raise HTTPException(
-            status_code=409,
-            detail="Change the invoice to Draft or Cancelled so its receivable is reversed safely.",
-        )
-
-    rev_lines = [
-        {"account_id": l["account_id"], "debit": l.get("credit") or 0, "credit": l.get("debit") or 0,
-         "description": f"Reversal · {l.get('description') or ''}".strip()}
-        for l in je["lines"]
-    ]
-    narration = f"Reversal of: {je.get('narration') or je_id}"
-    rev = await _post_journal(
-        user, business_today().isoformat(), narration, rev_lines,
-        reference=je.get("reference"),
-        project_id=je.get("project_id"), client_id=je.get("client_id"),
-        vendor_id=je.get("vendor_id"), employee_id=je.get("employee_id"),
-        source=f"{je.get('source') or 'manual'}_reversal", source_id=je_id,
-    )
-    await sdb.journal_entries.update_one(
-        {"id": je_id}, {
-            "$set": {"reversed": True, "reversal_je_id": rev["id"],
-                     "reversed_at": iso_now(), "reversed_by": user["user_id"]},
-            "$unset": {"idempotency_key": ""},
-        })
-    # If this was a linked payment JE, roll back the source document too so
-    # the source (invoice / milestone) matches the accounting.
-    src = je.get("source") or ""
-    if src in ("invoice_payment", "milestone_payment") and je.get("source_id"):
-        await _reset_source_after_reversal(src, je["source_id"])
-    await audit(user, "journal.reverse", target=je_id, target_type="journal_entry",
-                meta={"reversal_je_id": rev["id"], "total": je.get("total")},
-                org_id=user_org_id(user))
+    rev = await _reverse_journal_entry(user, je)
     return {"ok": True, "reversal": rev}
 
 
@@ -1021,7 +1225,7 @@ async def undo_journal_reversal(je_id: str, request: Request,
         raise HTTPException(status_code=409, detail="The linked original transaction is not in a reversible state")
 
     original_source = original.get("source") or "manual"
-    if original_source not in {"manual", "income", "expense"}:
+    if original_source not in {"manual", "income", "expense", "non_operating"}:
         raise HTTPException(
             status_code=409,
             detail="Undo this reversal from its original invoice, milestone, payroll, vendor, or other source workflow",
@@ -1303,7 +1507,7 @@ async def account_ledger(acc_id: str, request: Request,
     if not acc:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    q: dict = {"lines.account_id": acc_id}
+    q: dict = {"lines.account_id": acc_id, "voided_from_view": {"$ne": True}}
     if from_date or to_date:
         d = {}
         if from_date: d["$gte"] = from_date
@@ -1321,7 +1525,8 @@ async def account_ledger(acc_id: str, request: Request,
     opening = float(acc.get("opening_balance") or 0)
     if from_date:
         async for prior in sdb.journal_entries.find(
-            {"lines.account_id": acc_id, "date": {"$lt": from_date}},
+            {"lines.account_id": acc_id, "date": {"$lt": from_date},
+             "voided_from_view": {"$ne": True}},
             {"_id": 0, "lines": 1},
         ):
             for line in prior.get("lines") or []:
@@ -1470,12 +1675,13 @@ async def _entity_ledger(entity_type: str, entity_id: str, entity: Optional[dict
     opening = 0.0
     if from_date:
         async for e in sdb.journal_entries.find(
-            {field: entity_id, "date": {"$lt": from_date}}, {"_id": 0}
+            {field: entity_id, "date": {"$lt": from_date},
+             "voided_from_view": {"$ne": True}}, {"_id": 0}
         ):
             opening += _entity_net(e)
 
     # Period entries
-    q: dict = {field: entity_id}
+    q: dict = {field: entity_id, "voided_from_view": {"$ne": True}}
     if from_date or to_date:
         d = {}
         if from_date: d["$gte"] = from_date
@@ -1740,7 +1946,9 @@ async def finance_dashboard(request: Request,
     upcoming = [m for m in ms if today <= (m.get("due_date") or "") <= horizon]
 
     # Recent transactions
-    recent = await sdb.journal_entries.find({}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    recent = await sdb.journal_entries.find(
+        {"voided_from_view": {"$ne": True}}, {"_id": 0}
+    ).sort("created_at", -1).limit(10).to_list(10)
 
     return {
         "kpis": {
@@ -1853,7 +2061,7 @@ async def dashboard_validation(request: Request,
     fd, td, label = resolve_period(fy, from_date, to_date)
 
     # --- Accounting-engine values (source of truth going forward) ---
-    q: dict = {}
+    q: dict = {"voided_from_view": {"$ne": True}}
     if fd or td:
         d = {}
         if fd: d["$gte"] = fd
@@ -2441,7 +2649,7 @@ async def export_journal_csv(request: Request,
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission")
     from_date, to_date, _ = resolve_period(fy, from_date, to_date)
-    q: dict = {}
+    q: dict = {"voided_from_view": {"$ne": True}}
     if from_date or to_date:
         d = {}
         if from_date: d["$gte"] = from_date

@@ -15,6 +15,7 @@ from models.accounting import (
 from routes.accounting import (
     _cash_flow_bucket,
     _cash_collection_source,
+    _can_void_from_journal,
     _invoice_accrual_amounts,
     _linked_journal_key,
     _milestone_due_bucket,
@@ -258,10 +259,39 @@ def test_bank_match_requires_same_account_direction_amount_and_nearby_date():
     assert "cannot be matched" in _bank_match_error(row, {**valid, "reversed": True})
 
 
-def test_posted_journal_delete_is_always_rejected(monkeypatch):
+def test_journal_delete_uses_a_balancing_void(monkeypatch):
     class JournalEntries:
         async def find_one(self, *_args, **_kwargs):
-            return {"id": "je_1", "org_id": "org_a", "total": 100}
+            return {
+                "id": "je_1", "source": "non_operating", "date": "2026-10-20",
+                "org_id": "org_a", "total": 100,
+            }
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin_a", "org_id": "org_a", "permissions": ["finance.delete"]}
+
+    called = {}
+
+    async def reverse(_user, je, **kwargs):
+        called.update({"je": je, **kwargs})
+        return {"id": "je_reverse"}
+
+    monkeypatch.setattr(accounting, "sdb", SimpleNamespace(journal_entries=JournalEntries()))
+    monkeypatch.setattr(accounting, "require_user", user)
+    monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
+
+    result = asyncio.run(accounting.delete_journal("je_1", None))
+    assert result["deleted"] is True
+    assert result["reversal_je_id"] == "je_reverse"
+    assert called["action"] == "delete"
+    assert called["reversal_date"] == "2026-10-20"
+    assert called["hide_from_books"] is True
+
+
+def test_source_controlled_journal_cannot_be_deleted_directly(monkeypatch):
+    class JournalEntries:
+        async def find_one(self, *_args, **_kwargs):
+            return {"id": "je_1", "source": "payroll", "source_id": "run_1"}
 
     async def user(*_args, **_kwargs):
         return {"user_id": "admin_a", "org_id": "org_a", "permissions": ["finance.delete"]}
@@ -272,7 +302,112 @@ def test_posted_journal_delete_is_always_rejected(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(accounting.delete_journal("je_1", None))
     assert exc.value.status_code == 409
-    assert "cannot be deleted" in exc.value.detail
+    assert "source record" in exc.value.detail
+
+
+def test_only_safe_or_synchronised_journals_can_be_voided():
+    assert _can_void_from_journal({"source": "non_operating"}) is True
+    assert _can_void_from_journal({"source": "manual"}) is True
+    assert _can_void_from_journal({"source": "invoice_payment", "source_id": "inv_1"}) is True
+    assert _can_void_from_journal({"source": "payroll", "source_id": "run_1"}) is False
+    assert _can_void_from_journal({"source": "invoice_issue", "source_id": "inv_1"}) is False
+
+
+def test_balancing_void_marks_both_entries_hidden(monkeypatch):
+    class JournalEntries:
+        def __init__(self):
+            self.updates = []
+
+        async def update_one(self, query, update):
+            self.updates.append((query, update))
+
+    entries = JournalEntries()
+
+    async def post(*_args, **_kwargs):
+        return {"id": "je_reverse"}
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(accounting, "sdb", SimpleNamespace(journal_entries=entries))
+    monkeypatch.setattr(accounting, "_post_journal", post)
+    monkeypatch.setattr(accounting, "audit", no_audit)
+    original = {
+        "id": "je_owner", "source": "non_operating", "date": "2026-10-20",
+        "total": 10000, "narration": "Owner withdrawal",
+        "lines": [
+            {"account_id": "drawings", "debit": 10000, "credit": 0},
+            {"account_id": "bank", "debit": 0, "credit": 10000},
+        ],
+    }
+    result = asyncio.run(accounting._reverse_journal_entry(
+        {"user_id": "admin_a", "org_id": "org_a"}, original,
+        action="delete", reversal_date=original["date"], hide_from_books=True,
+    ))
+    assert result["id"] == "je_reverse"
+    updates = {query["id"]: update for query, update in entries.updates}
+    assert updates["je_owner"]["$set"]["voided_from_view"] is True
+    assert updates["je_reverse"]["$set"]["voided_from_view"] is True
+    assert updates["je_owner"]["$set"]["reversal_je_id"] == "je_reverse"
+
+
+def test_owner_withdrawal_correction_reverses_and_reposts(monkeypatch):
+    original = {
+        "id": "je_owner", "source": "non_operating", "date": "2026-10-20",
+        "total": 10000, "narration": "Personal withdrawal by owner",
+        "lines": [
+            {"account_id": "drawings", "debit": 10000, "credit": 0},
+            {"account_id": "bank", "debit": 0, "credit": 10000},
+        ],
+    }
+
+    class JournalEntries:
+        def __init__(self):
+            self.updates = []
+
+        async def find_one(self, *_args, **_kwargs):
+            return original
+
+        async def update_one(self, query, update):
+            self.updates.append((query, update))
+
+    entries = JournalEntries()
+    posted = {}
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin_a", "org_id": "org_a", "permissions": ["finance.update"]}
+
+    async def reverse(_user, je, **kwargs):
+        assert je is original
+        assert kwargs["action"] == "correction"
+        assert kwargs["hide_from_books"] is True
+        return {"id": "je_reverse"}
+
+    async def post(_user, date_value, narration, lines, **kwargs):
+        posted.update({"date": date_value, "narration": narration, "lines": lines, **kwargs})
+        return {"id": "je_corrected", "total": 12000}
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(accounting, "sdb", SimpleNamespace(journal_entries=entries))
+    monkeypatch.setattr(accounting, "require_user", user)
+    monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
+    monkeypatch.setattr(accounting, "_post_journal", post)
+    monkeypatch.setattr(accounting, "audit", no_audit)
+
+    payload = accounting.JournalCorrectionIn(
+        date="2026-10-21", narration="Corrected owner withdrawal",
+        reference="OWNER-1", amount=12000,
+    )
+    result = asyncio.run(accounting.correct_journal("je_owner", payload, None))
+    assert result["replacement"]["id"] == "je_corrected"
+    assert posted["date"] == "2026-10-21"
+    assert posted["source"] == "non_operating"
+    assert posted["lines"][0]["debit"] == 12000
+    assert posted["lines"][1]["credit"] == 12000
+    assert any(update[1]["$set"].get("corrected_je_id") == "je_corrected"
+               for update in entries.updates)
 
 
 def test_invoice_issue_must_be_reversed_through_invoice_workflow(monkeypatch):
