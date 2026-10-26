@@ -6,8 +6,13 @@ import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
 const TYPE_LABELS = {
   turnkey: "Turnkey",
   consultancy: "Design Consultancy",
+  // Display labels retained for historical records only.
   execution: "Execution Only",
   hybrid: "Hybrid",
+};
+const NEW_TYPE_LABELS = {
+  turnkey: TYPE_LABELS.turnkey,
+  consultancy: TYPE_LABELS.consultancy,
 };
 const STATUS_COLORS = {
   draft: "chip-draft", sent: "chip-sent", under_review: "chip-medium",
@@ -64,7 +69,7 @@ export default function QuotationsAdv() {
       {showForm && (
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="new-quotation-form">
           <select className="input-flat" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} data-testid="q-type">
-            {Object.entries(TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {Object.entries(NEW_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <input required className="input-flat md:col-span-2" placeholder="Project title" value={form.project_title} onChange={(e) => setForm({ ...form, project_title: e.target.value })} data-testid="q-title" />
           <select className="input-flat" value={form.client_id} onChange={(e) => {

@@ -9,6 +9,7 @@ import {
 const TABS = ["Overview", "BOQ Builder", "Rooms", "Materials", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
 const CONSULT_TABS = ["Overview", "Fee Schedule", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
 const TYPE_LABELS = { turnkey: "Turnkey", consultancy: "Consultancy", execution: "Execution Only", hybrid: "Hybrid" };
+const SELECTABLE_TYPE_LABELS = { turnkey: TYPE_LABELS.turnkey, consultancy: TYPE_LABELS.consultancy };
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 export default function QuotationBuilder() {
@@ -299,7 +300,7 @@ function Overview({ q, update, tpl, isConsult }) {
       <div className="space-y-6">
         <Card title="QUOTATION TYPE">
           <div className="grid grid-cols-2 gap-2">
-            {Object.entries(TYPE_LABELS).map(([v, l]) => (
+            {Object.entries(SELECTABLE_TYPE_LABELS).map(([v, l]) => (
               <button
                 key={v}
                 onClick={() => swapType(v)}

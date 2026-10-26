@@ -54,6 +54,7 @@ _INDEXES = [
     ("vendor_bills",       [("org_id", 1), ("po_id", 1), ("status", 1)], {}),
     ("vendor_payments",    [("org_id", 1), ("vendor_id", 1)], {}),
     ("vendor_commissions", [("org_id", 1), ("vendor_id", 1), ("status", 1)], {}),
+    ("vendor_commissions", [("org_id", 1), ("due_date", 1), ("status", 1)], {}),
     ("commission_settlements", [("request_key", 1)],
                             {"name": "commission_settlement_request_unique", "unique": True,
                              "sparse": True}),
@@ -77,6 +78,10 @@ _INDEXES = [
                             {"name": "account_id_unique", "unique": True}),
     ("accounts",           [("org_id", 1), ("type", 1)], {}),
     ("payment_milestones", [("org_id", 1), ("status", 1), ("due_date", 1)], {}),
+    ("collection_receivables", [("org_id", 1), ("status", 1), ("due_date", 1)], {}),
+    ("collection_receipts", [("request_key", 1)],
+                            {"name": "collection_receipt_request_unique", "unique": True,
+                             "sparse": True}),
     # Notifications
     ("notifications",      [("user_id", 1), ("read", 1), ("created_at", -1)], {}),
     ("notifications",      [("org_id", 1), ("kind", 1)], {}),

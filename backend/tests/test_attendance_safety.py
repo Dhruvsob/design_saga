@@ -30,6 +30,34 @@ def test_punch_permission_distinguishes_self_service_from_approval_only():
         attendance._require_punch_permission({"permissions": ["attendance.approve"]})
 
 
+def test_monthly_engine_materializes_holiday_without_punch_record(monkeypatch):
+    class EmptyCursor:
+        def __aiter__(self):
+            async def rows():
+                if False:
+                    yield None
+            return rows()
+
+    class AttendanceRows:
+        def find(self, *_args, **_kwargs):
+            return EmptyCursor()
+
+    monkeypatch.setattr(
+        attendance.engine,
+        "sdb",
+        SimpleNamespace(attendance=AttendanceRows()),
+    )
+    result = asyncio.run(attendance.engine.monthly_summary(
+        {"id": "emp_1", "name": "Hiren Panchal", "weekly_offs": []},
+        2026, 2, {"weekly_off_days": [], "full_day_min_hours": 8},
+        holiday_dates={"2026-02-10"},
+    ))
+    holiday = next(row for row in result["daily"] if row["date"] == "2026-02-10")
+    assert holiday["status"] == "holiday"
+    assert result["summary"]["holidays"] == 1
+    assert result["summary"]["working_days"] == 27
+
+
 def test_geofence_read_permissions_match_attendance_access():
     for permission in (
         "attendance.read", "attendance.create", "attendance.update", "attendance.approve",

@@ -636,7 +636,7 @@ export default function Attendance() {
                     <th className="p-2 text-left">Designation</th>
                     <th className="p-2">Present</th><th className="p-2">Late</th><th className="p-2">Absent</th>
                     <th className="p-2">Half</th><th className="p-2">Leave</th>
-                    <th className="p-2">Week-off</th><th className="p-2">Hours</th>
+                    <th className="p-2">Holiday</th><th className="p-2">Week-off</th><th className="p-2">Hours</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -649,6 +649,7 @@ export default function Attendance() {
                       <td className="p-2 text-center font-mono text-[#B4001C]">{r.counts.absent}</td>
                       <td className="p-2 text-center font-mono text-[#F0A93A]">{r.counts.half_day}</td>
                       <td className="p-2 text-center font-mono text-[#8A6DFF]">{r.counts.leave}</td>
+                      <td className="p-2 text-center font-mono text-[#3B82F6]">{r.counts.holiday || 0}</td>
                       <td className="p-2 text-center font-mono text-[#5C5C5C]">{r.counts.week_off}</td>
                       <td className="p-2 text-center font-mono">{r.worked_hours}</td>
                     </tr>

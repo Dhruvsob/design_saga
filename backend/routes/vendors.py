@@ -54,7 +54,7 @@ from models.accounting import VendorIn
 from models.vendor import (
     VendorUpdate, VendorBillIn, VendorBillUpdate, VendorPaymentIn,
     VendorRatingIn, VendorDocumentIn,
-    CommissionConfig, CommissionReceiveIn,
+    CommissionConfig, CommissionReceiveIn, CommissionExpectedIn, CommissionExpectedUpdate,
     AGENCY_TYPES, VENDOR_BILL_STATUSES, COMMISSION_TYPES, COMMISSION_STATUSES,
 )
 
@@ -1548,6 +1548,7 @@ async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
         "bill_id": bill_id,
         "bill_number": bill.get("bill_number"),
         "bill_date": bill.get("bill_date"),
+        "due_date": bill.get("due_date"),
         "project_id": bill.get("project_id"),
         "purchase_amount": base,
         "commission_type": cfg.get("type"),
@@ -1558,6 +1559,9 @@ async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
             "income_label": cfg.get("income_label") or "Vendor Commission Income",
         },
         "amount": amount,
+        "earned_amount": amount,
+        "recognition": "earned",
+        "origin": "vendor_bill",
         "updated_at": iso_now(),
     }
     if existing:
@@ -1580,6 +1584,113 @@ async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
     doc["created_at"] = iso_now()
     await sdb.vendor_commissions.insert_one(dict(doc))
     return doc
+
+
+# ---------- Planned/manual commission receivable (no accounting entry) ----------
+@router.post("/vendors/{vendor_id}/commissions")
+async def create_expected_commission(vendor_id: str, payload: CommissionExpectedIn,
+                                     request: Request,
+                                     session_token: Optional[str] = Cookie(default=None),
+                                     authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.create")
+    vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    project_name = None
+    if payload.project_id:
+        project = await get_visible_project(user, payload.project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project_name = project.get("name")
+    doc = {
+        "id": new_id("vcom_"),
+        "vendor_id": vendor_id,
+        "vendor_name": vendor.get("name"),
+        "project_id": payload.project_id,
+        "project_name": project_name,
+        "amount": round(float(payload.amount), 2),
+        "earned_amount": round(float(payload.amount), 2)
+            if payload.recognition == "earned" else 0.0,
+        "recognition": payload.recognition,
+        "origin": "manual_expected",
+        "due_date": payload.due_date,
+        "reminder_date": payload.reminder_date,
+        "reference": payload.reference,
+        "notes": payload.notes,
+        "received_amount": 0.0,
+        "status": "pending",
+        "created_at": iso_now(),
+        "created_by": user["user_id"],
+        "updated_at": iso_now(),
+    }
+    await sdb.vendor_commissions.insert_one(dict(doc))
+    await audit(user, "vendor_commission.plan", target=doc["id"],
+                target_type="vendor_commission",
+                meta={"vendor_id": vendor_id, "amount": doc["amount"],
+                      "recognition": doc["recognition"]})
+    return doc
+
+
+@router.patch("/vendors/{vendor_id}/commissions/{commission_id}")
+async def update_expected_commission(vendor_id: str, commission_id: str,
+                                     payload: CommissionExpectedUpdate, request: Request,
+                                     session_token: Optional[str] = Cookie(default=None),
+                                     authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.update")
+    row = await sdb.vendor_commissions.find_one(
+        {"id": commission_id, "vendor_id": vendor_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Commission not found")
+    if row.get("origin") != "manual_expected":
+        raise HTTPException(status_code=409,
+                            detail="Bill-earned commissions must be corrected from the vendor bill")
+    if float(row.get("received_amount") or 0) > 0:
+        raise HTTPException(status_code=409,
+                            detail="Reverse the linked receipt before changing this commission")
+    patch = payload.model_dump(exclude_unset=True)
+    if patch.get("project_id"):
+        project = await get_visible_project(user, patch["project_id"])
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        patch["project_name"] = project.get("name")
+    if "recognition" in patch:
+        amount = float(patch.get("amount", row.get("amount")) or 0)
+        patch["earned_amount"] = round(amount, 2) if patch["recognition"] == "earned" else 0.0
+    elif "amount" in patch and row.get("recognition") == "earned":
+        patch["earned_amount"] = round(float(patch["amount"]), 2)
+    patch["updated_at"] = iso_now()
+    await sdb.vendor_commissions.update_one({"id": commission_id}, {"$set": patch})
+    await audit(user, "vendor_commission.update", target=commission_id,
+                target_type="vendor_commission", meta={"fields": sorted(patch.keys())})
+    return await sdb.vendor_commissions.find_one({"id": commission_id}, {"_id": 0})
+
+
+@router.delete("/vendors/{vendor_id}/commissions/{commission_id}")
+async def delete_expected_commission(vendor_id: str, commission_id: str, request: Request,
+                                     session_token: Optional[str] = Cookie(default=None),
+                                     authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.delete")
+    row = await sdb.vendor_commissions.find_one(
+        {"id": commission_id, "vendor_id": vendor_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Commission not found")
+    if row.get("origin") != "manual_expected":
+        raise HTTPException(status_code=409,
+                            detail="Bill-earned commissions must be cancelled from the vendor bill")
+    if float(row.get("received_amount") or 0) > 0:
+        raise HTTPException(status_code=409,
+                            detail="Reverse the linked receipt before deleting this commission")
+    await sdb.vendor_commissions.update_one(
+        {"id": commission_id},
+        {"$set": {"status": "cancelled", "cancelled_at": iso_now(),
+                  "cancelled_by": user["user_id"], "updated_at": iso_now()}},
+    )
+    await audit(user, "vendor_commission.cancel", target=commission_id,
+                target_type="vendor_commission")
+    return {"ok": True, "cancelled": True}
 
 
 # ---------- Update vendor commission config ----------
@@ -1713,6 +1824,13 @@ async def _refresh_commission_allocations(commission_ids: list[str]) -> None:
         status = ("received" if received + 0.01 >= float(row.get("amount") or 0)
                   else "invoiced" if received > 0.001 else "pending")
         update = {"received_amount": received, "status": status, "updated_at": iso_now()}
+        if row.get("origin") == "manual_expected" and received > 0:
+            update["earned_amount"] = round(max(
+                float(row.get("earned_amount") or 0),
+                min(float(row.get("amount") or 0), received),
+            ), 2)
+            if row.get("recognition") == "planned":
+                update["recognition"] = "earned_on_receipt"
         if latest:
             update.update({
                 "received_date": latest.get("received_date"),
@@ -1760,7 +1878,9 @@ async def vendor_commission_ledger(vendor_id: str, request: Request,
             display_rows.append(r)
             continue
         total_purchase += float(r.get("purchase_amount") or 0)
-        total_earned += float(r.get("amount") or 0)
+        total_earned += float(r.get("earned_amount")
+                              if r.get("earned_amount") is not None
+                              else r.get("amount") or 0)
         received = allocated_by_commission.get(r.get("id"), 0.0)
         # Preserve pre-settlement-schema receipts without counting modern rows twice.
         if r.get("journal_entry_id") not in settlement_journal_ids:
@@ -1976,7 +2096,9 @@ async def commissions_dashboard(request: Request,
     rows = await sdb.vendor_commissions.find({"status": {"$nin": ["cancelled", "reversed"]}}, {"_id": 0}) \
                                       .to_list(20000)
     for r in rows:
-        earned = float(r.get("amount") or 0)
+        earned = float(r.get("earned_amount")
+                       if r.get("earned_amount") is not None
+                       else r.get("amount") or 0)
         totals["total_earned"] += earned
         if (r.get("bill_date") or "") >= month_start:
             totals["this_month"] += earned
@@ -2086,7 +2208,9 @@ async def commissions_report(request: Request,
     rows = await sdb.vendor_commissions.find(q, {"_id": 0}) \
                                       .sort("bill_date", -1).to_list(5000)
     totals = {
-        "earned":   round(sum(float(r.get("amount") or 0)
+        "earned":   round(sum(float(r.get("earned_amount")
+                                    if r.get("earned_amount") is not None
+                                    else r.get("amount") or 0)
                               for r in rows if r.get("status") not in ("cancelled", "reversed")), 2),
         "received": round(sum(float(r.get("received_amount") or 0)
                               for r in rows if r.get("status") not in ("cancelled", "reversed")), 2),

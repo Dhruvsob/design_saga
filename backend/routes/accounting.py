@@ -27,6 +27,7 @@ from core.downloads import content_disposition
 from core.rbac import has_permission
 from core.tenancy import user_org_id
 from core.audit import audit
+from core.locks import doc_lock
 from models.base import FiniteModel
 from pymongo.errors import DuplicateKeyError
 from core.finance import (
@@ -34,7 +35,8 @@ from core.finance import (
 )
 from models.accounting import (
     AccountIn, JournalIn, IncomeIn, ExpenseIn, NonOperatingTransactionIn,
-    MilestoneIn, MilestoneUpdate,
+    MilestoneIn, MilestoneUpdate, OtherReceivableIn, OtherReceivableUpdate,
+    CollectionReceiptIn,
     ACCOUNT_TYPES, DEFAULT_COA, PAYMENT_METHODS,
 )
 
@@ -88,6 +90,30 @@ def _milestone_due_bucket(due_date: Optional[str], today: _date,
         return "overdue"
     if due <= horizon:
         return "due_30"
+    return "later"
+
+
+def _collection_status(due_date: Optional[str], amount: float, received: float,
+                       today: _date, horizon: _date) -> str:
+    """One status vocabulary for every Money In source."""
+    amount = round(max(0.0, float(amount or 0)), 2)
+    received = round(max(0.0, float(received or 0)), 2)
+    if amount > 0 and received + 0.01 >= amount:
+        return "received"
+    if received > 0:
+        return "partially_received"
+    if not due_date:
+        return "no_due_date"
+    try:
+        due = _date.fromisoformat(due_date)
+    except (TypeError, ValueError):
+        return "no_due_date"
+    if due < today:
+        return "overdue"
+    if due == today:
+        return "due_today"
+    if due <= horizon:
+        return "upcoming"
     return "later"
 
 
@@ -436,33 +462,38 @@ async def reverse_receipt_je(user: dict, *, source: str, source_id: str,
     matches the accounting. Pass `reset_source=False` if the caller has
     already handled the source reset itself.
     """
-    orig = await sdb.journal_entries.find_one(
-        {"source": source, "source_id": source_id, "reversed": {"$ne": True}}, {"_id": 0})
-    if not orig:
+    originals = await sdb.journal_entries.find(
+        {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
+        {"_id": 0}).sort("date", 1).to_list(5000)
+    if not originals:
         # Even if there's no active JE, still make sure source status/journal_id
         # is cleaned up (idempotent safety net).
         if reset_source:
             await _reset_source_after_reversal(source, source_id)
         return None
-    rev_lines = [
-        {"account_id": l["account_id"], "debit": l["credit"], "credit": l["debit"],
-         "description": f"Reversal · {l.get('description') or ''}".strip()}
-        for l in orig["lines"]
-    ]
-    rev = await _post_journal(user, business_today().isoformat(), narration, rev_lines,
-                              reference=orig.get("reference"),
-                              project_id=orig.get("project_id"),
-                              client_id=orig.get("client_id"),
-                              source=f"{source}_reversal", source_id=orig["id"])
-    await sdb.journal_entries.update_one(
-        {"id": orig["id"]}, {
-            "$set": {"reversed": True, "reversal_je_id": rev["id"],
-                     "reversed_at": iso_now(), "reversed_by": user["user_id"]},
-            "$unset": {"idempotency_key": ""},
-        })
+    reversals = []
+    for orig in originals:
+        rev_lines = [
+            {"account_id": line["account_id"], "debit": line["credit"],
+             "credit": line["debit"],
+             "description": f"Reversal · {line.get('description') or ''}".strip()}
+            for line in orig["lines"]
+        ]
+        rev = await _post_journal(
+            user, business_today().isoformat(), narration, rev_lines,
+            reference=orig.get("reference"), project_id=orig.get("project_id"),
+            client_id=orig.get("client_id"), source=f"{source}_reversal",
+            source_id=orig["id"])
+        await sdb.journal_entries.update_one(
+            {"id": orig["id"]}, {
+                "$set": {"reversed": True, "reversal_je_id": rev["id"],
+                         "reversed_at": iso_now(), "reversed_by": user["user_id"]},
+                "$unset": {"idempotency_key": ""},
+            })
+        reversals.append(rev)
     if reset_source:
         await _reset_source_after_reversal(source, source_id)
-    return rev
+    return reversals[-1] if reversals else None
 
 
 async def _reset_source_after_reversal(source: str, source_id: str):
@@ -473,18 +504,39 @@ async def _reset_source_after_reversal(source: str, source_id: str):
     if not source or not source_id:
         return
     if source == "invoice_payment":
-        # Change status back to 'sent' (or 'partially_paid' if partial payments
-        # existed — we keep simple 'sent' since this is a full reversal).
+        invoice = await sdb.invoices.find_one({"id": source_id}, {"_id": 0})
+        if not invoice:
+            return
+        active = await sdb.journal_entries.find(
+            {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
+            {"_id": 0, "id": 1, "total": 1}).to_list(5000)
+        received = round(sum(float(row.get("total") or 0) for row in active), 2)
+        total = float(invoice.get("total") or 0)
+        status = "paid" if total > 0 and received + 0.01 >= total \
+            else "partially_paid" if received > 0 else "sent"
         await sdb.invoices.update_one(
-            {"id": source_id, "status": "paid"},
-            {"$set": {"status": "sent", "paid_date": None,
-                      "journal_id": None, "updated_at": iso_now()}},
+            {"id": source_id},
+            {"$set": {"status": status, "paid_amount": received,
+                      "paid_date": invoice.get("paid_date") if received > 0 else None,
+                      "journal_id": active[-1]["id"] if active else None,
+                      "updated_at": iso_now()}},
         )
     elif source == "milestone_payment":
+        milestone = await sdb.payment_milestones.find_one({"id": source_id}, {"_id": 0})
+        if not milestone:
+            return
+        active = await sdb.journal_entries.find(
+            {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
+            {"_id": 0, "id": 1, "total": 1}).to_list(5000)
+        received = round(sum(float(row.get("total") or 0) for row in active), 2)
+        amount = float(milestone.get("amount") or 0)
+        status = "paid" if amount > 0 and received + 0.01 >= amount \
+            else "invoiced" if received > 0 else "pending"
         await sdb.payment_milestones.update_one(
-            {"id": source_id, "status": "paid"},
-            {"$set": {"status": "pending", "paid_amount": None,
-                      "paid_at": None, "journal_id": None,
+            {"id": source_id},
+            {"$set": {"status": status, "paid_amount": received,
+                      "paid_at": milestone.get("paid_at") if received > 0 else None,
+                      "journal_id": active[-1]["id"] if active else None,
                       "updated_at": iso_now()}},
         )
 
@@ -874,7 +926,43 @@ def _can_void_from_journal(je: dict) -> bool:
         return False
     if not je.get("source_id"):
         return source in {"manual", "income", "expense", "non_operating"}
-    return source in {"invoice_payment", "milestone_payment"}
+    return source in {"invoice_payment", "milestone_payment", "other_receivable_income"}
+
+
+async def _sync_other_receivable_after_reversal(journal_entry_id: str) -> None:
+    """Keep a manual collection reminder aligned with its reversed receipt."""
+    receipt = await sdb.collection_receipts.find_one(
+        {"journal_entry_id": journal_entry_id}, {"_id": 0})
+    if not receipt or receipt.get("status") == "reversed":
+        return
+    changed_at = iso_now()
+    await sdb.collection_receipts.update_one(
+        {"id": receipt["id"]},
+        {"$set": {"status": "reversed", "reversed_at": changed_at}},
+    )
+    source_id = receipt.get("source_id")
+    if not source_id:
+        return
+    active = await sdb.collection_receipts.find(
+        {"source_id": source_id, "source_type": "other_receivable",
+         "status": "received"},
+        {"_id": 0, "amount": 1, "date": 1},
+    ).to_list(5000)
+    received = round(sum(float(row.get("amount") or 0) for row in active), 2)
+    source = await sdb.collection_receivables.find_one(
+        {"id": source_id}, {"_id": 0, "amount": 1})
+    if not source:
+        return
+    amount = float(source.get("amount") or 0)
+    status = ("received" if amount > 0 and received + 0.01 >= amount
+              else "partially_received" if received > 0 else "pending")
+    await sdb.collection_receivables.update_one(
+        {"id": source_id},
+        {"$set": {"received_amount": received, "status": status,
+                  "last_received_at": max((row.get("date") or "" for row in active),
+                                          default=None),
+                  "updated_at": changed_at}},
+    )
 
 
 async def _reverse_journal_entry(user: dict, je: dict, *, action: str = "reverse",
@@ -947,6 +1035,8 @@ async def _reverse_journal_entry(user: dict, je: dict, *, action: str = "reverse
     )
     if source in {"invoice_payment", "milestone_payment"} and je.get("source_id"):
         await _reset_source_after_reversal(source, je["source_id"])
+    elif source == "other_receivable_income":
+        await _sync_other_receivable_after_reversal(je["id"])
     await audit(
         user,
         f"journal.{action}",
@@ -1314,17 +1404,22 @@ async def create_income(payload: IncomeIn, request: Request,
 
     source = "income"
     source_id = None
+    receipt_suffix = None
     project_id = payload.project_id
     client_id = payload.client_id
     linked = None
+    received_before = 0.0
     if payload.invoice_id:
         linked = await sdb.invoices.find_one({"id": payload.invoice_id}, {"_id": 0})
         if not linked or linked.get("doc_type", "invoice") == "quotation":
             raise HTTPException(status_code=404, detail="Invoice not found")
         if linked.get("status") == "paid":
             raise HTTPException(status_code=409, detail="Invoice is already paid")
-        expected = float(linked.get("total") or 0)
-        _require_full_linked_payment("invoice", payload.amount, expected)
+        expected = round(max(0.0, float(linked.get("total") or 0)
+                             - float(linked.get("paid_amount") or 0)), 2)
+        if payload.amount > expected + 0.01:
+            raise HTTPException(status_code=400,
+                                detail=f"Amount exceeds invoice balance ({expected:.2f})")
         source, source_id = "invoice_payment", payload.invoice_id
         project_id = linked.get("project_id")
         client_id = linked.get("client_id")
@@ -1337,31 +1432,56 @@ async def create_income(payload: IncomeIn, request: Request,
             raise HTTPException(status_code=409, detail="Milestone is already paid")
         expected = max(0.0, float(linked.get("amount") or 0)
                        - float(linked.get("paid_amount") or 0))
-        _require_full_linked_payment("milestone", payload.amount, expected)
+        if payload.amount > expected + 0.01:
+            raise HTTPException(status_code=400,
+                                detail=f"Amount exceeds milestone balance ({expected:.2f})")
         source, source_id = "milestone_payment", payload.milestone_id
         project_id = linked.get("project_id")
 
     if source_id:
-        existing = await sdb.journal_entries.find_one(
+        active_receipts = await sdb.journal_entries.find(
             {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
+            {"_id": 0, "total": 1},
+        ).to_list(5000)
+        accounted_received = round(sum(float(row.get("total") or 0)
+                                       for row in active_receipts), 2)
+        received_before = max(round(float(linked.get("paid_amount") or 0), 2),
+                              accounted_received)
+        linked_total = float((linked.get("total") if payload.invoice_id
+                              else linked.get("amount")) or 0)
+        if payload.amount > max(0.0, linked_total - received_before) + 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Amount exceeds outstanding balance ({max(0.0, linked_total - received_before):.2f})",
+            )
+        supplied_key = (request.headers.get("idempotency-key") or "").strip()[:100]
+        receipt_suffix = (hashlib.sha256(supplied_key.encode("utf-8")).hexdigest()[:24]
+                          if supplied_key else new_id("receipt_"))
+        idem_key = f"{_linked_journal_key(user_org_id(user) or 'org_default', source, source_id)}:{receipt_suffix}"
+        existing = await sdb.journal_entries.find_one(
+            {"idempotency_key": idem_key, "reversed": {"$ne": True}},
             {"_id": 0, "id": 1},
         )
         if existing:
             # Recover the source document if a worker stopped after the
             # balanced journal insert but before its final status update.
             if payload.milestone_id:
-                paid_total = round(float(linked.get("paid_amount") or 0) + payload.amount, 2)
+                paid_total = accounted_received
+                new_status = "paid" if paid_total + 0.01 >= float(linked.get("amount") or 0) else "invoiced"
                 await sdb.payment_milestones.update_one(
-                    {"id": payload.milestone_id, "status": {"$ne": "paid"}},
-                    {"$set": {"status": "paid", "paid_amount": paid_total,
+                    {"id": payload.milestone_id},
+                    {"$set": {"status": new_status, "paid_amount": paid_total,
                               "paid_at": iso_now(), "journal_id": existing["id"]}},
                 )
                 return await sdb.journal_entries.find_one(
                     {"id": existing["id"]}, {"_id": 0})
             if payload.invoice_id:
+                paid_total = accounted_received
+                new_status = "paid" if paid_total + 0.01 >= float(linked.get("total") or 0) else "partially_paid"
                 await sdb.invoices.update_one(
-                    {"id": payload.invoice_id, "status": {"$ne": "paid"}},
-                    {"$set": {"status": "paid", "paid_date": payload.date,
+                    {"id": payload.invoice_id},
+                    {"$set": {"status": new_status, "paid_amount": paid_total,
+                              "paid_date": payload.date,
                               "journal_id": existing["id"], "updated_at": iso_now()}},
                 )
                 return await sdb.journal_entries.find_one(
@@ -1398,6 +1518,7 @@ async def create_income(payload: IncomeIn, request: Request,
             client_id=client_id, vendor_id=payload.vendor_id,
             employee_id=payload.employee_id,
             source=source, source_id=source_id,
+            idempotency_suffix=receipt_suffix,
         )
     except Exception:
         if created_accrual:
@@ -1406,18 +1527,22 @@ async def create_income(payload: IncomeIn, request: Request,
 
     # If linked to a milestone, mark it paid
     if payload.milestone_id:
-        paid_total = round(float(linked.get("paid_amount") or 0) + payload.amount, 2)
+        paid_total = round(received_before + payload.amount, 2)
+        new_status = "paid" if paid_total + 0.01 >= float(linked.get("amount") or 0) else "invoiced"
         await sdb.payment_milestones.update_one(
             {"id": payload.milestone_id},
-            {"$set": {"status": "paid", "paid_amount": paid_total,
+            {"$set": {"status": new_status, "paid_amount": paid_total,
                       "paid_at": iso_now(), "journal_id": je["id"]}}
         )
     # If linked to an invoice, mark it paid (closes the
     # Client → Invoice → Payment → Accounting loop)
     if payload.invoice_id:
+        paid_total = round(received_before + payload.amount, 2)
+        new_status = "paid" if paid_total + 0.01 >= float(linked.get("total") or 0) else "partially_paid"
         await sdb.invoices.update_one(
             {"id": payload.invoice_id},
-            {"$set": {"status": "paid", "paid_date": payload.date,
+            {"$set": {"status": new_status, "paid_amount": paid_total,
+                      "paid_date": payload.date,
                       "journal_id": je["id"],
                       "accrual_journal_id": (created_accrual or {}).get("id")
                           or (prior_accrual or {}).get("id")
@@ -1929,16 +2054,20 @@ async def finance_dashboard(request: Request,
     async for inv in sdb.invoices.find(
         {"status": {"$in": ["sent", "overdue", "partially_paid"]},
          "doc_type": {"$ne": "quotation"}},
-        {"_id": 0, "total": 1, "due_date": 1, "status": 1},
+        {"_id": 0, "total": 1, "paid_amount": 1, "due_date": 1, "status": 1},
     ):
-        outstanding_invoices += float(inv.get("total") or 0)
+        outstanding_invoices += max(0.0, float(inv.get("total") or 0)
+                                    - float(inv.get("paid_amount") or 0))
     ms = await sdb.payment_milestones.find(
         {"status": {"$ne": "paid"}},
-        {"_id": 0, "amount": 1, "due_date": 1, "status": 1, "project_id": 1, "name": 1},
+        {"_id": 0, "amount": 1, "paid_amount": 1, "due_date": 1,
+         "status": 1, "project_id": 1, "name": 1},
     ).to_list(500)
-    outstanding_ms = sum(float(m.get("amount") or 0) for m in ms)
+    outstanding_ms = sum(max(0.0, float(m.get("amount") or 0)
+                             - float(m.get("paid_amount") or 0)) for m in ms)
     outstanding = round(outstanding_invoices + outstanding_ms, 2)
-    overdue = round(sum(float(m.get("amount") or 0) for m in ms
+    overdue = round(sum(max(0.0, float(m.get("amount") or 0)
+                                - float(m.get("paid_amount") or 0)) for m in ms
                        if (m.get("due_date") or "") < today), 2)
 
     # Upcoming payments (next 30 days)
@@ -1967,11 +2096,216 @@ async def finance_dashboard(request: Request,
     }
 
 
+@router.post("/accounting/receivables")
+async def create_other_receivable(payload: OtherReceivableIn, request: Request,
+                                  session_token: Optional[str] = Cookie(default=None),
+                                  authorization: Optional[str] = Header(default=None)):
+    """Create a collection reminder only.  No journal is posted here."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    doc = payload.model_dump()
+    for collection_name, field in (("clients", "client_id"), ("vendors_acc", "vendor_id"),
+                                   ("projects", "project_id")):
+        value = doc.get(field)
+        if value and not await getattr(sdb, collection_name).find_one({"id": value}, {"_id": 1}):
+            raise HTTPException(status_code=404, detail=f"{field.removesuffix('_id').title()} not found")
+    if doc.get("income_account_id"):
+        account = await sdb.accounts.find_one(
+            {"id": doc["income_account_id"], "type": "income", "active": {"$ne": False}},
+            {"_id": 0, "id": 1})
+        if not account:
+            raise HTTPException(status_code=400, detail="Income account is unavailable")
+    doc.update({"id": new_id("recv_"), "received_amount": 0.0, "status": "pending",
+                "created_at": iso_now(), "created_by": user["user_id"],
+                "updated_at": iso_now()})
+    await sdb.collection_receivables.insert_one(dict(doc))
+    await audit(user, "receivable.create", target=doc["id"], target_type="receivable",
+                meta={"amount": doc["amount"], "due_date": doc.get("due_date")})
+    return doc
+
+
+@router.patch("/accounting/receivables/{receivable_id}")
+async def update_other_receivable(receivable_id: str, payload: OtherReceivableUpdate,
+                                  request: Request,
+                                  session_token: Optional[str] = Cookie(default=None),
+                                  authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    row = await sdb.collection_receivables.find_one({"id": receivable_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Receivable not found")
+    if float(row.get("received_amount") or 0) > 0:
+        raise HTTPException(status_code=409,
+                            detail="Reverse the linked receipt before changing this receivable")
+    patch = payload.model_dump(exclude_unset=True)
+    for collection_name, field in (("clients", "client_id"), ("vendors_acc", "vendor_id"),
+                                   ("projects", "project_id")):
+        value = patch.get(field)
+        if value and not await getattr(sdb, collection_name).find_one(
+                {"id": value}, {"_id": 1}):
+            raise HTTPException(
+                status_code=404,
+                detail=f"{field.removesuffix('_id').title()} not found",
+            )
+    if patch.get("income_account_id"):
+        account = await sdb.accounts.find_one(
+            {"id": patch["income_account_id"], "type": "income",
+             "active": {"$ne": False}}, {"_id": 0, "id": 1})
+        if not account:
+            raise HTTPException(status_code=400, detail="Income account is unavailable")
+    patch["updated_at"] = iso_now()
+    await sdb.collection_receivables.update_one({"id": receivable_id}, {"$set": patch})
+    await audit(user, "receivable.update", target=receivable_id, target_type="receivable",
+                meta={"fields": sorted(patch.keys())})
+    return await sdb.collection_receivables.find_one({"id": receivable_id}, {"_id": 0})
+
+
+@router.delete("/accounting/receivables/{receivable_id}")
+async def delete_other_receivable(receivable_id: str, request: Request,
+                                  session_token: Optional[str] = Cookie(default=None),
+                                  authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.delete")
+    row = await sdb.collection_receivables.find_one({"id": receivable_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Receivable not found")
+    if float(row.get("received_amount") or 0) > 0:
+        raise HTTPException(status_code=409,
+                            detail="Reverse the linked receipt before deleting this receivable")
+    await sdb.collection_receivables.update_one(
+        {"id": receivable_id},
+        {"$set": {"status": "cancelled", "cancelled_at": iso_now(),
+                  "cancelled_by": user["user_id"], "updated_at": iso_now()}},
+    )
+    await audit(user, "receivable.cancel", target=receivable_id, target_type="receivable")
+    return {"ok": True, "cancelled": True}
+
+
+@router.post("/accounting/collections/receive")
+async def receive_collection(payload: CollectionReceiptIn, request: Request,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    """Record Money In through the existing source workflow and journal engine."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    idem = (request.headers.get("idempotency-key") or "").strip()[:100]
+    request_key = (f"{user_org_id(user)}:{payload.source_type}:{payload.source_id}:{idem}"
+                   if idem else None)
+    if request_key:
+        prior = await sdb.collection_receipts.find_one({"request_key": request_key}, {"_id": 0})
+        if prior:
+            return prior
+
+    if payload.source_type == "vendor_commission":
+        from models.vendor import CommissionReceiveIn
+        from routes.vendors import _receive_commission_locked
+        row = await sdb.vendor_commissions.find_one({"id": payload.source_id}, {"_id": 0})
+        if not row or row.get("status") in ("cancelled", "reversed"):
+            raise HTTPException(status_code=404, detail="Commission not found")
+        outstanding = round(max(0.0, float(row.get("amount") or 0)
+                                - float(row.get("received_amount") or 0)), 2)
+        if payload.amount > outstanding + 0.01:
+            raise HTTPException(status_code=400, detail=f"Amount exceeds pending commission ({outstanding:.2f})")
+        bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
+        commission_payload = CommissionReceiveIn(
+            amount=payload.amount, received_date=payload.date,
+            bank_account_id=payload.bank_account_id,
+            payment_method=payload.payment_method, reference=payload.reference,
+            notes=payload.notes, commission_ids=[payload.source_id],
+        )
+        async with doc_lock(sdb.vendors_acc, row["vendor_id"]):
+            result = await _receive_commission_locked(
+                user, row["vendor_id"], commission_payload, bank,
+                idem=idem or None, request_key=request_key)
+        receipt = {**result, "source_type": payload.source_type,
+                   "source_id": payload.source_id, "amount": payload.amount}
+        return receipt
+
+    if payload.source_type in ("invoice", "milestone"):
+        income_id = payload.income_account_id
+        if not income_id:
+            _bank, default_income = await default_receipt_accounts()
+            income_id = (default_income or {}).get("id")
+        if not income_id:
+            raise HTTPException(status_code=409, detail="Income account is unavailable")
+        linked = ({"invoice_id": payload.source_id} if payload.source_type == "invoice"
+                  else {"milestone_id": payload.source_id})
+        lock_collection = (sdb.invoices if payload.source_type == "invoice"
+                           else sdb.payment_milestones)
+        async with doc_lock(lock_collection, payload.source_id):
+            je = await create_income(
+                IncomeIn(date=payload.date, amount=payload.amount,
+                         income_account_id=income_id, bank_account_id=payload.bank_account_id,
+                         payment_method=payload.payment_method, reference=payload.reference,
+                         notes=payload.notes, **linked),
+                request, session_token, authorization,
+            )
+        return {"ok": True, "source_type": payload.source_type,
+                "source_id": payload.source_id, "amount": payload.amount,
+                "journal_entry_id": je.get("id")}
+
+    async with doc_lock(sdb.collection_receivables, payload.source_id):
+        row = await sdb.collection_receivables.find_one(
+            {"id": payload.source_id, "status": {"$ne": "cancelled"}}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Receivable not found")
+        outstanding = round(max(0.0, float(row.get("amount") or 0)
+                                - float(row.get("received_amount") or 0)), 2)
+        if payload.amount > outstanding + 0.01:
+            raise HTTPException(status_code=400, detail=f"Amount exceeds pending receivable ({outstanding:.2f})")
+        bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
+        income_id = payload.income_account_id or row.get("income_account_id")
+        income = await sdb.accounts.find_one(
+            {"id": income_id, "type": "income", "active": {"$ne": False}}, {"_id": 0})
+        if not income:
+            raise HTTPException(status_code=400, detail="Select an active income account")
+        receipt_id = (f"cr_{hashlib.sha256(request_key.encode('utf-8')).hexdigest()[:24]}"
+                      if request_key else new_id("cr_"))
+        je = await _post_journal(
+            user, payload.date, payload.notes or f"Collection received - {row.get('name')}",
+            [{"account_id": bank["id"], "debit": payload.amount, "credit": 0,
+              "description": "Received"},
+             {"account_id": income["id"], "debit": 0, "credit": payload.amount,
+              "description": income.get("name")}],
+            reference=payload.reference, project_id=row.get("project_id"),
+            client_id=row.get("client_id"), vendor_id=row.get("vendor_id"),
+            source="other_receivable_income", source_id=receipt_id,
+        )
+        received = round(float(row.get("received_amount") or 0) + payload.amount, 2)
+        status = "received" if received + 0.01 >= float(row.get("amount") or 0) else "partially_received"
+        receipt = {
+            "id": receipt_id, "source_type": payload.source_type,
+            "source_id": payload.source_id, "amount": round(payload.amount, 2),
+            "date": payload.date, "payment_method": payload.payment_method,
+            "bank_account_id": payload.bank_account_id,
+            "income_account_id": income["id"], "reference": payload.reference,
+            "notes": payload.notes, "journal_entry_id": je["id"],
+            "status": "received", "created_at": iso_now(),
+            "created_by": user["user_id"],
+        }
+        if request_key:
+            receipt["request_key"] = request_key
+        await sdb.collection_receipts.insert_one(dict(receipt))
+        await sdb.collection_receivables.update_one(
+            {"id": payload.source_id},
+            {"$set": {"received_amount": received, "status": status,
+                      "last_received_at": payload.date, "updated_at": iso_now()}},
+        )
+        await audit(user, "receivable.receive", target=payload.source_id,
+                    target_type="receivable",
+                    meta={"receipt_id": receipt_id, "amount": payload.amount})
+        return receipt
+
+
 @router.get("/accounting/receivables")
 async def project_receivables(request: Request,
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
-    """Tenant-scoped project milestones that are still due for collection."""
+    """Unified Money In view over existing source-of-truth records."""
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
@@ -1979,65 +2313,104 @@ async def project_receivables(request: Request,
     today = business_today()
     horizon = today + timedelta(days=30)
     milestones = await sdb.payment_milestones.find(
-        {"status": {"$nin": ["paid", "cancelled"]}}, {"_id": 0}
-    ).sort("due_date", 1).to_list(5000)
+        {"status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(5000)
+    invoices = await sdb.invoices.find(
+        {"doc_type": {"$ne": "quotation"}, "status": {"$nin": ["draft", "cancelled"]}},
+        {"_id": 0}).to_list(5000)
+    commissions = await sdb.vendor_commissions.find(
+        {"status": {"$nin": ["cancelled", "reversed"]}}, {"_id": 0}).to_list(5000)
+    other_rows = await sdb.collection_receivables.find(
+        {"status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(5000)
 
-    project_ids = list({m.get("project_id") for m in milestones if m.get("project_id")})
-    projects = {
-        p["id"]: p async for p in sdb.projects.find(
-            {"id": {"$in": project_ids}},
-            {"_id": 0, "id": 1, "name": 1, "client_id": 1, "client_name": 1},
-        )
-    } if project_ids else {}
-    client_ids = list({p.get("client_id") for p in projects.values() if p.get("client_id")})
-    clients = {
-        c["id"]: c.get("name") async for c in sdb.clients.find(
-            {"id": {"$in": client_ids}}, {"_id": 0, "id": 1, "name": 1}
-        )
-    } if client_ids else {}
+    project_ids = {row.get("project_id") for row in
+                   [*milestones, *invoices, *commissions, *other_rows] if row.get("project_id")}
+    projects = {p["id"]: p async for p in sdb.projects.find(
+        {"id": {"$in": list(project_ids)}},
+        {"_id": 0, "id": 1, "name": 1, "client_id": 1, "client_name": 1})} \
+        if project_ids else {}
+    client_ids = {row.get("client_id") for row in [*invoices, *other_rows] if row.get("client_id")}
+    client_ids.update(p.get("client_id") for p in projects.values() if p.get("client_id"))
+    clients = {c["id"]: c.get("name") async for c in sdb.clients.find(
+        {"id": {"$in": list(client_ids)}}, {"_id": 0, "id": 1, "name": 1})} \
+        if client_ids else {}
+    vendor_ids = {row.get("vendor_id") for row in [*commissions, *other_rows] if row.get("vendor_id")}
+    vendors = {v["id"]: v.get("name") async for v in sdb.vendors_acc.find(
+        {"id": {"$in": list(vendor_ids)}}, {"_id": 0, "id": 1, "name": 1})} \
+        if vendor_ids else {}
 
-    totals = {"all": 0.0, "overdue": 0.0, "due_30": 0.0,
-              "later": 0.0, "no_due_date": 0.0}
     rows = []
-    for milestone in milestones:
-        amount = float(milestone.get("amount") or 0)
-        paid = float(milestone.get("paid_amount") or 0)
-        outstanding = round(max(0.0, amount - paid), 2)
-        if outstanding <= 0:
-            continue
-        due_date = milestone.get("due_date")
-        bucket = _milestone_due_bucket(due_date, today, horizon)
-        project = projects.get(milestone.get("project_id"), {})
-        client_id = project.get("client_id")
+
+    def append_row(*, source_type: str, source_id: str, name: str, amount: float,
+                   received: float = 0, due_date: Optional[str] = None,
+                   project_id: Optional[str] = None, client_id: Optional[str] = None,
+                   vendor_id: Optional[str] = None, reference: Optional[str] = None,
+                   recognition: Optional[str] = None, income_account_id: Optional[str] = None,
+                   origin: Optional[str] = None, reminder_date: Optional[str] = None):
+        project = projects.get(project_id, {})
+        status = _collection_status(due_date, amount, received, today, horizon)
+        outstanding = round(max(0.0, float(amount or 0) - float(received or 0)), 2)
         days_overdue = 0
-        if bucket == "overdue":
+        if status == "overdue" and due_date:
             days_overdue = (today - _date.fromisoformat(due_date)).days
-        totals["all"] += outstanding
-        totals[bucket] += outstanding
         rows.append({
-            "id": milestone.get("id"),
-            "name": milestone.get("name"),
-            "project_id": milestone.get("project_id"),
-            "project_name": project.get("name") or "Unknown project",
-            "client_id": client_id,
-            "client_name": project.get("client_name") or clients.get(client_id),
-            "due_date": due_date,
-            "status": milestone.get("status") or "pending",
-            "amount": round(amount, 2),
-            "paid_amount": round(paid, 2),
-            "outstanding": outstanding,
-            "bucket": bucket,
-            "days_overdue": days_overdue,
+            "id": source_id, "source_type": source_type, "name": name,
+            "project_id": project_id, "project_name": project.get("name"),
+            "client_id": client_id or project.get("client_id"),
+            "client_name": clients.get(client_id or project.get("client_id"))
+                or project.get("client_name"),
+            "vendor_id": vendor_id, "vendor_name": vendors.get(vendor_id),
+            "due_date": due_date, "status": status, "bucket": status,
+            "amount": round(float(amount or 0), 2),
+            "received_amount": round(float(received or 0), 2),
+            "outstanding": outstanding, "days_overdue": days_overdue,
+            "reference": reference, "recognition": recognition,
+            "income_account_id": income_account_id, "origin": origin,
+            "reminder_date": reminder_date,
         })
 
-    rows.sort(key=lambda row: (row.get("due_date") or "9999-12-31", row.get("project_name") or ""))
-    return {
-        "as_of": today.isoformat(),
-        "horizon": horizon.isoformat(),
-        "totals": {key: round(value, 2) for key, value in totals.items()},
-        "count": len(rows),
-        "rows": rows,
-    }
+    for row in milestones:
+        append_row(source_type="milestone", source_id=row["id"],
+                   name=row.get("name") or "Project milestone",
+                   amount=row.get("amount") or 0, received=row.get("paid_amount") or 0,
+                   due_date=row.get("due_date"), project_id=row.get("project_id"))
+    for row in invoices:
+        received = row.get("paid_amount") or (row.get("total") if row.get("status") == "paid" else 0)
+        append_row(source_type="invoice", source_id=row["id"],
+                   name=f"Invoice {row.get('number') or row['id']}",
+                   amount=row.get("total") or 0, received=received,
+                   due_date=row.get("due_date"), project_id=row.get("project_id"),
+                   client_id=row.get("client_id"), reference=row.get("number"))
+    for row in commissions:
+        append_row(source_type="vendor_commission", source_id=row["id"],
+                   name=(f"Commission - {row.get('vendor_name') or vendors.get(row.get('vendor_id')) or 'Vendor'}"),
+                   amount=row.get("amount") or 0, received=row.get("received_amount") or 0,
+                   due_date=row.get("due_date"), project_id=row.get("project_id"),
+                   vendor_id=row.get("vendor_id"), reference=row.get("reference") or row.get("bill_number"),
+                   recognition=row.get("recognition") or "earned", origin=row.get("origin"),
+                   reminder_date=row.get("reminder_date"))
+    for row in other_rows:
+        append_row(source_type="other_receivable", source_id=row["id"],
+                   name=row.get("name") or "Other receivable", amount=row.get("amount") or 0,
+                   received=row.get("received_amount") or 0, due_date=row.get("due_date"),
+                   project_id=row.get("project_id"), client_id=row.get("client_id"),
+                   vendor_id=row.get("vendor_id"), reference=row.get("reference"),
+                   recognition="cash_basis", income_account_id=row.get("income_account_id"),
+                   origin="manual_expected", reminder_date=row.get("reminder_date"))
+
+    totals = {key: 0.0 for key in (
+        "all", "overdue", "due_today", "upcoming", "later", "no_due_date",
+        "partially_received", "received")}
+    for row in rows:
+        totals["received"] += row["received_amount"]
+        if row["status"] != "received":
+            totals["all"] += row["outstanding"]
+            totals[row["status"]] += row["outstanding"]
+    totals["due_30"] = totals["due_today"] + totals["upcoming"]
+    rows.sort(key=lambda row: (row.get("status") == "received",
+                               row.get("due_date") or "9999-12-31", row.get("name") or ""))
+    return {"as_of": today.isoformat(), "horizon": horizon.isoformat(),
+            "totals": {key: round(value, 2) for key, value in totals.items()},
+            "count": len(rows), "rows": rows}
 
 
 # ==================================================

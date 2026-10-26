@@ -112,6 +112,84 @@ class IncomeIn(FiniteModel):
     notes: Optional[str] = None
 
 
+class OtherReceivableIn(FiniteModel):
+    """A non-invoice collection reminder.
+
+    It is deliberately non-posting: accounting starts only when a receipt is
+    recorded.  Vendor commissions use their own source records and are not
+    duplicated here.
+    """
+    name: str = Field(min_length=1, max_length=160)
+    amount: float = Field(gt=0)
+    due_date: Optional[str] = None
+    client_id: Optional[str] = None
+    vendor_id: Optional[str] = None
+    project_id: Optional[str] = None
+    income_account_id: Optional[str] = None
+    reminder_date: Optional[str] = None
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("due_date", "reminder_date")
+    @classmethod
+    def validate_receivable_dates(cls, value):
+        if value in (None, ""):
+            return value
+        from datetime import date
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
+
+
+class OtherReceivableUpdate(FiniteModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    amount: Optional[float] = Field(default=None, gt=0)
+    due_date: Optional[str] = None
+    client_id: Optional[str] = None
+    vendor_id: Optional[str] = None
+    project_id: Optional[str] = None
+    income_account_id: Optional[str] = None
+    reminder_date: Optional[str] = None
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("due_date", "reminder_date")
+    @classmethod
+    def validate_receivable_update_dates(cls, value):
+        if value in (None, ""):
+            return value
+        from datetime import date
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
+
+
+class CollectionReceiptIn(FiniteModel):
+    source_type: Literal["invoice", "milestone", "vendor_commission", "other_receivable"]
+    source_id: str
+    amount: float = Field(gt=0)
+    date: str
+    bank_account_id: str
+    income_account_id: Optional[str] = None
+    payment_method: Optional[str] = "bank_transfer"
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("date")
+    @classmethod
+    def validate_receipt_date(cls, value):
+        from datetime import date
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
+
+
 class ExpenseIn(FiniteModel):
     date: str
     amount: float = Field(gt=0)

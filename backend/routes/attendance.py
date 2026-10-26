@@ -950,32 +950,40 @@ async def monthly_sheet(request: Request, year: Optional[int] = None, month: Opt
     local_now = engine.now_ist()
     y = year or local_now.year
     m = month or local_now.month
-    start, end = _month_bounds(y, m)
-
     employees = await sdb.employees.find(
         {}, {"_id": 0, "id": 1, "name": 1, "first_name": 1, "last_name": 1,
              "employee_id": 1, "designation": 1, "department": 1,
-             "shift_start": 1, "shift_end": 1, "grace_minutes": 1}).to_list(500)
+             "shift_start": 1, "shift_end": 1, "grace_minutes": 1,
+             "weekly_offs": 1, "full_day_min_minutes": 1,
+             "payroll_basis_days": 1, "monthly_salary": 1, "salary": 1}).to_list(500)
+    policy = await _get_attendance_policy()
+    holiday_dates = await engine.get_holiday_dates(y)
     rows = []
     for e in employees:
         e["name"] = engine.emp_name(e)
-        recs = await sdb.attendance.find(
-            {"employee_id": e["id"], "date": {"$gte": start, "$lt": end}},
-            {"_id": 0},
-        ).sort("date", 1).to_list(500)
+        calculated = await engine.monthly_summary(
+            e, y, m, policy, holiday_dates=holiday_dates)
+        summary = calculated["summary"]
         counts = {s: 0 for s in ATTENDANCE_STATUSES}
-        total_hours = 0.0
-        for r in recs:
-            s = r.get("status", "absent")
-            counts[s] = counts.get(s, 0) + 1
-            total_hours += float(r.get("worked_hours") or 0)
+        counts.update({
+            "present": summary["present"] + summary["site_visit"],
+            "late": summary["late"],
+            "absent": summary["absent"],
+            "half_day": summary["half_day"],
+            "leave": summary["paid_leave"] + summary["unpaid_leave"],
+            "holiday": summary["holidays"],
+            "week_off": summary["week_off"],
+        })
         rows.append({
             "employee": e,
             "counts": counts,
-            "worked_hours": round(total_hours, 2),
-            "records": recs,
+            "worked_hours": round(summary["total_working_minutes"] / 60.0, 2),
+            # Calculated daily rows include missing holidays, weekly-offs,
+            # absences and upcoming days without altering stored punches.
+            "records": calculated["daily"],
         })
-    return {"year": y, "month": m, "rows": rows}
+    return {"year": y, "month": m, "holiday_dates": sorted(holiday_dates),
+            "rows": rows}
 
 
 # ==================================================

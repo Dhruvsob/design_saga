@@ -279,6 +279,9 @@ export default function Accounting() {
         <CollectionsDue
           banks={banks}
           incomeAccounts={incomeAccs}
+          clients={clients}
+          projects={projects}
+          vendors={vendors}
           onSaved={() => { loadDashboard(); loadCommon(); }}
         />
       )}
@@ -871,16 +874,26 @@ function SubKPI({ label, value, tint }) {
   );
 }
 
-function CollectionsDue({ banks, incomeAccounts, onSaved }) {
+function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onSaved }) {
+  const emptyPlan = {
+    type: "vendor_commission", name: "", amount: "", due_date: "",
+    vendor_id: "", client_id: "", project_id: "", recognition: "planned",
+    income_account_id: "", reference: "", reminder_date: "", notes: "",
+  };
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [collecting, setCollecting] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
+  const [editingRow, setEditingRow] = useState(null);
+  const [plan, setPlan] = useState(emptyPlan);
   const [receipt, setReceipt] = useState({
     date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+    amount: "",
     bank_account_id: "", income_account_id: "", payment_method: "bank_transfer",
     reference: "", notes: "",
+    request_key: "",
   });
 
   const load = () => api.get("/accounting/receivables")
@@ -893,8 +906,10 @@ function CollectionsDue({ banks, incomeAccounts, onSaved }) {
     setReceipt((current) => ({
       ...current,
       bank_account_id: current.bank_account_id || banks[0]?.id || "",
-      income_account_id: current.income_account_id || incomeAccounts[0]?.id || "",
-      notes: `Milestone collection · ${row.name || row.project_name}`,
+      income_account_id: row.income_account_id || current.income_account_id || incomeAccounts[0]?.id || "",
+      amount: row.outstanding,
+      request_key: crypto.randomUUID(),
+      notes: `Collection · ${row.name || row.project_name || row.vendor_name}`,
     }));
   };
 
@@ -903,14 +918,13 @@ function CollectionsDue({ banks, incomeAccounts, onSaved }) {
     if (!collecting || saving) return;
     setSaving(true);
     try {
-      await api.post("/accounting/income", {
-        ...receipt,
-        amount: collecting.outstanding,
-        milestone_id: collecting.id,
-        project_id: collecting.project_id,
-        client_id: collecting.client_id || undefined,
-      });
-      toast.success("Milestone receipt recorded");
+      const { request_key, ...receiptPayload } = receipt;
+      await api.post("/accounting/collections/receive", {
+        ...receiptPayload, amount: Number(receipt.amount),
+        source_type: collecting.source_type,
+        source_id: collecting.id,
+      }, { headers: { "Idempotency-Key": request_key } });
+      toast.success("Collection receipt recorded");
       setCollecting(null);
       await load();
       onSaved?.();
@@ -921,18 +935,78 @@ function CollectionsDue({ banks, incomeAccounts, onSaved }) {
     }
   };
 
+  const savePlan = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const common = {
+        amount: Number(plan.amount), due_date: plan.due_date || undefined,
+        project_id: plan.project_id || undefined, reference: plan.reference || undefined,
+        reminder_date: plan.reminder_date || undefined, notes: plan.notes || undefined,
+      };
+      if (plan.type === "vendor_commission") {
+        const path = `/vendors/${plan.vendor_id}/commissions${editingRow ? `/${editingRow.id}` : ""}`;
+        await api[editingRow ? "patch" : "post"](path, {
+          ...common, recognition: plan.recognition,
+        });
+      } else {
+        const path = `/accounting/receivables${editingRow ? `/${editingRow.id}` : ""}`;
+        await api[editingRow ? "patch" : "post"](path, {
+          ...common, name: plan.name, client_id: plan.client_id || undefined,
+          vendor_id: plan.vendor_id || undefined,
+          income_account_id: plan.income_account_id || undefined,
+        });
+      }
+      toast.success("Collection reminder added - no journal posted");
+      setShowPlan(false);
+      setEditingRow(null);
+      setPlan(emptyPlan);
+      await load();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not add collection reminder");
+    } finally { setSaving(false); }
+  };
+
+  const editPlan = (row) => {
+    setEditingRow(row);
+    setPlan({
+      type: row.source_type, name: row.name || "", amount: row.amount,
+      due_date: row.due_date || "", vendor_id: row.vendor_id || "",
+      client_id: row.client_id || "", project_id: row.project_id || "",
+      recognition: row.recognition === "earned" ? "earned" : "planned",
+      income_account_id: row.income_account_id || "", reference: row.reference || "",
+      reminder_date: row.reminder_date || "", notes: "",
+    });
+    setShowPlan(true);
+  };
+
+  const cancelPlan = async (row) => {
+    if (!window.confirm("Cancel this expected collection? No accounting entry will be deleted.")) return;
+    try {
+      const path = row.source_type === "vendor_commission"
+        ? `/vendors/${row.vendor_id}/commissions/${row.id}`
+        : `/accounting/receivables/${row.id}`;
+      await api.delete(path);
+      toast.success("Expected collection cancelled");
+      await load();
+    } catch (error) { toast.error(error?.response?.data?.detail || "Could not cancel collection"); }
+  };
+
   if (!data) return <div className="overline">LOADING COLLECTIONS…</div>;
   const term = query.trim().toLowerCase();
   const rows = (data.rows || []).filter((row) => {
     if (filter !== "all" && row.bucket !== filter) return false;
     if (!term) return true;
-    return `${row.project_name || ""} ${row.client_name || ""} ${row.name || ""}`
+    return `${row.project_name || ""} ${row.client_name || ""} ${row.vendor_name || ""} ${row.name || ""} ${row.reference || ""} ${row.source_type || ""}`
       .toLowerCase().includes(term);
   });
   const filters = [
-    ["all", "All pending"],
+    ["all", "All"],
     ["overdue", "Overdue"],
-    ["due_30", "Next 30 days"],
+    ["due_today", "Due today"],
+    ["upcoming", "Upcoming"],
+    ["partially_received", "Partially received"],
+    ["received", "Received"],
     ["later", "Later"],
     ["no_due_date", "No due date"],
   ];
@@ -941,23 +1015,54 @@ function CollectionsDue({ banks, incomeAccounts, onSaved }) {
     <div className="space-y-4" data-testid="collections-due-tab">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <div className="overline">PROJECT COLLECTIONS</div>
-          <div className="text-xs text-[#5C5C5C] mt-1">As of {formatDate(data.as_of)} · next 30 days through {formatDate(data.horizon)}</div>
+          <div className="overline">MONEY IN / COLLECTIONS DUE</div>
+          <div className="text-xs text-[#5C5C5C] mt-1">Invoices, project milestones, vendor commissions and other receivables · as of {formatDate(data.as_of)}</div>
         </div>
-        <input
-          className="input-flat min-w-[260px]"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search project, client or milestone"
-          data-testid="collections-search"
-        />
+        <div className="flex gap-2 flex-wrap">
+          <input className="input-flat min-w-[260px]" value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search person, project, invoice or reference"
+            data-testid="collections-search" />
+          <button type="button" className="btn-primary" onClick={() => {
+            setShowPlan(!showPlan); setEditingRow(null); setPlan(emptyPlan);
+          }}>
+            <Plus size={13} /> {showPlan ? "Cancel" : "Add expected collection"}
+          </button>
+        </div>
       </div>
 
+      {showPlan && (
+        <form onSubmit={savePlan} className="card-flat space-y-3" data-testid="collection-plan-form">
+          <div className="overline">{editingRow ? "EDIT EXPECTED COLLECTION" : "ADD A REMINDER - THIS DOES NOT POST ACCOUNTING"}</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <label className="text-xs">Collection type<select disabled={Boolean(editingRow)} className="input-flat mt-1 w-full" value={plan.type} onChange={(e) => setPlan({ ...emptyPlan, type: e.target.value })}><option value="vendor_commission">Vendor commission</option><option value="other_receivable">Other receivable</option></select></label>
+            {plan.type === "vendor_commission" ? (
+              <label className="text-xs">Vendor<select required className="input-flat mt-1 w-full" value={plan.vendor_id} onChange={(e) => setPlan({ ...plan, vendor_id: e.target.value })}><option value="">Select vendor</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
+            ) : (
+              <label className="text-xs">What is due?<input required className="input-flat mt-1 w-full" value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} placeholder="Referral fee, reimbursement…" /></label>
+            )}
+            <label className="text-xs">Expected amount<input required min="0.01" step="0.01" type="number" className="input-flat mt-1 w-full" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: e.target.value })} /></label>
+            <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={plan.due_date} onChange={(e) => setPlan({ ...plan, due_date: e.target.value })} /></label>
+            <label className="text-xs">Project<select className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+            {plan.type === "vendor_commission" ? (
+              <label className="text-xs">Accounting basis<select className="input-flat mt-1 w-full" value={plan.recognition} onChange={(e) => setPlan({ ...plan, recognition: e.target.value })}><option value="planned">Expected only - not earned yet</option><option value="earned">Already earned - awaiting receipt</option></select></label>
+            ) : <>
+              <label className="text-xs">Related client<select className="input-flat mt-1 w-full" value={plan.client_id} onChange={(e) => setPlan({ ...plan, client_id: e.target.value })}><option value="">No client</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+              <label className="text-xs">Income account on receipt<select className="input-flat mt-1 w-full" value={plan.income_account_id} onChange={(e) => setPlan({ ...plan, income_account_id: e.target.value })}><option value="">Choose when received</option>{incomeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+            </>}
+            <label className="text-xs">Reference<input className="input-flat mt-1 w-full" value={plan.reference} onChange={(e) => setPlan({ ...plan, reference: e.target.value })} /></label>
+            <label className="text-xs">Reminder date<input type="date" className="input-flat mt-1 w-full" value={plan.reminder_date} onChange={(e) => setPlan({ ...plan, reminder_date: e.target.value })} /></label>
+          </div>
+          <textarea className="input-flat w-full" value={plan.notes} onChange={(e) => setPlan({ ...plan, notes: e.target.value })} placeholder="Reminder notes" />
+          <button className="btn-primary" disabled={saving}>{saving ? "Saving…" : editingRow ? "Save changes" : "Save reminder"}</button>
+        </form>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPI label="Total pending" value={CURRENCY(data.totals?.all)} Icon={Money} tint="#0A0A0A" />
+        <KPI label="Pending collection" value={CURRENCY(data.totals?.all)} Icon={Money} tint="#0A0A0A" />
         <KPI label="Overdue" value={CURRENCY(data.totals?.overdue)} Icon={ArrowUp} tint="#B4001C" />
-        <KPI label="Next 30 days" value={CURRENCY(data.totals?.due_30)} Icon={ArrowDown} tint="#7A4E1A" />
-        <KPI label="Later" value={CURRENCY(data.totals?.later)} Icon={ChartLine} tint="#1D633E" />
+        <KPI label="Due today / upcoming" value={CURRENCY((data.totals?.due_today || 0) + (data.totals?.upcoming || 0))} Icon={ArrowDown} tint="#7A4E1A" />
+        <KPI label="Received" value={CURRENCY(data.totals?.received)} Icon={ChartLine} tint="#1D633E" />
       </div>
 
       <div className="flex gap-1.5 flex-wrap" data-testid="collections-filters">
@@ -975,9 +1080,9 @@ function CollectionsDue({ banks, incomeAccounts, onSaved }) {
           <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase text-[#5C5C5C]">
             <tr>
               <th className="p-3 text-left">Due date</th>
-              <th className="p-3 text-left">Project</th>
-              <th className="p-3 text-left">Client</th>
-              <th className="p-3 text-left">Milestone</th>
+              <th className="p-3 text-left">Source</th>
+              <th className="p-3 text-left">Party / project</th>
+              <th className="p-3 text-left">Collection</th>
               <th className="p-3 text-left">Status</th>
               <th className="p-3 text-right">To collect</th>
               <th className="p-3" />
@@ -990,17 +1095,23 @@ function CollectionsDue({ banks, incomeAccounts, onSaved }) {
                   <div>{formatDate(row.due_date)}</div>
                   {row.days_overdue > 0 && <div className="text-[10px] text-[#B4001C]">{row.days_overdue} days overdue</div>}
                 </td>
-                <td className="p-3 font-semibold">{row.project_name}</td>
-                <td className="p-3 text-[#5C5C5C]">{row.client_name || "—"}</td>
-                <td className="p-3">{row.name || "Payment milestone"}</td>
+                <td className="p-3"><span className="status-chip chip-medium">{(row.source_type || "").replaceAll("_", " ")}</span></td>
+                <td className="p-3"><div className="font-semibold">{row.vendor_name || row.client_name || "—"}</div><div className="text-xs text-[#5C5C5C]">{row.project_name || "No project"}</div></td>
+                <td className="p-3"><div>{row.name || "Collection"}</div>{row.recognition === "planned" && <div className="text-[10px] text-[#7A4E1A]">Expected only - not yet earned</div>}</td>
                 <td className="p-3"><span className={`status-chip chip-${row.status}`}>{row.status}</span></td>
                 <td className="p-3 text-right font-mono font-semibold">{CURRENCY(row.outstanding)}</td>
                 <td className="p-3 text-right whitespace-nowrap">
-                  <button type="button" className="btn-primary text-xs mr-2"
+                  {row.outstanding > 0 && <button type="button" className="btn-primary text-xs mr-2"
                     onClick={() => openReceipt(row)} disabled={!banks.length || !incomeAccounts.length}>
                     <Money size={12} /> Receive
-                  </button>
-                  {row.project_id && <a href={`/projects/${row.project_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>}
+                  </button>}
+                  {row.vendor_id ? <a href={`/vendors/${row.vendor_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
+                    : row.project_id ? <a href={`/projects/${row.project_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
+                    : null}
+                  {row.origin === "manual_expected" && row.received_amount <= 0 && <>
+                    <button type="button" className="btn-ghost text-xs" onClick={() => editPlan(row)}><PencilSimple size={12} /> Edit</button>
+                    <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => cancelPlan(row)}><Trash size={12} /> Cancel</button>
+                  </>}
                 </td>
               </tr>
             ))}
@@ -1016,14 +1127,15 @@ function CollectionsDue({ banks, incomeAccounts, onSaved }) {
           <form onSubmit={saveReceipt} className="bg-white border border-[#E5E5E5] w-full max-w-lg p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="overline">RECORD MILESTONE RECEIPT</div>
-                <h3 className="font-display text-xl mt-1">{collecting.name || "Payment milestone"}</h3>
-                <p className="text-sm text-[#5C5C5C] mt-1">{collecting.project_name} · {CURRENCY(collecting.outstanding)}</p>
+                <div className="overline">RECORD COLLECTION RECEIPT</div>
+                <h3 className="font-display text-xl mt-1">{collecting.name || "Collection"}</h3>
+                <p className="text-sm text-[#5C5C5C] mt-1">{collecting.vendor_name || collecting.client_name || collecting.project_name || "Other receivable"} · {CURRENCY(collecting.outstanding)} pending</p>
               </div>
               <button type="button" className="btn-ghost" onClick={() => setCollecting(null)} aria-label="Close"><X size={16} /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs">Receipt date<input required type="date" className="input-flat mt-1 w-full" value={receipt.date} onChange={(e) => setReceipt({ ...receipt, date: e.target.value })} /></label>
+              <label className="text-xs">Amount received<input required min="0.01" max={collecting.outstanding} step="0.01" type="number" className="input-flat mt-1 w-full" value={receipt.amount} onChange={(e) => setReceipt({ ...receipt, amount: e.target.value })} /></label>
               <label className="text-xs">Payment method<select className="input-flat mt-1 w-full" value={receipt.payment_method} onChange={(e) => setReceipt({ ...receipt, payment_method: e.target.value })}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="online">Online</option><option value="other">Other</option></select></label>
               <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={receipt.bank_account_id} onChange={(e) => setReceipt({ ...receipt, bank_account_id: e.target.value })}><option value="" disabled>Select cash / bank</option>{banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
               <label className="text-xs">Income account<select required className="input-flat mt-1 w-full" value={receipt.income_account_id} onChange={(e) => setReceipt({ ...receipt, income_account_id: e.target.value })}><option value="" disabled>Select income account</option>{incomeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>

@@ -10,17 +10,19 @@ from pydantic import ValidationError
 
 import routes.accounting as accounting
 from models.accounting import (
-    DEFAULT_COA, IncomeIn, JournalLine, MilestoneIn, NonOperatingTransactionIn,
+    CollectionReceiptIn, DEFAULT_COA, IncomeIn, JournalLine, MilestoneIn,
+    NonOperatingTransactionIn, OtherReceivableIn,
 )
+from models.vendor import CommissionExpectedIn
 from routes.accounting import (
     _cash_flow_bucket,
     _cash_collection_source,
     _can_void_from_journal,
+    _collection_status,
     _invoice_accrual_amounts,
     _linked_journal_key,
     _milestone_due_bucket,
     _party_ledger_name,
-    _require_full_linked_payment,
 )
 from routes.finance_extras import _bank_match_error
 from routes.finance_extras import RecurringIn
@@ -215,12 +217,35 @@ def test_non_operating_workflows_post_expected_debit_and_credit(monkeypatch):
         assert posted[-1]["lines"][1]["credit"] == 100
 
 
-def test_linked_payments_must_settle_the_full_source_amount():
-    _require_full_linked_payment("invoice", 1180, 1180.004)
-    with pytest.raises(HTTPException) as exc:
-        _require_full_linked_payment("invoice", 100, 1180)
-    assert exc.value.status_code == 400
-    assert "1180.00" in exc.value.detail
+def test_money_in_models_allow_partial_receipts_but_reject_invalid_dates():
+    receipt = CollectionReceiptIn(
+        source_type="invoice", source_id="inv_1", amount=100,
+        date="2026-10-26", bank_account_id="bank",
+    )
+    assert receipt.amount == 100
+    assert OtherReceivableIn(name="Consulting follow-up", amount=5000,
+                             due_date="2026-10-31").amount == 5000
+    commission = CommissionExpectedIn(amount=5000, due_date="2026-10-31")
+    assert commission.recognition == "planned"
+    with pytest.raises(ValidationError):
+        CollectionReceiptIn(source_type="invoice", source_id="inv_1", amount=100,
+                            date="31/10/2026", bank_account_id="bank")
+    with pytest.raises(ValidationError):
+        OtherReceivableIn(name="Bad date", amount=100, due_date="31/10/2026")
+    with pytest.raises(ValidationError):
+        CommissionExpectedIn(amount=100, due_date="31/10/2026")
+
+
+def test_unified_collection_statuses_cover_partial_and_due_states():
+    today = date(2026, 10, 26)
+    horizon = date(2026, 11, 25)
+    assert _collection_status("2026-10-25", 5000, 0, today, horizon) == "overdue"
+    assert _collection_status("2026-10-26", 5000, 0, today, horizon) == "due_today"
+    assert _collection_status("2026-11-01", 5000, 0, today, horizon) == "upcoming"
+    assert _collection_status("2026-12-01", 5000, 0, today, horizon) == "later"
+    assert _collection_status(None, 5000, 0, today, horizon) == "no_due_date"
+    assert _collection_status("2026-10-25", 5000, 1000, today, horizon) == "partially_received"
+    assert _collection_status("2026-10-25", 5000, 5000, today, horizon) == "received"
 
 
 def test_collection_sources_include_reversals_for_net_reporting():
@@ -229,6 +254,12 @@ def test_collection_sources_include_reversals_for_net_reporting():
     assert _cash_collection_source("invoice_payment_reversal") is True
     assert _cash_collection_source("milestone_payment_reversal") is True
     assert _cash_collection_source("payroll") is False
+
+
+def test_manual_receivable_receipts_use_controlled_void_workflow():
+    assert _can_void_from_journal({
+        "source": "other_receivable_income", "source_id": "cr_1",
+    }) is True
 
 
 def test_milestone_due_buckets_cover_collection_workflow():

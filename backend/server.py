@@ -272,7 +272,7 @@ TASK_CATEGORIES = [
     "Civil Work", "Automation", "Accessories", "Others",
 ]
 REMINDER_FREQUENCIES = ["one_time", "daily", "weekly", "monthly", "custom"]
-INVOICE_STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"]
+INVOICE_STATUSES = ["draft", "sent", "partially_paid", "paid", "overdue", "cancelled"]
 
 
 class LeadIn(BaseModel):
@@ -866,12 +866,14 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
     collection_due = None
     if can_view_collections:
         due_cursor = sdb.invoices.find(
-            {"status": {"$in": ["sent", "overdue"]}, "doc_type": "invoice"},
-            {"_id": 0, "total": 1},
+            {"status": {"$in": ["sent", "overdue", "partially_paid"]},
+             "doc_type": "invoice"},
+            {"_id": 0, "total": 1, "paid_amount": 1},
         )
         collection_due = 0.0
         async for inv in due_cursor:
-            collection_due += float(inv.get("total", 0))
+            collection_due += max(0.0, float(inv.get("total") or 0)
+                                  - float(inv.get("paid_amount") or 0))
 
     # Overdue tasks
     from core.helpers import business_today
@@ -1982,6 +1984,11 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
     if inv.get("status") == "paid" and payload.status != "paid" \
             and not has_permission(user, "finance.update"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    if inv.get("status") == "partially_paid" and payload.status == "paid":
+        raise HTTPException(
+            status_code=409,
+            detail="Record the remaining receipt from Money In so the bank and receivable ledgers stay correct",
+        )
     upd = {"status": payload.status, "updated_at": iso(now_utc())}
 
     # --- Accounting is the source of truth: keep books in sync ---
@@ -1990,7 +1997,7 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
         reverse_invoice_accrual_je, reverse_receipt_je,
     )
     is_invoice = inv.get("doc_type", "invoice") == "invoice"
-    issued_states = {"sent", "overdue", "paid"}
+    issued_states = {"sent", "overdue", "partially_paid", "paid"}
     current_is_issued = inv.get("status") in issued_states
     target_is_issued = payload.status in issued_states
     if is_invoice and target_is_issued and not current_is_issued \
@@ -2013,6 +2020,7 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
         from core.helpers import business_today
         upd["paid_date"] = business_today().isoformat()
         amount = float(inv.get("total") or 0)
+        upd["paid_amount"] = amount
         if amount > 0:
             try:
                 je = await post_receipt_je(
@@ -2855,7 +2863,10 @@ async def seed_demo(request: Request, session_token: Optional[str] = Cookie(defa
 #  Timeline, Terms, Versions, Approval, Change Orders, Premium PDF)
 # ============================================================
 
-QUOTATION_TYPES = ["turnkey", "consultancy", "execution", "hybrid"]
+# New quotations intentionally use only the two commercial models supported by
+# the business.  Legacy execution/hybrid quotations remain readable below via
+# their existing templates, but they cannot be selected for new work.
+QUOTATION_TYPES = ["turnkey", "consultancy"]
 QUOTATION_STATUSES = ["draft", "sent", "under_review", "approved", "rejected", "converted"]
 ROOM_PRESETS = ["Living Room", "Kitchen", "Master Bedroom", "Kids Bedroom",
                 "Guest Bedroom", "Master Bath", "Common Bath", "Dining",
@@ -3140,7 +3151,9 @@ def _new_quotation_doc(payload: dict, user: dict) -> dict:
         # timeline
         "timeline": payload.get("timeline") or [t.copy() for t in DEFAULT_TIMELINE_BY_TYPE.get(qtype, [])],
         # terms
-        "terms": payload.get("terms") or [t.copy() for t in DEFAULT_TERMS],
+        "terms": payload.get("terms") or [
+            t.copy() for t in (CONSULTANCY_TERMS if qtype == "consultancy" else DEFAULT_TERMS)
+        ],
         # approval
         "approval": {
             "internal_status": "pending",
@@ -3163,7 +3176,7 @@ def _new_quotation_doc(payload: dict, user: dict) -> dict:
 
 # ---------- Pydantic in-models (lenient) ----------
 class QuotationCreate(BaseModel):
-    type: Optional[str] = "turnkey"
+    type: Literal["turnkey", "consultancy"] = "turnkey"
     project_title: str
     client_id: Optional[str] = None
     client_name: Optional[str] = None
@@ -3174,7 +3187,7 @@ class QuotationCreate(BaseModel):
 
 class QuotationUpdate(BaseModel):
     project_title: Optional[str] = None
-    type: Optional[str] = None
+    type: Optional[Literal["turnkey", "consultancy"]] = None
     client_id: Optional[str] = None
     client_name: Optional[str] = None
     project_id: Optional[str] = None

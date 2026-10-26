@@ -1,5 +1,6 @@
 """Notification privacy and idempotency regression tests."""
 import asyncio
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -54,6 +55,14 @@ class _Preferences:
 
     def find(self, query, *_args):
         self.queries.append(query)
+        return _Cursor(self.rows)
+
+
+class _Rows:
+    def __init__(self, rows=None):
+        self.rows = rows or []
+
+    def find(self, *_args, **_kwargs):
         return _Cursor(self.rows)
 
 
@@ -163,3 +172,34 @@ def test_manual_tenant_scan_requires_finance_or_admin_permission():
     with pytest.raises(HTTPException) as exc:
         notification_routes._require_scan_permission({"permissions": ["tasks.read"]})
     assert exc.value.status_code == 403
+
+
+def test_scan_reuses_finance_notifications_for_planned_collections(monkeypatch):
+    emitted = []
+
+    async def emit_finance(kind, title, body="", **kwargs):
+        emitted.append({"kind": kind, "title": title, "body": body, **kwargs})
+        return 1
+
+    monkeypatch.setattr(notification_routes, "business_today", lambda: date(2026, 10, 26))
+    monkeypatch.setattr(notification_routes, "emit_finance", emit_finance)
+    monkeypatch.setattr(notification_routes, "sdb", SimpleNamespace(
+        vendor_bills=_Rows(), invoices=_Rows(), payment_milestones=_Rows(), tasks=_Rows(),
+        vendor_commissions=_Rows([{
+            "id": "vcom_1", "vendor_name": "Dhrumil Bhai", "status": "pending",
+            "amount": 5000, "received_amount": 1000, "due_date": "2026-10-26",
+        }]),
+        collection_receivables=_Rows([{
+            "id": "recv_1", "name": "Referral fee", "status": "pending",
+            "amount": 2000, "received_amount": 0, "due_date": "2026-10-31",
+            "reminder_date": "2026-10-26",
+        }]),
+    ))
+
+    result = asyncio.run(notification_routes.run_scan("org_a"))
+
+    assert result["emitted"]["collection_due"] == 1
+    assert result["emitted"]["collection_reminder"] == 1
+    due = next(row for row in emitted if row["kind"] == "collection_due")
+    assert "Dhrumil Bhai" in due["title"]
+    assert "4,000" in due["body"]

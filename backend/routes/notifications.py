@@ -166,6 +166,8 @@ async def run_scan(caller_org):
         "vendor_bill_due": 0, "vendor_bill_overdue": 0,
         "invoice_due": 0, "invoice_overdue": 0,
         "milestone_due": 0, "milestone_overdue": 0,
+        "collection_reminder": 0, "collection_due": 0,
+        "collection_overdue": 0,
         "task_overdue": 0,
     }
 
@@ -203,14 +205,18 @@ async def run_scan(caller_org):
 
     # ---- Invoices -------------------------------------------------------
     async for inv in sdb.invoices.find(
-        {"status": {"$in": ["sent", "overdue"]}, "doc_type": {"$ne": "quotation"}},
+        {"status": {"$in": ["sent", "overdue", "partially_paid"]},
+         "doc_type": {"$ne": "quotation"}},
         {"_id": 0},
     ):
         due = inv.get("due_date") or ""
         if not due:
             continue
         client_name = inv.get("client_name", "client")
-        amt = inv.get("total") or 0
+        amt = max(0.0, float(inv.get("total") or 0)
+                  - float(inv.get("paid_amount") or 0))
+        if amt <= 0:
+            continue
         if due < today:
             k = f"inv_overdue:{inv['id']}:{today}"
             counts["invoice_overdue"] += await emit_finance(
@@ -237,12 +243,15 @@ async def run_scan(caller_org):
 
     # ---- Payment milestones ---------------------------------------------
     async for m in sdb.payment_milestones.find(
-        {"status": {"$ne": "paid"}}, {"_id": 0},
+        {"status": {"$nin": ["paid", "cancelled"]}}, {"_id": 0},
     ):
         due = m.get("due_date") or ""
         if not due:
             continue
-        amt = m.get("amount") or 0
+        amt = max(0.0, float(m.get("amount") or 0)
+                  - float(m.get("paid_amount") or 0))
+        if amt <= 0:
+            continue
         proj = m.get("project_id")
         if due < today:
             k = f"ms_overdue:{m.get('id')}:{today}"
@@ -267,6 +276,56 @@ async def run_scan(caller_org):
                 dedup_key=k,
                 org_id=caller_org,
             )
+
+    # ---- Planned commissions and other receivables ---------------------
+    collection_sources = (
+        (sdb.vendor_commissions,
+         {"status": {"$in": ["pending", "invoiced"]}}, "vendor_commission"),
+        (sdb.collection_receivables,
+         {"status": {"$in": ["pending", "partially_received"]}}, "other_receivable"),
+    )
+    for collection, query, source_type in collection_sources:
+        async for row in collection.find(query, {"_id": 0}):
+            amount = max(0.0, float(row.get("amount") or 0)
+                         - float(row.get("received_amount") or 0))
+            if amount <= 0:
+                continue
+            due = row.get("due_date") or ""
+            reminder = row.get("reminder_date") or ""
+            party = (row.get("vendor_name") or row.get("name")
+                     or row.get("reference") or "Expected collection")
+            if reminder == today and due != today:
+                key = f"collection_reminder:{source_type}:{row['id']}:{today}"
+                counts["collection_reminder"] += await emit_finance(
+                    "collection_reminder",
+                    f"Collection reminder · {party}",
+                    f"₹{amount:,.0f}" + (f" · due {due}" if due else ""),
+                    link="/accounting",
+                    meta={"source_type": source_type, "source_id": row["id"],
+                          "amount": amount},
+                    dedup_key=key, org_id=caller_org,
+                )
+            if due and due < today:
+                key = f"collection_overdue:{source_type}:{row['id']}:{today}"
+                counts["collection_overdue"] += await emit_finance(
+                    "collection_overdue",
+                    f"Collection overdue · {party}",
+                    f"₹{amount:,.0f} · due {due}",
+                    link="/accounting", priority="high",
+                    meta={"source_type": source_type, "source_id": row["id"],
+                          "amount": amount},
+                    dedup_key=key, org_id=caller_org,
+                )
+            elif due == today:
+                key = f"collection_due:{source_type}:{row['id']}:{today}"
+                counts["collection_due"] += await emit_finance(
+                    "collection_due",
+                    f"Collection due today · {party}",
+                    f"₹{amount:,.0f}", link="/accounting",
+                    meta={"source_type": source_type, "source_id": row["id"],
+                          "amount": amount},
+                    dedup_key=key, org_id=caller_org,
+                )
 
     # ---- Overdue tasks (per assignee) -----------------------------------
     async for t in sdb.tasks.find(

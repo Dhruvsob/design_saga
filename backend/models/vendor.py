@@ -9,7 +9,7 @@ All new schemas ship with an optional `org_id` — the app is single-org today
 but every new document is written multi-tenant ready.
 """
 from pydantic import Field, field_validator
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import date
 
 from core.url_security import external_http_url
@@ -56,6 +56,54 @@ class CommissionReceiveIn(FiniteModel):
     reference: Optional[str] = None
     notes: Optional[str] = None
     commission_ids: Optional[List[str]] = None  # settle specific commission rows (FIFO if empty)
+
+
+class CommissionExpectedIn(FiniteModel):
+    """A planned vendor commission collection.
+
+    Creating this record never posts a journal.  ``recognition`` controls
+    whether the commission is already contractually earned or is merely an
+    expected collection that becomes income only when cash is received.
+    """
+    amount: float = Field(gt=0)
+    due_date: Optional[str] = None
+    project_id: Optional[str] = None
+    recognition: Literal["planned", "earned"] = "planned"
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+    reminder_date: Optional[str] = None
+
+    @field_validator("due_date", "reminder_date")
+    @classmethod
+    def validate_expected_dates(cls, value):
+        if value in (None, ""):
+            return value
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
+
+
+class CommissionExpectedUpdate(FiniteModel):
+    amount: Optional[float] = Field(default=None, gt=0)
+    due_date: Optional[str] = None
+    project_id: Optional[str] = None
+    recognition: Optional[Literal["planned", "earned"]] = None
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+    reminder_date: Optional[str] = None
+
+    @field_validator("due_date", "reminder_date")
+    @classmethod
+    def validate_expected_update_dates(cls, value):
+        if value in (None, ""):
+            return value
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
 
 
 # ---------- Bills ----------
