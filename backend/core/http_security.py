@@ -75,7 +75,9 @@ def install_log_redaction():
 # --------------------------------------------------------------------------
 # (method or "*", path regex, bucket, limit, window seconds)
 RATE_RULES = [
-    ("POST", re.compile(r"^/api/auth/(login|session|password-login)"), "auth", 30, 60),
+    ("POST", re.compile(r"^/api/auth/(login|login-password|password-login|session)$"), "auth", 30, 60),
+    ("POST", re.compile(r"^/api/auth/pin/unlock$"), "pin_unlock", 10, 60),
+    ("POST", re.compile(r"^/api/auth/register$"), "registration", 10, 3600),
     ("*", re.compile(r"/reset-password(?:/[^/]+)?$"), "password_reset", 10, 900),
     ("POST", re.compile(r"/account/password$|/auth/change-password$"), "password_change", 10, 900),
     ("POST", re.compile(r"^/api/portal/[^/]+/message$"), "portal_write", 10, 60),
@@ -206,6 +208,8 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Frame-Options": "DENY",
+    "X-Permitted-Cross-Domain-Policies": "none",
+    "Cross-Origin-Resource-Policy": "same-site",
 }
 
 

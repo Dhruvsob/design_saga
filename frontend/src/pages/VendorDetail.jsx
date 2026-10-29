@@ -9,7 +9,7 @@ import {
   ArrowLeft, Star, Buildings, Phone, Envelope, MapPin, Bank as BankIcon,
   IdentificationCard, CurrencyInr, Plus, Trash, FileText, Gauge, Receipt,
   PaperPlaneTilt, ShieldCheck, Notepad, Certificate, Wrench,
-  Handshake, Percent, TrendUp, DownloadSimple,
+  Handshake, Percent, TrendUp, DownloadSimple, PencilSimple, ArrowCounterClockwise,
 } from "@phosphor-icons/react";
 
 const INR = (n) =>
@@ -83,6 +83,63 @@ export default function VendorDetail() {
       commissionRequestKey.current = crypto.randomUUID();
       const { data } = await api.get(`/vendors/${id}/commission-ledger`);
       setCommissionLedger(data);
+    } finally { setBusy(false); }
+  };
+  const refreshCommissions = async () => {
+    const { data } = await api.get(`/vendors/${id}/commission-ledger`);
+    setCommissionLedger(data);
+  };
+  const updateBill = async (billId, patch) => {
+    setBusy(true);
+    try {
+      await api.patch(`/vendor-bills/${billId}`, patch);
+      await Promise.all([load(), refreshCommissions()]);
+      toast.success("Bill details updated");
+    } finally { setBusy(false); }
+  };
+  const deleteBill = async (bill) => {
+    const action = bill.status === "draft" ? "delete" : "cancel and reverse";
+    if (!window.confirm(`${action[0].toUpperCase()}${action.slice(1)} ${bill.bill_number}?\n\nPosted accounting remains in the audit log and is corrected with a balanced reversal.`)) return;
+    setBusy(true);
+    try {
+      await api.delete(`/vendor-bills/${bill.id}`);
+      await Promise.all([load(), refreshCommissions()]);
+      toast.success(bill.status === "draft" ? "Draft bill deleted" : "Bill cancelled and reversed");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not cancel bill");
+    } finally { setBusy(false); }
+  };
+  const reversePayment = async (payment) => {
+    if (!window.confirm(`Reverse this ${INR_D(payment.amount)} vendor payment?\n\nThe linked bills and accounting balances will be restored automatically.`)) return;
+    setBusy(true);
+    try {
+      await api.delete(`/vendor-payments/${payment.id}`);
+      await load();
+      toast.success("Vendor payment reversed");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not reverse payment");
+    } finally { setBusy(false); }
+  };
+  const reverseCommissionReceipt = async (receipt) => {
+    if (!window.confirm(`Delete this ${INR_D(receipt.amount)} commission receipt?\n\nA balanced reversal will preserve the audit trail and correct all commission totals.`)) return;
+    setBusy(true);
+    try {
+      await api.delete(`/commission-settlements/${receipt.id}`);
+      await refreshCommissions();
+      toast.success("Commission receipt deleted with accounting reversal");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not delete commission receipt");
+    } finally { setBusy(false); }
+  };
+  const cancelExpectedCommission = async (row) => {
+    if (!window.confirm("Cancel this expected commission? No posted accounting will be deleted.")) return;
+    setBusy(true);
+    try {
+      await api.delete(`/vendors/${id}/commissions/${row.id}`);
+      await refreshCommissions();
+      toast.success("Expected commission cancelled");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not cancel expected commission");
     } finally { setBusy(false); }
   };
 
@@ -212,15 +269,21 @@ export default function VendorDetail() {
       {tab === "ledger" && <Ledger data={ledger} />}
       {tab === "bills" && (
         <Bills v={v} accounts={accounts} purchaseOrders={purchaseOrders}
-          canBill={canBill} onCreate={submitBill} busy={busy} />
+          canBill={canBill} canEdit={hasPerm("finance.update")}
+          canDelete={hasPerm("finance.delete")} onCreate={submitBill}
+          onUpdate={updateBill} onDelete={deleteBill} busy={busy} />
       )}
       {tab === "payments" && (
-        <Payments v={v} accounts={accounts} canBill={canBill} onCreate={submitPayment} busy={busy} />
+        <Payments v={v} accounts={accounts} canBill={canBill}
+          canDelete={hasPerm("finance.delete")} onCreate={submitPayment}
+          onDelete={reversePayment} busy={busy} />
       )}
       {tab === "commissions" && (
         <Commissions ledger={commissionLedger} accounts={accounts}
           canReceive={hasPerm("finance.create")}
-          onReceive={receiveCommission} busy={busy} />
+          canDelete={hasPerm("finance.delete")}
+          onReceive={receiveCommission} onDeleteReceipt={reverseCommissionReceipt}
+          onDeletePlan={cancelExpectedCommission} busy={busy} />
       )}
       {tab === "projects" && <ProjectsTasks v={v} />}
       {tab === "documents" && (
@@ -339,8 +402,9 @@ function Ledger({ data }) {
 }
 
 /* -------------------- BILLS -------------------- */
-function Bills({ v, accounts, purchaseOrders, canBill, onCreate, busy }) {
+function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCreate, onUpdate, onDelete, busy }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const expenseAccounts = accounts.filter((a) => a.type === "expense" && a.active !== false);
   const [f, setF] = useState({ bill_date: today(), due_date: "", items: [emptyItem()], tax_rate: 18, tds_rate: 0, notes: "", project_id: "", po_id: "", expense_account_id: "" });
   const total = useMemo(() => {
@@ -444,17 +508,33 @@ function Bills({ v, accounts, purchaseOrders, canBill, onCreate, busy }) {
         </form>
       )}
 
+      {editing && (
+        <form className="card-flat space-y-3" onSubmit={async (e) => {
+          e.preventDefault();
+          await onUpdate(editing.id, { due_date: editing.due_date || null, notes: editing.notes || "" });
+          setEditing(null);
+        }}>
+          <div className="overline">EDIT BILL DETAILS · {editing.bill_number}</div>
+          <div className="text-xs text-[#5C5C5C]">For amount, GST, TDS, account or line-item mistakes, cancel the posted bill and record the corrected bill. This preserves double-entry history.</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={editing.due_date || ""} onChange={(e) => setEditing({ ...editing, due_date: e.target.value })} /></label>
+            <label className="text-xs">Notes<input className="input-flat mt-1 w-full" value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></label>
+          </div>
+          <div className="flex gap-2"><button disabled={busy} className="btn-primary">Save details</button><button type="button" className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button></div>
+        </form>
+      )}
+
       <div className="border border-[#E5E5E5]">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
             <tr>
               <Th>Number</Th><Th>Bill date</Th><Th>Due</Th><Th>Status</Th>
-              <Th className="text-right">Total</Th><Th className="text-right">Paid</Th><Th className="text-right">Outstanding</Th>
+              <Th className="text-right">Total</Th><Th className="text-right">Paid</Th><Th className="text-right">Outstanding</Th><Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
             {(v.bills || []).length === 0 && (
-              <tr><td colSpan={7} className="p-8 text-center text-[#9A9A9A]">No bills yet.</td></tr>
+              <tr><td colSpan={8} className="p-8 text-center text-[#9A9A9A]">No bills yet.</td></tr>
             )}
             {(v.bills || []).map((b) => (
               <tr key={b.id} className="border-b border-[#F0F0F0]" data-testid={`bill-row-${b.id}`}>
@@ -465,6 +545,10 @@ function Bills({ v, accounts, purchaseOrders, canBill, onCreate, busy }) {
                 <Td className="text-right font-mono">{INR_D(b.total)}</Td>
                 <Td className="text-right font-mono text-[#1D633E]">{INR_D(b.paid_amount || 0)}</Td>
                 <Td className="text-right font-mono text-[#B22B22]">{INR_D(b.outstanding || 0)}</Td>
+                <Td><div className="flex gap-1">
+                  {canEdit && b.status !== "cancelled" && <button type="button" className="btn-ghost text-xs" onClick={() => setEditing({ ...b })}><PencilSimple size={12} /> Edit</button>}
+                  {canDelete && b.status !== "cancelled" && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDelete(b)}><Trash size={12} /> {b.status === "draft" ? "Delete" : "Cancel"}</button>}
+                </div></Td>
               </tr>
             ))}
           </tbody>
@@ -491,7 +575,7 @@ function BillStatus({ s }) {
 }
 
 /* -------------------- PAYMENTS -------------------- */
-function Payments({ v, accounts, canBill, onCreate, busy }) {
+function Payments({ v, accounts, canBill, canDelete, onCreate, onDelete, busy }) {
   const [open, setOpen] = useState(false);
   const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
   const [f, setF] = useState({
@@ -584,12 +668,12 @@ function Payments({ v, accounts, canBill, onCreate, busy }) {
           <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
             <tr>
               <Th>Date</Th><Th>Method</Th><Th>Reference</Th>
-              <Th className="text-right">Amount</Th><Th>Settled bills</Th>
+              <Th className="text-right">Amount</Th><Th>Settled bills</Th><Th>Status / actions</Th>
             </tr>
           </thead>
           <tbody>
             {(v.payments || []).length === 0 && (
-              <tr><td colSpan={5} className="p-8 text-center text-[#9A9A9A]">No payments recorded.</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-[#9A9A9A]">No payments recorded.</td></tr>
             )}
             {(v.payments || []).map((p) => (
               <tr key={p.id} className="border-b border-[#F0F0F0]" data-testid={`payment-row-${p.id}`}>
@@ -600,6 +684,7 @@ function Payments({ v, accounts, canBill, onCreate, busy }) {
                 <Td className="text-xs font-mono">
                   {(p.bill_ids || []).length ? p.bill_ids.length + " bill(s)" : "on-account"}
                 </Td>
+                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[#9A9A9A]">Reversed</span> : canDelete ? <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDelete(p)}><ArrowCounterClockwise size={12} /> Reverse</button> : "—"}</Td>
               </tr>
             ))}
           </tbody>
@@ -895,7 +980,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
 }
 
 /* -------------------- COMMISSIONS (list + receive) -------------------- */
-function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
+function Commissions({ ledger, accounts, canReceive, canDelete, onReceive, onDeleteReceipt, onDeletePlan, busy }) {
   const { id } = useParams();
   const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
   const [open, setOpen] = useState(false);
@@ -1002,12 +1087,12 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
             <tr>
               <Th>Bill date</Th><Th>Bill</Th><Th className="text-right">Purchase</Th>
               <Th>Type</Th><Th className="text-right">Earned</Th>
-              <Th className="text-right">Received</Th><Th>Status</Th>
+              <Th className="text-right">Received</Th><Th>Status</Th><Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
             {(ledger.entries || []).length === 0 && (
-              <tr><td colSpan={7} className="p-8 text-center text-[#9A9A9A]">
+              <tr><td colSpan={8} className="p-8 text-center text-[#9A9A9A]">
                 No commissions yet. Post a bill and it'll auto-compute.
               </td></tr>
             )}
@@ -1024,6 +1109,7 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
                 <Td className="text-right font-mono">{INR_D(r.amount)}</Td>
                 <Td className="text-right font-mono text-[#1D633E]">{INR_D(r.received_amount || 0)}</Td>
                 <Td><CommissionStatus s={r.status} /></Td>
+                <Td>{canDelete && r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button> : r.bill_id ? <span className="text-[10px] text-[#9A9A9A]">Correct from bill</span> : "—"}</Td>
               </tr>
             ))}
           </tbody>
@@ -1037,7 +1123,7 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
             <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
               <tr>
                 <Th>Date</Th><Th>Method / reference</Th>
-                <Th className="text-right">Received</Th><Th className="text-right">Unallocated</Th>
+                <Th className="text-right">Received</Th><Th className="text-right">Unallocated</Th><Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
@@ -1050,6 +1136,7 @@ function Commissions({ ledger, accounts, canReceive, onReceive, busy }) {
                   </Td>
                   <Td className="text-right font-mono text-[#1D633E]">{INR_D(receipt.amount)}</Td>
                   <Td className="text-right font-mono">{INR_D(receipt.unallocated || 0)}</Td>
+                  <Td>{canDelete ? <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeleteReceipt(receipt)}><Trash size={12} /> Delete</button> : "—"}</Td>
                 </tr>
               ))}
             </tbody>

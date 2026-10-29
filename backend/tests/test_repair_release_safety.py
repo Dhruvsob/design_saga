@@ -37,6 +37,19 @@ def test_every_password_reset_route_is_rate_limited(path):
     assert rate_limit_decision(_request(path))[0] == "password_reset"
 
 
+@pytest.mark.parametrize(("path", "limit", "bucket"), [
+    ("/api/auth/login-password", 30, "auth"),
+    ("/api/auth/session", 30, "auth"),
+    ("/api/auth/pin/unlock", 10, "pin_unlock"),
+    ("/api/auth/register", 10, "registration"),
+])
+def test_every_authentication_entry_point_is_rate_limited(path, limit, bucket):
+    reset_rate_limits()
+    for _ in range(limit):
+        assert rate_limit_decision(_request(path)) is None
+    assert rate_limit_decision(_request(path))[0] == bucket
+
+
 @pytest.mark.parametrize("path", [
     "/api/files/upload",
     "/api/vendors/vendor_1/documents/upload",

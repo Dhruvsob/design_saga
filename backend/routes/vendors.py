@@ -795,7 +795,7 @@ async def update_vendor_bill(bill_id: str, payload: VendorBillUpdate, request: R
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "finance.create")
+    _require(user, "finance.update")
     bill = await sdb.vendor_bills.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -869,7 +869,7 @@ async def delete_vendor_bill(bill_id: str, request: Request,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
-    _require(user, "finance.create")
+    _require(user, "finance.delete")
     bill = await sdb.vendor_bills.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -1086,7 +1086,7 @@ async def delete_vendor_payment(pmt_id: str, request: Request,
     REVERSAL journal entry (ledger stays immutable / audit-safe), and refresh
     linked bill statuses."""
     user = await require_user(request, session_token, authorization)
-    _require(user, "finance.create")
+    _require(user, "finance.delete")
     async with doc_lock(sdb.vendor_payments, pmt_id):
         return await _reverse_vendor_payment_locked(user, pmt_id)
 
@@ -2075,6 +2075,77 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
     await _refresh_commission_allocations([s["id"] for s in settled])
     return {"ok": True, "settlement_id": settlement_id, "journal_entry_id": je_id,
             "settled": settled, "unallocated": round(remaining, 2)}
+
+
+@router.delete("/commission-settlements/{settlement_id}")
+async def delete_commission_settlement(settlement_id: str, request: Request,
+                                       session_token: Optional[str] = Cookie(default=None),
+                                       authorization: Optional[str] = Header(default=None)):
+    """Remove a mistaken commission receipt without corrupting the books.
+
+    The cash receipt is posted accounting history, so the user-facing Delete
+    action creates a balanced reversal, hides both sides from ordinary books,
+    preserves the audit trail, and rebuilds every affected commission balance.
+    """
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.delete")
+    async with doc_lock(sdb.commission_settlements, settlement_id):
+        return await _reverse_commission_settlement_locked(user, settlement_id)
+
+
+async def _reverse_commission_settlement_locked(user: dict, settlement_id: str) -> dict:
+    settlement = await sdb.commission_settlements.find_one(
+        {"id": settlement_id}, {"_id": 0})
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Commission receipt not found")
+    if settlement.get("status") in ("cancelled", "reversed"):
+        return {"ok": True, "already_reversed": True,
+                "reversal_je_id": settlement.get("reversal_je_id")}
+
+    journal_id = settlement.get("journal_entry_id")
+    if not journal_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Commission receipt has no linked journal entry; reconcile it before deletion",
+        )
+    journal = await sdb.journal_entries.find_one({"id": journal_id}, {"_id": 0})
+    if not journal:
+        raise HTTPException(
+            status_code=409,
+            detail="Linked journal entry is missing; reconcile it before deletion",
+        )
+
+    reversal_id = journal.get("reversal_je_id")
+    if not journal.get("reversed"):
+        from routes.accounting import _reverse_journal_entry
+        reversal = await _reverse_journal_entry(
+            user, journal, action="delete",
+            reversal_date=settlement.get("received_date"),
+            hide_from_books=True,
+        )
+        reversal_id = reversal["id"]
+
+    changed_at = iso_now()
+    await sdb.commission_settlements.update_one(
+        {"id": settlement_id},
+        {"$set": {
+            "status": "reversed",
+            "reversal_je_id": reversal_id,
+            "reversed_at": changed_at,
+            "reversed_by": user["user_id"],
+        }},
+    )
+    commission_ids = [
+        row.get("id") for row in settlement.get("commissions") or [] if row.get("id")
+    ]
+    await _refresh_commission_allocations(commission_ids)
+    await audit(
+        user, "vendor_commission_receipt.delete", target=settlement_id,
+        target_type="commission_settlement",
+        meta={"journal_entry_id": journal_id, "reversal_je_id": reversal_id,
+              "amount": settlement.get("amount")},
+    )
+    return {"ok": True, "deleted": True, "reversal_je_id": reversal_id}
 
 
 # ---------- Cross-vendor commission dashboard ----------

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from starlette.requests import Request
 
+from routes import accounting
 from routes import vendors
 
 
@@ -50,6 +51,15 @@ class _Collection:
 
     def find(self, query, *_args, **_kwargs):
         return _Cursor(row for row in self.rows if _matches(row, query))
+
+    async def update_one(self, query, update):
+        for row in self.rows:
+            if _matches(row, query):
+                row.update(update.get("$set") or {})
+                for key in (update.get("$unset") or {}):
+                    row.pop(key, None)
+                return SimpleNamespace(matched_count=1, modified_count=1)
+        return SimpleNamespace(matched_count=0, modified_count=0)
 
 
 def _request(path):
@@ -127,3 +137,42 @@ def test_commission_dashboard_includes_direct_receipts(monkeypatch):
         "vendor_id": "vendor_1", "vendor_name": "Vendor One",
         "earned": 0.0, "received": 16000.0,
     }]
+
+
+def test_commission_receipt_delete_posts_reversal_and_rebuilds_allocations(monkeypatch):
+    fake = SimpleNamespace(
+        commission_settlements=_Collection([{
+            "id": "receipt_1", "vendor_id": "vendor_1", "amount": 5000,
+            "received_date": "2026-10-31", "journal_entry_id": "je_1",
+            "status": "received", "commissions": [{"id": "commission_1", "applied": 5000}],
+        }]),
+        journal_entries=_Collection([{"id": "je_1", "source": "commission_income"}]),
+    )
+    monkeypatch.setattr(vendors, "sdb", fake)
+    reversed_call = {}
+    refreshed = []
+
+    async def reverse(_user, journal, **kwargs):
+        reversed_call.update({"journal": journal, **kwargs})
+        return {"id": "je_reverse"}
+
+    async def refresh(ids):
+        refreshed.extend(ids)
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
+    monkeypatch.setattr(vendors, "_refresh_commission_allocations", refresh)
+    monkeypatch.setattr(vendors, "audit", no_audit)
+
+    user = {"user_id": "admin", "org_id": "org_a", "permissions": ["finance.delete"]}
+    result = asyncio.run(vendors._reverse_commission_settlement_locked(user, "receipt_1"))
+
+    assert result == {"ok": True, "deleted": True, "reversal_je_id": "je_reverse"}
+    assert reversed_call["action"] == "delete"
+    assert reversed_call["hide_from_books"] is True
+    assert reversed_call["reversal_date"] == "2026-10-31"
+    assert refreshed == ["commission_1"]
+    assert fake.commission_settlements.rows[0]["status"] == "reversed"
+    assert fake.commission_settlements.rows[0]["reversal_je_id"] == "je_reverse"

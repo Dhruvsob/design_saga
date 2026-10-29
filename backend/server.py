@@ -76,7 +76,14 @@ def _demo_seeding_enabled() -> bool:
     enabled = os.environ.get("ENABLE_SEED_DEMO", "").strip().lower() in ("1", "true", "yes")
     return enabled and environment not in ("production", "prod")
 
-app = FastAPI(title="Design Saga API")
+_production = os.environ.get("ENV", os.environ.get("APP_ENV", "development")).strip().lower() == "production"
+app = FastAPI(
+    title="Design Saga API",
+    debug=False,
+    docs_url=None if _production else "/docs",
+    redoc_url=None if _production else "/redoc",
+    openapi_url=None if _production else "/openapi.json",
+)
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -5000,8 +5007,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=_cors_origins(),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization", "Content-Type", "Idempotency-Key", "X-Requested-With",
+        "X-Session-ID", "X-Request-ID",
+    ],
 )
 
 
