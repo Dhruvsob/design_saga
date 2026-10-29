@@ -4,7 +4,7 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; prior repair batches are pushed through `f3668a4`. The permission-aware business-screen batch below is locally verified and awaiting its release commit.
+- Local checkout: `codex/repair-release`; all verified repair batches are pushed through `8715ed4`. The working tree is clean and the accumulated release is ready for production deployment.
 - Production checkout: `/opt/design-saga-git`; runtime commit `3b15e23` was the last verified deployment before VPS access became unavailable.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
@@ -15,7 +15,7 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 
 - Clients, projects, leads, invoices, expenses, holidays and loans now hide creation or mutation controls when the signed-in role lacks the matching backend permission. Lead drag/drop, conversion and notes are protected separately; invoice status editing and loan EMI/prepayment controls no longer appear to read-only users.
 - Existing backend authorization remains authoritative. This change removes misleading actions and repeated 403 failures without granting new access or changing production data.
-- Verification: full frontend ESLint and the production Vite build pass. Deployment and live custom-role verification are pending restored VPS access.
+- Verification: full frontend ESLint and the production Vite build pass. The release commit is pushed; deployment and live custom-role verification are pending restored VPS access.
 
 ### DS-042: Calendar and holiday permission revocation
 
