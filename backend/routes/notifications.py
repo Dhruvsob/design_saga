@@ -12,6 +12,7 @@ from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, iso_now, now_utc
 from core.deps import require_user
+from core.access_control import unique_legacy_assignee_user_id
 from core.notifications import emit, emit_admins, emit_finance
 from core.tenancy import user_org_id
 from core.rbac import has_any_permission
@@ -335,11 +336,8 @@ async def run_scan(caller_org):
         # Find the assignee's user_id from `assignee_name` (best-effort).
         assignee_uid = t.get("assignee_id")
         if not assignee_uid and t.get("assignee_name"):
-            u = await db.users.find_one(
-                {"name": t["assignee_name"], "org_id": caller_org},
-                {"_id": 0, "user_id": 1})
-            if u:
-                assignee_uid = u["user_id"]
+            assignee_uid = await unique_legacy_assignee_user_id(
+                caller_org, t["assignee_name"])
         if not assignee_uid:
             continue
         k = f"task_overdue:{t['id']}:{today}"

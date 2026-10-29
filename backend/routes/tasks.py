@@ -17,7 +17,7 @@ from core.tenancy import user_org_id
 from core.google_calendar import sync_source, sync_sources
 from core.access_control import (
     get_visible_project, get_visible_task, merge_query, require_permission,
-    task_visibility_query, user_identity_ids,
+    task_visibility_query, unique_legacy_assignee_user_id, user_identity_ids,
 )
 
 from models.task import (
@@ -162,6 +162,7 @@ async def list_tasks(request: Request,
     # match against project team membership and task assignment. ----
     my_ids = await user_identity_ids(user)
     my_name = user.get("name")
+    legacy_uid = await unique_legacy_assignee_user_id(user_org_id(user), my_name)
 
     # ---- Visibility gate (Project Team → Tasks) ----
     # Privileged roles (permission `tasks.delete` → Admin/Director/PM/SuperAdmin)
@@ -177,7 +178,7 @@ async def list_tasks(request: Request,
         t["assigned_to_me"] = bool(
             (t.get("assignee_id") and t["assignee_id"] in my_ids)
             or any(a in my_ids for a in assignees)
-            or (my_name and t.get("assignee_name") == my_name)
+            or (legacy_uid == user.get("user_id") and my_name and t.get("assignee_name") == my_name)
         )
     if mine:
         rows = [t for t in rows if t["assigned_to_me"]]
@@ -199,10 +200,11 @@ async def get_task(task_id: str, request: Request,
             t[k] = []
     my_ids = await user_identity_ids(user)
     my_name = user.get("name")
+    legacy_uid = await unique_legacy_assignee_user_id(user_org_id(user), my_name)
     t["assigned_to_me"] = bool(
         (t.get("assignee_id") and t["assignee_id"] in my_ids)
         or any(a in my_ids for a in t["assignees"])
-        or (my_name and t.get("assignee_name") == my_name)
+        or (legacy_uid == user.get("user_id") and my_name and t.get("assignee_name") == my_name)
     )
     return t
 
@@ -225,6 +227,8 @@ async def create_task(payload: TaskIn, request: Request,
 
     if not doc.get("assignee_name") and doc.get("task_type") == "employee":
         doc["assignee_name"] = user.get("name")
+        if not doc.get("assignee_id") and not doc.get("assignees"):
+            doc["assignee_id"] = user.get("user_id")
     if doc.get("project_id"):
         p = await get_visible_project(user, doc["project_id"])
         doc["project_name"] = p.get("name")
@@ -293,11 +297,12 @@ async def create_task(payload: TaskIn, request: Request,
     if created is not None:
         my_ids = await user_identity_ids(user)
         my_name = user.get("name")
+        legacy_uid = await unique_legacy_assignee_user_id(user_org_id(user), my_name)
         assignees = created.get("assignees") or []
         created["assigned_to_me"] = bool(
             (created.get("assignee_id") and created["assignee_id"] in my_ids)
             or any(a in my_ids for a in assignees)
-            or (my_name and created.get("assignee_name") == my_name)
+            or (legacy_uid == user.get("user_id") and my_name and created.get("assignee_name") == my_name)
         )
     await sync_source(user_org_id(user), "task", doc["id"])
     return created
@@ -329,10 +334,9 @@ async def _assignee_user_ids(user: dict, assignee_id, assignees, assignee_name) 
                 if u:
                     uids.add(u["user_id"])
     if not uids and assignee_name:
-        u = await db.users.find_one({"name": assignee_name, "org_id": user_org_id(user)},
-                                    {"_id": 0, "user_id": 1})
-        if u:
-            uids.add(u["user_id"])
+        legacy_uid = await unique_legacy_assignee_user_id(user_org_id(user), assignee_name)
+        if legacy_uid:
+            uids.add(legacy_uid)
     return list(uids)
 
 

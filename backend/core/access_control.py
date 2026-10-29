@@ -1,6 +1,7 @@
 """Shared same-tenant project and task visibility rules."""
 from fastapi import HTTPException
 
+from core.db import db
 from core.rbac import has_any_permission, has_permission
 from core.scoped_db import sdb
 
@@ -19,6 +20,30 @@ async def user_identity_ids(user: dict) -> set[str]:
         if employee.get("id"):
             ids.add(employee["id"])
     return ids
+
+
+async def unique_legacy_assignee_user_id(org_id: str, name: str | None) -> str | None:
+    """Resolve a legacy name-only assignment only when it is unambiguous.
+
+    Modern records use immutable user/employee IDs.  Older tasks sometimes
+    contain only a display name; matching those with ``find_one`` can expose a
+    task to the wrong employee when two active users share a name.
+    """
+    clean_name = (name or "").strip()
+    if not clean_name:
+        return None
+    rows = await db.users.find(
+        {
+            "org_id": org_id,
+            "name": clean_name,
+            "is_active": {"$ne": False},
+            "approval_status": {"$nin": ["pending", "rejected"]},
+        },
+        {"_id": 0, "user_id": 1},
+    ).limit(2).to_list(2)
+    if len(rows) != 1:
+        return None
+    return rows[0].get("user_id")
 
 
 def merge_query(base: dict | None, visibility: dict | None) -> dict:
@@ -107,7 +132,8 @@ async def task_visibility_query(user: dict) -> dict:
         {"assignees": {"$in": ids}},
         {"created_by": user["user_id"]},
     ]
-    if user.get("name"):
+    legacy_uid = await unique_legacy_assignee_user_id(user.get("org_id"), user.get("name"))
+    if legacy_uid == user.get("user_id"):
         terms.append({"assignee_name": user["name"]})
     return {"$or": terms}
 
@@ -120,7 +146,8 @@ async def personal_task_visibility_query(user: dict) -> dict:
         {"assignees": {"$in": ids}},
         {"created_by": user["user_id"]},
     ]
-    if user.get("name"):
+    legacy_uid = await unique_legacy_assignee_user_id(user.get("org_id"), user.get("name"))
+    if legacy_uid == user.get("user_id"):
         terms.append({"assignee_name": user["name"]})
     return {"$or": terms}
 

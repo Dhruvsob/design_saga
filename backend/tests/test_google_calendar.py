@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from core import google_calendar as gc
+from core import access_control
 from routes.calendar import _validate_event_timing
 
 
@@ -43,6 +44,43 @@ def test_personal_sync_visibility_is_owner_or_explicit_share_only():
         "calendar_event", {"visibility": "private", "employee_ids": ["emp_a"]}, user, ids)
     assert not gc._source_visible_to_user(
         "calendar_event", {"visibility": "private", "created_by": "user_b"}, user, ids)
+    assert not gc._source_visible_to_user(
+        "task", {"assignee_name": "A Person"}, user, ids)
+    assert gc._source_visible_to_user(
+        "task", {"assignee_name": "A Person"}, user, ids,
+        legacy_name_allowed=True)
+
+
+def test_legacy_name_assignment_requires_one_active_user(monkeypatch):
+    class Cursor:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def limit(self, _count):
+            return self
+
+        async def to_list(self, _count):
+            return self.rows
+
+    class Users:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def find(self, query, projection):
+            assert query["org_id"] == "org_a"
+            assert query["name"] == "Same Name"
+            assert projection == {"_id": 0, "user_id": 1}
+            return Cursor(self.rows)
+
+    monkeypatch.setattr(access_control.db, "users", Users([{"user_id": "user_a"}]))
+    assert asyncio.run(access_control.unique_legacy_assignee_user_id(
+        "org_a", "Same Name")) == "user_a"
+
+    monkeypatch.setattr(access_control.db, "users", Users([
+        {"user_id": "user_a"}, {"user_id": "user_b"},
+    ]))
+    assert asyncio.run(access_control.unique_legacy_assignee_user_id(
+        "org_a", "Same Name")) is None
 
 
 def test_calendar_sync_excludes_inactive_and_unapproved_users():

@@ -15,6 +15,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from email_validator import EmailNotValidError, validate_email
 
 from .db import db
+from .access_control import unique_legacy_assignee_user_id
 from .helpers import business_today, iso_now, now_utc
 
 log = logging.getLogger("google_calendar")
@@ -229,8 +230,9 @@ async def _attendee_emails(org_id: str, doc: dict, source_type: str) -> list[str
             if email:
                 emails.add(email)
     if source_type == "task" and not emails and doc.get("assignee_name"):
+        legacy_uid = await unique_legacy_assignee_user_id(org_id, doc["assignee_name"])
         user = await db.users.find_one(
-            {"org_id": org_id, "name": doc["assignee_name"]}, {"_id": 0, "email": 1})
+            {"org_id": org_id, "user_id": legacy_uid}, {"_id": 0, "email": 1}) if legacy_uid else None
         email = _clean_email((user or {}).get("email"))
         if email:
             emails.add(email)
@@ -354,7 +356,7 @@ async def _user_identity_ids(org_id: str, user: dict) -> set[str]:
 
 
 def _source_visible_to_user(source_type: str, doc: dict, user: dict,
-                            identity_ids: set[str]) -> bool:
+                            identity_ids: set[str], legacy_name_allowed: bool = False) -> bool:
     """Personal Google sync: own, explicitly assigned, or explicitly shared."""
     uid = user["user_id"]
     if doc.get("created_by") == uid:
@@ -369,7 +371,7 @@ def _source_visible_to_user(source_type: str, doc: dict, user: dict,
     return bool(
         doc.get("assignee_id") in identity_ids
         or identity_ids.intersection(doc.get("assignees") or [])
-        or (user.get("name") and doc.get("assignee_name") == user["name"])
+        or (legacy_name_allowed and user.get("name") and doc.get("assignee_name") == user["name"])
     )
 
 
@@ -403,8 +405,13 @@ async def _queue_source_for_connections(org_id: str, source_type: str, source_id
             user = await db.users.find_one(
                 _active_user_filter(org_id, user_id), {"_id": 0})
             if user:
+                legacy_allowed = (
+                    source_type == "task"
+                    and await unique_legacy_assignee_user_id(org_id, user.get("name")) == user_id
+                )
                 visible = _source_visible_to_user(
-                    source_type, doc, user, await _user_identity_ids(org_id, user))
+                    source_type, doc, user, await _user_identity_ids(org_id, user),
+                    legacy_name_allowed=legacy_allowed)
         if visible:
             await enqueue_sync(org_id, user_id, source_type, source_id, "upsert")
             queued += 1
@@ -501,9 +508,16 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
                 mapping_filter, {"_id": 0})
             user = await db.users.find_one(
                 _active_user_filter(row["org_id"], user_id), {"_id": 0})
+            legacy_allowed = bool(
+                user
+                and row["source_type"] == "task"
+                and await unique_legacy_assignee_user_id(
+                    row["org_id"], user.get("name")) == user_id
+            )
             visible = bool(doc and user and _source_visible_to_user(
                 row["source_type"], doc, user,
-                await _user_identity_ids(row["org_id"], user)))
+                await _user_identity_ids(row["org_id"], user),
+                legacy_name_allowed=legacy_allowed))
             if row["operation"] == "delete" or not visible:
                 if mapping:
                     await _delete_remote(connection, mapping.get("event_id") or event_id)
@@ -564,6 +578,9 @@ async def enqueue_user_sources(org_id: str, user_id: str) -> int:
     if not user:
         return 0
     identity_ids = await _user_identity_ids(org_id, user)
+    legacy_allowed = (
+        await unique_legacy_assignee_user_id(org_id, user.get("name")) == user_id
+    )
     today = business_today().isoformat()
     count = 0
     async for event in db.calendar_events.find(
@@ -577,7 +594,9 @@ async def enqueue_user_sources(org_id: str, user_id: str) -> int:
          "$or": [{"reminder_date": {"$gte": today}}, {"due_date": {"$gte": today}}]},
         {"_id": 0},
     ).limit(2000):
-        if _source_visible_to_user("task", task, user, identity_ids):
+        if _source_visible_to_user(
+                "task", task, user, identity_ids,
+                legacy_name_allowed=legacy_allowed):
             await enqueue_sync(org_id, user_id, "task", task["id"])
             count += 1
     return count

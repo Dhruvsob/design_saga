@@ -17,6 +17,12 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 - Quotation create/delete/update/version/status/AI/conversion controls now follow the backend permissions. Invalid status actions are no longer offered, converted quotations remain read-only, and project conversion is shown only when the user also has project/task creation rights.
 - Verification: focused frontend ESLint and production build pass. Deployment and live role verification are pending restored VPS access.
 
+### DS-039: Ambiguous name-based task assignment privacy
+
+- Legacy tasks that contain only an assignee display name now resolve that name only when it identifies exactly one active, approved user in the tenant. Duplicate names fail closed instead of exposing or notifying the wrong employee.
+- The same rule protects task list/detail visibility, Assigned to me badges, overdue notifications, Google Calendar invitations and personal Google Calendar copies. New self-assigned employee tasks persist the immutable user ID so they do not depend on names.
+- Verification: 47 focused task/calendar/notification/visibility tests pass, including a duplicate-name regression; Python compilation and diff checks pass. Deployment is pending restored VPS access.
+
 ### DS-037: Safe correction controls across vendor, expense and loan workflows
 
 - Vendor bills expose metadata edit and draft-delete/posted-cancel controls; vendor payments and commission receipts expose balanced reversal controls; expected commissions can be cancelled. Vendor master records now expose Edit and audit-preserving Archive actions using the existing permission-checked APIs.
@@ -166,7 +172,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-025 | Low | Date formats inconsistent | Fixed and deployed at `c89907d`: major ERP display surfaces consistently use DD/MM/YYYY while browser form controls and database/API values correctly retain ISO storage |
 | BR-026 | Low | New-tenant PO dead-end | Send/GRN paths exist; empty master-data onboarding needs live workflow verification |
 | BR-027 | Low | Bill creation location confusing | UX review item; preserve vendor and PO context while improving discoverability |
-| BR-028 | Low | Unsafe automatic matching by name | Confirmed residual risk in selected legacy fallbacks; migrate to IDs where evidence permits |
+| BR-028 | Low | Unsafe automatic matching by name | Fixed for the remaining task visibility, notification and Google Calendar fallbacks: name-only legacy assignments resolve only when unique within the active tenant; new self-assignments persist IDs. Deployment pending |
 | BR-029 | Low | Large flat dropdowns | Confirmed usability gap; replace only high-volume selectors with searchable controls |
 | BR-030 | Low | System account codes missing | Current defaults have codes; audit legacy/generated accounts and fill only unambiguous gaps |
 | BR-031 | Low | Account edit/deactivate missing | Fixed and deployed through the Chart of Accounts UI with non-destructive deactivation/restore |
