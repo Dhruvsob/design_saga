@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
-import { Plus, ArrowRight, Trash, DotsSixVertical, PencilSimple, X, Check, ClockCounterClockwise, NotePencil } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Trash, DotsSixVertical, PencilSimple, Eye, X, Check, ClockCounterClockwise, NotePencil } from "@phosphor-icons/react";
 import PageHero from "../components/PageHero";
 import { formatDateTime } from "../lib/format";
 
@@ -22,6 +23,11 @@ const STAGE_COLORS = {
 
 export default function Leads() {
   const navigate = useNavigate();
+  const { hasPerm } = useAuth();
+  const canCreate = hasPerm("leads.create");
+  const canUpdate = hasPerm("leads.update");
+  const canDelete = hasPerm("leads.delete");
+  const canConvert = canUpdate && hasPerm("clients.create") && hasPerm("projects.create");
   const { values } = useMasterData();
   const STAGES = values("lead_stage", FALLBACK_STAGES);
   const SOURCES = values("lead_source", FALLBACK_SOURCES);
@@ -162,9 +168,9 @@ export default function Leads() {
         kicker="Drag cards between columns to update stages. Convert qualified leads into projects with one click."
         count={leads.length}
       >
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-lead-btn">
+        {canCreate && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-lead-btn">
           <Plus size={14} /> {showForm ? "Cancel" : "New lead"}
-        </button>
+        </button>}
       </PageHero>
 
       {showForm && (
@@ -194,9 +200,9 @@ export default function Leads() {
             <div
               key={stage}
               className={`fade-up border-r border-b border-[#E5E5E5] min-h-[500px] flex flex-col transition-all ${isOver ? "bg-[#F5F4F0]" : ""}`}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(stage); }}
+              onDragOver={(e) => { if (canUpdate) { e.preventDefault(); setDragOver(stage); } }}
               onDragLeave={() => setDragOver(null)}
-              onDrop={() => drop(stage)}
+              onDrop={() => canUpdate && drop(stage)}
               data-testid={`col-${stage}`}
             >
               <div className="p-3 border-b border-[#E5E5E5] bg-[#FAFAFA] flex items-center justify-between">
@@ -210,7 +216,7 @@ export default function Leads() {
                 {items.map((l) => (
                   <div
                     key={l.id}
-                    draggable
+                    draggable={canUpdate}
                     onDragStart={() => setDragId(l.id)}
                     className="border border-[#E5E5E5] p-3 bg-white hover:border-[#0A0A0A] hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition-all group"
                     data-testid={`lead-${l.id}`}
@@ -242,17 +248,17 @@ export default function Leads() {
                     <div className="flex items-center flex-wrap gap-x-2 gap-y-2 mt-3 pt-3 border-t border-[#F0F0F0]">
                       <span className="overline text-[10px] truncate min-w-0 flex-1">{l.source}</span>
                       <div className="flex items-center gap-2 shrink-0">
-                        {l.stage !== "Won" && l.stage !== "Lost" && (
+                        {canConvert && l.stage !== "Won" && l.stage !== "Lost" && (
                           <button onClick={() => convert(l.id)} className="text-[#8B7F6A] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
                             <ArrowRight size={12} weight="bold" /> Convert
                           </button>
                         )}
-                        <button onClick={() => startEdit(l)} className="text-[#5C5C5C] hover:text-[#0A0A0A] hover:scale-110 transition shrink-0" title="Edit" data-testid={`lead-edit-${l.id}`}>
-                          <PencilSimple size={12} />
+                        <button onClick={() => startEdit(l)} className="text-[#5C5C5C] hover:text-[#0A0A0A] hover:scale-110 transition shrink-0" title={canUpdate ? "Edit" : "View details"} data-testid={`lead-edit-${l.id}`}>
+                          {canUpdate ? <PencilSimple size={12} /> : <Eye size={12} />}
                         </button>
-                        <button onClick={() => del(l.id)} className="text-[#B4342B] hover:scale-110 transition shrink-0" title="Delete" data-testid={`lead-delete-${l.id}`}>
+                        {canDelete && <button onClick={() => del(l.id)} className="text-[#B4342B] hover:scale-110 transition shrink-0" title="Delete" data-testid={`lead-delete-${l.id}`}>
                           <Trash size={12} />
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   </div>
@@ -268,9 +274,9 @@ export default function Leads() {
           );
         })}
       </div>
-      <p className="text-xs text-[#5C5C5C] font-mono tracking-wider flex items-center gap-2">
+      {canUpdate && <p className="text-xs text-[#5C5C5C] font-mono tracking-wider flex items-center gap-2">
         <DotsSixVertical size={12} /> DRAG CARDS BETWEEN COLUMNS TO UPDATE STAGES.
-      </p>
+      </p>}
 
       {/* Edit lead modal */}
       {editing && (
@@ -278,9 +284,10 @@ export default function Leads() {
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
           <form onSubmit={saveEdit} className="bg-white border border-[#0A0A0A] w-full max-w-2xl p-6 space-y-3 max-h-[90vh] overflow-y-auto" data-testid="lead-edit-modal">
             <div className="flex items-center justify-between">
-              <div className="overline">EDIT LEAD</div>
+              <div className="overline">{canUpdate ? "EDIT LEAD" : "LEAD DETAILS"}</div>
               <button type="button" onClick={() => setEditing(null)} className="btn-ghost p-1"><X size={14} /></button>
             </div>
+            <fieldset disabled={!canUpdate} className="space-y-3">
             <input required className="input-flat w-full" placeholder="Name" value={editing.name || ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} data-testid="edit-lead-name" />
             <div className="grid grid-cols-2 gap-3">
               <input className="input-flat" placeholder="Email" value={editing.email || ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
@@ -295,6 +302,7 @@ export default function Leads() {
               <input className="input-flat" placeholder="Location" value={editing.location || ""} onChange={(e) => setEditing({ ...editing, location: e.target.value })} />
             </div>
             <textarea className="input-flat w-full" rows="2" placeholder="Notes" value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />
+            </fieldset>
 
             {/* Notes & history thread — every note is timestamped and kept in history */}
             <div className="border-t border-[#E5E5E5] pt-3 space-y-3" data-testid="lead-notes-section">
@@ -303,7 +311,7 @@ export default function Leads() {
                 <span className="font-mono text-[10px] bg-[#F5F4F0] px-1.5 py-0.5 border border-[#E5E5E5]" data-testid="lead-notes-count">{notes.length}</span>
               </div>
 
-              <div className="flex items-start gap-2">
+              {canUpdate && <div className="flex items-start gap-2">
                 <textarea
                   className="input-flat w-full"
                   rows="2"
@@ -321,7 +329,7 @@ export default function Leads() {
                 >
                   <Plus size={13} /> Add
                 </button>
-              </div>
+              </div>}
 
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1" data-testid="lead-notes-list">
                 {notes.length === 0 && (
@@ -367,12 +375,12 @@ export default function Leads() {
                                 <ClockCounterClockwise size={13} />
                               </button>
                             )}
-                            <button type="button" onClick={() => startNoteEdit(n)} className="text-[#5C5C5C] hover:text-[#0A0A0A] transition" title="Edit note" data-testid={`lead-note-edit-${n.id}`}>
+                            {canUpdate && <button type="button" onClick={() => startNoteEdit(n)} className="text-[#5C5C5C] hover:text-[#0A0A0A] transition" title="Edit note" data-testid={`lead-note-edit-${n.id}`}>
                               <PencilSimple size={12} />
-                            </button>
-                            <button type="button" onClick={() => deleteNote(n.id)} className="text-[#B4342B] hover:scale-110 transition" title="Delete note" data-testid={`lead-note-delete-${n.id}`}>
+                            </button>}
+                            {canUpdate && <button type="button" onClick={() => deleteNote(n.id)} className="text-[#B4342B] hover:scale-110 transition" title="Delete note" data-testid={`lead-note-delete-${n.id}`}>
                               <Trash size={12} />
-                            </button>
+                            </button>}
                           </div>
                         </div>
                         {showHistory[n.id] && n.history && n.history.length > 0 && (
@@ -393,7 +401,7 @@ export default function Leads() {
               </div>
             </div>
 
-            <button className="btn-primary w-full" data-testid="edit-lead-save">Save changes</button>
+            {canUpdate && <button className="btn-primary w-full" data-testid="edit-lead-save">Save changes</button>}
           </form>
         </div>
       )}

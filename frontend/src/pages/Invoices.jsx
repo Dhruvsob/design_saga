@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api, { API } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { formatDate } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple } from "@phosphor-icons/react";
 
 export default function Invoices({ docType = "invoice" }) {
+  const { hasPerm } = useAuth();
+  const canCreate = hasPerm("invoices.create");
+  const canUpdate = hasPerm("invoices.update");
+  const canDelete = hasPerm("invoices.delete");
   const [rows, setRows] = useState([]);
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -128,9 +133,9 @@ export default function Invoices({ docType = "invoice" }) {
             {docType === "quotation" ? "Proposals, polished." : "Send. Track. Collect."}
           </h1>
         </div>
-        <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(initialForm(docType)); }} className="btn-primary" data-testid={`new-${docType}-btn`}>
+        {canCreate && <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(initialForm(docType)); }} className="btn-primary" data-testid={`new-${docType}-btn`}>
           <Plus size={14} /> {showForm ? "Cancel" : `New ${docType}`}
-        </button>
+        </button>}
       </div>
 
       {showForm && (
@@ -221,22 +226,22 @@ export default function Invoices({ docType = "invoice" }) {
                 <Td className="font-mono text-xs">{formatDate(r.due_date)}</Td>
                 <Td className="font-mono font-semibold">₹{(r.total || 0).toLocaleString("en-IN")}</Td>
                 <Td>
-                  <select className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
+                  {canUpdate ? <select className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
                     <option value="draft">draft</option>
                     <option value="sent">sent</option>
                     <option value="paid">paid</option>
                     <option value="overdue">overdue</option>
                     <option value="cancelled">cancelled</option>
-                  </select>
+                  </select> : <span className={`status-chip chip-${r.status}`}>{r.status}</span>}
                 </Td>
                 <Td>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setPreview(r)} className="text-[#8B7F6A]" title="Preview"><Eye size={16} /></button>
                     <button onClick={() => download(r.id)} className="text-[#8B7F6A]" title="PDF"><FilePdf size={16} /></button>
-                    {r.status !== "paid" && (
+                    {canUpdate && r.status !== "paid" && (
                       <button onClick={() => startEdit(r)} className="text-[#5C5C5C] hover:text-[#0A0A0A]" title="Edit" data-testid={`${docType}-edit-${r.id}`}><PencilSimple size={16} /></button>
                     )}
-                    <button onClick={() => del(r.id, r.status === "paid")} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>
+                    {canDelete && <button onClick={() => del(r.id, r.status === "paid")} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>}
                   </div>
                 </Td>
               </tr>

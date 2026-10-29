@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
 import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
 
 const KINDS = [
@@ -14,6 +15,7 @@ const KINDS = [
 const kindMeta = (id) => KINDS.find((k) => k.id === id) || KINDS[3];
 
 export default function Holidays() {
+  const { hasPerm } = useAuth();
   const [year, setYear] = useState(new Date().getFullYear());
   const [rows, setRows] = useState([]);
   const [offs, setOffs] = useState([]);
@@ -21,6 +23,8 @@ export default function Holidays() {
   const [form, setForm] = useState({
     date: "", name: "", kind: "company", recurring: false, description: "",
   });
+  const canCreate = hasPerm("holidays.create");
+  const canDelete = hasPerm("holidays.delete");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,7 +98,7 @@ export default function Holidays() {
         </div>
       </header>
 
-      <div className="card-flat" data-testid="holiday-add">
+      {canCreate && <div className="card-flat" data-testid="holiday-add">
         <div className="overline mb-2">ADD HOLIDAY</div>
         <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
           <input
@@ -134,7 +138,7 @@ export default function Holidays() {
             <Plus size={14} /> Add
           </button>
         </div>
-      </div>
+      </div>}
 
       {loading && <div className="overline">LOADING…</div>}
 
@@ -156,7 +160,7 @@ export default function Holidays() {
                         <span className="text-xs" style={{ color: meta.color }}>{meta.label}{h.recurring && " · recurring"}</span>
                       </td>
                       <td className="py-1.5 text-right">
-                        {!h.materialized_from_recurring && (
+                        {canDelete && !h.materialized_from_recurring && (
                           <button
                             className="text-[#B22B22] hover:opacity-70"
                             data-testid={`holiday-delete-${h.id}`}

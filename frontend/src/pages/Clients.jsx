@@ -26,6 +26,7 @@ export default function Clients() {
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const canCreate = hasPerm("clients.create");
 
   const load = async () => {
     setLoading(true);
@@ -93,11 +94,13 @@ export default function Clients() {
         kicker="Click a client to open their profile — projects, invoices and ledger in one place."
         count={filtered.length}
       >
-        <button
-          onClick={() => { setShowForm(!showForm); setEditing(null); setForm(EMPTY); }}
-          className="btn-primary" data-testid="new-client-btn">
-          <Plus size={14} /> {showForm ? "Cancel" : "New client"}
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => { setShowForm(!showForm); setEditing(null); setForm(EMPTY); }}
+            className="btn-primary" data-testid="new-client-btn">
+            <Plus size={14} /> {showForm ? "Cancel" : "New client"}
+          </button>
+        )}
       </PageHero>
 
       {showForm && (

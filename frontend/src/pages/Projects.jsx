@@ -11,7 +11,8 @@ const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings"
 const FALLBACK_TYPES = ["Residential", "Commercial"];
 
 export default function Projects() {
-  const { currentOrg } = useAuth();
+  const { currentOrg, hasPerm } = useAuth();
+  const canCreate = hasPerm("projects.create");
   const { values } = useMasterData();
   const STAGES = values("project_stage", FALLBACK_STAGES);
   const TYPES = values("project_type", FALLBACK_TYPES);
@@ -78,9 +79,9 @@ export default function Projects() {
         kicker="Track every brief from concept to handover. Click any tile to dive in."
         count={projects.length}
       >
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-project-btn">
+        {canCreate && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-project-btn">
           <Plus size={14} /> {showForm ? "Cancel" : "New project"}
-        </button>
+        </button>}
       </PageHero>
 
       {showForm && (

@@ -26,6 +26,7 @@ export default function Loans() {
   const [detail, setDetail] = useState(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
+  const canCreate = hasPerm("finance.create") || hasPerm("loans.create");
 
   const load = async () => {
     try {
@@ -53,9 +54,11 @@ export default function Loans() {
         kicker="Track every loan, auto-post EMIs, prepay smart — all reconciled with Accounting."
         count={loans.length}
       >
-        <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="create-loan-btn">
-          <Plus size={13}/> Add loan
-        </button>
+        {canCreate && (
+          <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="create-loan-btn">
+            <Plus size={13}/> Add loan
+          </button>
+        )}
       </PageHero>
 
       {err && <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 text-sm text-[#B22B22]"><Warning size={13} className="inline mr-1"/>{err}</div>}
@@ -104,7 +107,7 @@ export default function Loans() {
             ))}
             {loans.length === 0 && (
               <tr><td colSpan={9} className="p-12 text-center text-[#5C5C5C]">
-                No loans yet. Click <em>Add loan</em> to record one.
+                {canCreate ? <>No loans yet. Click <em>Add loan</em> to record one.</> : "No loans available."}
               </td></tr>
             )}
           </tbody>
@@ -118,6 +121,7 @@ export default function Loans() {
       {detail && <LoanDetailModal loanId={detail} accounts={accounts}
                     canEdit={hasPerm("finance.update") || hasPerm("loans.update")}
                     canDelete={hasPerm("finance.delete") || hasPerm("loans.delete")}
+                    canTransact={canCreate}
                     onClose={() => setDetail(null)} onArchived={() => { setDetail(null); load(); }} onChange={load} />}
     </div>
   );
@@ -209,7 +213,7 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
   );
 }
 
-function LoanDetailModal({ loanId, accounts, canEdit, canDelete, onClose, onArchived, onChange }) {
+function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, onClose, onArchived, onChange }) {
   const [loan, setLoan] = useState(null);
   const [payFrom, setPayFrom] = useState(accounts[0]?.id || "");
   const [busyIdx, setBusyIdx] = useState(-1);
@@ -312,7 +316,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, onClose, onArch
       </div>
 
       {/* Pay controls */}
-      <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[#FAFAFA] border border-[#E5E5E5]">
+      {canTransact && <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[#FAFAFA] border border-[#E5E5E5]">
         <div className="flex-1 min-w-[220px]">
           <label className="overline text-[10px] mb-1 block">Pay from</label>
           <select className="input-flat w-full" value={payFrom} onChange={(e) => setPayFrom(e.target.value)}>
@@ -330,7 +334,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, onClose, onArch
             </button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Schedule */}
       <div className="overline mb-2">AMORTIZATION SCHEDULE</div>
@@ -362,7 +366,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, onClose, onArch
                   )}
                 </Td>
                 <Td className="text-right">
-                  {!row.paid && (
+                  {canTransact && !row.paid && (
                     <button
                       disabled={busyIdx === row.index || !payFrom}
                       onClick={() => payEMI(row.index)}

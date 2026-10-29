@@ -41,6 +41,7 @@ export default function Expenses() {
   const [err, setErr] = useState("");
   const isAdmin = hasPerm("*.*");
   const isFinance = hasPerm("finance.create");
+  const canCreate = hasPerm("expenses.create");
   const canManage = hasPerm("expenses.update");
   const canDeletePosted = hasPerm("finance.delete");
 
@@ -74,9 +75,9 @@ export default function Expenses() {
         title="From claim to reimbursement, in minutes."
         kicker="For staff reimbursement claims that need approval. For direct company expenses (rent, tea, salary etc.), use Accounting → Expense."
         count={expenses.length}>
-        <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="new-expense-btn">
+        {canCreate && <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="new-expense-btn">
           <Plus size={13}/> New claim
-        </button>
+        </button>}
       </PageHero>
 
       {err && <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 text-sm text-[#B22B22]"><Warning size={13} className="inline mr-1"/>{err}</div>}
@@ -127,7 +128,7 @@ export default function Expenses() {
       {editExpense && <CreateExpense initial={editExpense} expenseId={editExpense.id}
         onClose={() => setEditExpense(null)} onCreated={() => { setEditExpense(null); load(); }} />}
       {detail && <ExpenseDetail expId={detail} accounts={accounts} isAdmin={isAdmin}
-        isFinance={isFinance} canManage={canManage} canDeletePosted={canDeletePosted}
+        isFinance={isFinance} canCreate={canCreate} canManage={canManage} canDeletePosted={canDeletePosted}
         userId={user?.user_id} userRole={user?.role} onClose={() => setDetail(null)}
         onEdit={(expense) => { setDetail(null); setEditExpense(expense); }} onChange={load} />}
     </div>
@@ -211,7 +212,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
   );
 }
 
-function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canManage, canDeletePosted, userId, userRole, onClose, onEdit, onChange }) {
+function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canManage, canDeletePosted, userId, userRole, onClose, onEdit, onChange }) {
   const [exp, setExp] = useState(null);
   const [comment, setComment] = useState("");
   const [payFrom, setPayFrom] = useState(accounts[0]?.id || "");
@@ -256,8 +257,11 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canManage, canDele
   const canDecide = ["pending_l1","pending_l2"].includes(exp.status) && (isAdmin || exp.pending_approver_role === userRole);
   const canReimburse = exp.status === "approved" && isFinance;
   const isOwner = exp.claimant_id === userId;
-  const canEdit = !["reimbursed", "cancelled"].includes(exp.status) && (isOwner || isAdmin || canManage);
-  const canCancel = exp.status !== "cancelled" && (exp.status === "reimbursed" ? (isAdmin || canDeletePosted) : (isOwner || isAdmin || canManage));
+  const canEdit = !["reimbursed", "cancelled"].includes(exp.status) &&
+    ((isOwner && canCreate) || isAdmin || canManage);
+  const canCancel = exp.status !== "cancelled" && (exp.status === "reimbursed"
+    ? (isAdmin || canDeletePosted)
+    : ((isOwner && canCreate) || isAdmin || canManage));
 
   return (
     <Modal onClose={onClose} title={exp.title} eyebrow={`EXPENSE · ${exp.claimant_name}`} wide>
