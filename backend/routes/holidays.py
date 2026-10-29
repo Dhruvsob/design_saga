@@ -206,7 +206,9 @@ async def is_holiday(date_str: str, request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
     """Check if a specific date is a holiday (also considers weekly-off + recurring)."""
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "holidays.read"):
+        raise HTTPException(403, "Missing permission: holidays.read")
     _validate_date(date_str)
     d = _date.fromisoformat(date_str)
 

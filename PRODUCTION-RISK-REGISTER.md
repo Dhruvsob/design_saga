@@ -85,7 +85,7 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Production UI cleanup | Remove demo/seed/debug/tip controls while preserving real empty-state guidance and Ctrl/Cmd+K | Fixed in frontend inventory; no demo/seed/debug/tip controls remain, and backend seed routes are disabled plus hard-blocked in production |
-| Permission-aware UI | Hidden controls must match backend permissions; backend remains authoritative | Partial: salary/private HR and shared Daybook edit/reverse actions match permissions; broader screen inventory continues |
+| Permission-aware UI | Hidden controls must match backend permissions; backend remains authoritative | Core clients, projects, leads, invoices, expenses, holidays, loans, purchase orders, quotations, vendors, employees, salary/private HR and Daybook actions now match backend permissions; broader detail-screen inventory and live custom-role verification remain |
 | Authentication UX | Correct errors, no redirect loops, token refresh/expiry behavior and safe logout | Audit |
 | Form safety | Server errors shown clearly, double-submit prevention, validation parity and unsaved-change protection | Audit |
 | Accessibility | Keyboard navigation, labels, focus, contrast, table semantics and screen-reader checks | Audit |

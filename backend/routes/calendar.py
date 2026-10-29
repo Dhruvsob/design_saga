@@ -232,6 +232,8 @@ async def update_event(event_id: str, payload: EventUpdate, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
                        authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "calendar.read"):
+        raise HTTPException(403, "Missing permission: calendar.read")
     row = await sdb.calendar_events.find_one({"id": event_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "Event not found")
@@ -264,6 +266,8 @@ async def delete_event(event_id: str, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
                        authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "calendar.read"):
+        raise HTTPException(403, "Missing permission: calendar.read")
     row = await sdb.calendar_events.find_one({"id": event_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "Event not found")

@@ -17,6 +17,12 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 - Existing backend authorization remains authoritative. This change removes misleading actions and repeated 403 failures without granting new access or changing production data.
 - Verification: full frontend ESLint and the production Vite build pass. Deployment and live custom-role verification are pending restored VPS access.
 
+### DS-042: Calendar and holiday permission revocation
+
+- Calendar event update/delete now re-check `calendar.read` before ownership, so a user whose custom-role access is revoked cannot keep mutating previously created events through direct API calls.
+- The holiday date probe now requires `holidays.read`, matching the main holiday calendar and preventing custom roles without holiday access from bypassing the route permission.
+- Verification: 19 focused Calendar/Google Calendar/holiday permission tests pass. Deployment is pending restored VPS access.
+
 ### DS-038: Purchase-order correction and quotation permission controls
 
 - Purchase orders now expose permission-aware create, edit, send, cancel and GRN controls. Draft line items can be corrected; after sending, only safe metadata remains editable, while received quantities and matched bills stay protected.
