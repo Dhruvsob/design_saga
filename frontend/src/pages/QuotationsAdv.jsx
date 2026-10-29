@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
 
 const TYPE_LABELS = {
@@ -20,6 +21,7 @@ const STATUS_COLORS = {
 };
 
 export default function QuotationsAdv() {
+  const { hasPerm } = useAuth();
   const [rows, setRows] = useState([]);
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -60,9 +62,9 @@ export default function QuotationsAdv() {
           <p className="text-[#5C5C5C] mt-2 max-w-xl">BOQ, room-wise costing, materials, payment plans, timeline, terms, versions and approval — all in one professional document.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-quotation-btn">
+          {hasPerm("quotations.create") && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-quotation-btn">
             <Plus size={14} /> {showForm ? "Cancel" : "New quotation"}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -114,7 +116,7 @@ export default function QuotationsAdv() {
                 <Td>
                   <div className="flex items-center gap-2">
                     <button onClick={() => navigate(`/quotations/${r.id}`)} className="text-[#8B7F6A]" title="Open"><ArrowRight size={16} /></button>
-                    <button onClick={() => del(r.id)} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>
+                    {hasPerm("quotations.delete") && r.status !== "converted" && <button onClick={() => del(r.id)} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>}
                   </div>
                 </Td>
               </tr>

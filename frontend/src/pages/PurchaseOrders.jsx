@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { formatDate } from "../lib/format";
+import { useAuth } from "../context/AuthContext";
 import {
   Package, Plus, Warning, CheckSquare, PaperPlaneTilt, X, ArrowsClockwise, Truck, ClipboardText,
+  PencilSimple, Trash,
 } from "@phosphor-icons/react";
 
 const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -24,6 +26,7 @@ const STATUS_TONE = {
 };
 
 export default function PurchaseOrders() {
+  const { hasPerm } = useAuth();
   const [pos, setPos] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [err, setErr] = useState("");
@@ -53,9 +56,9 @@ export default function PurchaseOrders() {
         title="Every rupee, tracked from PO to payment."
         kicker="Auto 3-way match against Goods Receipts and vendor bills."
         count={pos.length}>
-        <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="create-po-btn">
+        {hasPerm("purchase_orders.create") && <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="create-po-btn">
           <Plus size={13}/> New PO
-        </button>
+        </button>}
       </PageHero>
 
       {err && <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 text-sm text-[#B22B22]"><Warning size={13} className="inline mr-1"/>{err}</div>}
@@ -87,7 +90,8 @@ export default function PurchaseOrders() {
       </div>
 
       {showCreate && <CreatePO vendors={vendors} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
-      {detail && <PODetail poId={detail} onClose={() => setDetail(null)} onChange={load} />}
+      {detail && <PODetail poId={detail} canUpdate={hasPerm("purchase_orders.update")}
+        canReceive={hasPerm("purchase_orders.create")} onClose={() => setDetail(null)} onChange={load} />}
     </div>
   );
 }
@@ -162,11 +166,13 @@ function CreatePO({ vendors, onClose, onCreated }) {
   );
 }
 
-function PODetail({ poId, onClose, onChange }) {
+function PODetail({ poId, canUpdate, canReceive, onClose, onChange }) {
   const [po, setPo] = useState(null);
   const [grns, setGrns] = useState([]);
   const [match, setMatch] = useState(null);
   const [showGRN, setShowGRN] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
   const [err, setErr] = useState("");
 
   const load = async () => {
@@ -190,6 +196,26 @@ function PODetail({ poId, onClose, onChange }) {
     try { await api.post(`/purchase-orders/${poId}/cancel`); await load(); onChange && onChange(); }
     catch (e) { setErr(fmtErr(e?.response?.data?.detail)); }
   };
+  const startEdit = () => {
+    setEditForm({ expected_delivery: po.expected_delivery || "", delivery_address: po.delivery_address || "",
+      payment_terms: po.payment_terms || "", notes: po.notes || "",
+      lines: (po.lines || []).map((line) => ({ item_name: line.item_name, description: line.description || "",
+        quantity: Number(line.quantity), unit: line.unit || "nos", unit_price: Number(line.unit_price), tax_rate: Number(line.tax_rate || 0) })) });
+    setEditing(true);
+  };
+  const saveEdit = async (event) => {
+    event.preventDefault(); setErr("");
+    try {
+      const payload = { expected_delivery: editForm.expected_delivery || null,
+        delivery_address: editForm.delivery_address, payment_terms: editForm.payment_terms,
+        notes: editForm.notes };
+      if (po.status === "draft") payload.lines = editForm.lines;
+      await api.patch(`/purchase-orders/${poId}`, payload);
+      setEditing(false); await load(); onChange && onChange();
+    } catch (e) { setErr(fmtErr(e?.response?.data?.detail, "Update failed")); }
+  };
+  const setEditLine = (index, field, value) => setEditForm((current) => ({ ...current,
+    lines: current.lines.map((line, i) => i === index ? { ...line, [field]: value } : line) }));
 
   if (!po) return <Modal onClose={onClose} title="Loading…" wide><div className="skeleton h-64"></div></Modal>;
   return (
@@ -204,16 +230,42 @@ function PODetail({ poId, onClose, onChange }) {
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
-        {po.status === "draft" && (
+        {canUpdate && !["closed", "cancelled"].includes(po.status) && <button type="button" onClick={startEdit} className="btn-ghost text-xs"><PencilSimple size={12}/> Edit PO</button>}
+        {canUpdate && po.status === "draft" && (
           <button onClick={sendPO} className="btn-primary text-xs" data-testid="po-send"><PaperPlaneTilt size={12}/> Send to vendor</button>
         )}
-        {["sent","partial"].includes(po.status) && (
+        {canReceive && ["sent","partial"].includes(po.status) && (
           <button onClick={() => setShowGRN(true)} className="btn-primary text-xs" data-testid="grn-btn"><Truck size={12}/> Record GRN</button>
         )}
-        {["draft","sent"].includes(po.status) && grns.length === 0 && (
+        {canUpdate && ["draft","sent"].includes(po.status) && grns.length === 0 && (
           <button onClick={cancelPO} className="btn-ghost text-xs text-[#B22B22]"><X size={12}/> Cancel PO</button>
         )}
       </div>
+
+      {editing && editForm && (
+        <form onSubmit={saveEdit} className="border border-[#E5E5E5] bg-[#FAFAFA] p-3 mb-6 space-y-3">
+          <div className="overline">EDIT PURCHASE ORDER</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input type="date" className="input-flat" value={editForm.expected_delivery} onChange={(e) => setEditForm({...editForm, expected_delivery: e.target.value})}/>
+            <input className="input-flat" placeholder="Delivery address" value={editForm.delivery_address} onChange={(e) => setEditForm({...editForm, delivery_address: e.target.value})}/>
+            <input className="input-flat" placeholder="Payment terms" value={editForm.payment_terms} onChange={(e) => setEditForm({...editForm, payment_terms: e.target.value})}/>
+            <input className="input-flat md:col-span-3" placeholder="Notes" value={editForm.notes} onChange={(e) => setEditForm({...editForm, notes: e.target.value})}/>
+          </div>
+          {po.status === "draft" && <div className="space-y-2">
+            {editForm.lines.map((line, index) => <div key={index} className="grid grid-cols-12 gap-2">
+              <input required className="input-flat col-span-3" value={line.item_name} onChange={(e) => setEditLine(index, "item_name", e.target.value)}/>
+              <input className="input-flat col-span-2" placeholder="Unit" value={line.unit} onChange={(e) => setEditLine(index, "unit", e.target.value)}/>
+              <input required type="number" min="0.001" step="0.001" className="input-flat col-span-2" value={line.quantity} onChange={(e) => setEditLine(index, "quantity", Number(e.target.value))}/>
+              <input required type="number" min="0" step="0.01" className="input-flat col-span-2" value={line.unit_price} onChange={(e) => setEditLine(index, "unit_price", Number(e.target.value))}/>
+              <input type="number" min="0" max="100" step="0.01" className="input-flat col-span-2" value={line.tax_rate} onChange={(e) => setEditLine(index, "tax_rate", Number(e.target.value))}/>
+              <button type="button" className="btn-ghost col-span-1 text-[#B22B22]" disabled={editForm.lines.length === 1} onClick={() => setEditForm({...editForm, lines: editForm.lines.filter((_, i) => i !== index)})}><Trash size={12}/></button>
+            </div>)}
+            <button type="button" className="btn-ghost text-xs" onClick={() => setEditForm({...editForm, lines: [...editForm.lines, {item_name:"", description:"", quantity:1, unit:"nos", unit_price:0, tax_rate:0}]})}><Plus size={11}/> Add line</button>
+          </div>}
+          <div className="text-xs text-[#5C5C5C]">Line items can only be changed while the PO is a draft. Received quantities and matched bills remain protected.</div>
+          <div className="flex gap-2"><button className="btn-primary text-xs">Save changes</button><button type="button" className="btn-ghost text-xs" onClick={() => setEditing(false)}>Cancel</button></div>
+        </form>
+      )}
 
       <div className="overline mb-2">LINE ITEMS</div>
       <div className="border border-[#E5E5E5] mb-6 overflow-x-auto">

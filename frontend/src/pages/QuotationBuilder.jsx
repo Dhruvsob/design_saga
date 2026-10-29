@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { API } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft, FloppyDisk, FilePdf, Sparkle, Plus, Trash, ArrowRight,
   CheckCircle, X, Clock,
@@ -13,6 +14,7 @@ const SELECTABLE_TYPE_LABELS = { turnkey: TYPE_LABELS.turnkey, consultancy: TYPE
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 export default function QuotationBuilder() {
+  const { hasPerm } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [q, setQ] = useState(null);
@@ -34,7 +36,12 @@ export default function QuotationBuilder() {
 
   useEffect(() => { load(); }, [load]);
 
+  const canUpdate = hasPerm("quotations.update") && q?.status !== "converted";
+  const canVersion = hasPerm("quotations.create") && q?.status !== "converted";
+  const canConvert = hasPerm("quotations.update") && hasPerm("projects.create") && hasPerm("tasks.create") && q?.status !== "converted";
+
   const update = (patch) => {
+    if (!canUpdate) return;
     setQ((prev) => ({ ...prev, ...patch }));
     setDirty(true);
   };
@@ -132,25 +139,25 @@ export default function QuotationBuilder() {
 
       {/* Action bar */}
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={save} disabled={saving || !dirty} className="btn-primary" data-testid="save-quotation-btn">
+        {canUpdate && <button onClick={save} disabled={saving || !dirty} className="btn-primary" data-testid="save-quotation-btn">
           <FloppyDisk size={14} /> {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
-        </button>
+        </button>}
         <a href={`${API}/quotations-adv/${id}/pdf`} target="_blank" rel="noreferrer" className="btn-ghost" data-testid="pdf-btn">
           <FilePdf size={14} /> Download PDF
         </a>
-        <button onClick={newVersion} className="btn-ghost">
+        {canVersion && <button onClick={newVersion} className="btn-ghost">
           New version
-        </button>
-        <button onClick={() => setStatus("sent")} className="btn-ghost">Mark sent</button>
-        <button onClick={() => setStatus("approved")} className="btn-ghost">Mark approved</button>
-        <button onClick={convert} className="btn-ghost">
+        </button>}
+        {canUpdate && ["draft", "rejected"].includes(q.status) && <button onClick={() => setStatus("sent")} className="btn-ghost">Mark sent</button>}
+        {canUpdate && ["sent", "rejected"].includes(q.status) && <button onClick={() => setStatus("approved")} className="btn-ghost">Mark approved</button>}
+        {canConvert && ["approved", "sent", "under_review"].includes(q.status) && <button onClick={convert} className="btn-ghost">
           <ArrowRight size={14} /> Convert to project
-        </button>
-        <div className="ml-auto flex items-center gap-2">
+        </button>}
+        {canUpdate && <div className="ml-auto flex items-center gap-2">
           <button onClick={() => askAI("missing_items")} className="btn-ghost text-xs"><Sparkle size={12} /> AI: missing items</button>
           <button onClick={() => askAI("cost_optimisation")} className="btn-ghost text-xs"><Sparkle size={12} /> AI: optimise cost</button>
           <button onClick={() => askAI("premium_upgrades")} className="btn-ghost text-xs"><Sparkle size={12} /> AI: premium upgrades</button>
-        </div>
+        </div>}
       </div>
 
       {/* Tabs */}

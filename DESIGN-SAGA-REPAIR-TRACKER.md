@@ -4,12 +4,18 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; tested security/vendor baseline `d1a5b5a` is pushed to GitHub. Expense, vendor-master and loan correction UI changes are verified locally and awaiting their next commit.
+- Local checkout: `codex/repair-release`; safe vendor, expense and loan correction baseline `5760398` is pushed to GitHub. Purchase-order correction and quotation permission-aware UI changes are verified locally and awaiting their next commit.
 - Production checkout: `/opt/design-saga-git`; runtime commit `3b15e23` was the last verified deployment before VPS access became unavailable.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
-- Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance or quotation work.
+- Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
+
+### DS-038: Purchase-order correction and quotation permission controls
+
+- Purchase orders now expose permission-aware create, edit, send, cancel and GRN controls. Draft line items can be corrected; after sending, only safe metadata remains editable, while received quantities and matched bills stay protected.
+- Quotation create/delete/update/version/status/AI/conversion controls now follow the backend permissions. Invalid status actions are no longer offered, converted quotations remain read-only, and project conversion is shown only when the user also has project/task creation rights.
+- Verification: focused frontend ESLint and production build pass. Deployment and live role verification are pending restored VPS access.
 
 ### DS-037: Safe correction controls across vendor, expense and loan workflows
 
