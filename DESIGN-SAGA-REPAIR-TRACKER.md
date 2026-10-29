@@ -4,7 +4,7 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; safe vendor, expense and loan correction baseline `5760398` is pushed to GitHub. Purchase-order correction and quotation permission-aware UI changes are verified locally and awaiting their next commit.
+- Local checkout: `codex/repair-release`; vendor/expense/loan corrections, purchase-order corrections, quotation permission controls and duplicate-name task privacy repair are tested and pushed through `b787372`.
 - Production checkout: `/opt/design-saga-git`; runtime commit `3b15e23` was the last verified deployment before VPS access became unavailable.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
