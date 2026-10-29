@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import api from "../lib/api";
-import { formatDate, formatDateTime } from "../lib/format";
+import { dateForInput, formatDate, formatDateTime } from "../lib/format";
 import {
   Plus, X, PencilSimple, Trash, Play, ClockCounterClockwise, Warning, Pause,
   DownloadSimple, ClockClockwise, CaretDown, CaretRight,
@@ -121,7 +121,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
           <tbody data-testid="rec-rows">
             {rules.map((r) => {
               const expName = expenseAccs.find((a) => a.id === r.expense_account_id)?.name || "—";
-              const isDue = r.next_run_date && r.next_run_date <= new Date().toISOString().slice(0, 10);
+              const isDue = r.next_run_date && r.next_run_date <= dateForInput(new Date());
               return (
                 <tr key={r.id} className={`border-t border-[#F0F0F0] ${!r.active ? "opacity-60" : ""}`} data-testid={`rec-row-${r.id}`}>
                   <td className="p-3">
@@ -172,7 +172,7 @@ const emptyRule = () => ({
   name: "", amount: "", frequency: "monthly", day_of_month: 1,
   day_of_week: 1, expense_account_id: "", paid_from_account_id: "",
   vendor_id: "", project_id: "", client_id: "", reference: "",
-  gst: "", notes: "", start_date: new Date().toISOString().slice(0, 10),
+  gst: "", notes: "", start_date: dateForInput(new Date()),
   end_date: "",
 });
 

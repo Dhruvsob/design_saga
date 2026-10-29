@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
-import { formatDate } from "../lib/format";
+import { dateForInput, formatDate } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import {
   Bank, Plus, Warning, Check, CurrencyInr, CalendarBlank, X,
@@ -142,7 +142,7 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
   const [requestKey] = useState(() => crypto.randomUUID());
   const [f, setF] = useState({
     lender_name: "", loan_type: "business", principal: 500000, interest_rate_pa: 9.5,
-    tenure_months: 36, start_date: new Date().toISOString().slice(0,10), emi_day: 5,
+    tenure_months: 36, start_date: dateForInput(new Date()), emi_day: 5,
     disbursement_account_id: accounts[0]?.id || "", account_number: "", notes: "",
   });
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);

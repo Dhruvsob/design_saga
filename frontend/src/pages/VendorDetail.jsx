@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../lib/api";
-import { formatDate } from "../lib/format";
+import { dateForInput, formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -1274,7 +1274,7 @@ const Td = ({ children, className = "" }) => (
 );
 
 /* -------------------- helpers -------------------- */
-function today() { return new Date().toISOString().slice(0, 10); }
+function today() { return dateForInput(new Date()); }
 function emptyItem() { return { description: "", quantity: 1, rate: 0 }; }
 function updateItem(f, setF, i, k, v) {
   const items = [...f.items]; items[i] = { ...items[i], [k]: v }; setF({ ...f, items });

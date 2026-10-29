@@ -6,7 +6,7 @@ import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
 import { TransactionDetail } from "../components/TransactionDetail";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
-import { formatDate } from "../lib/format";
+import { dateForInput, formatDate } from "../lib/format";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
@@ -1153,7 +1153,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, clients, projects, vendors, employees, journal, page, onPage, onSubmit }) {
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState(() => ({
-    date: new Date().toISOString().slice(0, 10), amount: "",
+    date: dateForInput(new Date()), amount: "",
     ...(kind === "income" ? { income_account_id: "", bank_account_id: "", client_id: "", project_id: "", vendor_id: "", employee_id: "" }
                           : { expense_account_id: "", paid_from_account_id: "", vendor_id: "", project_id: "", client_id: "", employee_id: "", gst: "" }),
     payment_method: "bank_transfer", reference: "", notes: "",

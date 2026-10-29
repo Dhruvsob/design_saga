@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
-import { formatDate } from "../lib/format";
+import { dateForInput, formatDate } from "../lib/format";
 import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
 
 const STATUS_CHIP = {
@@ -26,7 +26,7 @@ export default function Employees() {
     first_name: "", last_name: "", email: "", phone: "",
     department: "Design", designation: "",
     employment_type: "full_time", employment_status: "active",
-    joining_date: new Date().toISOString().slice(0, 10),
+    joining_date: dateForInput(new Date()),
   });
 
   const load = async () => {
@@ -51,7 +51,7 @@ export default function Employees() {
         first_name: "", last_name: "", email: "", phone: "",
         department: "Design", designation: "",
         employment_type: "full_time", employment_status: "active",
-        joining_date: new Date().toISOString().slice(0, 10),
+        joining_date: dateForInput(new Date()),
       });
       await load();
       navigate(`/employees/${data.id}`);

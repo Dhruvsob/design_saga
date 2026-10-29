@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { formatDate } from "../lib/format";
 import { ChatCircleText, PaperPlaneRight, Trash } from "@phosphor-icons/react";
 
 const relativeTime = (iso) => {
@@ -13,7 +14,7 @@ const relativeTime = (iso) => {
   if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso, "");
 };
 
 export default function CommentsPanel({ entityType, entityId }) {

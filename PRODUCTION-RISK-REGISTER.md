@@ -60,7 +60,7 @@ yet received sufficient adversarial testing.
 | Commission visibility | Direct/excess receipts must reconcile across journals, vendor ledger and commission dashboard without double counting allocations | Fixed and deployed at `3b95ca1`; live three-receipt/₹21,000 production reconciliation passes and reversed settlement journals are excluded |
 | Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Dependency matrix blocks deletion when operational, attendance or financial history exists; archive path is available and tested |
 | Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | User ID, tenant employee counter, employee/document counters and key finance identifiers are protected; production duplicate preflight is clean; broader normalization audit continues |
-| Time zones | All business dates use Asia/Kolkata while stored timestamps remain UTC; test midnight/month/year boundaries | Shared IST business-date helper applied to audited modules; boundary regression test passes |
+| Time zones | All business dates use Asia/Kolkata while stored timestamps remain UTC; test midnight/month/year boundaries | Shared IST business-date helper and backend boundary regression cover audited modules; frontend form defaults, due-state checks, period presets and FY boundaries are now IST-safe, with live deployment verification pending |
 | Money precision | Decimal-safe calculations, rounding policy, GST/TDS, currency and reconciliation | Non-finite, zero/negative and out-of-range financial inputs are rejected before persistence; Decimal migration and tax-rounding policy audit remain open |
 
 ## P2 - Reliability, DevOps and Operations
@@ -92,7 +92,7 @@ yet received sufficient adversarial testing.
 | Responsive layout | No clipped controls, overlapping text or unusable tables on supported mobile/desktop widths | Audit |
 | Browser compatibility | Current Chrome, Edge, Safari and mobile smoke tests | Audit |
 | Performance | Bundle size, lazy loading, pagination, large tenant datasets and API latency budgets | Accounting/Daybook pagination and route-level lazy loading are active; initial JavaScript is reduced from 1.52 MB (372 KB gzip) to 495 KB (149 KB gzip). Large-data/API latency budgets remain open |
-| Date presentation | Business dates should be DD/MM/YYYY without changing API/database date storage | Fixed on major ERP operational, accounting, attendance, project, vendor, client, task, HR and administration surfaces at `8e1ec41`; timestamp boundaries render in IST while native date inputs and stored values remain ISO by design |
+| Date presentation | Business dates should be DD/MM/YYYY without changing API/database date storage | Fixed on major ERP operational, accounting, attendance, project, vendor, client, task, HR and administration surfaces; timestamp boundaries and current-day defaults use IST while native date inputs and stored values remain ISO by design; latest batch awaits deployment |
 
 ## Required Release Gates
 

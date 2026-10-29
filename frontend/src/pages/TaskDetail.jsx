@@ -4,7 +4,7 @@ import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
 import PageHero from "../components/PageHero";
 import CommentsPanel from "../components/CommentsPanel";
-import { formatDate, formatDateTime } from "../lib/format";
+import { dateForInput, formatDate, formatDateTime } from "../lib/format";
 import {
   ArrowLeft, Trash, Bell, Clock, Plus, PaperclipHorizontal, LinkSimple,
   ClockCounterClockwise, Users, Buildings, Warning, ChatCircleText,
@@ -54,7 +54,7 @@ export default function TaskDetail() {
   if (!task) return <div className="p-8 overline">LOADING…</div>;
 
   const isVendor = task.task_type === "vendor";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateForInput(new Date());
   const overdue = task.due_date && task.due_date < today && task.status !== "done";
 
   return (

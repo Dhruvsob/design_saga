@@ -8,7 +8,7 @@ import {
   DownloadSimple, Clock, ArrowsClockwise,
 } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
-import { formatDate, formatDateTime } from "../lib/format";
+import { dateForInput, formatDate, formatDateTime } from "../lib/format";
 
 const STATUS_COLORS = {
   present: "#1D633E", late: "#B87500", absent: "#B4001C", half_day: "#F0A93A",
@@ -61,7 +61,8 @@ export default function Attendance() {
   const [meta, setMeta] = useState(null);
   const [policy, setPolicy] = useState(null);
   const [ym, setYm] = useState(() => {
-    const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1 };
+    const [y, m] = dateForInput(new Date()).split("-").map(Number);
+    return { y, m };
   });
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ leave_type: "casual", from_date: "", to_date: "", reason: "" });
@@ -772,7 +773,7 @@ function MonthlyGrid({ monthly, ym }) {
 function TeamDashboardTab() {
   const [dash, setDash] = useState(null);
   const [recs, setRecs] = useState([]);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = dateForInput(new Date());
 
   const load = useCallback(async () => {
     const [d, r] = await Promise.all([
@@ -916,8 +917,8 @@ function LiveBoardTab() {
    Payroll Preview — Jewellers engine (LOP + fines + short leave)
    ================================================== */
 function PayrollTab() {
-  const now = new Date();
-  const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 });
+  const [todayYear, todayMonth] = dateForInput(new Date()).split("-").map(Number);
+  const [ym, setYm] = useState({ y: todayYear, m: todayMonth });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 

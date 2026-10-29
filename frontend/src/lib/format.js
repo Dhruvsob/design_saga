@@ -132,9 +132,9 @@ export function empName(e) {
 
 // Indian financial year for a given date → { start, end, label } (Apr 1 – Mar 31)
 export function financialYear(value = new Date()) {
-  const d = toDate(value) || new Date();
-  const y = d.getFullYear();
-  const startYear = d.getMonth() >= 3 ? y : y - 1; // month 3 = April
+  const calendarDate = dateForInput(value) || dateForInput(new Date());
+  const [y, month] = calendarDate.split("-").map(Number);
+  const startYear = month >= 4 ? y : y - 1;
   return {
     start: `${startYear}-04-01`,
     end: `${startYear + 1}-03-31`,

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import { PERIOD_PRESETS, computeRange, periodLabel } from "../lib/period";
 import { downloadFile } from "../lib/download";
-import { formatDate } from "../lib/format";
+import { dateForInput, formatDate } from "../lib/format";
 import { TransactionDetail } from "./TransactionDetail";
 import {
   X, MagnifyingGlass, Bank, ArrowSquareOut, DownloadSimple, Printer, Plus,
@@ -13,7 +13,7 @@ import {
 const CURRENCY = (n) =>
   `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => dateForInput(new Date());
 
 // Slide-over showing one account's complete transaction history.
 // Reuses GET /accounting/ledger/account/{id}. Adds inline Quick-Add (for

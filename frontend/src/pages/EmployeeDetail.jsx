@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
-import { formatDate } from "../lib/format";
+import { dateForInput, formatDate } from "../lib/format";
 import {
   ArrowLeft, FloppyDisk, Plus, Trash, UserMinus, Warning, Trophy,
   FileText, ArrowSquareOut, ShieldWarning,
@@ -549,9 +549,9 @@ function Row({ label, children }) {
 }
 
 function PaySalaryBlock({ employeeId, netMonthly }) {
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [todayYear, todayMonth] = dateForInput(new Date()).split("-").map(Number);
+  const [year, setYear] = useState(todayYear);
+  const [month, setMonth] = useState(todayMonth);
   const [preview, setPreview] = useState(null);
   const [banks, setBanks] = useState([]);
   const [bankAccountId, setBankAccountId] = useState("");
@@ -854,7 +854,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateForInput(new Date());
   const [form, setForm] = useState({ effective_date: today, reason: "", note: "", salary: {} });
 
   const load = useCallback(async () => {

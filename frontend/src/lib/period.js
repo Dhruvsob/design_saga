@@ -1,6 +1,8 @@
 // Shared date-period helpers for Accounting (Daybook + Account ledger).
 // India financial year runs Apr 1 -> Mar 31.
 
+import { dateForInput } from "./format";
+
 export const PERIOD_PRESETS = [
   { id: "today", label: "Today" },
   { id: "week", label: "This Week" },
@@ -23,7 +25,8 @@ export function ymd(d) {
 // Returns { from, to } as yyyy-mm-dd strings ("" means unbounded).
 // For "custom" returns null so the caller keeps its own from/to.
 export function computeRange(preset) {
-  const now = new Date();
+  const [todayYear, todayMonth, todayDay] = dateForInput(new Date()).split("-").map(Number);
+  const now = new Date(todayYear, todayMonth - 1, todayDay);
   const y = now.getFullYear();
   const m = now.getMonth(); // 0-11
   switch (preset) {

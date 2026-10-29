@@ -1,15 +1,21 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-29 (Asia/Calcutta)
+Last updated: 2026-10-30 (Asia/Kolkata)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; all verified repair batches are pushed at the current branch HEAD. The working tree is clean and the accumulated release is ready for production deployment.
+- Local checkout: `codex/repair-release`; all committed repair batches are pushed at the current branch HEAD. The accumulated release is ready for production deployment after the current verified batch is committed.
 - Production checkout: `/opt/design-saga-git`; runtime commit `3b15e23` was the last verified deployment before VPS access became unavailable.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
+
+### DS-044: IST-safe business-date defaults
+
+- Replaced UTC-derived `today` defaults in accounting, attendance, payroll, employee onboarding/salary, tasks, loans, holidays, vendor entries, recurring expenses and account-ledger flows with the shared Asia/Kolkata calendar-date helper. Users working between midnight and 05:30 IST no longer receive the previous UTC date in forms, overdue checks or due-state calculations.
+- Financial-year and accounting period presets now derive the current calendar day in IST before calculating month, week, year and 1-April-to-31-March boundaries. Comments also use the shared DD/MM/YYYY formatter instead of a browser-locale-dependent date.
+- Verification: full frontend ESLint and production Vite build pass. Native date input values and API/database storage remain ISO `YYYY-MM-DD`; user-facing business dates remain DD/MM/YYYY. Deployment and live midnight-boundary verification remain pending restored VPS access.
 
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 

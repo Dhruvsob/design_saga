@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
+import { dateForInput } from "../lib/format";
 import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
 
 const KINDS = [
@@ -16,7 +17,8 @@ const kindMeta = (id) => KINDS.find((k) => k.id === id) || KINDS[3];
 
 export default function Holidays() {
   const { hasPerm } = useAuth();
-  const [year, setYear] = useState(new Date().getFullYear());
+  const currentYear = Number(dateForInput(new Date()).slice(0, 4));
+  const [year, setYear] = useState(currentYear);
   const [rows, setRows] = useState([]);
   const [offs, setOffs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -89,7 +91,7 @@ export default function Holidays() {
           <input
             type="number" value={year}
             data-testid="holiday-year-input"
-            onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())}
+            onChange={(e) => setYear(Number(e.target.value) || currentYear)}
             className="border border-[#E5E5E5] w-24 text-sm px-2 py-1"
           />
           <button className="btn-ghost text-xs" onClick={load} data-testid="holiday-refresh">

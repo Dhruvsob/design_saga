@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
-import { empName, formatDate } from "../lib/format";
+import { dateForInput, empName, formatDate } from "../lib/format";
 import {
   Plus, X, Trash, DotsSixVertical, MagnifyingGlass, ListChecks,
   Table as TableIcon, SquaresFour, Warning, Bell, DownloadSimple,
@@ -162,7 +162,7 @@ export default function TasksBoard() {
     link.click();
   };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateForInput(new Date());
   const overdueCount = filtered.filter((t) => t.due_date && t.due_date < today && t.status !== "done").length;
   const areas = meta?.areas || [];
   const categories = taskType === "vendor" ? (meta?.categories_vendor || meta?.categories || [])
@@ -358,7 +358,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
 // Kanban view
 // ================================================================
 function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOver, onOpen, selected, onToggleSelect }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateForInput(new Date());
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 border-t border-l border-[#E5E5E5] stagger" data-testid="kanban-board">
       {LANES.map((c) => {
@@ -474,7 +474,7 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
     if (checked) n.add(id); else n.delete(id);
     setSelected(n);
   };
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateForInput(new Date());
 
   return (
     <div className="border border-[#E5E5E5] overflow-x-auto" data-testid="task-table">
