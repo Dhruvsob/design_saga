@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { useAuth } from "../context/AuthContext";
-import { empName } from "../lib/format";
+import { dateForInput, empName } from "../lib/format";
 import {
   CaretLeft, CaretRight, Plus, X, Trash, MapPin, Clock as ClockIcon,
   Bell, Users, Lock, Globe, HardHat, UserCircle, SpeakerHigh, SpeakerSlash,
@@ -32,6 +32,10 @@ const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 /* Local YYYY-MM-DD (never use toISOString — TZ shifts the day) */
 const ymd = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const istTodayDate = () => {
+  const [year, month, day] = dateForInput(new Date()).split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const mondayOf = (d) => { const x = new Date(d); const wd = (x.getDay() + 6) % 7; return addDays(x, -wd); };
 const fmtNice = (s) => {
@@ -44,7 +48,7 @@ export default function CalendarPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [view, setView] = useState("month");            // month | week | agenda
-  const [cursor, setCursor] = useState(() => new Date());
+  const [cursor, setCursor] = useState(istTodayDate);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hiddenKinds, setHiddenKinds] = useState({});   // kind -> true (hidden)
@@ -165,7 +169,7 @@ export default function CalendarPage() {
     setCursor(x);
     setSelectedDay(null);
   };
-  const goToday = () => { setCursor(new Date()); setSelectedDay(null); };
+  const goToday = () => { setCursor(istTodayDate()); setSelectedDay(null); };
 
   const headerLabel = view === "month"
     ? `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`
@@ -182,7 +186,7 @@ export default function CalendarPage() {
     }
   };
 
-  const todayStr = ymd(new Date());
+  const todayStr = dateForInput(new Date());
 
   return (
     <div className="space-y-6" data-testid="calendar-page">

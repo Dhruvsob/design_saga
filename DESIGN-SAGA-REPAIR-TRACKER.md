@@ -13,7 +13,7 @@ Last updated: 2026-10-30 (Asia/Kolkata)
 
 ### DS-044: IST-safe business-date defaults
 
-- Replaced UTC-derived `today` defaults in accounting, attendance, payroll, employee onboarding/salary, tasks, loans, holidays, vendor entries, recurring expenses and account-ledger flows with the shared Asia/Kolkata calendar-date helper. Users working between midnight and 05:30 IST no longer receive the previous UTC date in forms, overdue checks or due-state calculations.
+- Replaced UTC-derived or browser-local `today` defaults in accounting, attendance, payroll, employee onboarding/salary, tasks, loans, holidays, calendar, vendor entries, recurring expenses and account-ledger flows with the shared Asia/Kolkata calendar-date helper. Users working between midnight and 05:30 IST no longer receive the previous UTC date in forms, overdue checks, due-state calculations or the calendar's Today action.
 - Financial-year and accounting period presets now derive the current calendar day in IST before calculating month, week, year and 1-April-to-31-March boundaries. Comments also use the shared DD/MM/YYYY formatter instead of a browser-locale-dependent date.
 - Verification: full frontend ESLint and production Vite build pass. Native date input values and API/database storage remain ISO `YYYY-MM-DD`; user-facing business dates remain DD/MM/YYYY. Deployment and live midnight-boundary verification remain pending restored VPS access.
 
