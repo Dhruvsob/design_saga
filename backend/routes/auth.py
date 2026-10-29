@@ -35,6 +35,7 @@ import os
 from core.db import db
 from core.helpers import iso_now, now_utc, new_id
 from core.audit import audit
+from core.session_response import login_response
 from core.deps import ensure_user_access, require_user, get_current_user
 from core.rbac import has_permission, ROLES, normalize_role, expand_permissions
 from models.user import (
@@ -405,7 +406,7 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
     packed["app_pin_enabled"] = pin_configured
     packed["app_pin_setup_required"] = not pin_configured
     packed["app_pin_locked"] = pin_configured
-    return {"user": packed, "session_token": token}
+    return login_response(packed, token)
 
 
 # ==================================================

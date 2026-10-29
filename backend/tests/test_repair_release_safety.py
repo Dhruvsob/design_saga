@@ -12,7 +12,7 @@ import core.helpers as helpers_module
 import core.jobs as jobs_module
 import core.indexes as indexes_module
 from core.audit import audit_digest, verify_chain
-from core.http_security import rate_limit_decision, reset_rate_limits
+from core.http_security import _client_ip, rate_limit_decision, reset_rate_limits
 from core.indexes import _INDEXES
 from core.helpers import business_today
 from models.loan import LoanUpdateIn
@@ -25,6 +25,29 @@ def _request(path: str) -> Request:
         "headers": [], "client": ("203.0.113.10", 1234),
         "scheme": "https", "server": ("gamaa.in", 443),
     })
+
+
+def test_rate_limit_source_ignores_spoofed_forwarded_client_ip():
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/login-password",
+        "headers": [
+            (b"x-forwarded-for", b"198.51.100.77, 203.0.113.10"),
+            (b"x-real-ip", b"203.0.113.10"),
+        ],
+        "client": ("127.0.0.1", 1234),
+        "scheme": "https", "server": ("gamaa.in", 443),
+    })
+    assert _client_ip(request) == "203.0.113.10"
+
+
+def test_rate_limit_source_uses_nearest_forwarded_hop_without_real_ip():
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/auth/login-password",
+        "headers": [(b"x-forwarded-for", b"198.51.100.77, 203.0.113.10")],
+        "client": ("127.0.0.1", 1234),
+        "scheme": "https", "server": ("gamaa.in", 443),
+    })
+    assert _client_ip(request) == "203.0.113.10"
 
 
 @pytest.mark.parametrize("path", [

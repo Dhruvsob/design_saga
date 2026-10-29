@@ -96,8 +96,15 @@ _MAX_KEYS = 50000
 
 
 def _client_ip(request: Request) -> str:
+    # Nginx overwrites X-Real-IP with the socket peer.  Prefer it over the
+    # left-most X-Forwarded-For value, which a public client can forge before
+    # Nginx appends the real address.  When X-Real-IP is unavailable, the
+    # right-most forwarded hop is the closest proxy-observed address.
+    real = request.headers.get("x-real-ip", "").strip()
+    if real:
+        return real
     fwd = request.headers.get("x-forwarded-for", "")
-    ip = fwd.split(",", 1)[0].strip()
+    ip = fwd.rsplit(",", 1)[-1].strip()
     if not ip and request.client:
         ip = request.client.host
     return ip or "unknown"

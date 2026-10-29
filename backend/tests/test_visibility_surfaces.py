@@ -1,5 +1,6 @@
 """Regression coverage for secondary visibility surfaces."""
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -7,6 +8,7 @@ from pydantic import ValidationError
 
 from routes.calendar import _date_window
 from routes.comments import CommentIn, _require_entity_access
+from routes import comments as comments_routes
 from routes import search as search_routes
 
 
@@ -55,6 +57,48 @@ def test_comment_entity_permission_is_required_before_lookup():
     with pytest.raises(HTTPException) as exc:
         asyncio.run(_require_entity_access(user, "vendor", "vendor_1"))
     assert exc.value.status_code == 403
+
+
+def test_comment_delete_is_soft_and_audited(monkeypatch):
+    class Comments:
+        def __init__(self):
+            self.row = {
+                "id": "comment_1", "entity_type": "project", "entity_id": "project_1",
+                "author_id": "user_1", "body": "Keep history",
+            }
+
+        async def find_one(self, *_args, **_kwargs):
+            return dict(self.row)
+
+        async def update_one(self, query, update):
+            assert query["deleted"] == {"$ne": True}
+            self.row.update(update["$set"])
+            return SimpleNamespace(matched_count=1)
+
+    comments = Comments()
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "user_1", "org_id": "org_a", "permissions": []}
+
+    async def allow(*_args, **_kwargs):
+        return None
+
+    audited = []
+
+    async def record_audit(*args, **kwargs):
+        audited.append((args, kwargs))
+
+    monkeypatch.setattr(comments_routes, "sdb", SimpleNamespace(comments=comments))
+    monkeypatch.setattr(comments_routes, "require_user", user)
+    monkeypatch.setattr(comments_routes, "_require_entity_access", allow)
+    monkeypatch.setattr(comments_routes, "audit", record_audit)
+
+    result = asyncio.run(comments_routes.delete_comment("comment_1", None))
+
+    assert result == {"ok": True}
+    assert comments.row["deleted"] is True
+    assert comments.row["deleted_by"] == "user_1"
+    assert audited and audited[0][0][1] == "comment.delete"
 
 
 def test_global_search_includes_advanced_quotes_and_only_visible_events(monkeypatch):

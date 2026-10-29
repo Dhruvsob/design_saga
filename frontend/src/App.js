@@ -117,16 +117,16 @@ function AppRouter() {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/portal/:token" element={<ClientPortal />} />
       <Route path="/dashboard" element={<ProtectedShell><Dashboard /></ProtectedShell>} />
-      <Route path="/crm" element={<ProtectedShell><Leads /></ProtectedShell>} />
-      <Route path="/projects" element={<ProtectedShell><Projects /></ProtectedShell>} />
-      <Route path="/projects/:id" element={<ProtectedShell><ProjectDetail /></ProtectedShell>} />
-      <Route path="/tasks" element={<ProtectedShell><Tasks /></ProtectedShell>} />
-      <Route path="/tasks/:id" element={<ProtectedShell><TaskDetail /></ProtectedShell>} />
+      <Route path="/crm" element={<ProtectedShell requirePerm="leads.read"><Leads /></ProtectedShell>} />
+      <Route path="/projects" element={<ProtectedShell requirePerm="projects.read"><Projects /></ProtectedShell>} />
+      <Route path="/projects/:id" element={<ProtectedShell requirePerm="projects.read"><ProjectDetail /></ProtectedShell>} />
+      <Route path="/tasks" element={<ProtectedShell requirePerm="tasks.read"><Tasks /></ProtectedShell>} />
+      <Route path="/tasks/:id" element={<ProtectedShell requirePerm="tasks.read"><TaskDetail /></ProtectedShell>} />
       <Route path="/calendar" element={<ProtectedShell requirePerm="calendar.read"><CalendarPage /></ProtectedShell>} />
-      <Route path="/clients" element={<ProtectedShell><Clients /></ProtectedShell>} />
-      <Route path="/clients/:id" element={<ProtectedShell><ClientDetail /></ProtectedShell>} />
+      <Route path="/clients" element={<ProtectedShell requirePerm="clients.read"><Clients /></ProtectedShell>} />
+      <Route path="/clients/:id" element={<ProtectedShell requirePerm="clients.read"><ClientDetail /></ProtectedShell>} />
       <Route path="/invoices" element={<ProtectedShell requirePerm="invoices.read"><Invoices docType="invoice" /></ProtectedShell>} />
-      <Route path="/quotations" element={<ProtectedShell><QuotationsAdv /></ProtectedShell>} />
+      <Route path="/quotations" element={<ProtectedShell requirePerm="quotations.read"><QuotationsAdv /></ProtectedShell>} />
       <Route path="/quotations/:id" element={<ProtectedShell requirePerm="quotations.read"><QuotationBuilder /></ProtectedShell>} />
       <Route path="/employees" element={<ProtectedShell requirePerm="employees.read"><Employees /></ProtectedShell>} />
       <Route path="/employees/:id" element={<ProtectedShell requirePerm="employees.read"><EmployeeDetail /></ProtectedShell>} />

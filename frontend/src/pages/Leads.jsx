@@ -69,9 +69,14 @@ export default function Leads() {
   };
 
   const del = async (id) => {
-    if (!window.confirm("Delete this lead?")) return;
-    await api.delete(`/leads/${id}`);
-    load();
+    if (!window.confirm("Remove this lead from the active pipeline? Its history will be preserved.")) return;
+    try {
+      await api.delete(`/leads/${id}`);
+      toast.success("Lead removed from the active pipeline");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not remove lead");
+    }
   };
 
   const startEdit = async (l) => {

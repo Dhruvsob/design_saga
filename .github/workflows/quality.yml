@@ -49,12 +49,14 @@ jobs:
           tests/test_auth_tenant_safety.py
           tests/test_password_policy.py
           tests/test_app_pin_lock.py
+          tests/test_session_response_safety.py
           tests/test_rbac_session_safety.py
           tests/test_conversion_safety.py
           tests/test_repair_release_safety.py
           tests/test_purchase_safety.py
           tests/test_expense_safety.py
           tests/test_google_calendar.py
+          tests/test_calendar_holiday_permission_revocation.py
           tests/test_notification_safety.py
           tests/test_notification_tenant_safety.py
           tests/test_monitor_safety.py

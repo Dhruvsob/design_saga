@@ -50,6 +50,9 @@ class _Rows:
         return next((dict(row) for row in self.rows
                      if all(row.get(k) == v for k, v in query.items())), None)
 
+    async def count_documents(self, query):
+        return sum(1 for row in self.rows if all(row.get(k) == v for k, v in query.items()))
+
 
 class _QuotationCollection(_LeadCollection):
     def __init__(self):
@@ -201,6 +204,76 @@ def test_lead_conversion_requires_client_and_project_create_permissions(
     assert not leads.row.get("conversion_claim")
     assert clients.rows == []
     assert projects.rows == []
+
+
+def test_unconverted_lead_delete_archives_and_preserves_history(monkeypatch):
+    leads = _LifecycleCollection({
+        "id": "lead_1", "name": "Client", "stage": "New",
+        "converted_project_id": None,
+    })
+    monkeypatch.setattr(server, "sdb", SimpleNamespace(leads=leads))
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin", "name": "Admin", "org_id": "org_a"}
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(server, "require_user", user)
+    monkeypatch.setattr(server, "has_permission", lambda *_args: True)
+    monkeypatch.setattr(server, "audit_log", no_audit)
+
+    result = asyncio.run(server.delete_lead("lead_1", _request("DELETE", "/api/leads/lead_1")))
+
+    assert result == {"ok": True, "archived": True}
+    assert leads.row["id"] == "lead_1"
+    assert leads.row["archived"] is True
+    assert leads.row["archived_by"] == "admin"
+
+
+def test_converted_lead_cannot_be_deleted(monkeypatch):
+    leads = _LifecycleCollection({
+        "id": "lead_1", "name": "Client", "stage": "Won",
+        "converted_project_id": "project_1",
+    })
+    monkeypatch.setattr(server, "sdb", SimpleNamespace(leads=leads))
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin", "name": "Admin", "org_id": "org_a"}
+
+    monkeypatch.setattr(server, "require_user", user)
+    monkeypatch.setattr(server, "has_permission", lambda *_args: True)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.delete_lead("lead_1", _request("DELETE", "/api/leads/lead_1")))
+
+    assert exc.value.status_code == 409
+    assert "archived" not in leads.row
+
+
+def test_client_delete_blocks_all_linked_history(monkeypatch):
+    clients = _Rows()
+    clients.rows = [{"id": "client_1", "name": "Client"}]
+    quotations = _Rows()
+    quotations.rows = [{"id": "quote_1", "client_id": "client_1"}]
+    empty = _Rows()
+    monkeypatch.setattr(server, "sdb", SimpleNamespace(
+        clients=clients, projects=empty, invoices=empty, quotations=quotations,
+        quotations_adv=empty, journal_entries=empty, comments=empty,
+    ))
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin", "name": "Admin", "org_id": "org_a"}
+
+    monkeypatch.setattr(server, "require_user", user)
+    monkeypatch.setattr(server, "has_permission", lambda *_args: True)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.delete_client("client_1", _request("DELETE", "/api/clients/client_1")))
+
+    assert exc.value.status_code == 409
+    assert "quotations" in exc.value.detail
+    assert clients.rows[0]["id"] == "client_1"
 
 
 def test_concurrent_quotation_conversion_has_one_project_and_task_set(monkeypatch):

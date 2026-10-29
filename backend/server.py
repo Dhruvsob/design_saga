@@ -45,6 +45,7 @@ db = client[db_name]
 from core.scoped_db import sdb  # noqa: E402
 from core.audit import audit as audit_log  # noqa: E402
 from core.downloads import content_disposition  # noqa: E402
+from core.session_response import login_response  # noqa: E402
 from core.access_control import (  # noqa: E402
     get_visible_project, merge_query, project_visibility_query,
     require_permission as enforce_permission, visible_project_ids,
@@ -604,7 +605,7 @@ async def create_session(request: Request, response: Response):
     packed["app_pin_enabled"] = pin_configured
     packed["app_pin_setup_required"] = not pin_configured
     packed["app_pin_locked"] = pin_configured
-    return {"user": packed, "session_token": session_token}
+    return login_response(packed, session_token)
 
 
 @api.get("/auth/me")
@@ -1031,8 +1032,27 @@ async def delete_lead(lead_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "leads.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: leads.delete")
-    await sdb.leads.delete_one({"id": lead_id})
-    return {"ok": True}
+    lead = await sdb.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if lead.get("converted_project_id"):
+        raise HTTPException(
+            status_code=409,
+            detail="Converted leads cannot be deleted because they are linked to a project",
+        )
+    result = await sdb.leads.update_one(
+        {"id": lead_id, "converted_project_id": None},
+        {"$set": {
+            "archived": True,
+            "archived_at": iso(now_utc()),
+            "archived_by": user["user_id"],
+        }},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=409, detail="Lead changed; refresh and retry")
+    await audit_log(user, "lead.archive", target=lead_id, target_type="lead",
+                    meta={"name": lead.get("name")})
+    return {"ok": True, "archived": True}
 
 
 @api.post("/leads/{lead_id}/convert")
@@ -1347,13 +1367,31 @@ async def delete_client(client_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "clients.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: clients.delete")
-    n_projects = await sdb.projects.count_documents({"client_id": client_id})
-    n_invoices = await sdb.invoices.count_documents({"client_id": client_id})
-    if n_projects or n_invoices:
+    client = await sdb.clients.find_one({"id": client_id}, {"_id": 0, "name": 1})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    dependencies = {
+        "projects": await sdb.projects.count_documents({"client_id": client_id}),
+        "invoices": await sdb.invoices.count_documents({"client_id": client_id}),
+        "quotations": (
+            await sdb.quotations.count_documents({"client_id": client_id})
+            + await sdb.quotations_adv.count_documents({"client_id": client_id})
+        ),
+        "journal entries": await sdb.journal_entries.count_documents({"client_id": client_id}),
+        "comments": await sdb.comments.count_documents(
+            {"entity_type": "client", "entity_id": client_id}),
+    }
+    linked = {name: count for name, count in dependencies.items() if count}
+    if linked:
+        summary = ", ".join(f"{count} {name}" for name, count in linked.items())
         raise HTTPException(
             status_code=409,
-            detail=f"Client has {n_projects} project(s) and {n_invoices} invoice(s). Archive it instead.")
-    await sdb.clients.delete_one({"id": client_id})
+            detail=f"Client has linked history ({summary}). Archive it instead.")
+    result = await sdb.clients.delete_one({"id": client_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=409, detail="Client changed; refresh and retry")
+    await audit_log(user, "client.delete", target=client_id, target_type="client",
+                    meta={"name": client.get("name")})
     return {"ok": True}
 
 

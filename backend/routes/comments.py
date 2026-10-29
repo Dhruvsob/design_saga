@@ -12,6 +12,7 @@ from core.deps import require_user
 from core.helpers import iso_now, new_id
 from core.rbac import has_permission
 from core.access_control import get_visible_project, get_visible_purchase_order, get_visible_task
+from core.audit import audit
 
 router = APIRouter()
 
@@ -64,7 +65,7 @@ async def list_comments(request: Request,
     user = await require_user(request, session_token, authorization)
     await _require_entity_access(user, entity_type, entity_id)
     rows = await sdb.comments.find(
-        {"entity_type": entity_type, "entity_id": entity_id},
+        {"entity_type": entity_type, "entity_id": entity_id, "deleted": {"$ne": True}},
         {"_id": 0}).sort("created_at", 1).to_list(500)
     return rows
 
@@ -106,5 +107,17 @@ async def delete_comment(comment_id: str, request: Request,
     await _require_entity_access(user, c.get("entity_type"), c.get("entity_id"))
     if c.get("author_id") != user.get("user_id") and not has_permission(user, "*.*"):
         raise HTTPException(status_code=403, detail="You can only delete your own comments")
-    await sdb.comments.delete_one({"id": comment_id})
+    deleted_at = iso_now()
+    result = await sdb.comments.update_one(
+        {"id": comment_id, "deleted": {"$ne": True}},
+        {"$set": {
+            "deleted": True,
+            "deleted_at": deleted_at,
+            "deleted_by": user.get("user_id"),
+        }},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=409, detail="Comment changed; refresh and retry")
+    await audit(user, "comment.delete", target=comment_id, target_type="comment",
+                meta={"entity_type": c.get("entity_type"), "entity_id": c.get("entity_id")})
     return {"ok": True}

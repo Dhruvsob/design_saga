@@ -11,6 +11,15 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-043: Authentication, rate-limit and lifecycle hardening batch
+
+- Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.
+- Production login and Google OAuth responses are cookie-only by default. The raw bearer token is returned only outside production or when an operator explicitly enables the split-origin fallback; the HttpOnly/Secure/SameSite cookie remains authoritative.
+- Direct frontend routes for CRM, projects, tasks, clients and quotations now require the same read permissions as their APIs. Users without access see a consistent 403 screen rather than loading a broken screen through a manually entered URL.
+- Unconverted lead removal is now an audited archive; converted leads cannot be deleted because they are project provenance. Client hard-delete now checks projects, invoices, both quotation stores, journal entries and comments before allowing deletion. Comment deletion is soft, hidden from normal reads and audited.
+- The unused legacy DayPicker component and its incompatible/unused `react-day-picker` and `date-fns` dependencies were removed. The current production Node dependency audit reports zero vulnerabilities.
+- Verification: 221 mandatory backend security/integrity tests pass; full frontend ESLint and production build pass; tracked-secret and diff checks pass. Deployment and live role/login verification remain pending restored VPS access.
+
 ### DS-041: Permission-aware core business screens
 
 - Clients, projects, leads, invoices, expenses, holidays and loans now hide creation or mutation controls when the signed-in role lacks the matching backend permission. Lead drag/drop, conversion and notes are protected separately; invoice status editing and loan EMI/prepayment controls no longer appear to read-only users.
