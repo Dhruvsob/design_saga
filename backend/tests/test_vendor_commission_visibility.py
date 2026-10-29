@@ -49,6 +49,20 @@ class _Collection:
     async def find_one(self, query, *_args, **_kwargs):
         return next((dict(row) for row in self.rows if _matches(row, query)), None)
 
+    async def count_documents(self, query):
+        name_filter = query.get("name")
+        if isinstance(name_filter, dict) and "$regex" in name_filter:
+            import re
+            pattern = re.compile(
+                name_filter["$regex"],
+                re.IGNORECASE if name_filter.get("$options") == "i" else 0,
+            )
+            return sum(
+                1 for row in self.rows
+                if pattern.match(row.get("name") or "") and row.get("active") is not False
+            )
+        return sum(1 for row in self.rows if _matches(row, query))
+
     def find(self, query, *_args, **_kwargs):
         return _Cursor(row for row in self.rows if _matches(row, query))
 
@@ -176,3 +190,23 @@ def test_commission_receipt_delete_posts_reversal_and_rebuilds_allocations(monke
     assert refreshed == ["commission_1"]
     assert fake.commission_settlements.rows[0]["status"] == "reversed"
     assert fake.commission_settlements.rows[0]["reversal_je_id"] == "je_reverse"
+
+
+def test_legacy_vendor_name_link_fails_closed_when_names_are_duplicated(monkeypatch):
+    vendors_collection = _Collection([
+        {"id": "vendor_1", "name": "Same Vendor", "active": True},
+        {"id": "vendor_2", "name": "same vendor", "active": True},
+    ])
+    monkeypatch.setattr(vendors, "sdb", SimpleNamespace(vendors_acc=vendors_collection))
+
+    duplicated = asyncio.run(vendors._vendor_task_query(
+        {"id": "vendor_1", "name": "Same Vendor"}))
+    assert duplicated == {"$or": [{"vendor_id": "vendor_1"}]}
+
+    vendors_collection.rows.pop()
+    unique = asyncio.run(vendors._vendor_task_query(
+        {"id": "vendor_1", "name": "Same Vendor"}))
+    assert unique == {"$or": [
+        {"vendor_id": "vendor_1"},
+        {"vendor_contact.vendor_name": "Same Vendor"},
+    ]}

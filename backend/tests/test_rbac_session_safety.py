@@ -11,7 +11,10 @@ from core.rbac import (
     user_with_perms,
 )
 from routes.auth import _ensure_assignable_role, _pack_user
-from server import _employee_account_filter, _org_backfill_filter, _user_with_perms
+from server import (
+    _can_read_role_catalog, _employee_account_filter, _org_backfill_filter,
+    _user_with_perms,
+)
 
 
 def test_empty_permission_override_is_fail_closed_everywhere():
@@ -21,6 +24,14 @@ def test_empty_permission_override_is_fail_closed_everywhere():
     assert user_with_perms(user)["permissions"] == []
     assert _pack_user(user)["permissions"] == []
     assert _user_with_perms(user)["permissions"] == []
+
+
+def test_role_catalog_is_not_exposed_to_unprivileged_custom_roles():
+    assert _can_read_role_catalog({"permissions": []}) is False
+    assert _can_read_role_catalog({"permissions": ["projects.read"]}) is False
+    assert _can_read_role_catalog({"permissions": ["users.read"]}) is True
+    assert _can_read_role_catalog({"permissions": ["rbac.read"]}) is True
+    assert _can_read_role_catalog({"permissions": ["*.*"]}) is True
 
 
 def test_legacy_attendance_reader_is_upgraded_for_self_check_in():

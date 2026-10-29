@@ -62,6 +62,20 @@ def test_expense_status_filter_accepts_only_known_workflow_states():
         expenses._status_filter("pending_l1,unknown")
 
 
+def test_expense_api_permissions_fail_closed_for_custom_roles():
+    denied = {"permissions": []}
+    with pytest.raises(HTTPException) as read_error:
+        expenses._require_expense_permission(denied, "expenses.read")
+    assert read_error.value.status_code == 403
+
+    expenses._require_expense_permission(
+        {"permissions": ["expenses.read"]}, "expenses.read")
+    expenses._require_expense_permission(
+        {"permissions": ["expenses.create"]}, "expenses.read", "expenses.create")
+    expenses._require_expense_permission(
+        {"permissions": ["*.*"]}, "expenses.read")
+
+
 def test_claimant_can_cancel_unposted_expense_without_journal(monkeypatch):
     claims = _Collection([{
         "id": "exp_own", "claimant_id": "employee", "status": "pending_l1",

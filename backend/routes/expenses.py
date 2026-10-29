@@ -42,6 +42,11 @@ EXPENSE_STATUSES = {
 }
 
 
+def _require_expense_permission(user: dict, *permissions: str) -> None:
+    if not has_any_permission(user, "*.*", *permissions):
+        raise HTTPException(403, f"Missing permission: {permissions[0]}")
+
+
 def _status_filter(value: str):
     statuses = [status.strip() for status in value.split(",") if status.strip()]
     if not statuses or any(status not in EXPENSE_STATUSES for status in statuses):
@@ -102,6 +107,9 @@ async def get_policy(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(
+        user, "expenses.read", "expenses.create", "expenses.update",
+        "expenses.approve", "finance.read")
     return await _get_policy(user)
 
 
@@ -130,6 +138,9 @@ async def approvers(request: Request,
                     session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(
+        user, "expenses.read", "expenses.create", "expenses.update",
+        "expenses.approve", "finance.read")
     policy = await _get_policy(user)
     roles = [policy["l1_approver_role"]]
     if policy.get("l2_approver_role"):
@@ -152,6 +163,8 @@ async def list_expenses(request: Request, status: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(
+        user, "expenses.read", "expenses.update", "expenses.approve", "finance.read")
     q = {}
     if status:
         q["status"] = _status_filter(status)
@@ -171,6 +184,8 @@ async def get_expense(exp_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(
+        user, "expenses.read", "expenses.update", "expenses.approve", "finance.read")
     q = _visible_expense_query(user, {"id": exp_id})
     e = await sdb.expenses.find_one(q, {"_id": 0, "_lock": 0, "_lock_at": 0})
     if not e:
@@ -217,6 +232,7 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(user, "expenses.create")
     policy = await _get_policy(user)
 
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
@@ -373,6 +389,7 @@ async def update_expense(exp_id: str, payload: ExpenseCreateIn, request: Request
                          authorization: Optional[str] = Header(default=None)):
     """Correct an unposted claim and restart approval using the new values."""
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(user, "expenses.create", "expenses.update")
     async with doc_lock(sdb.expenses, exp_id):
         exp = await sdb.expenses.find_one({"id": exp_id}, {"_id": 0})
         if not exp:
@@ -406,6 +423,7 @@ async def cancel_expense(exp_id: str, request: Request,
                          authorization: Optional[str] = Header(default=None)):
     """Withdraw an unposted claim or safely reverse a posted reimbursement."""
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(user, "expenses.create", "expenses.update", "finance.delete")
     async with doc_lock(sdb.expenses, exp_id):
         return await _cancel_expense_locked(user, exp_id)
 
@@ -597,6 +615,8 @@ async def summary(request: Request,
                   session_token: Optional[str] = Cookie(default=None),
                   authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    _require_expense_permission(
+        user, "expenses.read", "expenses.update", "expenses.approve", "finance.read")
     pending = await sdb.expenses.count_documents(_visible_expense_query(user,
         {"status": {"$in": ["pending_l1", "pending_l2"]}}))
     approved = await sdb.expenses.count_documents(

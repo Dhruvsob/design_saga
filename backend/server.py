@@ -648,6 +648,12 @@ class RoleAssignIn(BaseModel):
     role: str
 
 
+def _can_read_role_catalog(user: dict) -> bool:
+    return any(has_permission(user, permission) for permission in (
+        "*.*", "rbac.read", "rbac.manage", "users.read", "users.update",
+    ))
+
+
 @api.get("/rbac/roles")
 async def rbac_roles(request: Request,
                      session_token: Optional[str] = Cookie(default=None),
@@ -655,6 +661,8 @@ async def rbac_roles(request: Request,
     """Role catalogue with EFFECTIVE (per-tenant override-aware) permissions,
     the static defaults, and the editable-permission catalogue for the UI."""
     user = await require_user(request, session_token, authorization)
+    if not _can_read_role_catalog(user):
+        raise HTTPException(status_code=403, detail="Missing permission: rbac.read")
     from core.deps import resolve_permissions as _resolve_perms
     from core.tenancy import user_org_id as _uoid
     org_id = _uoid(user)

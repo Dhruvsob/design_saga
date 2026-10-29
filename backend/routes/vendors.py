@@ -90,6 +90,20 @@ def _vendor_for_user(vendor: dict, user: dict) -> dict:
     return out
 
 
+async def _vendor_task_query(vendor: dict) -> dict:
+    """Use a legacy vendor-name link only when it identifies one active vendor."""
+    terms = [{"vendor_id": vendor["id"]}]
+    name = (vendor.get("name") or "").strip()
+    if name:
+        matches = await sdb.vendors_acc.count_documents({
+            "name": {"$regex": f"^{_re_mod.escape(name)}$", "$options": "i"},
+            "active": {"$ne": False},
+        })
+        if matches == 1:
+            terms.append({"vendor_contact.vendor_name": name})
+    return {"$or": terms}
+
+
 def _bill_total(bill: dict) -> float:
     """Compute a bill's grand total from items + tax + tds."""
     items = bill.get("items") or []
@@ -423,10 +437,7 @@ async def get_vendor(vendor_id: str, request: Request,
                      if p.get("status") != "reversed")
 
     # Assigned tasks / projects (backward compat: some tasks store vendor_id, others vendor_contact.vendor_name)
-    task_query = {"$or": [
-        {"vendor_id": vendor_id},
-        {"vendor_contact.vendor_name": v.get("name")},
-    ]}
+    task_query = await _vendor_task_query(v)
     tasks = await sdb.tasks.find(
         merge_query(task_query, await task_visibility_query(user)), {"_id": 0}
     ).sort("created_at", -1).to_list(500)
@@ -1271,8 +1282,7 @@ async def vendor_performance(vendor_id: str, request: Request,
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     # Task-based completion
-    task_query = {"$or": [{"vendor_id": vendor_id},
-                          {"vendor_contact.vendor_name": vendor.get("name")}]}
+    task_query = await _vendor_task_query(vendor)
     tasks = await sdb.tasks.find(
         merge_query(task_query, await task_visibility_query(user)), {"_id": 0}
     ).to_list(500)

@@ -4,7 +4,7 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; vendor/expense/loan corrections, purchase-order corrections, quotation permission controls and duplicate-name task privacy repair are tested and pushed through `b787372`.
+- Local checkout: `codex/repair-release`; prior repair batches are pushed through `ddb45aa`. Expense RBAC, duplicate vendor-name isolation and role-catalog authorization are verified locally and awaiting their release commit.
 - Production checkout: `/opt/design-saga-git`; runtime commit `3b15e23` was the last verified deployment before VPS access became unavailable.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
@@ -22,6 +22,13 @@ Last updated: 2026-10-29 (Asia/Calcutta)
 - Legacy tasks that contain only an assignee display name now resolve that name only when it identifies exactly one active, approved user in the tenant. Duplicate names fail closed instead of exposing or notifying the wrong employee.
 - The same rule protects task list/detail visibility, Assigned to me badges, overdue notifications, Google Calendar invitations and personal Google Calendar copies. New self-assigned employee tasks persist the immutable user ID so they do not depend on names.
 - Verification: 47 focused task/calendar/notification/visibility tests pass, including a duplicate-name regression; Python compilation and diff checks pass. Deployment is pending restored VPS access.
+
+### DS-040: Expense RBAC and legacy vendor-link isolation
+
+- Expense policy, approver, list, detail, summary, create, edit and cancellation APIs now fail closed when a custom role lacks the relevant expense/finance permission. Claimant-only and routed-approver record visibility remains unchanged after the permission gate.
+- Legacy task links by vendor display name are used only when the name identifies exactly one active vendor in the tenant. Duplicate vendor names can no longer contaminate another vendor's task history or performance metrics; ID-linked records remain authoritative.
+- The RBAC role/permission catalogue now requires an explicit RBAC or user-management read permission instead of being visible to every authenticated account.
+- Verification: 56 focused expense/vendor/RBAC/finance/security tests pass; Python compilation and diff checks pass. Deployment is pending restored VPS access.
 
 ### DS-037: Safe correction controls across vendor, expense and loan workflows
 
@@ -172,7 +179,7 @@ This is the canonical intake list supplied after the repair-release deployment. 
 | BR-025 | Low | Date formats inconsistent | Fixed and deployed at `c89907d`: major ERP display surfaces consistently use DD/MM/YYYY while browser form controls and database/API values correctly retain ISO storage |
 | BR-026 | Low | New-tenant PO dead-end | Send/GRN paths exist; empty master-data onboarding needs live workflow verification |
 | BR-027 | Low | Bill creation location confusing | UX review item; preserve vendor and PO context while improving discoverability |
-| BR-028 | Low | Unsafe automatic matching by name | Fixed for the remaining task visibility, notification and Google Calendar fallbacks: name-only legacy assignments resolve only when unique within the active tenant; new self-assignments persist IDs. Deployment pending |
+| BR-028 | Low | Unsafe automatic matching by name | Fixed for task/user and vendor legacy fallbacks: name-only links resolve only when unique within the active tenant; new self-assignments persist IDs. Deployment pending |
 | BR-029 | Low | Large flat dropdowns | Confirmed usability gap; replace only high-volume selectors with searchable controls |
 | BR-030 | Low | System account codes missing | Current defaults have codes; audit legacy/generated accounts and fill only unambiguous gaps |
 | BR-031 | Low | Account edit/deactivate missing | Fixed and deployed through the Chart of Accounts UI with non-destructive deactivation/restore |
