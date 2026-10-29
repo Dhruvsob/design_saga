@@ -302,7 +302,10 @@ async def list_vendors(
     query: dict = {}
     if agency_type: query["agency_type"] = agency_type
     if category:    query["category"] = category
-    if active is not None: query["active"] = active
+    if active is not None:
+        query["active"] = active
+    else:
+        query["active"] = {"$ne": False}
     if q:
         rx = {"$regex": q, "$options": "i"}
         query["$or"] = [{"name": rx}, {"company": rx}, {"phone": rx},
@@ -381,6 +384,8 @@ async def create_vendor(
         await sdb.vendors_acc.insert_one(dict(doc))
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="A vendor with this GSTIN already exists")
+    await audit(user, "vendor.create", target=doc["id"], target_type="vendor",
+                meta={"name": doc.get("name"), "agency_type": doc.get("agency_type")})
     return await sdb.vendors_acc.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -481,6 +486,8 @@ async def update_vendor(vendor_id: str, payload: VendorUpdate, request: Request,
     res = await sdb.vendors_acc.update_one({"id": vendor_id}, {"$set": patch})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Vendor not found")
+    await audit(user, "vendor.update", target=vendor_id, target_type="vendor",
+                meta={"fields": [key for key in patch if key not in ("updated_at", "updated_by")]})
     return await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
 
 
@@ -497,6 +504,7 @@ async def delete_vendor(vendor_id: str, request: Request,
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Vendor not found")
+    await audit(user, "vendor.archive", target=vendor_id, target_type="vendor")
     return {"ok": True, "soft_deleted": True}
 
 

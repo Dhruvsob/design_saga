@@ -311,7 +311,10 @@ async def update_loan(loan_id: str, payload: LoanUpdateIn, request: Request,
         raise HTTPException(404, "Loan not found")
     up = {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None}
     up["updated_at"] = iso_now()
+    up["updated_by"] = user["user_id"]
     await sdb.loans.update_one({"id": loan_id}, {"$set": up})
+    await audit(user, "loan.update", target=loan_id, target_type="loan",
+                meta={"fields": [key for key in up if key not in ("updated_at", "updated_by")]})
     return await sdb.loans.find_one({"id": loan_id}, {"_id": 0})
 
 
