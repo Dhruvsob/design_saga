@@ -17,6 +17,12 @@ Last updated: 2026-10-30 (Asia/Kolkata)
 - Financial-year and accounting period presets now derive the current calendar day in IST before calculating month, week, year and 1-April-to-31-March boundaries. Comments also use the shared DD/MM/YYYY formatter instead of a browser-locale-dependent date.
 - Verification: full frontend ESLint and production Vite build pass. Native date input values and API/database storage remain ISO `YYYY-MM-DD`; user-facing business dates remain DD/MM/YYYY. Deployment and live midnight-boundary verification remain pending restored VPS access.
 
+### DS-045: Project-detail task visibility parity
+
+- The project-detail aggregator previously returned every task in a visible project whenever the caller had `tasks.read`, bypassing the task module's assigned/created/project visibility query. A limited employee could therefore receive unrelated task records through the nested project response.
+- Project detail now combines the project ID with the shared task visibility query and returns no task data at all when `tasks.read` is absent. This preserves the existing administrator-wide view while keeping restricted employees on the same rules across task list, task detail, search, calendar and project detail.
+- Verification: the focused access/URL safety suite passes 20 tests, including the new query-composition regression. Deployment and live custom-role validation remain pending restored VPS access.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.

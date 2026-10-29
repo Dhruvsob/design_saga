@@ -48,7 +48,8 @@ from core.downloads import content_disposition  # noqa: E402
 from core.session_response import login_response  # noqa: E402
 from core.access_control import (  # noqa: E402
     get_visible_project, merge_query, project_visibility_query,
-    require_permission as enforce_permission, visible_project_ids,
+    require_permission as enforce_permission, task_visibility_query,
+    visible_project_ids,
 )
 from core.url_security import external_http_url  # noqa: E402
 from core.tenancy import user_org_id  # noqa: E402
@@ -1463,14 +1464,22 @@ async def create_project(payload: ProjectIn, request: Request,
     return await sdb.projects.find_one({"id": doc["id"]}, {"_id": 0})
 
 
+async def _project_detail_task_query(user: dict, project_id: str) -> dict:
+    """Apply the task module's visibility rules inside project detail too."""
+    return merge_query({"project_id": project_id}, await task_visibility_query(user))
+
+
 @api.get("/projects/{project_id}")
 async def get_project(project_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     p = await get_visible_project(user, project_id)
-    p["tasks"] = (await sdb.tasks.find({"project_id": project_id}, {"_id": 0}).to_list(500)
-                  if has_permission(user, "tasks.read") else [])
+    if has_permission(user, "tasks.read"):
+        task_query = await _project_detail_task_query(user, project_id)
+        p["tasks"] = await sdb.tasks.find(task_query, {"_id": 0}).to_list(500)
+    else:
+        p["tasks"] = []
     p["files"] = (await sdb.files.find({"project_id": project_id}, {"_id": 0}).to_list(500)
                   if has_permission(user, "files.read") else [])
     can_invoice = _can_read_invoices(user)

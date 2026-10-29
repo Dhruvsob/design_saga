@@ -14,6 +14,7 @@ from models.task import Attachment, TaskIn
 from models.vendor import VendorDocumentIn
 from routes.organization import _pack_org, _sanitize_branding_update
 import routes.organization as organization_module
+import server as server_module
 from services.storage import LOGO_PATH_RE
 from server import (
     DocumentIn, _ai_user_message, _cors_origins, _public_file_projection,
@@ -169,4 +170,19 @@ def test_permission_guard_and_query_merge():
     assert exc.value.status_code == 403
     assert merge_query({"archived": False}, {"team_ids": "emp_1"}) == {
         "$and": [{"archived": False}, {"team_ids": "emp_1"}]
+    }
+
+
+def test_project_detail_combines_project_and_task_visibility(monkeypatch):
+    async def assigned_only(_user):
+        return {"assignee_id": "user_1"}
+
+    monkeypatch.setattr(server_module, "task_visibility_query", assigned_only)
+    query = asyncio.run(server_module._project_detail_task_query(
+        {"user_id": "user_1"}, "project_1"))
+    assert query == {
+        "$and": [
+            {"project_id": "project_1"},
+            {"assignee_id": "user_1"},
+        ]
     }
