@@ -62,6 +62,61 @@ def test_expense_status_filter_accepts_only_known_workflow_states():
         expenses._status_filter("pending_l1,unknown")
 
 
+def test_claimant_can_cancel_unposted_expense_without_journal(monkeypatch):
+    claims = _Collection([{
+        "id": "exp_own", "claimant_id": "employee", "status": "pending_l1",
+        "total": 750, "pending_approver_role": "ProjectManager",
+    }])
+    monkeypatch.setattr(expenses, "sdb", SimpleNamespace(expenses=claims))
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(expenses, "audit", no_audit)
+    result = asyncio.run(expenses._cancel_expense_locked(
+        {"user_id": "employee", "permissions": ["expenses.read"]}, "exp_own"))
+
+    assert result == {"ok": True, "deleted": True, "reversal_je_id": None}
+    assert claims.rows[0]["status"] == "cancelled"
+    assert claims.rows[0]["pending_approver_role"] is None
+
+
+def test_posted_expense_delete_requires_finance_permission_and_reverses(monkeypatch):
+    claims = _Collection([{
+        "id": "exp_paid", "claimant_id": "employee", "status": "reimbursed",
+        "total": 1200, "reimbursement_journal_id": "je_expense",
+    }])
+    journals = _Collection([{
+        "id": "je_expense", "date": "2026-10-20", "source": "expense",
+        "reversed": False,
+    }])
+    monkeypatch.setattr(expenses, "sdb", SimpleNamespace(
+        expenses=claims, journal_entries=journals))
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    async def reverse(_user, journal, **kwargs):
+        assert journal["id"] == "je_expense"
+        assert kwargs == {"action": "delete", "reversal_date": "2026-10-20",
+                          "hide_from_books": True}
+        return {"id": "je_reversal"}
+
+    monkeypatch.setattr(expenses, "audit", no_audit)
+    monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
+
+    with pytest.raises(HTTPException) as denied:
+        asyncio.run(expenses._cancel_expense_locked(
+            {"user_id": "employee", "permissions": ["expenses.read"]}, "exp_paid"))
+    assert denied.value.status_code == 403
+
+    result = asyncio.run(expenses._cancel_expense_locked(
+        {"user_id": "admin", "permissions": ["finance.delete"]}, "exp_paid"))
+    assert result["reversal_je_id"] == "je_reversal"
+    assert claims.rows[0]["status"] == "cancelled"
+    assert claims.rows[0]["reversal_je_id"] == "je_reversal"
+
+
 def test_reimbursement_retry_recovers_existing_journal(monkeypatch):
     claims = _Collection([{
         "id": "exp_1", "status": "approved", "title": "Site travel",

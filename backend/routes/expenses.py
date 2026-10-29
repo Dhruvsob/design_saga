@@ -38,6 +38,7 @@ router = APIRouter()
 
 EXPENSE_STATUSES = {
     "receipt_required", "pending_l1", "pending_l2", "approved", "rejected", "reimbursed",
+    "cancelled",
 }
 
 
@@ -315,6 +316,140 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
     await audit(user, "expense.submit", target=exp_id, target_type="expense",
                 meta={"title": doc["title"], "total": total, "status": doc["status"]})
     return doc
+
+
+def _can_change_expense(user: dict, exp: dict) -> bool:
+    return (exp.get("claimant_id") == user.get("user_id")
+            or has_any_permission(user, "*.*", "expenses.update"))
+
+
+async def _validated_expense_values(payload: ExpenseCreateIn, user: dict) -> dict:
+    """Validate editable claim data and rebuild its derived totals/status."""
+    policy = await _get_policy(user)
+    if payload.project_id and not await sdb.projects.find_one(
+            {"id": payload.project_id}, {"_id": 1}):
+        raise HTTPException(400, "Project not found")
+    if payload.vendor_id and not await sdb.vendors_acc.find_one(
+            {"id": payload.vendor_id}, {"_id": 1}):
+        raise HTTPException(400, "Vendor not found")
+    if payload.reimburse_to_account_id and not await sdb.accounts.find_one(
+            {"id": payload.reimburse_to_account_id}, {"_id": 1}):
+        raise HTTPException(400, "Reimbursement account not found")
+
+    allowed = policy.get("allowed_categories") or DEFAULT_POLICY["allowed_categories"]
+    subtotal = 0.0
+    tax = 0.0
+    has_receipt = False
+    lines = []
+    for line in payload.lines:
+        if line.category not in allowed:
+            raise HTTPException(400, f"Category '{line.category}' not allowed by policy")
+        amount = float(line.amount)
+        subtotal += amount
+        tax += amount * float(line.tax_rate or 0) / 100.0
+        has_receipt = has_receipt or bool(line.receipt_url)
+        row = line.model_dump()
+        row["id"] = new_id("expl_")
+        lines.append(row)
+    total = round(subtotal + tax, 2)
+    if total <= 0:
+        raise HTTPException(400, "Expense total must be greater than zero")
+    route = _decide_route(total, has_receipt, policy)
+    return {
+        "title": payload.title.strip(), "project_id": payload.project_id,
+        "vendor_id": payload.vendor_id, "payment_mode": payload.payment_mode,
+        "reimburse_to_account_id": payload.reimburse_to_account_id,
+        "notes": payload.notes, "lines": lines, "subtotal": round(subtotal, 2),
+        "tax": round(tax, 2), "total": total, "has_receipt": has_receipt,
+        "status": route["status"],
+        "pending_approver_role": route.get("pending_approver_role"),
+        "needs_l2": route.get("needs_l2", False),
+    }
+
+
+@router.put("/expenses/{exp_id}")
+async def update_expense(exp_id: str, payload: ExpenseCreateIn, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    """Correct an unposted claim and restart approval using the new values."""
+    user = await require_user(request, session_token, authorization)
+    async with doc_lock(sdb.expenses, exp_id):
+        exp = await sdb.expenses.find_one({"id": exp_id}, {"_id": 0})
+        if not exp:
+            raise HTTPException(404, "Expense not found")
+        if not _can_change_expense(user, exp):
+            raise HTTPException(403, "You cannot edit this expense")
+        if exp.get("status") in ("reimbursed", "cancelled") or exp.get("reimbursement_journal_id"):
+            raise HTTPException(
+                409,
+                "Posted or cancelled expenses cannot be edited. Cancel the reimbursement and submit a corrected claim.",
+            )
+        values = await _validated_expense_values(payload, user)
+        values.update({
+            "approval_trail": [], "approved_at": None, "rejected_at": None,
+            "updated_at": iso_now(), "updated_by": user["user_id"],
+            "resubmitted_at": iso_now(),
+        })
+        result = await sdb.expenses.update_one(
+            {"id": exp_id, "status": exp.get("status")}, {"$set": values})
+        if result.matched_count != 1:
+            raise HTTPException(409, "Expense changed while it was being edited. Refresh and retry.")
+        await audit(user, "expense.update", target=exp_id, target_type="expense",
+                    meta={"old_total": exp.get("total"), "new_total": values["total"],
+                          "status": values["status"]})
+        return await sdb.expenses.find_one({"id": exp_id}, {"_id": 0, "_lock": 0, "_lock_at": 0})
+
+
+@router.delete("/expenses/{exp_id}")
+async def cancel_expense(exp_id: str, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    """Withdraw an unposted claim or safely reverse a posted reimbursement."""
+    user = await require_user(request, session_token, authorization)
+    async with doc_lock(sdb.expenses, exp_id):
+        return await _cancel_expense_locked(user, exp_id)
+
+
+async def _cancel_expense_locked(user: dict, exp_id: str) -> dict:
+    exp = await sdb.expenses.find_one({"id": exp_id}, {"_id": 0})
+    if not exp:
+        raise HTTPException(404, "Expense not found")
+    if exp.get("status") == "cancelled":
+        return {"ok": True, "already_cancelled": True,
+                "reversal_je_id": exp.get("reversal_je_id")}
+    posted = bool(exp.get("reimbursement_journal_id") or exp.get("status") == "reimbursed")
+    if posted:
+        if not has_any_permission(user, "*.*", "finance.delete"):
+            raise HTTPException(403, "Missing permission: finance.delete")
+    elif not _can_change_expense(user, exp):
+        raise HTTPException(403, "You cannot cancel this expense")
+
+    reversal_id = exp.get("reversal_je_id")
+    if posted:
+        journal_id = exp.get("reimbursement_journal_id")
+        journal = await sdb.journal_entries.find_one({"id": journal_id}, {"_id": 0})
+        if not journal:
+            raise HTTPException(409, "Linked reimbursement journal is missing; reconcile it before cancellation")
+        if not journal.get("reversed"):
+            from routes.accounting import _reverse_journal_entry
+            reversal = await _reverse_journal_entry(
+                user, journal, action="delete", reversal_date=journal.get("date"),
+                hide_from_books=True,
+            )
+            reversal_id = reversal["id"]
+        else:
+            reversal_id = journal.get("reversal_je_id")
+
+    changed_at = iso_now()
+    await sdb.expenses.update_one({"id": exp_id}, {"$set": {
+        "status": "cancelled", "pending_approver_role": None,
+        "cancelled_at": changed_at, "cancelled_by": user["user_id"],
+        "reversal_je_id": reversal_id,
+    }})
+    await audit(user, "expense.delete", target=exp_id, target_type="expense",
+                meta={"posted": posted, "journal_entry_id": exp.get("reimbursement_journal_id"),
+                      "reversal_je_id": reversal_id, "amount": exp.get("total")})
+    return {"ok": True, "deleted": True, "reversal_je_id": reversal_id}
 
 
 # ------------------------------------------------------------

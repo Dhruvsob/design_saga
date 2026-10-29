@@ -6,6 +6,7 @@ import { safeExternalUrl } from "../lib/url";
 import { formatDate } from "../lib/format";
 import {
   Receipt, Plus, Warning, Check, X, ArrowsClockwise, CurrencyInr, ThumbsUp, ThumbsDown, Wallet,
+  PencilSimple, Trash,
 } from "@phosphor-icons/react";
 
 const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -24,6 +25,7 @@ const STATUS_TONE = {
   approved: "bg-[#F5F4F0] text-[#8B7F6A]",
   rejected: "bg-[#FCEEEC] text-[#B22B22]",
   reimbursed: "bg-[#EFF7EF] text-[#1D633E]",
+  cancelled: "bg-[#F0F0F0] text-[#5C5C5C]",
 };
 
 export default function Expenses() {
@@ -33,11 +35,14 @@ export default function Expenses() {
   const [summary, setSummary] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [editExpense, setEditExpense] = useState(null);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const isAdmin = hasPerm("*.*");
   const isFinance = hasPerm("finance.create");
+  const canManage = hasPerm("expenses.update");
+  const canDeletePosted = hasPerm("finance.delete");
 
   const load = async () => {
     setLoading(true);
@@ -119,7 +124,12 @@ export default function Expenses() {
       </div>
 
       {showCreate && <CreateExpense onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
-      {detail && <ExpenseDetail expId={detail} accounts={accounts} isAdmin={isAdmin} isFinance={isFinance} userRole={user?.role} onClose={() => setDetail(null)} onChange={load} />}
+      {editExpense && <CreateExpense initial={editExpense} expenseId={editExpense.id}
+        onClose={() => setEditExpense(null)} onCreated={() => { setEditExpense(null); load(); }} />}
+      {detail && <ExpenseDetail expId={detail} accounts={accounts} isAdmin={isAdmin}
+        isFinance={isFinance} canManage={canManage} canDeletePosted={canDeletePosted}
+        userId={user?.user_id} userRole={user?.role} onClose={() => setDetail(null)}
+        onEdit={(expense) => { setDetail(null); setEditExpense(expense); }} onChange={load} />}
     </div>
   );
 }
@@ -136,10 +146,17 @@ function KPI({ label, value, tone }) {
 
 const CATEGORIES = ["travel","meals","materials","utilities","site","office","other"];
 
-function CreateExpense({ onClose, onCreated }) {
+function CreateExpense({ onClose, onCreated, initial = null, expenseId = null }) {
   const [f, setF] = useState({
-    title: "", payment_mode: "personal", notes: "",
-    lines: [{ category: "travel", amount: 0, description: "", receipt_url: "", tax_rate: 0 }],
+    title: initial?.title || "", payment_mode: initial?.payment_mode || "personal",
+    notes: initial?.notes || "", project_id: initial?.project_id || null,
+    vendor_id: initial?.vendor_id || null,
+    reimburse_to_account_id: initial?.reimburse_to_account_id || null,
+    lines: initial?.lines?.map((line) => ({
+      category: line.category, amount: Number(line.amount || 0),
+      description: line.description || "", receipt_url: line.receipt_url || "",
+      tax_rate: Number(line.tax_rate || 0), date: line.date || null,
+    })) || [{ category: "travel", amount: 0, description: "", receipt_url: "", tax_rate: 0 }],
   });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const total = f.lines.reduce((s, l) => s + Number(l.amount || 0) + Number(l.amount || 0) * Number(l.tax_rate || 0)/100, 0);
@@ -147,14 +164,15 @@ function CreateExpense({ onClose, onCreated }) {
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try {
-      await api.post("/expenses", f);
+      if (expenseId) await api.put(`/expenses/${expenseId}`, f);
+      else await api.post("/expenses", f);
       onCreated();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Submit failed"));
     } finally { setBusy(false); }
   };
   return (
-    <Modal onClose={onClose} title="Submit Expense Claim" eyebrow="NEW CLAIM" wide>
+    <Modal onClose={onClose} title={expenseId ? "Correct Expense Claim" : "Submit Expense Claim"} eyebrow={expenseId ? "EDIT CLAIM" : "NEW CLAIM"} wide>
       <form onSubmit={submit} className="space-y-4" data-testid="exp-create-form">
         <F label="Title *"><input required data-testid="exp-title" className="input-flat w-full" value={f.title} onChange={(e) => setF({...f, title: e.target.value})} /></F>
         <F label="Payment mode">
@@ -186,14 +204,14 @@ function CreateExpense({ onClose, onCreated }) {
         {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-          <button disabled={busy || !f.title} className="btn-primary" data-testid="exp-submit">{busy ? "Submitting…" : "Submit claim"}</button>
+          <button disabled={busy || !f.title || f.lines.length === 0} className="btn-primary" data-testid="exp-submit">{busy ? "Saving…" : expenseId ? "Save and restart approval" : "Submit claim"}</button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function ExpenseDetail({ expId, accounts, isAdmin, isFinance, userRole, onClose, onChange }) {
+function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canManage, canDeletePosted, userId, userRole, onClose, onEdit, onChange }) {
   const [exp, setExp] = useState(null);
   const [comment, setComment] = useState("");
   const [payFrom, setPayFrom] = useState(accounts[0]?.id || "");
@@ -220,10 +238,26 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, userRole, onClose,
     } catch (e) { setErr(fmtErr(e?.response?.data?.detail)); }
     finally { setBusy(""); }
   };
+  const cancelExpense = async () => {
+    const posted = exp.status === "reimbursed";
+    const message = posted
+      ? "Delete this reimbursed expense? A balanced accounting reversal will be retained in the audit trail."
+      : "Delete this expense claim? It will remain in the audit trail as cancelled.";
+    if (!window.confirm(message)) return;
+    setBusy("delete"); setErr("");
+    try {
+      await api.delete(`/expenses/${expId}`);
+      await load(); onChange && onChange();
+    } catch (e) { setErr(fmtErr(e?.response?.data?.detail)); }
+    finally { setBusy(""); }
+  };
 
   if (!exp) return <Modal onClose={onClose} title="Loading…" wide><div className="skeleton h-64"/></Modal>;
   const canDecide = ["pending_l1","pending_l2"].includes(exp.status) && (isAdmin || exp.pending_approver_role === userRole);
   const canReimburse = exp.status === "approved" && isFinance;
+  const isOwner = exp.claimant_id === userId;
+  const canEdit = !["reimbursed", "cancelled"].includes(exp.status) && (isOwner || isAdmin || canManage);
+  const canCancel = exp.status !== "cancelled" && (exp.status === "reimbursed" ? (isAdmin || canDeletePosted) : (isOwner || isAdmin || canManage));
 
   return (
     <Modal onClose={onClose} title={exp.title} eyebrow={`EXPENSE · ${exp.claimant_name}`} wide>
@@ -234,6 +268,13 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, userRole, onClose,
         {exp.pending_approver_role && <span className="text-xs text-[#5C5C5C]">Awaiting: <b>{exp.pending_approver_role}</b></span>}
         <span className="font-mono font-bold text-lg ml-auto accent-blue">{fmtMoney(exp.total)}</span>
       </div>
+
+      {(canEdit || canCancel) && (
+        <div className="flex gap-2 mb-4">
+          {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => onEdit(exp)}><PencilSimple size={12}/> Edit claim</button>}
+          {canCancel && <button type="button" disabled={busy === "delete"} className="btn-ghost text-xs text-[#B22B22]" onClick={cancelExpense}><Trash size={12}/> {exp.status === "reimbursed" ? "Delete with reversal" : "Delete"}</button>}
+        </div>
+      )}
 
       <div className="overline mb-2">LINE ITEMS</div>
       <div className="border border-[#E5E5E5] mb-6 overflow-x-auto">

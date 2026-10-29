@@ -26,7 +26,7 @@ class LoanUpdateIn(FiniteModel):
     account_number: Optional[str] = None
     reference: Optional[str] = None
     notes: Optional[str] = None
-    emi_day: Optional[int] = None
+    emi_day: Optional[int] = Field(default=None, ge=1, le=31)
 
 
 class PayEMIIn(FiniteModel):

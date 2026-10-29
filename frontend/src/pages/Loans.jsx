@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { formatDate } from "../lib/format";
+import { useAuth } from "../context/AuthContext";
 import {
   Bank, Plus, Warning, Check, CurrencyInr, CalendarBlank, X,
-  ChartLineUp, TrendUp, PencilSimple,
+  ChartLineUp, TrendUp, PencilSimple, Archive,
 } from "@phosphor-icons/react";
 
 function fmtErr(d, fb = "Failed") {
@@ -17,6 +18,7 @@ const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maxim
 const fmtDate = formatDate;
 
 export default function Loans() {
+  const { hasPerm } = useAuth();
   const [loans, setLoans] = useState([]);
   const [summary, setSummary] = useState(null);
   const [accounts, setAccounts] = useState([]);
@@ -114,7 +116,9 @@ export default function Loans() {
                        onClose={() => setShowCreate(false)}
                        onCreated={() => { setShowCreate(false); load(); }} />}
       {detail && <LoanDetailModal loanId={detail} accounts={accounts}
-                    onClose={() => setDetail(null)} onChange={load} />}
+                    canEdit={hasPerm("finance.update") || hasPerm("loans.update")}
+                    canDelete={hasPerm("finance.delete") || hasPerm("loans.delete")}
+                    onClose={() => setDetail(null)} onArchived={() => { setDetail(null); load(); }} onChange={load} />}
     </div>
   );
 }
@@ -205,12 +209,14 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
   );
 }
 
-function LoanDetailModal({ loanId, accounts, onClose, onChange }) {
+function LoanDetailModal({ loanId, accounts, canEdit, canDelete, onClose, onArchived, onChange }) {
   const [loan, setLoan] = useState(null);
   const [payFrom, setPayFrom] = useState(accounts[0]?.id || "");
   const [busyIdx, setBusyIdx] = useState(-1);
   const [err, setErr] = useState("");
   const [prepayAmt, setPrepayAmt] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
 
   const load = async () => {
     try { const { data } = await api.get(`/loans/${loanId}`); setLoan(data); }
@@ -244,6 +250,24 @@ function LoanDetailModal({ loanId, accounts, onClose, onChange }) {
       setErr(fmtErr(e?.response?.data?.detail, "Prepay failed"));
     }
   };
+  const startEdit = () => {
+    setEditForm({ lender_contact: loan.lender_contact || "", account_number: loan.account_number || "",
+      reference: loan.reference || "", notes: loan.notes || "", emi_day: loan.emi_day || 1 });
+    setEditing(true);
+  };
+  const saveEdit = async (event) => {
+    event.preventDefault(); setErr("");
+    try {
+      await api.patch(`/loans/${loanId}`, editForm);
+      setEditing(false); await load(); onChange && onChange();
+    } catch (e) { setErr(fmtErr(e?.response?.data?.detail, "Update failed")); }
+  };
+  const archiveLoan = async () => {
+    if (!window.confirm("Archive this loan? The disbursement will be reversed safely. Loans with posted EMI or prepayment entries must be corrected from Accounting first.")) return;
+    setErr("");
+    try { await api.delete(`/loans/${loanId}`); onArchived && onArchived(); }
+    catch (e) { setErr(fmtErr(e?.response?.data?.detail, "Archive failed")); }
+  };
 
   if (!loan) return <Modal onClose={onClose} title="Loading…" wide><div className="skeleton h-64"></div></Modal>;
 
@@ -252,6 +276,25 @@ function LoanDetailModal({ loanId, accounts, onClose, onChange }) {
     <Modal onClose={onClose} title={loan.lender_name}
            eyebrow={`LOAN · ${loan.loan_type?.toUpperCase()} · ${loan.status?.toUpperCase()}`} wide>
       {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 mb-3">{err}</div>}
+
+      <div className="flex gap-2 mb-4">
+        {canEdit && <button type="button" className="btn-ghost text-xs" onClick={startEdit}><PencilSimple size={12}/> Edit details</button>}
+        {canDelete && loan.status !== "archived" && <button type="button" className="btn-ghost text-xs text-[#B22B22]" onClick={archiveLoan}><Archive size={12}/> Archive loan</button>}
+      </div>
+      {editing && (
+        <form onSubmit={saveEdit} className="border border-[#E5E5E5] bg-[#FAFAFA] p-3 mb-4 space-y-3">
+          <div className="overline">EDIT NON-FINANCIAL DETAILS</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input className="input-flat" placeholder="Lender contact" value={editForm.lender_contact} onChange={(e) => setEditForm({...editForm, lender_contact: e.target.value})}/>
+            <input className="input-flat" placeholder="Account number" value={editForm.account_number} onChange={(e) => setEditForm({...editForm, account_number: e.target.value})}/>
+            <input className="input-flat" placeholder="Reference" value={editForm.reference} onChange={(e) => setEditForm({...editForm, reference: e.target.value})}/>
+            <input type="number" min="1" max="31" className="input-flat" placeholder="EMI day" value={editForm.emi_day} onChange={(e) => setEditForm({...editForm, emi_day: Number(e.target.value)})}/>
+            <input className="input-flat md:col-span-2" placeholder="Notes" value={editForm.notes} onChange={(e) => setEditForm({...editForm, notes: e.target.value})}/>
+          </div>
+          <div className="text-xs text-[#5C5C5C]">Principal, rate and posted schedule amounts remain immutable. Correct financial mistakes by reversal and a new loan.</div>
+          <div className="flex gap-2"><button className="btn-primary text-xs">Save</button><button type="button" className="btn-ghost text-xs" onClick={() => setEditing(false)}>Cancel</button></div>
+        </form>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <MiniStat label="Principal" value={fmtMoney(loan.principal)} />

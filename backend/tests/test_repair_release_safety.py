@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 from starlette.requests import Request
 
 import core.audit as audit_module
@@ -14,6 +15,7 @@ from core.audit import audit_digest, verify_chain
 from core.http_security import rate_limit_decision, reset_rate_limits
 from core.indexes import _INDEXES
 from core.helpers import business_today
+from models.loan import LoanUpdateIn
 from server import _demo_seeding_enabled, _ensure_required_indexes
 
 
@@ -48,6 +50,14 @@ def test_every_authentication_entry_point_is_rate_limited(path, limit, bucket):
     for _ in range(limit):
         assert rate_limit_decision(_request(path)) is None
     assert rate_limit_decision(_request(path))[0] == bucket
+
+
+def test_loan_edit_rejects_invalid_emi_day():
+    assert LoanUpdateIn(emi_day=31).emi_day == 31
+    with pytest.raises(ValidationError):
+        LoanUpdateIn(emi_day=0)
+    with pytest.raises(ValidationError):
+        LoanUpdateIn(emi_day=32)
 
 
 @pytest.mark.parametrize("path", [

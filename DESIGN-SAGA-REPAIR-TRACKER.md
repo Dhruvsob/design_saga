@@ -1,15 +1,23 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-26 (Asia/Calcutta)
+Last updated: 2026-10-29 (Asia/Calcutta)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; the latest tested repair baseline before the current password hardening is `dcba5f8` and is pushed to GitHub `repair` and `codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; runtime commit `8e1ec41` was verified on 2026-10-24.
+- Local checkout: `codex/repair-release`; tested security/vendor baseline `d1a5b5a` is pushed to GitHub. Expense, vendor-master and loan correction UI changes are verified locally and awaiting their next commit.
+- Production checkout: `/opt/design-saga-git`; runtime commit `3b15e23` was the last verified deployment before VPS access became unavailable.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
-- Current action: preserve and push the verified password/PIN hardening, restore stable VPS access, then deploy with backup and health checks before continuing the P1 route-by-route authorization and business-integrity audit. Do not repeat the completed attendance or quotation-conversion work.
+- Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance or quotation work.
+
+### DS-037: Safe correction controls across vendor, expense and loan workflows
+
+- Vendor bills expose metadata edit and draft-delete/posted-cancel controls; vendor payments and commission receipts expose balanced reversal controls; expected commissions can be cancelled. Vendor master records now expose Edit and audit-preserving Archive actions using the existing permission-checked APIs.
+- Expense claims can be corrected before reimbursement and automatically restart approval. Claimants can withdraw their own unposted claims; managers can correct permitted claims; reimbursed claims require `finance.delete` and create a balanced hidden reversal before becoming cancelled.
+- Loan records expose permitted non-financial metadata correction and safe archive. Financial terms remain immutable after posting, and EMI-day edits are validated to 1-31.
+- Verification: 61 deterministic backend accounting/security tests pass; frontend ESLint and production build pass; tracked-secret scan and diff checks pass. The legacy Emergent preview loan suite remains external-only and unavailable because its preview TLS endpoint is retired.
+- Deployment: pending restored Hostinger SSH or a fresh authenticated browser-terminal session.
 
 ### DS-034: Unified password policy and recoverable personal app lock
 

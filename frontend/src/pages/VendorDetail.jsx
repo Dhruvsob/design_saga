@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
@@ -10,6 +10,7 @@ import {
   IdentificationCard, CurrencyInr, Plus, Trash, FileText, Gauge, Receipt,
   PaperPlaneTilt, ShieldCheck, Notepad, Certificate, Wrench,
   Handshake, Percent, TrendUp, DownloadSimple, PencilSimple, ArrowCounterClockwise,
+  Archive,
 } from "@phosphor-icons/react";
 
 const INR = (n) =>
@@ -24,6 +25,7 @@ const TURNKEY_TABS     = ["overview", "commercial", "ledger", "bills", "payments
 
 export default function VendorDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { hasPerm, currentOrg } = useAuth();
   const businessMode = (currentOrg?.business_mode || "hybrid").toLowerCase();
   // Hybrid gets everything so all workflows stay reachable during transitions.
@@ -39,6 +41,8 @@ export default function VendorDetail() {
   const [accounts, setAccounts] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [vendorForm, setVendorForm] = useState(null);
   const commissionRequestKey = useRef(crypto.randomUUID());
   const billRequestKey = useRef(crypto.randomUUID());
   const paymentRequestKey = useRef(crypto.randomUUID());
@@ -144,6 +148,33 @@ export default function VendorDetail() {
   };
 
   const canBill = hasPerm("finance.create");
+  const canEditVendor = hasPerm("vendors.update");
+  const canDeleteVendor = hasPerm("vendors.delete");
+
+  const openVendorEdit = () => {
+    const fields = ["name", "company", "agency_type", "contact_person", "phone", "email",
+      "address", "city", "state", "pincode", "gstin", "pan", "tds_applicable", "tds_rate",
+      "bank_name", "bank_account_number", "bank_ifsc", "bank_branch", "upi_id", "category", "notes"];
+    setVendorForm(Object.fromEntries(fields.map((field) => [field, v[field] ?? (field === "tds_applicable" ? false : "")])));
+    setEditOpen(true);
+  };
+  const saveVendor = async (event) => {
+    event.preventDefault(); setBusy(true);
+    try {
+      await api.patch(`/vendors/${id}`, vendorForm);
+      await load(); setEditOpen(false); toast.success("Vendor updated");
+    } catch (error) { toast.error(error?.response?.data?.detail || "Could not update vendor"); }
+    finally { setBusy(false); }
+  };
+  const archiveVendor = async () => {
+    if (!window.confirm(`Archive ${v.name}? Existing bills, payments and accounting history will be preserved.`)) return;
+    setBusy(true);
+    try {
+      await api.delete(`/vendors/${id}`);
+      toast.success("Vendor archived"); navigate("/vendors");
+    } catch (error) { toast.error(error?.response?.data?.detail || "Could not archive vendor"); }
+    finally { setBusy(false); }
+  };
 
   const submitBill = async (form) => {
     setBusy(true);
@@ -214,6 +245,8 @@ export default function VendorDetail() {
             {v.company && <div className="text-[#5C5C5C] mt-1">{v.company}</div>}
           </div>
           <div className="flex items-center gap-2">
+            {canEditVendor && <button type="button" className="btn-ghost" onClick={openVendorEdit}><PencilSimple size={13}/> Edit</button>}
+            {canDeleteVendor && <button type="button" className="btn-ghost text-[#B22B22]" onClick={archiveVendor}><Archive size={13}/> Archive</button>}
             <div className="px-3 py-2 border border-[#E5E5E5]">
               <div className="overline text-[9px]">RATING</div>
               <div className="flex items-center gap-1">
@@ -290,6 +323,40 @@ export default function VendorDetail() {
         <Documents v={v} canEdit={hasPerm("vendors.update")} onAdd={addDoc} onDelete={delDoc} busy={busy} />
       )}
       {tab === "performance" && <Performance perf={perf} />}
+      {editOpen && vendorForm && <VendorEditModal form={vendorForm} setForm={setVendorForm}
+        onSave={saveVendor} onClose={() => setEditOpen(false)} busy={busy} />}
+    </div>
+  );
+}
+
+function VendorEditModal({ form, setForm, onSave, onClose, busy }) {
+  const field = (name, placeholder, type = "text") => (
+    <input type={type} className="input-flat" placeholder={placeholder} value={form[name] ?? ""}
+      onChange={(e) => setForm({ ...form, [name]: type === "number" ? Number(e.target.value) : e.target.value })} />
+  );
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <form onSubmit={onSave} onClick={(e) => e.stopPropagation()} className="bg-white border border-[#E5E5E5] p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto space-y-4">
+        <div className="flex justify-between items-start"><div><div className="overline">VENDOR MASTER</div><h2 className="font-display font-bold text-3xl">Edit vendor</h2></div><button type="button" className="btn-ghost" onClick={onClose}>×</button></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {field("name", "Vendor name")}{field("company", "Company")}
+          <select className="input-flat" value={form.agency_type || "vendor"} onChange={(e) => setForm({ ...form, agency_type: e.target.value })}>
+            {["vendor", "agency", "contractor", "sub_contractor", "supplier", "consultant", "freelancer", "other"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}
+          </select>
+          {field("contact_person", "Contact person")}{field("phone", "Phone")}{field("email", "Email", "email")}
+          {field("category", "Category")}{field("city", "City")}{field("state", "State")}
+          {field("pincode", "Pincode")}{field("gstin", "GSTIN")}{field("pan", "PAN")}
+          {field("address", "Address")}
+        </div>
+        <div className="overline">BANKING &amp; TAX</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {field("bank_name", "Bank name")}{field("bank_account_number", "Account number")}{field("bank_ifsc", "IFSC")}
+          {field("bank_branch", "Branch")}{field("upi_id", "UPI ID")}{field("tds_rate", "TDS %", "number")}
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.tds_applicable)} onChange={(e) => setForm({ ...form, tds_applicable: e.target.checked })}/> TDS applicable</label>
+        </div>
+        <textarea className="input-flat w-full min-h-20" placeholder="Notes" value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })}/>
+        <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onClose}>Cancel</button><button disabled={busy || !form.name?.trim()} className="btn-primary">{busy ? "Saving…" : "Save changes"}</button></div>
+      </form>
     </div>
   );
 }
