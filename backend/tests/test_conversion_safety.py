@@ -130,6 +130,11 @@ def _allow_quotation_user(monkeypatch, collection):
     monkeypatch.setattr(server, "_require_perm", lambda *_args: None)
     monkeypatch.setattr(server, "has_permission", lambda *_args: True)
 
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(server, "audit_log", no_audit)
+
 
 def test_concurrent_lead_conversion_has_exactly_one_winner(monkeypatch):
     leads = _LeadCollection()

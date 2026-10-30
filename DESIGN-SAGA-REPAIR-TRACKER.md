@@ -29,6 +29,12 @@ Last updated: 2026-10-30 (Asia/Kolkata)
 - Dashboard project and task aggregates now reuse the shared assignment visibility queries and fail closed when their source permission is absent. Lead analytics require `leads.read`; named team utilization requires both `tasks.read` and `employees.read`. Financial cards retain their existing finance/invoice gates.
 - Verification: 42 focused access, visibility, tenant-lookup and authentication tests pass, including fail-closed and assignment-scope dashboard regressions. Deployment and live custom-role validation remain pending restored VPS access.
 
+### DS-047: Client, invoice and quotation audit coverage
+
+- Added tamper-evident audit events for client creation/restoration, invoice creation, and advanced quotation creation, editing, deletion, status changes, internal approval decisions and version creation.
+- Existing authorization, optimistic-concurrency checks and accounting posting behavior are unchanged; the new records capture actor, tenant, target and bounded metadata after each successful mutation.
+- Verification: server compilation and 34 focused conversion/access tests pass. The complete mandatory suite passed 224 tests immediately before this audit-only batch. Deployment and production audit-chain verification remain pending restored VPS access.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.

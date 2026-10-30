@@ -1295,6 +1295,8 @@ async def create_client(payload: ClientIn, request: Request,
     doc["id"] = new_id("cli_")
     doc["created_at"] = iso(now_utc())
     await sdb.clients.insert_one(dict(doc))
+    await audit_log(user, "client.create", target=doc["id"], target_type="client",
+                    meta={"name": doc.get("name")})
     return await sdb.clients.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -1378,6 +1380,7 @@ async def restore_client(client_id: str, request: Request,
         {"id": client_id}, {"$set": {"archived": False}, "$unset": {"archived_at": "", "archived_by": ""}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Client not found")
+    await audit_log(user, "client.restore", target=client_id, target_type="client")
     return {"ok": True, "archived": False}
 
 
@@ -1961,6 +1964,9 @@ async def create_invoice(payload: InvoiceIn, request: Request,
         await sdb.invoices.insert_one(dict(doc))
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Invoice number already exists; retry creation")
+    await audit_log(user, "invoice.create", target=doc["id"], target_type="invoice",
+                    meta={"number": doc.get("number"), "total": doc.get("total"),
+                          "status": requested_status})
     if requested_status != "draft" and doc.get("doc_type", "invoice") == "invoice":
         return await _update_invoice_status_locked(
             user, doc["id"], InvoiceStatusUpdate(status=requested_status))
@@ -3388,6 +3394,8 @@ async def adv_create(payload: QuotationCreate, request: Request,
         if c:
             doc["client_name"] = c.get("name")
     await sdb.quotations_adv.insert_one(dict(doc))
+    await audit_log(user, "quotation.create", target=doc["id"], target_type="quotation",
+                    meta={"number": doc.get("number"), "total": (doc.get("cost") or {}).get("grand_total")})
     return await sdb.quotations_adv.find_one({"id": doc["id"]}, {"_id": 0})
 
 
@@ -3428,6 +3436,8 @@ async def adv_update(qid: str, payload: QuotationUpdate, request: Request,
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
+    await audit_log(user, "quotation.update", target=qid, target_type="quotation",
+                    meta={"fields": sorted(update.keys())})
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3449,6 +3459,8 @@ async def adv_delete(qid: str, request: Request, session_token: Optional[str] = 
     })
     if result.deleted_count == 0:
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
+    await audit_log(user, "quotation.delete", target=qid, target_type="quotation",
+                    meta={"number": doc.get("number")})
     return {"ok": True}
 
 
@@ -3475,6 +3487,8 @@ async def adv_status(qid: str, payload: StatusUpdate, request: Request,
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
+    await audit_log(user, "quotation.status", target=qid, target_type="quotation",
+                    meta={"from": current, "to": payload.status})
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3517,6 +3531,8 @@ async def adv_approval(qid: str, payload: ApprovalUpdate, request: Request,
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
+    await audit_log(user, "quotation.approval", target=qid, target_type="quotation",
+                    meta={"decision": payload.decision, "status": next_status})
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3571,6 +3587,8 @@ async def adv_new_version(qid: str, request: Request, session_token: Optional[st
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
+    await audit_log(user, "quotation.version", target=qid, target_type="quotation",
+                    meta={"from": src.get("version", 1), "to": new_v})
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
