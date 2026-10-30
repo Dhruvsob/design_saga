@@ -23,6 +23,12 @@ Last updated: 2026-10-30 (Asia/Kolkata)
 - Project detail now combines the project ID with the shared task visibility query and returns no task data at all when `tasks.read` is absent. This preserves the existing administrator-wide view while keeping restricted employees on the same rules across task list, task detail, search, calendar and project detail.
 - Verification: the focused access/URL safety suite passes 20 tests, including the new query-composition regression. Deployment and live custom-role validation remain pending restored VPS access.
 
+### DS-046: Permission-aware dashboard aggregates
+
+- `dashboard.read` previously exposed tenant-wide project/task counts, lead funnel/source statistics and employee task-load names even when the role lacked the corresponding project, task, CRM or employee permission. Assignment-restricted users also received counts derived from records they could not open.
+- Dashboard project and task aggregates now reuse the shared assignment visibility queries and fail closed when their source permission is absent. Lead analytics require `leads.read`; named team utilization requires both `tasks.read` and `employees.read`. Financial cards retain their existing finance/invoice gates.
+- Verification: 42 focused access, visibility, tenant-lookup and authentication tests pass, including fail-closed and assignment-scope dashboard regressions. Deployment and live custom-role validation remain pending restored VPS access.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.

@@ -855,6 +855,16 @@ async def rbac_assign_role(user_id: str, payload: RoleAssignIn, request: Request
 # ============================================================
 # Dashboard
 # ============================================================
+async def _dashboard_scope_queries(user: dict) -> tuple[dict, dict]:
+    """Return fail-closed project/task scopes for dashboard aggregates."""
+    no_rows = {"id": {"$in": []}}
+    project_query = (await project_visibility_query(user)
+                     if has_permission(user, "projects.read") else no_rows)
+    task_query = (await task_visibility_query(user)
+                  if has_permission(user, "tasks.read") else no_rows)
+    return project_query, task_query
+
+
 @api.get("/dashboard/stats")
 async def dashboard_stats(request: Request, session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
@@ -864,9 +874,15 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
 
     can_view_revenue = has_permission(user, "finance.read")
     can_view_collections = can_view_revenue or has_permission(user, "invoices.read")
+    can_view_leads = has_permission(user, "leads.read")
+    can_view_utilization = (has_permission(user, "tasks.read")
+                            and has_permission(user, "employees.read"))
+    project_scope, task_scope = await _dashboard_scope_queries(user)
 
-    active_projects = await sdb.projects.count_documents({"stage": {"$nin": ["Handover"]}, "archived": {"$ne": True}})
-    total_projects = await sdb.projects.count_documents({"archived": {"$ne": True}})
+    active_projects = await sdb.projects.count_documents(merge_query(
+        {"stage": {"$nin": ["Handover"]}, "archived": {"$ne": True}}, project_scope))
+    total_projects = await sdb.projects.count_documents(merge_query(
+        {"archived": {"$ne": True}}, project_scope))
 
     # Revenue: sum from ACCOUNTING journal entries (income line credits) — single source
     # of truth. Falls back to zero if no journal exists yet. This matches the P&L report.
@@ -895,22 +911,24 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
     # Overdue tasks
     from core.helpers import business_today
     today = business_today().isoformat()
-    overdue_tasks = await sdb.tasks.count_documents({
+    overdue_tasks = await sdb.tasks.count_documents(merge_query({
         "status": {"$ne": "done"},
         "due_date": {"$lt": today, "$ne": None}
-    })
+    }, task_scope))
 
     # Pipeline funnel
     pipeline = []
-    for stage in PIPELINE_STAGES:
-        count = await sdb.leads.count_documents({"stage": stage})
-        pipeline.append({"stage": stage, "count": count})
+    if can_view_leads:
+        for stage in PIPELINE_STAGES:
+            count = await sdb.leads.count_documents({"stage": stage})
+            pipeline.append({"stage": stage, "count": count})
 
     # Lead sources
     sources = {}
-    async for lead in sdb.leads.find({}, {"_id": 0, "source": 1}):
-        s = lead.get("source", "Other")
-        sources[s] = sources.get(s, 0) + 1
+    if can_view_leads:
+        async for lead in sdb.leads.find({}, {"_id": 0, "source": 1}):
+            s = lead.get("source", "Other")
+            sources[s] = sources.get(s, 0) + 1
     source_list = [{"source": k, "count": v} for k, v in sources.items()]
 
     # Alerts
@@ -924,10 +942,12 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
     # per active employee. Not a percentage — a workload index the studio owner can eyeball.
     weight = {"urgent": 3, "critical": 3, "high": 2, "medium": 1, "low": 1}
     util = {}
-    async for t in sdb.tasks.find({"status": {"$ne": "done"}},
-                                 {"_id": 0, "assignee_name": 1, "priority": 1}):
-        n = t.get("assignee_name") or "Unassigned"
-        util[n] = util.get(n, 0) + weight.get((t.get("priority") or "medium").lower(), 1)
+    if can_view_utilization:
+        async for t in sdb.tasks.find(
+                merge_query({"status": {"$ne": "done"}}, task_scope),
+                {"_id": 0, "assignee_name": 1, "priority": 1}):
+            n = t.get("assignee_name") or "Unassigned"
+            util[n] = util.get(n, 0) + weight.get((t.get("priority") or "medium").lower(), 1)
     utilization = sorted(
         [{"name": k, "load": v} for k, v in util.items()],
         key=lambda x: -x["load"],

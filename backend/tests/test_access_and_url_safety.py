@@ -186,3 +186,31 @@ def test_project_detail_combines_project_and_task_visibility(monkeypatch):
             {"assignee_id": "user_1"},
         ]
     }
+
+
+def test_dashboard_scopes_fail_closed_without_source_permissions(monkeypatch):
+    monkeypatch.setattr(server_module, "has_permission", lambda _user, _perm: False)
+    project_query, task_query = asyncio.run(
+        server_module._dashboard_scope_queries({"user_id": "limited"}))
+    assert project_query == {"id": {"$in": []}}
+    assert task_query == {"id": {"$in": []}}
+
+
+def test_dashboard_scopes_reuse_assignment_visibility(monkeypatch):
+    monkeypatch.setattr(
+        server_module, "has_permission",
+        lambda _user, perm: perm in {"projects.read", "tasks.read"},
+    )
+
+    async def visible_projects(_user):
+        return {"team_ids": "employee_1"}
+
+    async def visible_tasks(_user):
+        return {"assignee_id": "employee_1"}
+
+    monkeypatch.setattr(server_module, "project_visibility_query", visible_projects)
+    monkeypatch.setattr(server_module, "task_visibility_query", visible_tasks)
+    project_query, task_query = asyncio.run(
+        server_module._dashboard_scope_queries({"user_id": "user_1"}))
+    assert project_query == {"team_ids": "employee_1"}
+    assert task_query == {"assignee_id": "employee_1"}
