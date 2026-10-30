@@ -35,6 +35,12 @@ Last updated: 2026-10-30 (Asia/Kolkata)
 - Existing authorization, optimistic-concurrency checks and accounting posting behavior are unchanged; the new records capture actor, tenant, target and bounded metadata after each successful mutation.
 - Verification: server compilation and 34 focused conversion/access tests pass. The complete mandatory suite passed 224 tests immediately before this audit-only batch. Deployment and production audit-chain verification remain pending restored VPS access.
 
+### DS-048: Sensitive employee mutation audit coverage
+
+- Salary revisions, private employee document addition/removal, warnings and rewards now emit tenant-bound tamper-evident audit events containing only record identifiers and safe operational metadata, not document URLs, notes, reasons or salary amounts.
+- Employee document removal now fails with 404 when either the employee or document ID is absent instead of reporting a misleading success for a guessed/stale identifier.
+- Verification: Python compilation, diff and tracked-secret gates pass. Deployment and production audit-chain verification remain pending restored VPS access.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.

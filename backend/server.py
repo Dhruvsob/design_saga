@@ -4888,6 +4888,10 @@ async def record_salary_increment(eid: str, payload: SalaryIncrementIn, request:
     res = await sdb.employees.update_one({"id": eid}, update)
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
+    await audit_log(user, "employee.salary_revision", target=eid, target_type="employee",
+                    meta={"revision_id": entry["id"],
+                          "effective_date": entry["effective_date"],
+                          "apply_now": bool(payload.apply_now)})
     return entry
 
 
@@ -4910,6 +4914,8 @@ async def add_employee_doc(eid: str, payload: DocumentIn, request: Request,
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
+    await audit_log(user, "employee.document.add", target=eid, target_type="employee",
+                    meta={"document_id": entry["id"]})
     return entry
 
 
@@ -4920,10 +4926,14 @@ async def remove_employee_doc(eid: str, doc_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "employees.update"):
         raise HTTPException(status_code=403, detail="Missing permission: employees.update")
-    await sdb.employees.update_one(
-        {"id": eid},
+    res = await sdb.employees.update_one(
+        {"id": eid, "documents.id": doc_id},
         {"$pull": {"documents": {"id": doc_id}}, "$set": {"updated_at": iso(now_utc())}},
     )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee document not found")
+    await audit_log(user, "employee.document.remove", target=eid, target_type="employee",
+                    meta={"document_id": doc_id})
     return {"ok": True}
 
 
@@ -4942,6 +4952,8 @@ async def add_warning(eid: str, payload: WarningIn, request: Request,
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
+    await audit_log(user, "employee.warning.add", target=eid, target_type="employee",
+                    meta={"warning_id": entry["id"]})
     return entry
 
 
@@ -4960,6 +4972,8 @@ async def add_reward(eid: str, payload: RewardIn, request: Request,
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
+    await audit_log(user, "employee.reward.add", target=eid, target_type="employee",
+                    meta={"reward_id": entry["id"]})
     return entry
 
 
