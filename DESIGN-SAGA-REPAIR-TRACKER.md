@@ -11,6 +11,12 @@ Last updated: 2026-11-02 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-067: Immutable salary-revision correction
+
+- Effective-dated salary revisions were append-only with no way to correct the latest mistaken structure/date. Deleting or mutating the old row would destroy compensation history, while editing current employee salary alone would disconnect it from the revision trail.
+- Payroll/finance-authorized users can now correct the latest active revision through a document lock. The original is retained and marked superseded; a replacement revision records the corrected structure and source ID, and current salary updates through the same atomic employee update. Historical payroll runs/payslips remain unchanged because they retain their existing snapshots. Older non-current revisions cannot overwrite current salary.
+- Verification: 12 focused salary/payroll/employee regressions pass, including immutable supersession, current-salary synchronization, historical-revision rejection and permission denial before writes. Frontend ESLint and production build pass. Deployment remains pending stable VPS access.
+
 ### DS-066: Vendor and employee document metadata correction
 
 - Vendor and employee documents were add/delete-only. Correcting a label, document type, expiry date or employee external URL required removing and recreating the record, risking lost context and unnecessary file churn.

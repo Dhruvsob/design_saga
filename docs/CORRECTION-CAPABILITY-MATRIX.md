@@ -18,8 +18,8 @@ reversal/reposting and remain auditable.
 | Quotations | `quotations_adv` | Edit/delete before protected lifecycle stages; versions/change orders preserve accepted history | Final UI consistency review remains |
 | Journals/Daybook | `journal_entries` | Descriptive metadata edit; posted amount/date correction uses reversal; direct eligible reversals can be undone | Source-driven entries must be corrected in their source module |
 | Expenses | `expenses` + linked journal | Draft edit/delete; approved/reimbursed records use cancellation/reversal safeguards | Live legacy invalid-URL reproduction remains record-specific |
-| Payroll/salary | `payroll_runs` + linked journal | Explicit Cash/Bank/date/method/reference; reverse run and repost; generic salary expense path blocked | Salary-revision superseding/correction workflow remains |
-| Employees | `employees` | Profile edit/offboard; documents add/edit/remove; warning/reward add/edit/delete with audit | Salary-revision superseding remains separate payroll work |
+| Payroll/salary | `payroll_runs` + linked journal | Explicit Cash/Bank/date/method/reference; reverse run and repost; generic salary expense path blocked; latest salary revision can be superseded without deleting history | Historical paid runs remain immutable and are corrected only by reversal |
+| Employees | `employees` | Profile edit/offboard; documents add/edit/remove; warning/reward add/edit/delete with audit | None confirmed for nonfinancial employee master records |
 | Attendance/leave | Attendance, leave and correction collections | Rejected punch retry; correction requests; atomic approval/review; manual authorized adjustment | Approved records intentionally require correction workflow, not hard delete |
 | Projects/clients | Project/client masters | Edit; dependency-aware archive/delete; restore | None confirmed locally |
 | Leads/tasks/calendar | Respective source records | Edit/delete with module permissions and source visibility rules | None confirmed locally |

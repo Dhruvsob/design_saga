@@ -951,6 +951,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [correctingId, setCorrectingId] = useState(null);
   const today = dateForInput(new Date());
   const [form, setForm] = useState({ effective_date: today, reason: "", note: "", salary: {} });
 
@@ -968,10 +969,17 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const openForm = () => {
+  const openForm = (revision = null) => {
     const base = {};
-    [...EARN_KEYS, ...DED_KEYS].forEach((k) => { base[k] = currentSalary?.[k] ?? 0; });
-    setForm({ effective_date: today, reason: "", note: "", salary: base });
+    const source = revision?.salary || currentSalary || {};
+    [...EARN_KEYS, ...DED_KEYS].forEach((k) => { base[k] = source[k] ?? 0; });
+    setForm({
+      effective_date: revision?.effective_date || today,
+      reason: revision ? `Correction: ${revision.reason || "salary revision"}` : "",
+      note: revision?.note || "",
+      salary: base,
+    });
+    setCorrectingId(revision?.id || null);
     setMsg("");
     setOpen(true);
   };
@@ -981,12 +989,16 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
   const previewDed = DED_KEYS.reduce((a, k) => a + Number(form.salary[k] || 0), 0);
   const previewNet = previewGross - previewDed;
   const deltaNet = previewNet - Number(currentSalary?.net_monthly || 0);
+  const latestActiveId = history.find((row) => !row.superseded_at)?.id;
 
   const save = async () => {
     if (!form.effective_date) { setMsg("Effective date is required"); return; }
     setBusy(true); setMsg("");
     try {
-      await api.post(`/employees/${employeeId}/salary/increment`, {
+      const endpoint = correctingId
+        ? `/employees/${employeeId}/salary/revisions/${correctingId}/supersede`
+        : `/employees/${employeeId}/salary/increment`;
+      await api.post(endpoint, {
         effective_date: form.effective_date,
         reason: form.reason,
         note: form.note,
@@ -994,6 +1006,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
         apply_now: true,
       });
       setOpen(false);
+      setCorrectingId(null);
       await load();
     } catch (ex) {
       setMsg(ex?.response?.data?.detail || "Could not save the revision");
@@ -1005,7 +1018,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       <div className="flex items-center justify-between mb-4">
         <div className="overline flex items-center gap-1.5"><TrendUp size={13} /> SALARY REVISIONS · effective-dated increments</div>
         {canEdit && !open && (
-          <button onClick={openForm} className="btn-ghost text-xs" data-testid="salary-revision-add-btn">
+          <button onClick={() => openForm()} className="btn-ghost text-xs" data-testid="salary-revision-add-btn">
             <Plus size={13} /> Record increment
           </button>
         )}
@@ -1013,6 +1026,9 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
 
       {open && (
         <div className="border border-[#0A0A0A] p-4 mb-4 space-y-3" data-testid="salary-revision-form">
+          {correctingId && <div className="text-xs border border-[#B87500] bg-[#FFF6E5] p-2">
+            This correction preserves the original revision as superseded and creates a replacement.
+          </div>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="text-xs">
               <div className="overline mb-1">Effective from</div>
@@ -1055,9 +1071,9 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
               </span>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <button onClick={() => setOpen(false)} className="btn-ghost text-xs">Cancel</button>
+              <button onClick={() => { setOpen(false); setCorrectingId(null); }} className="btn-ghost text-xs">Cancel</button>
               <button onClick={save} disabled={busy} className="btn-primary text-xs disabled:opacity-40" data-testid="salary-revision-save-btn">
-                {busy ? "Saving…" : "Save revision"}
+                {busy ? "Saving…" : correctingId ? "Save correction" : "Save revision"}
               </button>
             </div>
           </div>
@@ -1074,24 +1090,32 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       ) : (
         <div className="space-y-2" data-testid="salary-history-list">
           {history.map((h) => (
-            <div key={h.id} className="flex items-center justify-between border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2" data-testid={`salary-history-${h.id}`}>
+            <div key={h.id} className={`flex items-center justify-between border border-[#E5E5E5] px-3 py-2 ${h.superseded_at ? "bg-[#F3F1EC] opacity-70" : "bg-[#FAFAFA]"}`} data-testid={`salary-history-${h.id}`}>
               <div className="min-w-0">
                 <div className="text-sm font-semibold flex items-center gap-2">
                   <ClockCounterClockwise size={13} className="text-[#8B7F6A]" />
                   {h.reason || "Salary revision"}
+                  {h.superseded_at && <span className="text-[9px] font-mono uppercase border px-1">Superseded</span>}
                 </div>
                 <div className="text-[11px] text-[#5C5C5C] font-mono">
                   Effective {formatDate(h.effective_date)} · by {h.changed_by_name || "—"}
                   {h.note ? ` · ${h.note}` : ""}
                 </div>
               </div>
-              <div className="text-right shrink-0">
+              <div className="text-right shrink-0 flex items-center gap-2">
+                {canEdit && h.id === latestActiveId && !h.superseded_at && (
+                  <button type="button" className="btn-ghost text-xs" onClick={() => openForm(h)}>
+                    <PencilSimple size={12} /> Correct
+                  </button>
+                )}
+                <div>
                 <div className="font-mono font-bold">{fmt(h.net_monthly)}<span className="text-[10px] text-[#9A9A9A]"> net</span></div>
                 {typeof h.delta_net === "number" && (
                   <div className={`text-[11px] font-mono ${h.delta_net >= 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
                     {h.delta_net >= 0 ? "+" : ""}{fmt(h.delta_net)}
                   </div>
                 )}
+                </div>
               </div>
             </div>
           ))}

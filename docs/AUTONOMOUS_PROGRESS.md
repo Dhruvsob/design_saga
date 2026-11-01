@@ -36,8 +36,10 @@ Last updated: 02/11/2026 (Asia/Kolkata)
   is maintained in `docs/CORRECTION-CAPABILITY-MATRIX.md`.
 - DS-066: Vendor and employee document metadata can now be corrected in place
   with nested-record scoping, URL/date validation and content-free audit events.
-- Focused document correction suite: 8 passed. Complete mandatory
-  security/integrity suite: 255 passed. Diff and tracked-secret release gates
+- DS-067: the latest active salary revision now uses immutable supersession
+  instead of deletion, preserving old payroll snapshots and audit history.
+- Focused salary/payroll correction suite: 12 passed. Complete mandatory
+  security/integrity suite: 258 passed. Diff and tracked-secret release gates
   are rerun before each commit.
 - Frontend ESLint passes with zero warnings and the production Vite build
   succeeds for DS-064.

@@ -4921,6 +4921,88 @@ async def record_salary_increment(eid: str, payload: SalaryIncrementIn, request:
     return entry
 
 
+@api.post("/employees/{eid}/salary/revisions/{revision_id}/supersede")
+async def supersede_salary_revision(eid: str, revision_id: str,
+                                    payload: SalaryIncrementIn, request: Request,
+                                    session_token: Optional[str] = Cookie(default=None),
+                                    authorization: Optional[str] = Header(default=None)):
+    """Correct the latest active salary revision without deleting history."""
+    user = await require_user(request, session_token, authorization)
+    if not (has_permission(user, "payroll.create")
+            and has_permission(user, "finance.update")):
+        raise HTTPException(status_code=403,
+                            detail="Missing permissions: payroll.create and finance.update")
+    try:
+        effective_date = datetime.strptime(
+            (payload.effective_date or "")[:10], "%Y-%m-%d").date().isoformat()
+    except Exception as exc:
+        raise HTTPException(status_code=400,
+                            detail="Invalid effective_date (YYYY-MM-DD)") from exc
+
+    from core.locks import doc_lock
+    async with doc_lock(sdb.employees, eid):
+        emp = await sdb.employees.find_one({"id": eid}, {"_id": 0})
+        history = list((emp or {}).get("salary_history") or [])
+        target = next((row for row in history if row.get("id") == revision_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="Salary revision not found")
+        if target.get("superseded_at"):
+            raise HTTPException(status_code=409, detail="Salary revision is already superseded")
+        active = [row for row in history if not row.get("superseded_at")]
+        active.sort(key=lambda row: (row.get("effective_date") or "",
+                                     row.get("changed_at") or ""), reverse=True)
+        if not active or active[0].get("id") != revision_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Only the latest active salary revision can be corrected; add a new revision instead",
+            )
+
+        new_salary = _compute_salary(payload.salary.model_dump())
+        corrected_at = iso(now_utc())
+        replacement = {
+            "id": new_id("sinc_"),
+            "effective_date": effective_date,
+            "reason": payload.reason or "Salary revision correction",
+            "note": payload.note or "",
+            "salary": new_salary,
+            "gross_monthly": new_salary.get("gross_monthly"),
+            "net_monthly": new_salary.get("net_monthly"),
+            "ctc_annual": new_salary.get("ctc_annual"),
+            "previous_gross": target.get("previous_gross"),
+            "previous_net": target.get("previous_net"),
+            "delta_net": round(float(new_salary.get("net_monthly") or 0)
+                               - float(target.get("previous_net") or 0), 2),
+            "changed_at": corrected_at,
+            "changed_by": user["user_id"],
+            "changed_by_name": user.get("name"),
+            "corrects_revision_id": revision_id,
+        }
+        for row in history:
+            if row.get("id") == revision_id:
+                row["superseded_at"] = corrected_at
+                row["superseded_by"] = user["user_id"]
+                row["superseded_by_revision_id"] = replacement["id"]
+                break
+        history.append(replacement)
+        update = {"salary_history": history, "updated_at": corrected_at,
+                  "updated_by": user["user_id"]}
+        if payload.apply_now:
+            update["salary"] = new_salary
+        res = await sdb.employees.update_one(
+            {"id": eid, "_lock": {"$exists": True}}, {"$set": update})
+        if res.matched_count == 0:
+            raise HTTPException(status_code=409,
+                                detail="Employee changed while correcting salary; refresh and retry")
+
+    await audit_log(user, "employee.salary_revision_correct", target=eid,
+                    target_type="employee",
+                    meta={"original_revision_id": revision_id,
+                          "replacement_revision_id": replacement["id"],
+                          "effective_date": effective_date,
+                          "apply_now": bool(payload.apply_now)})
+    return replacement
+
+
 @api.post("/employees/{eid}/documents")
 async def add_employee_doc(eid: str, payload: DocumentIn, request: Request,
                            session_token: Optional[str] = Cookie(default=None),

@@ -45,6 +45,7 @@ jobs:
           tests/test_accounting_safety.py
           tests/test_financial_read_permissions.py
           tests/test_employee_corrections.py
+          tests/test_salary_revision_corrections.py
           tests/test_vendor_document_corrections.py
           tests/test_visibility_surfaces.py
           tests/test_tenant_lookup_scoping.py
