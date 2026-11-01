@@ -11,11 +11,11 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
-### DS-058: Journal-detail authorization and route-authentication gate
+### DS-058: Journal-detail defense-in-depth and route-authentication gate
 
-- The direct journal-detail endpoint previously read a tenant financial transaction without explicitly requiring an authenticated user or `finance.read`. It now authenticates and rejects non-finance roles before any journal lookup, matching Accounting list, ledger and report permissions.
+- Accounting already enforces `finance.read` through a router-level dependency, so the direct journal-detail endpoint was not publicly exposed. The handler nevertheless lacked its own explicit check; it now authenticates and rejects non-finance roles before any journal lookup, preserving protection if route wiring is refactored later.
 - Added a source-level regression inventory covering every FastAPI route in `server.py` and modular route files. A new endpoint fails the mandatory security suite unless it calls an approved authentication dependency or is deliberately added to the small reviewed public/delegating allowlist.
-- Verification: 35 focused access, URL and financial-read tests pass, including proof that unauthorized journal detail requests perform zero database reads. Deployment remains pending VPS SSH access.
+- Verification: 35 focused access, URL and financial-read tests pass, including proof that the handler itself performs zero database reads for an unauthorized caller. Deployment remains pending VPS SSH access.
 
 ### DS-057: Tenant-safe audit evidence export
 
