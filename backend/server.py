@@ -4428,13 +4428,29 @@ class DocumentIn(BaseModel):
 
 
 class WarningIn(BaseModel):
-    reason: str
-    note: Optional[str] = ""
+    reason: str = Field(min_length=1, max_length=300)
+    note: Optional[str] = Field(default="", max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def warning_reason_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Warning reason is required")
+        return value
 
 
 class RewardIn(BaseModel):
-    title: str
-    note: Optional[str] = ""
+    title: str = Field(min_length=1, max_length=300)
+    note: Optional[str] = Field(default="", max_length=2000)
+
+    @field_validator("title")
+    @classmethod
+    def reward_title_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Reward title is required")
+        return value
 
 
 def _compute_salary(s: dict) -> dict:
@@ -4967,6 +4983,52 @@ async def add_warning(eid: str, payload: WarningIn, request: Request,
     return entry
 
 
+@api.patch("/employees/{eid}/warnings/{warning_id}")
+async def update_warning(eid: str, warning_id: str, payload: WarningIn,
+                         request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    reason = payload.reason.strip()
+    note = (payload.note or "").strip()
+    res = await sdb.employees.update_one(
+        {"id": eid, "performance.warnings.id": warning_id},
+        {"$set": {
+            "performance.warnings.$.reason": reason,
+            "performance.warnings.$.note": note,
+            "performance.warnings.$.updated_at": iso(now_utc()),
+            "performance.warnings.$.updated_by": user["user_id"],
+            "updated_at": iso(now_utc()),
+        }},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee warning not found")
+    await audit_log(user, "employee.warning.update", target=eid, target_type="employee",
+                    meta={"warning_id": warning_id})
+    return {"ok": True, "id": warning_id, "reason": reason, "note": note}
+
+
+@api.delete("/employees/{eid}/warnings/{warning_id}")
+async def remove_warning(eid: str, warning_id: str, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    res = await sdb.employees.update_one(
+        {"id": eid, "performance.warnings.id": warning_id},
+        {"$pull": {"performance.warnings": {"id": warning_id}},
+         "$set": {"updated_at": iso(now_utc())}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee warning not found")
+    await audit_log(user, "employee.warning.remove", target=eid, target_type="employee",
+                    meta={"warning_id": warning_id})
+    return {"ok": True}
+
+
 @api.post("/employees/{eid}/rewards")
 async def add_reward(eid: str, payload: RewardIn, request: Request,
                      session_token: Optional[str] = Cookie(default=None),
@@ -4985,6 +5047,52 @@ async def add_reward(eid: str, payload: RewardIn, request: Request,
     await audit_log(user, "employee.reward.add", target=eid, target_type="employee",
                     meta={"reward_id": entry["id"]})
     return entry
+
+
+@api.patch("/employees/{eid}/rewards/{reward_id}")
+async def update_reward(eid: str, reward_id: str, payload: RewardIn,
+                        request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    title = payload.title.strip()
+    note = (payload.note or "").strip()
+    res = await sdb.employees.update_one(
+        {"id": eid, "performance.rewards.id": reward_id},
+        {"$set": {
+            "performance.rewards.$.title": title,
+            "performance.rewards.$.note": note,
+            "performance.rewards.$.updated_at": iso(now_utc()),
+            "performance.rewards.$.updated_by": user["user_id"],
+            "updated_at": iso(now_utc()),
+        }},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee reward not found")
+    await audit_log(user, "employee.reward.update", target=eid, target_type="employee",
+                    meta={"reward_id": reward_id})
+    return {"ok": True, "id": reward_id, "title": title, "note": note}
+
+
+@api.delete("/employees/{eid}/rewards/{reward_id}")
+async def remove_reward(eid: str, reward_id: str, request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    res = await sdb.employees.update_one(
+        {"id": eid, "performance.rewards.id": reward_id},
+        {"$pull": {"performance.rewards": {"id": reward_id}},
+         "$set": {"updated_at": iso(now_utc())}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee reward not found")
+    await audit_log(user, "employee.reward.remove", target=eid, target_type="employee",
+                    meta={"reward_id": reward_id})
+    return {"ok": True}
 
 
 @api.post("/employees/seed")

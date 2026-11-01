@@ -5,7 +5,7 @@ import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate } from "../lib/format";
 import {
-  ArrowLeft, FloppyDisk, Plus, Trash, UserMinus, Warning, Trophy,
+  ArrowLeft, FloppyDisk, Plus, Trash, PencilSimple, UserMinus, Warning, Trophy,
   FileText, ArrowSquareOut, ShieldWarning,
   TrendUp, ClockCounterClockwise, Key, Receipt,
 } from "@phosphor-icons/react";
@@ -116,6 +116,36 @@ export default function EmployeeDetail() {
     const note = window.prompt("Description (optional):") || "";
     await api.post(`/employees/${id}/rewards`, { title, note });
     load();
+  };
+
+  const editWarning = async (warning) => {
+    const reason = window.prompt("Warning reason?", warning.reason || "");
+    if (!reason?.trim()) return;
+    const note = window.prompt("Additional note (optional):", warning.note || "");
+    if (note === null) return;
+    await api.patch(`/employees/${id}/warnings/${warning.id}`, { reason: reason.trim(), note });
+    await load();
+  };
+
+  const deleteWarning = async (warning) => {
+    if (!window.confirm("Delete this warning? The action will remain in the audit log.")) return;
+    await api.delete(`/employees/${id}/warnings/${warning.id}`);
+    await load();
+  };
+
+  const editReward = async (reward) => {
+    const title = window.prompt("Reward title?", reward.title || "");
+    if (!title?.trim()) return;
+    const note = window.prompt("Description (optional):", reward.note || "");
+    if (note === null) return;
+    await api.patch(`/employees/${id}/rewards/${reward.id}`, { title: title.trim(), note });
+    await load();
+  };
+
+  const deleteReward = async (reward) => {
+    if (!window.confirm("Delete this reward? The action will remain in the audit log.")) return;
+    await api.delete(`/employees/${id}/rewards/${reward.id}`);
+    await load();
   };
 
   const addDocument = async () => {
@@ -489,7 +519,13 @@ export default function EmployeeDetail() {
               <div className="space-y-2">
                 {[...(perf.warnings || [])].reverse().map((w) => (
                   <div key={w.id} className="border-l-2 border-[#FF2A00] pl-3 py-1">
-                    <div className="font-semibold text-sm">{w.reason}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold text-sm">{w.reason}</div>
+                      {canEdit && <div className="flex gap-1 shrink-0">
+                        <button type="button" className="btn-ghost p-1" onClick={() => editWarning(w)} aria-label="Edit warning"><PencilSimple size={12} /></button>
+                        <button type="button" className="btn-ghost p-1 text-[#B4001C]" onClick={() => deleteWarning(w)} aria-label="Delete warning"><Trash size={12} /></button>
+                      </div>}
+                    </div>
                     {w.note && <p className="text-xs text-[#5C5C5C] mt-1">{w.note}</p>}
                     <div className="text-[10px] font-mono tracking-widest uppercase text-[#9A9A9A] mt-1">
                       {formatDate(w.at)} · {w.by || "—"}
@@ -508,7 +544,13 @@ export default function EmployeeDetail() {
               <div className="space-y-2">
                 {[...(perf.rewards || [])].reverse().map((r) => (
                   <div key={r.id} className="border-l-2 border-[#1D633E] pl-3 py-1">
-                    <div className="font-semibold text-sm">{r.title}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold text-sm">{r.title}</div>
+                      {canEdit && <div className="flex gap-1 shrink-0">
+                        <button type="button" className="btn-ghost p-1" onClick={() => editReward(r)} aria-label="Edit reward"><PencilSimple size={12} /></button>
+                        <button type="button" className="btn-ghost p-1 text-[#B4001C]" onClick={() => deleteReward(r)} aria-label="Delete reward"><Trash size={12} /></button>
+                      </div>}
+                    </div>
                     {r.note && <p className="text-xs text-[#5C5C5C] mt-1">{r.note}</p>}
                     <div className="text-[10px] font-mono tracking-widest uppercase text-[#9A9A9A] mt-1">
                       {formatDate(r.at)} · {r.by || "—"}

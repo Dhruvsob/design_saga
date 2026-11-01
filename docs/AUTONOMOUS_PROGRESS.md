@@ -31,9 +31,12 @@ Last updated: 02/11/2026 (Asia/Kolkata)
   return raw exception text to callers.
 - DS-064: expired/revoked sessions now clear protected UI immediately; auth and
   five-minute app-lock activity synchronize across same-origin browser tabs.
-- Focused failure-detail regression suite: 31 passed. Complete mandatory
-  security/integrity suite: 247 passed. Diff and tracked-secret release gates
-  pass.
+- DS-065: Employee Performance warnings/rewards now have permission-aware,
+  audited edit/delete APIs and UI actions. The cross-module correction inventory
+  is maintained in `docs/CORRECTION-CAPABILITY-MATRIX.md`.
+- Focused employee correction/permission suite: 18 passed. Complete mandatory
+  security/integrity suite: 251 passed. Diff and tracked-secret release gates
+  are rerun before each commit.
 - Frontend ESLint passes with zero warnings and the production Vite build
   succeeds for DS-064.
 - Current dependency audit could not be refreshed: npm registry TLS validation

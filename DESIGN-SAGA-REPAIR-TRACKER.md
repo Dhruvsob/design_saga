@@ -11,6 +11,13 @@ Last updated: 2026-11-02 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-065: Employee warning/reward correction lifecycle
+
+- The Employee Performance screen supported creating warnings and rewards but exposed no correction path. Mistyped nonfinancial records were permanently visible even to authorized HR/Admin users, contrary to the correction behavior in other master-data modules.
+- Authorized `employees.update` users can now edit or delete a specific nested warning/reward. Inputs are bounded and reject blank titles/reasons; every update/removal records a tenant-bound audit event containing only the employee and nested record IDs. UI actions are permission-aware and require confirmation before removal.
+- Verification: 18 focused employee/financial-permission regressions pass, including nested-ID query scoping, audit creation and rejection before database access. Frontend ESLint and production build pass. Deployment remains pending stable VPS access.
+- The persistent cross-module inventory is `docs/CORRECTION-CAPABILITY-MATRIX.md`; it distinguishes safe physical deletion, source correction and immutable financial reversal instead of promising destructive deletion for every record.
+
 ### DS-064: Session-expiry and multi-tab app-lock consistency
 
 - A server-revoked or expired session could leave the current protected screen mounted until another navigation/auth refresh, producing repeated API failures and stale-looking UI. The five-minute PIN timer was also tab-local: an inactive background tab could lock every tab even while the user was actively working in another tab.
