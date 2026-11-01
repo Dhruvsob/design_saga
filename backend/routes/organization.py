@@ -263,7 +263,9 @@ async def upload_logo_multipart(request: Request,
     try:
         result = _storage.put_object(path, data, file.content_type)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"Storage error: {e}")
+        _log.warning("Object-storage logo upload failed: %s", type(e).__name__)
+        raise HTTPException(
+            503, "Logo storage is temporarily unavailable. Try again later.") from e
     stored_path = result.get("path", path)
     logo_url = f"/api/org/logo/{stored_path}"
     await db.organizations.update_one(

@@ -21,6 +21,11 @@ _OWNER = f"{socket.gethostname()}:{os.getpid()}"
 EXPECTED_JOBS = ("notification_scan", "recurring_expense_scan")
 
 
+def _safe_job_error(exc: Exception | None) -> str:
+    """Persist failure type only; exception messages may contain credentials/PII."""
+    return (type(exc).__name__ if exc is not None else "UnknownError")[:80]
+
+
 async def _acquire(name: str, lease_seconds: int) -> bool:
     now = now_utc()
     stale = iso(now - timedelta(seconds=lease_seconds))
@@ -62,7 +67,7 @@ async def run_job(name: str, fn, *, lease_seconds: int = 1800, retries: int = 3)
                 await asyncio.sleep(min(60, 5 * attempt))
         await db.job_status.update_one({"name": name}, {
             "$set": {"running": False, "last_failure_at": iso(now_utc()),
-                     "last_error": f"{type(last_exc).__name__}: {str(last_exc)[:300]}"},
+                     "last_error": _safe_job_error(last_exc)},
             "$inc": {"consecutive_failures": 1}})
         return None
     finally:

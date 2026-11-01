@@ -33,6 +33,19 @@ class GoogleCalendarError(RuntimeError):
     pass
 
 
+def _safe_sync_error(exc: Exception) -> str:
+    """Return operationally useful error metadata without persisting provider text.
+
+    OAuth/provider exception messages can contain request URLs, response bodies,
+    authorization codes or tokens. Store only the exception class and an HTTP
+    status when available.
+    """
+    name = type(exc).__name__[:80] or "ExternalError"
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+        return f"{name} (HTTP {exc.response.status_code})"
+    return name
+
+
 def is_configured() -> bool:
     return all(os.environ.get(name) for name in (
         "GOOGLE_CALENDAR_CLIENT_ID",
@@ -556,7 +569,7 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
             result["synced"] += 1
         except Exception as exc:  # noqa: BLE001 - queue retains sanitized failure
             attempts = int(row.get("attempts") or 0) + 1
-            message = str(exc)[:240]
+            message = _safe_sync_error(exc)
             delay = min(3600, 30 * (2 ** min(attempts, 7)))
             await db.google_calendar_sync_queue.update_one(
                 {"sync_key": row["sync_key"]},

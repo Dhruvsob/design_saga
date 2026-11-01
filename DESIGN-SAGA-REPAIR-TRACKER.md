@@ -1,6 +1,6 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-11-01 (Asia/Kolkata)
+Last updated: 2026-11-02 (Asia/Kolkata)
 
 ## Current Checkpoint
 
@@ -10,6 +10,24 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
+
+### DS-063: API and notification failure-detail secret minimization
+
+- The cross-tenant notification scheduler returned raw per-tenant exception messages in its operational result, and the multipart company-logo endpoint returned raw object-storage failures to authenticated clients. Provider/database errors can include credentials, internal endpoints, request details or tenant data.
+- Scheduler results now expose only the bounded exception class. Logo-storage failures are logged by exception class and return a stable generic 503 message, matching the existing base64 logo upload path.
+- Verification: focused regressions inject a private provider-detail marker and assert it cannot escape through scheduler results; source regression prevents reintroducing raw storage exception interpolation. Deployment remains pending stable VPS access.
+
+### DS-061: Google Calendar retry-error secret minimization
+
+- Calendar synchronization previously persisted raw external exception text in queue/connection `last_error` fields. OAuth and HTTP client messages can contain request URLs, provider response bodies, authorization codes or token fragments, bypassing log-only redaction because the value was stored in the database.
+- Retry failures now persist only the bounded exception class and HTTP status code when available. Retry timing, attempt counts and operator-visible failure state remain intact without storing provider payloads or URLs.
+- Verification: focused regression uses an exception containing a secret OAuth code/token and proves the stored summary contains only `HTTPStatusError (HTTP 401)`. Deployment remains pending stable VPS access.
+
+### DS-062: Scheduled-job failure-state secret minimization
+
+- The shared job runner persisted raw exception messages in `job_status.last_error`. Database/network exceptions can embed connection strings, credentials, request URLs or tenant data, so this bypassed log redaction and retained sensitive text in operational state.
+- Job health now persists only the bounded exception class while retaining failure timestamps, attempt counts and consecutive-failure alerts. Logs already record the exception class only.
+- Verification: focused regression supplies a private provider-detail marker and proves only `RuntimeError` is retained. Deployment remains pending stable VPS access.
 
 ### DS-059: Favorite-account financial permission isolation
 

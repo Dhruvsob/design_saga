@@ -203,3 +203,18 @@ def test_scan_reuses_finance_notifications_for_planned_collections(monkeypatch):
     due = next(row for row in emitted if row["kind"] == "collection_due")
     assert "Dhrumil Bhai" in due["title"]
     assert "4,000" in due["body"]
+
+
+def test_scheduled_scan_result_does_not_expose_exception_secrets(monkeypatch):
+    async def fail_scan(_org_id):
+        raise RuntimeError("DO_NOT_RETURN_PRIVATE_PROVIDER_DETAIL_52bc")
+
+    monkeypatch.setattr(notification_routes, "run_scan", fail_scan)
+    monkeypatch.setattr(
+        notification_routes, "db",
+        SimpleNamespace(organizations=_Rows([{"org_id": "org_a"}])),
+    )
+
+    result = asyncio.run(notification_routes.scheduled_scan_all_orgs())
+
+    assert result == {"org_a": {"error": "RuntimeError"}}

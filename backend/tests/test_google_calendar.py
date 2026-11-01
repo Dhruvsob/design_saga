@@ -1,5 +1,6 @@
 import asyncio
 from unittest.mock import AsyncMock
+import httpx
 
 import pytest
 
@@ -19,6 +20,19 @@ def test_token_encryption_requires_real_secret(monkeypatch):
     monkeypatch.setenv("GOOGLE_CALENDAR_ENCRYPTION_KEY", "short")
     with pytest.raises(gc.GoogleCalendarError):
         gc.encrypt_token("refresh-secret")
+
+
+def test_sync_error_summary_never_persists_provider_url_or_token():
+    request = httpx.Request("POST", "https://oauth.example/token?code=secret-code")
+    response = httpx.Response(401, request=request, text='{"access_token":"secret-token"}')
+    error = httpx.HTTPStatusError(
+        "401 from https://oauth.example/token?code=secret-code access_token=secret-token",
+        request=request, response=response,
+    )
+    summary = gc._safe_sync_error(error)
+    assert summary == "HTTPStatusError (HTTP 401)"
+    assert "secret" not in summary
+    assert "oauth.example" not in summary
 
 
 def test_google_event_id_is_stable_and_google_safe():

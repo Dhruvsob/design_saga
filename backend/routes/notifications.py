@@ -376,7 +376,8 @@ async def scheduled_scan_all_orgs():
             set_scope_from_user({"org_id": oid, "email": "", "is_super_admin": False})
             results[oid] = (await run_scan(oid)).get("emitted")
         except Exception as exc:            # never let one org break the loop
-            results[oid] = {"error": str(exc)[:200]}
+            # Provider/database messages may contain credentials or tenant data.
+            results[oid] = {"error": type(exc).__name__[:80]}
         finally:
             clear_scope()
     return results
