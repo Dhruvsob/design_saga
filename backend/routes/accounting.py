@@ -1379,6 +1379,14 @@ async def undo_journal_reversal(je_id: str, request: Request,
 # ==================================================
 # Income (payment received) — convenience wrapper
 # ==================================================
+def _validate_received_into_account(payment_method: str, account: dict) -> None:
+    is_cash_account = account.get("name") in {"Cash", "Petty Cash"}
+    if payment_method == "cash" and not is_cash_account:
+        raise HTTPException(status_code=400, detail="Cash receipts must use Cash or Petty Cash")
+    if payment_method != "cash" and not account.get("is_bank"):
+        raise HTTPException(status_code=400, detail="Non-cash receipts must use a bank account")
+
+
 @router.post("/accounting/income")
 async def create_income(payload: IncomeIn, request: Request,
                         session_token: Optional[str] = Cookie(default=None),
@@ -1392,11 +1400,13 @@ async def create_income(payload: IncomeIn, request: Request,
         raise HTTPException(status_code=400, detail="Link either an invoice or a milestone, not both")
 
     bank = await sdb.accounts.find_one(
-        {"id": payload.bank_account_id}, {"_id": 0, "id": 1, "type": 1})
+        {"id": payload.bank_account_id},
+        {"_id": 0, "id": 1, "type": 1, "name": 1, "is_bank": 1})
     income = await sdb.accounts.find_one(
         {"id": payload.income_account_id}, {"_id": 0, "id": 1, "type": 1})
     if not bank or bank.get("type") != "asset":
         raise HTTPException(status_code=400, detail="Received-into account must be a cash/bank asset account")
+    _validate_received_into_account(payload.payment_method, bank)
     if not income or income.get("type") != "income":
         raise HTTPException(status_code=400, detail="Income account must be an income account")
     if bank["id"] == income["id"]:
@@ -2267,6 +2277,7 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
         if payload.amount > outstanding + 0.01:
             raise HTTPException(status_code=400, detail=f"Amount exceeds pending receivable ({outstanding:.2f})")
         bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
+        _validate_received_into_account(payload.payment_method, bank)
         income_id = payload.income_account_id or row.get("income_account_id")
         income = await sdb.accounts.find_one(
             {"id": income_id, "type": "income", "active": {"$ne": False}}, {"_id": 0})

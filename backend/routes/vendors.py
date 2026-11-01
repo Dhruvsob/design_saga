@@ -1955,7 +1955,6 @@ async def receive_commission(vendor_id: str, payload: CommissionReceiveIn, reque
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
     bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
-    _validate_commission_receipt_account(payload.payment_method, bank)
     if payload.commission_ids and len(set(payload.commission_ids)) != len(payload.commission_ids):
         raise HTTPException(status_code=400, detail="Duplicate commission IDs in request")
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
@@ -1978,6 +1977,7 @@ async def receive_commission(vendor_id: str, payload: CommissionReceiveIn, reque
 async def _receive_commission_locked(user: dict, vendor_id: str, payload: CommissionReceiveIn,
                                      bank: dict, idem: Optional[str] = None,
                                      request_key: Optional[str] = None):
+    _validate_commission_receipt_account(payload.payment_method, bank)
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")

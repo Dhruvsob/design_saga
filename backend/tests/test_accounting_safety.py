@@ -242,6 +242,10 @@ def test_money_in_models_allow_partial_receipts_but_reject_invalid_dates():
         CollectionReceiptIn(source_type="invoice", source_id="inv_1", amount=100,
                             date="31/10/2026", bank_account_id="bank")
     with pytest.raises(ValidationError):
+        CollectionReceiptIn(source_type="invoice", source_id="inv_1", amount=100,
+                            date="2026-10-31", bank_account_id="bank",
+                            payment_method="crypto")
+    with pytest.raises(ValidationError):
         OtherReceivableIn(name="Bad date", amount=100, due_date="31/10/2026")
     with pytest.raises(ValidationError):
         CommissionExpectedIn(amount=100, due_date="31/10/2026")
@@ -263,6 +267,18 @@ def test_commission_receipt_method_matches_cash_or_bank_account():
     with pytest.raises(HTTPException, match="Non-cash"):
         vendors._validate_commission_receipt_account(
             "upi", {"name": "Cash", "is_bank": False})
+
+
+def test_money_in_method_matches_received_into_account():
+    accounting._validate_received_into_account("cash", {"name": "Cash"})
+    accounting._validate_received_into_account(
+        "bank_transfer", {"name": "ICICI Current", "is_bank": True})
+    with pytest.raises(HTTPException, match="Cash receipts"):
+        accounting._validate_received_into_account(
+            "cash", {"name": "ICICI Current", "is_bank": True})
+    with pytest.raises(HTTPException, match="Non-cash"):
+        accounting._validate_received_into_account(
+            "upi", {"name": "Petty Cash", "is_bank": False})
 
 
 def test_unified_collection_statuses_cover_partial_and_due_states():

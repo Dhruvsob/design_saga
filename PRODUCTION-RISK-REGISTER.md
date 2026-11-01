@@ -49,7 +49,7 @@ yet received sufficient adversarial testing.
 | Area | Risk / required evidence | Status |
 |---|---|---|
 | Employee/user link | Employee creation must create/link exactly one active authentication user where requested | Tenant-bound account lookup, safe offboarding, active-session revocation and duplicate login-ID prevention are covered; production identity preflight is clean and user IDs are uniquely indexed |
-| Invoice lifecycle | Draft/issued/paid/reversed/deleted transitions and permissions | Fixed and deployed: accounting-aware status transitions are idempotent, permission checked and reversal based |
+| Invoice lifecycle | Draft/issued/paid/reversed/deleted transitions and permissions | Fixed locally: Paid now requires explicit Record Payment metadata and Cash/Bank selection; partial/full receipts and latest-payment reversal synchronize invoice status and accounting; deployment pending |
 | Invoice accrual / Accounts Receivable | Issued invoices must not leave AR at zero; payment must settle AR without double-counting revenue | Fixed and verified live: issue posts A/R against revenue/GST, payment settles A/R, and rollback uses balanced reversals; no historical migration was required |
 | Capital and non-operating money | Owner capital/drawings, investments, advances and private loans must never be misclassified as operating income/expense | Fixed, deployed and verified live through reversible owner capital, gold, advance and repayment tests |
 | Chart of Accounts integrity | Current balances, unique names/codes, safe edits and non-destructive deactivation | Fixed and deployed; live current balances verified, future duplicate codes rejected, exact unused duplicates cleaned after backup, and audit chains pass |

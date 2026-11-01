@@ -1932,6 +1932,11 @@ async def create_invoice(payload: InvoiceIn, request: Request,
             and not has_permission(user, "finance.create"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
     requested_status = doc.get("status") or "draft"
+    if requested_status == "paid" and doc.get("doc_type", "invoice") == "invoice":
+        raise HTTPException(
+            status_code=409,
+            detail="Create or issue the invoice first, then use Record Payment with the actual date and Cash/Bank account",
+        )
     if requested_status != "draft" and doc.get("doc_type", "invoice") == "invoice":
         # Persist a draft first. The shared status workflow then posts the
         # invoice accrual (and, for paid, its receipt) before changing status.
@@ -2059,6 +2064,11 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
         raise HTTPException(status_code=404, detail="Not found")
     if inv.get("status") == payload.status:
         return {k: v for k, v in inv.items() if k not in ("_lock", "_lock_at")}
+    if payload.status == "paid" and inv.get("doc_type", "invoice") == "invoice":
+        raise HTTPException(
+            status_code=409,
+            detail="Use Record Payment so amount, date, method and Cash/Bank account are captured",
+        )
     if inv.get("status") == "cancelled" and payload.status == "paid":
         raise HTTPException(status_code=409, detail="Cancelled invoices cannot be marked paid; reopen as sent first")
     if inv.get("status") == "paid" and payload.status == "cancelled":

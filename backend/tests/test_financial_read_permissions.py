@@ -237,3 +237,16 @@ def test_invoice_issue_and_draft_transitions_post_and_reverse_accrual(monkeypatc
     assert draft["status"] == "draft"
     assert draft["accrual_journal_id"] is None
     assert calls == ["post", "reverse"]
+
+
+def test_invoice_cannot_be_marked_paid_without_record_payment(monkeypatch):
+    class Invoices:
+        async def find_one(self, *_args, **_kwargs):
+            return {"id": "inv_1", "number": "INV-1", "doc_type": "invoice",
+                    "status": "sent", "total": 1180}
+
+    monkeypatch.setattr(server, "sdb", SimpleNamespace(invoices=Invoices()))
+    with pytest.raises(HTTPException, match="Record Payment"):
+        asyncio.run(server._update_invoice_status_locked(
+            {"user_id": "admin"}, "inv_1",
+            server.InvoiceStatusUpdate(status="paid")))

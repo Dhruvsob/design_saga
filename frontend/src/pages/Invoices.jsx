@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { formatDate } from "../lib/format";
-import { Plus, FilePdf, Trash, Eye, PencilSimple } from "@phosphor-icons/react";
+import { dateForInput, formatDate } from "../lib/format";
+import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
   const canCreate = hasPerm("invoices.create");
   const canUpdate = hasPerm("invoices.update");
   const canDelete = hasPerm("invoices.delete");
+  const canRecordPayment = hasPerm("finance.create");
+  const canCorrectPayment = hasPerm("finance.delete");
   const [rows, setRows] = useState([]);
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -17,6 +19,13 @@ export default function Invoices({ docType = "invoice" }) {
   const [form, setForm] = useState(initialForm(docType));
   const [editingId, setEditingId] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [paying, setPaying] = useState(null);
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [payment, setPayment] = useState({
+    amount: "", date: dateForInput(new Date()), bank_account_id: "",
+    payment_method: "bank_transfer", reference: "", notes: "",
+  });
 
   function initialForm(dt) {
     return {
@@ -28,14 +37,16 @@ export default function Invoices({ docType = "invoice" }) {
   }
 
   const load = async () => {
-    const [inv, cl, pr] = await Promise.all([
+    const [inv, cl, pr, acc] = await Promise.all([
       api.get(`/invoices?doc_type=${docType}`),
       api.get("/clients"),
       api.get("/projects"),
+      canRecordPayment ? api.get("/accounts").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
     ]);
     setRows(inv.data);
     setClients(cl.data);
     setProjects(pr.data);
+    setAccounts((acc.data || []).filter((row) => row.is_bank || ["Cash", "Petty Cash"].includes(row.name)));
   };
   useEffect(() => { load(); setForm(initialForm(docType)); /* eslint-disable-next-line */ }, [docType]);
 
@@ -90,19 +101,47 @@ export default function Invoices({ docType = "invoice" }) {
   };
 
   const changeStatus = async (id, status) => {
-    const row = rows.find((r) => r.id === id);
-    if (status === "paid" && row?.doc_type !== "quotation") {
-      const ok = window.confirm(
-        `Mark ${row?.number || "this invoice"} as PAID?\n\nThis records a receipt of ₹${(row?.total || 0).toLocaleString("en-IN")} in Accounting (dated today). You can undo by changing status back to "sent".`
-      );
-      if (!ok) { load(); return; }
-    }
     try {
       await api.patch(`/invoices/${id}/status`, { status });
     } catch (e) {
       alert(e?.response?.data?.detail || "Could not update status");
     }
     load();
+  };
+
+  const openPayment = (row) => {
+    const account = accounts[0];
+    setPaying(row);
+    setPayment({
+      amount: Math.max(0, Number(row.total || 0) - Number(row.paid_amount || 0)),
+      date: dateForInput(new Date()), bank_account_id: account?.id || "",
+      payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer",
+      reference: row.number || "", notes: `Payment received for ${row.number || "invoice"}`,
+    });
+  };
+
+  const recordPayment = async (event) => {
+    event.preventDefault();
+    if (!paying || paymentBusy) return;
+    setPaymentBusy(true);
+    try {
+      await api.post("/accounting/collections/receive", {
+        ...payment, amount: Number(payment.amount), source_type: "invoice", source_id: paying.id,
+      }, { headers: { "Idempotency-Key": crypto.randomUUID() } });
+      toast.success("Invoice payment recorded in Accounting");
+      setPaying(null); await load();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not record invoice payment");
+    } finally { setPaymentBusy(false); }
+  };
+
+  const reverseLatestPayment = async (row) => {
+    if (!row.journal_id) return toast.error("No linked payment journal was found");
+    if (!window.confirm(`Delete the latest payment for ${row.number}?\n\nA balanced reversal will preserve the audit history and restore the invoice balance.`)) return;
+    try {
+      await api.delete(`/journal-entries/${row.journal_id}`);
+      toast.success("Latest invoice payment reversed"); await load();
+    } catch (error) { toast.error(error?.response?.data?.detail || "Could not reverse invoice payment"); }
   };
 
   const del = async (id, isPaid) => {
@@ -226,10 +265,9 @@ export default function Invoices({ docType = "invoice" }) {
                 <Td className="font-mono text-xs">{formatDate(r.due_date)}</Td>
                 <Td className="font-mono font-semibold">₹{(r.total || 0).toLocaleString("en-IN")}</Td>
                 <Td>
-                  {canUpdate ? <select className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
+                  {canUpdate && !["paid", "partially_paid"].includes(r.status) ? <select className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
                     <option value="draft">draft</option>
                     <option value="sent">sent</option>
-                    <option value="paid">paid</option>
                     <option value="overdue">overdue</option>
                     <option value="cancelled">cancelled</option>
                   </select> : <span className={`status-chip chip-${r.status}`}>{r.status}</span>}
@@ -238,10 +276,16 @@ export default function Invoices({ docType = "invoice" }) {
                   <div className="flex items-center gap-2">
                     <button onClick={() => setPreview(r)} className="text-[#8B7F6A]" title="Preview"><Eye size={16} /></button>
                     <button onClick={() => download(r.id)} className="text-[#8B7F6A]" title="PDF"><FilePdf size={16} /></button>
-                    {canUpdate && r.status !== "paid" && (
+                    {canUpdate && (docType === "quotation" ? r.status !== "paid" : r.status === "draft") && (
                       <button onClick={() => startEdit(r)} className="text-[#5C5C5C] hover:text-[#0A0A0A]" title="Edit" data-testid={`${docType}-edit-${r.id}`}><PencilSimple size={16} /></button>
                     )}
-                    {canDelete && <button onClick={() => del(r.id, r.status === "paid")} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>}
+                    {docType === "invoice" && canRecordPayment && ["sent", "overdue", "partially_paid"].includes(r.status) && accounts.length > 0 && (
+                      <button onClick={() => openPayment(r)} className="text-[#1D633E]" title="Record payment" data-testid={`invoice-pay-${r.id}`}><Money size={16} /></button>
+                    )}
+                    {docType === "invoice" && canCorrectPayment && ["paid", "partially_paid"].includes(r.status) && r.journal_id && (
+                      <button onClick={() => reverseLatestPayment(r)} className="text-[#B4001C]" title="Delete latest payment with reversal"><ArrowCounterClockwise size={16} /></button>
+                    )}
+                    {canDelete && <button onClick={() => del(r.id, ["paid", "partially_paid"].includes(r.status))} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>}
                   </div>
                 </Td>
               </tr>
@@ -262,6 +306,21 @@ export default function Invoices({ docType = "invoice" }) {
               className="w-full h-[90vh]"
             />
           </div>
+        </div>
+      )}
+      {paying && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <form onSubmit={recordPayment} className="bg-white border border-[#E5E5E5] w-full max-w-xl p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3"><div><div className="overline">RECORD PAYMENT</div><h2 className="font-display font-bold text-2xl">{paying.number}</h2><div className="text-xs text-[#5C5C5C]">Outstanding ₹{Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0)).toLocaleString("en-IN")}</div></div><button type="button" className="btn-ghost" onClick={() => setPaying(null)}><X size={16}/></button></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-xs">Amount<input required min="0.01" max={Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0))} step="0.01" type="number" className="input-flat mt-1 w-full" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label>
+              <label className="text-xs">Payment date<input required type="date" className="input-flat mt-1 w-full" value={payment.date} onChange={(e) => setPayment({ ...payment, date: e.target.value })}/></label>
+              <label className="text-xs">Method<select className="input-flat mt-1 w-full" value={payment.payment_method} onChange={(e) => { const method = e.target.value; const compatible = method === "cash" ? accounts.find((a) => ["Cash", "Petty Cash"].includes(a.name)) : accounts.find((a) => a.is_bank); setPayment({ ...payment, payment_method: method, bank_account_id: compatible?.id || payment.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="credit_card">Credit card</option><option value="online">Online</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
+              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={payment.bank_account_id} onChange={(e) => { const account = accounts.find((a) => a.id === e.target.value); setPayment({ ...payment, bank_account_id: e.target.value, payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer" }); }}><option value="">Select Cash / Bank</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+              <label className="text-xs sm:col-span-2">Reference<input className="input-flat mt-1 w-full" value={payment.reference} onChange={(e) => setPayment({ ...payment, reference: e.target.value })}/></label>
+            </div>
+            <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setPaying(null)}>Cancel</button><button className="btn-primary" disabled={paymentBusy}>{paymentBusy ? "Recording…" : "Record payment"}</button></div>
+          </form>
         </div>
       )}
     </div>

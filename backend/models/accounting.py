@@ -105,11 +105,23 @@ class IncomeIn(FiniteModel):
     employee_id: Optional[str] = None
     income_account_id: str                    # which income account
     bank_account_id: str                      # cash / bank Rx into
-    payment_method: Optional[str] = "bank_transfer"
+    payment_method: Literal[
+        "cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"
+    ] = "bank_transfer"
     reference: Optional[str] = None
     invoice_id: Optional[str] = None
     milestone_id: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def validate_income_date(cls, value):
+        from datetime import date
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
 
 
 class OtherReceivableIn(FiniteModel):
@@ -175,7 +187,9 @@ class CollectionReceiptIn(FiniteModel):
     date: str
     bank_account_id: str
     income_account_id: Optional[str] = None
-    payment_method: Optional[str] = "bank_transfer"
+    payment_method: Literal[
+        "cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"
+    ] = "bank_transfer"
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
 

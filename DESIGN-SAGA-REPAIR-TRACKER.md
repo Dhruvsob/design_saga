@@ -65,6 +65,15 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Database effect: no migration or historical rewrite. New plans and future corrections use the existing authoritative collections; posted receipt corrections remain reversal based.
 - Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
 
+### DS-052: Invoice Record Payment and reversible partial collections
+
+- Root cause: Invoice status UI allowed a direct Paid selection that silently created a full receipt dated today through a default account. It did not capture the actual amount, Cash/Bank account, method or reference, so status could be mistaken for proof of payment and reproduce Cash/Bank mismatches. The invoice screen also offered edit/delete actions that the backend correctly rejected for partially paid records.
+- Correction: Paid is now derived only from the authoritative Money In receipt workflow. Issued invoices expose Record Payment with amount, date, method, Cash/Bank account and reference; partial receipts set Partially Paid and full settlement sets Paid. Direct API creation/status transition to Paid is rejected with guidance to Record Payment. The latest linked payment can be deleted from the invoice screen by a balanced hidden-from-books reversal, which restores invoice outstanding/status through the existing source-sync engine. Draft invoice edit/delete controls now match backend lifecycle rules.
+- Validation: Money In dates and methods are schema constrained. Cash receipts require Cash/Petty Cash; bank transfer, UPI, cheque, card, online and other non-cash methods require a configured bank account. The same rule applies to generic income, invoice/milestone collections and other receivables.
+- Verification: 53 focused invoice, accounting, payroll, vendor-commission visibility and financial-permission regressions pass. Frontend ESLint and production build pass; diff checks pass.
+- Database effect: no migration or historical rewrite. New receipts use existing journal/source records and corrections append balanced reversals.
+- Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.
