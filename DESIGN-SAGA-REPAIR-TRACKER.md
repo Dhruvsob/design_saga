@@ -11,6 +11,18 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-059: Favorite-account financial permission isolation
+
+- The standalone `finance_extras` router is mounted separately from the protected Accounting router. Its Favorite Accounts endpoints authenticated the caller but did not require `finance.read`, allowing an ordinary employee to probe an account ID and retrieve account master fields through a personal favorite list.
+- List, add and remove favorite-account endpoints now reject callers without `finance.read` before any account or favorite-record lookup. Tenant scoping and per-user ownership remain unchanged.
+- Verification: focused financial-read regressions prove all three unauthorized paths return 403 without database access. Deployment remains pending stable VPS access.
+
+### DS-060: Vendor commission statement financial privacy
+
+- Vendor Commission Statement PDF exposed earned, received and pending commission amounts to any role with `vendors.read`, while the Vendor Commissions screen and accounting APIs correctly require finance access.
+- The PDF now requires both `vendors.read` and `finance.read`; a vendor-directory-only employee is rejected before vendor or commission data is queried.
+- Verification: focused financial-read regression proves the non-finance path returns 403 with zero vendor-data access. Deployment remains pending stable VPS access.
+
 ### DS-058: Journal-detail defense-in-depth and route-authentication gate
 
 - Accounting already enforces `finance.read` through a router-level dependency, so the direct journal-detail endpoint was not publicly exposed. The handler nevertheless lacked its own explicit check; it now authenticates and rejects non-finance roles before any journal lookup, preserving protection if route wiring is refactored later.

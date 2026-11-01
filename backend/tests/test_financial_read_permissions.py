@@ -163,6 +163,54 @@ def test_journal_detail_requires_finance_read_before_database_access(monkeypatch
     assert journals.reads == 1
 
 
+def test_favorite_accounts_require_finance_read_before_account_lookup(monkeypatch):
+    from routes import finance_extras
+
+    class ForbiddenCollection:
+        async def find_one(self, *_args, **_kwargs):
+            raise AssertionError("database must not be queried without finance.read")
+
+    monkeypatch.setattr(
+        finance_extras,
+        "sdb",
+        SimpleNamespace(
+            user_favorite_accounts=ForbiddenCollection(),
+            accounts=ForbiddenCollection(),
+        ),
+    )
+
+    async def employee(*_args, **_kwargs):
+        return {"user_id": "employee_1", "permissions": ["projects.read"]}
+
+    monkeypatch.setattr(finance_extras, "require_user", employee)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(finance_extras.list_favorites(None))
+    assert exc.value.status_code == 403
+    with pytest.raises(HTTPException):
+        asyncio.run(finance_extras.add_favorite(finance_extras.FavoriteIn(account_id="acc_1"), None))
+    with pytest.raises(HTTPException):
+        asyncio.run(finance_extras.remove_favorite("acc_1", None))
+
+
+def test_vendor_commission_statement_requires_vendor_and_finance_read(monkeypatch):
+    from routes import finance_extras
+
+    class Vendors:
+        async def find_one(self, *_args, **_kwargs):
+            raise AssertionError("vendor data must not be read without finance.read")
+
+    monkeypatch.setattr(finance_extras, "sdb", SimpleNamespace(vendors_acc=Vendors()))
+
+    async def operational_vendor_reader(*_args, **_kwargs):
+        return {"user_id": "employee_1", "permissions": ["vendors.read"]}
+
+    monkeypatch.setattr(finance_extras, "require_user", operational_vendor_reader)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(finance_extras.vendor_commission_statement_pdf("vendor_1", None))
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Missing permission: finance.read"
+
+
 def test_project_detail_separates_invoice_procurement_and_vendor_cost_access(monkeypatch):
     collections = SimpleNamespace(
         tasks=_Collection(), files=_Collection(), employees=_Collection(),

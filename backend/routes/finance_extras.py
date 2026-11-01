@@ -337,6 +337,8 @@ async def list_favorites(request: Request,
                          session_token: Optional[str] = Cookie(default=None),
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(403, "Missing permission: finance.read")
     # Personal per-user list within the tenant.
     doc = await sdb.user_favorite_accounts.find_one(
         {"user_id": user["user_id"]}, {"_id": 0})
@@ -355,6 +357,8 @@ async def add_favorite(payload: FavoriteIn, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
                        authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(403, "Missing permission: finance.read")
     acc = await sdb.accounts.find_one({"id": payload.account_id}, {"_id": 0, "id": 1})
     if not acc:
         raise HTTPException(404, "Account not found")
@@ -384,6 +388,8 @@ async def remove_favorite(account_id: str, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(403, "Missing permission: finance.read")
     doc = await sdb.user_favorite_accounts.find_one(
         {"user_id": user["user_id"]}, {"_id": 0})
     ids = list((doc or {}).get("account_ids") or [])
@@ -413,6 +419,8 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "vendors.read"):
         raise HTTPException(403, "Missing permission: vendors.read")
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(403, "Missing permission: finance.read")
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
     if not vendor:
         raise HTTPException(404, "Vendor not found")
