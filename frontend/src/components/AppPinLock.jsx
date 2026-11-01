@@ -37,7 +37,7 @@ export function MandatoryPinSetupOverlay() {
         <div className="overline text-center text-[#8B7F6A]">PERSONAL SECURITY</div>
         <h1 className="font-display font-bold text-3xl text-center mt-2">Create your App PIN</h1>
         <p className="text-sm text-[#5C5C5C] text-center mt-2 mb-6">
-          Choose a personal 4- or 6-digit PIN. It protects only your account and is required after one minute without activity.
+          Choose a personal 4- or 6-digit PIN. It protects only your account and is required after five minutes without activity.
         </p>
         <label className="block"><span className="text-xs text-[#5C5C5C]">New PIN</span>
           <input type="password" inputMode="numeric" maxLength={6} autoComplete="new-password"
@@ -110,7 +110,7 @@ export function PinLockOverlay() {
         <div className="overline text-center text-[#8B7F6A]">APP LOCKED</div>
         <h1 className="font-display font-bold text-3xl text-center mt-2">Welcome back, {user.name?.split(" ")[0] || "there"}.</h1>
         <p className="text-sm text-[#5C5C5C] text-center mt-2 mb-6">
-          Enter your personal 4- or 6-digit PIN. The ERP locks after one minute without activity.
+          Enter your personal 4- or 6-digit PIN. The ERP locks after five minutes without activity.
         </p>
         <input
           ref={inputRef}
@@ -192,7 +192,7 @@ export function PinSecurityDialog({ onClose }) {
               <ShieldCheck size={24} className="text-[#1D633E] shrink-0" weight="fill" />
               <div>
                 <div className="font-semibold">Personal PIN enabled</div>
-                <div className="text-xs text-[#5C5C5C] mt-1">This account locks after one minute without activity. Each user has a separate PIN.</div>
+                <div className="text-xs text-[#5C5C5C] mt-1">This account locks after five minutes without activity. Each user has a separate PIN.</div>
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-2 mt-5">

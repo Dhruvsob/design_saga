@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api, { setSessionToken } from "../lib/api";
 
+const PIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
 const AuthContext = createContext(null);
 
 function checkPerm(permissions, perm) {
@@ -107,7 +109,7 @@ export function AuthProvider({ children }) {
     };
     const activity = () => {
       const now = Date.now();
-      if (now - lastActivity >= 60000) {
+      if (now - lastActivity >= PIN_IDLE_TIMEOUT_MS) {
         lockLocally();
         return;
       }
@@ -119,7 +121,7 @@ export function AuthProvider({ children }) {
       });
     };
     const checkIdle = () => {
-      if (Date.now() - lastActivity >= 60000) lockLocally();
+      if (Date.now() - lastActivity >= PIN_IDLE_TIMEOUT_MS) lockLocally();
     };
     const events = ["pointerdown", "keydown", "touchstart", "scroll"];
     events.forEach((name) => window.addEventListener(name, activity, { passive: true }));

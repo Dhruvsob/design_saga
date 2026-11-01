@@ -6,7 +6,7 @@ from fastapi import HTTPException, Request
 from .helpers import now_utc
 
 
-PIN_TIMEOUT_SECONDS = 60
+PIN_TIMEOUT_SECONDS = 5 * 60
 
 
 def _as_utc(value):

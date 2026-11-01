@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 import routes.auth as auth
 from core.session_lock import (
+    PIN_TIMEOUT_SECONDS,
     enforce_session_pin,
     session_is_recent,
     session_pin_locked,
@@ -16,6 +17,10 @@ from routes.auth import _validate_app_pin, _validate_new_app_pin
 
 
 NOW = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
+
+
+def test_pin_inactivity_timeout_is_five_minutes():
+    assert PIN_TIMEOUT_SECONDS == 300
 
 
 def test_pin_lock_is_fail_closed_when_unlock_lease_is_missing_or_expired():

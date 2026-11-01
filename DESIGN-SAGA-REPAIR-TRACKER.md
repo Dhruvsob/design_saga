@@ -41,6 +41,12 @@ Last updated: 2026-10-30 (Asia/Kolkata)
 - Employee document removal now fails with 404 when either the employee or document ID is absent instead of reporting a misleading success for a guessed/stale identifier.
 - Verification: Python compilation, diff and tracked-secret gates pass. Deployment and production audit-chain verification remain pending restored VPS access.
 
+### DS-049: Five-minute personal App PIN inactivity lock
+
+- The mandatory per-user App PIN now locks after five minutes (300 seconds) without activity instead of one minute. Backend unlock leases and frontend idle detection use the same duration, while manual Lock now, cross-tab locking, five-attempt/15-minute protection and hashed PIN storage remain unchanged.
+- All setup, lock-screen and security-dialog text now states five minutes. Existing users and PIN hashes require no migration.
+- Verification: 14 focused PIN/session regressions pass; full frontend ESLint and production build pass. Deployment and live timing verification remain pending restored VPS access.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.
@@ -613,10 +619,10 @@ This is the canonical intake list supplied after the repair-release deployment. 
 
 ## Deployment Safety
 
-### DS-020: Mandatory personal App PIN and one-minute lock
+### DS-020: Mandatory personal App PIN and five-minute lock
 
 - Root cause: the inactivity lock was server-enforced but optional, accepted only six-digit PINs, and could be disabled by the user. Accounts without a configured PIN and sessions created before rollout could continue without the second local security step.
-- Correction: every active approved user must create a separate 4- or 6-digit PIN before business APIs or screens are available. New and existing sessions are upgraded fail-closed, existing PINs remain valid, PINs stay bcrypt-hashed, predictable shared defaults are rejected for new PINs, and users can no longer disable the control. The existing five-attempt/15-minute lockout, one-minute inactivity timeout, manual Lock now action, session isolation, and audit logging remain in place.
+- Correction: every active approved user must create a separate 4- or 6-digit PIN before business APIs or screens are available. New and existing sessions are upgraded fail-closed, existing PINs remain valid, PINs stay bcrypt-hashed, predictable shared defaults are rejected for new PINs, and users can no longer disable the control. The five-attempt/15-minute lockout, five-minute inactivity timeout, manual Lock now action, session isolation, and audit logging remain in place.
 - Safety: no shared `1234`/`123456` credential is assigned and no existing password or PIN is overwritten. Pending and deactivated users retain their existing lifecycle screens. An administrator password reset still clears the old PIN as an account-recovery action, after which the user must enroll a new personal PIN at next login.
 - Verification: 196 backend security/integrity regressions passed, full frontend lint passed with zero warnings, and the production frontend bundle built successfully.
 - Database effect: no migration or business-data rewrite. Session rows are upgraded lazily on first authenticated request; PIN hashes are written only when each user completes enrollment.
