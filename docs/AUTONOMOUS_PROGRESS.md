@@ -30,8 +30,10 @@ Last updated: 01/11/2026 (Asia/Kolkata)
 - DS-060: Vendor Commission Statement PDF now requires both `vendors.read` and
   `finance.read` before any vendor/commission lookup.
 - Focused access/financial suite: 37 passed. Diff and tracked-secret gates pass.
-- Next executable work: continue resource-level permission review of separately
-  mounted routers, then run the full mandatory suite and update this checkpoint.
+- Complete mandatory security/integrity suite: 243 passed. Diff and
+  tracked-secret gates pass. Batch commit: `9f8154f`.
+- Next executable work: continue resource-level permission review beyond the
+  separately mounted routers, then accounting/correction workflow integration.
 
 ## External blockers
 
