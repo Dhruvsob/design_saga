@@ -39,6 +39,7 @@ export default function VendorDetail() {
   const [perf, setPerf] = useState(null);
   const [commissionLedger, setCommissionLedger] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [busy, setBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -48,12 +49,14 @@ export default function VendorDetail() {
   const paymentRequestKey = useRef(crypto.randomUUID());
 
   const load = useCallback(async () => {
-    const [{ data }, { data: acc }] = await Promise.all([
+    const [{ data }, { data: acc }, { data: projectRows }] = await Promise.all([
       api.get(`/vendors/${id}`),
       hasPerm("finance.read") ? api.get("/accounts") : Promise.resolve({ data: [] }),
+      hasPerm("projects.read") ? api.get("/projects") : Promise.resolve({ data: [] }),
     ]);
     setV(data);
     setAccounts(acc);
+    setProjects(projectRows || []);
     if (hasPerm("purchase_orders.read")) {
       const poResult = await api.get(`/purchase-orders?vendor_id=${id}`).catch(() => ({ data: [] }));
       setPurchaseOrders(poResult.data || []);
@@ -144,6 +147,24 @@ export default function VendorDetail() {
       toast.success("Expected commission cancelled");
     } catch (error) {
       toast.error(error?.response?.data?.detail || "Could not cancel expected commission");
+    } finally { setBusy(false); }
+  };
+  const saveExpectedCommission = async (form, commissionId) => {
+    setBusy(true);
+    try {
+      const payload = {
+        amount: Number(form.amount), due_date: form.due_date || undefined,
+        project_id: form.project_id || undefined, recognition: form.recognition,
+        reference: form.reference || undefined, reminder_date: form.reminder_date || undefined,
+        notes: form.notes || undefined,
+      };
+      if (commissionId) await api.patch(`/vendors/${id}/commissions/${commissionId}`, payload);
+      else await api.post(`/vendors/${id}/commissions`, payload);
+      await refreshCommissions();
+      toast.success(commissionId ? "Expected commission updated" : "Expected commission added without posting accounting");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not save expected commission");
+      throw error;
     } finally { setBusy(false); }
   };
 
@@ -312,11 +333,12 @@ export default function VendorDetail() {
           onDelete={reversePayment} busy={busy} />
       )}
       {tab === "commissions" && (
-        <Commissions ledger={commissionLedger} accounts={accounts}
+        <Commissions ledger={commissionLedger} accounts={accounts} projects={projects}
           canReceive={hasPerm("finance.create")}
+          canPlan={hasPerm("finance.create")} canEdit={hasPerm("finance.update")}
           canDelete={hasPerm("finance.delete")}
           onReceive={receiveCommission} onDeleteReceipt={reverseCommissionReceipt}
-          onDeletePlan={cancelExpectedCommission} busy={busy} />
+          onSavePlan={saveExpectedCommission} onDeletePlan={cancelExpectedCommission} busy={busy} />
       )}
       {tab === "projects" && <ProjectsTasks v={v} />}
       {tab === "documents" && (
@@ -1047,17 +1069,26 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
 }
 
 /* -------------------- COMMISSIONS (list + receive) -------------------- */
-function Commissions({ ledger, accounts, canReceive, canDelete, onReceive, onDeleteReceipt, onDeletePlan, busy }) {
+function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit, canDelete,
+  onReceive, onDeleteReceipt, onSavePlan, onDeletePlan, busy }) {
   const { id } = useParams();
   const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
   const [open, setOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState(null);
+  const emptyPlan = {
+    amount: "", due_date: "", project_id: "", recognition: "planned",
+    reference: "", reminder_date: "", notes: "",
+  };
+  const [plan, setPlan] = useState(emptyPlan);
   const [f, setF] = useState({
     amount: 0, received_date: today(), bank_account_id: "",
     payment_method: "bank_transfer", reference: "", notes: "", commission_ids: [],
   });
   useEffect(() => {
     if (!f.bank_account_id && bankAccounts[0]) {
-      setF((s) => ({ ...s, bank_account_id: bankAccounts[0].id }));
+      setF((s) => ({ ...s, bank_account_id: bankAccounts[0].id,
+        payment_method: ["Cash", "Petty Cash"].includes(bankAccounts[0].name) ? "cash" : "bank_transfer" }));
     }
     // eslint-disable-next-line
   }, [accounts.length]);
@@ -1072,6 +1103,23 @@ function Commissions({ ledger, accounts, canReceive, canDelete, onReceive, onDel
       document.body.appendChild(link); link.click(); link.remove();
       window.URL.revokeObjectURL(url);
     } catch (e) { /* toast handled by axios interceptor */ }
+  };
+  const openPlan = (row = null) => {
+    setEditingPlan(row);
+    setPlan(row ? {
+      amount: row.amount ?? "", due_date: row.due_date || "",
+      project_id: row.project_id || "", recognition: row.recognition || "planned",
+      reference: row.reference || "", reminder_date: row.reminder_date || "",
+      notes: row.notes || "",
+    } : emptyPlan);
+    setPlanOpen(true);
+  };
+  const submitPlan = async (event) => {
+    event.preventDefault();
+    try {
+      await onSavePlan(plan, editingPlan?.id);
+      setPlanOpen(false); setEditingPlan(null); setPlan(emptyPlan);
+    } catch { /* parent shows the API error and leaves the form open */ }
   };
 
   if (!ledger) return <div className="overline">LOADING…</div>;
@@ -1094,7 +1142,29 @@ function Commissions({ ledger, accounts, canReceive, canDelete, onReceive, onDel
           <button onClick={downloadStatementPdf} className="btn-ghost" data-testid="cm-statement-pdf-btn">
             <DownloadSimple size={13} /> Statement PDF
           </button>
+          {canPlan && <button type="button" onClick={() => openPlan()} className="btn-ghost" data-testid="add-expected-commission">
+            <Receipt size={13} /> Add expected commission
+          </button>}
         </div>
+      )}
+      {planOpen && (
+        <form className="card-flat space-y-3" onSubmit={submitPlan} data-testid="expected-commission-form">
+          <div className="flex items-start justify-between gap-3">
+            <div><div className="overline">{editingPlan ? "EDIT EXPECTED COMMISSION" : "EXPECTED COMMISSION"}</div>
+              <div className="text-xs text-[#5C5C5C] mt-1">This creates a collection due only. No journal is posted until money is received.</div></div>
+            <button type="button" className="btn-ghost" onClick={() => setPlanOpen(false)}>×</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <label className="text-xs">Expected amount<input required min="0.01" step="0.01" type="number" className="input-flat mt-1 w-full" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: e.target.value })} /></label>
+            <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={plan.due_date} onChange={(e) => setPlan({ ...plan, due_date: e.target.value })} /></label>
+            <label className="text-xs">Project<select className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+            <label className="text-xs">Accounting basis<select className="input-flat mt-1 w-full" value={plan.recognition} onChange={(e) => setPlan({ ...plan, recognition: e.target.value })}><option value="planned">Expected only - not earned</option><option value="earned">Already earned - awaiting receipt</option></select></label>
+            <label className="text-xs">Reminder date<input type="date" className="input-flat mt-1 w-full" value={plan.reminder_date} onChange={(e) => setPlan({ ...plan, reminder_date: e.target.value })} /></label>
+            <label className="text-xs md:col-span-2">Reference<input className="input-flat mt-1 w-full" value={plan.reference} onChange={(e) => setPlan({ ...plan, reference: e.target.value })} /></label>
+            <label className="text-xs md:col-span-4">Notes<textarea className="input-flat mt-1 w-full" value={plan.notes} onChange={(e) => setPlan({ ...plan, notes: e.target.value })} /></label>
+          </div>
+          <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : editingPlan ? "Save changes" : "Add expected commission"}</button>
+        </form>
       )}
       {open && (
         <form
@@ -1109,12 +1179,23 @@ function Commissions({ ledger, accounts, canReceive, canDelete, onReceive, onDel
               onChange={(e) => setF({ ...f, received_date: e.target.value })} />
             <select required className="input-flat" value={f.bank_account_id}
               data-testid="rcm-bank"
-              onChange={(e) => setF({ ...f, bank_account_id: e.target.value })}>
+              onChange={(e) => {
+                const account = bankAccounts.find((item) => item.id === e.target.value);
+                setF({ ...f, bank_account_id: e.target.value,
+                  payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer" });
+              }}>
               <option value="">Deposited to…</option>
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <select className="input-flat" value={f.payment_method}
-              onChange={(e) => setF({ ...f, payment_method: e.target.value })}>
+              onChange={(e) => {
+                const method = e.target.value;
+                const compatible = method === "cash"
+                  ? bankAccounts.find((item) => ["Cash", "Petty Cash"].includes(item.name))
+                  : bankAccounts.find((item) => item.is_bank);
+                setF({ ...f, payment_method: method,
+                  bank_account_id: compatible?.id || f.bank_account_id });
+              }}>
               {["bank_transfer","upi","cash","cheque","credit_card","online","other"].map((m) => (
                 <option key={m} value={m}>{m.replace("_", " ")}</option>
               ))}
@@ -1152,7 +1233,7 @@ function Commissions({ ledger, accounts, canReceive, canDelete, onReceive, onDel
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
             <tr>
-              <Th>Bill date</Th><Th>Bill</Th><Th className="text-right">Purchase</Th>
+              <Th>Due / bill date</Th><Th>Source / project</Th><Th className="text-right">Purchase</Th>
               <Th>Type</Th><Th className="text-right">Earned</Th>
               <Th className="text-right">Received</Th><Th>Status</Th><Th>Actions</Th>
             </tr>
@@ -1165,18 +1246,18 @@ function Commissions({ ledger, accounts, canReceive, canDelete, onReceive, onDel
             )}
             {(ledger.entries || []).map((r) => (
               <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`cm-row-${r.id}`}>
-                <Td className="font-mono text-xs">{formatDate(r.bill_date)}</Td>
-                <Td className="font-mono text-xs">{r.bill_number}</Td>
+                <Td className="font-mono text-xs">{formatDate(r.due_date || r.bill_date)}</Td>
+                <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected commission"}</div><div className="text-[10px] text-[#9A9A9A]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
                 <Td className="text-right font-mono">{INR_D(r.purchase_amount)}</Td>
                 <Td>
                   <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[#F2F2F2]">
-                    {r.commission_type}
+                    {r.origin === "manual_expected" ? r.recognition : r.commission_type}
                   </span>
                 </Td>
                 <Td className="text-right font-mono">{INR_D(r.amount)}</Td>
                 <Td className="text-right font-mono text-[#1D633E]">{INR_D(r.received_amount || 0)}</Td>
                 <Td><CommissionStatus s={r.status} /></Td>
-                <Td>{canDelete && r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button> : r.bill_id ? <span className="text-[10px] text-[#9A9A9A]">Correct from bill</span> : "—"}</Td>
+                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <div className="flex gap-1">{canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => openPlan(r)}><PencilSimple size={12} /> Edit</button>}{canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button>}</div> : r.bill_id ? <span className="text-[10px] text-[#9A9A9A]">Correct from bill</span> : "—"}</Td>
               </tr>
             ))}
           </tbody>

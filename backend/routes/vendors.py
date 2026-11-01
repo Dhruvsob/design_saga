@@ -1377,6 +1377,14 @@ async def vendor_performance(vendor_id: str, request: Request,
 #     shows up automatically on Dashboard, P&L, Cash Flow, everywhere.
 # ==================================================================
 
+def _validate_commission_receipt_account(payment_method: str, account: dict) -> None:
+    """Keep the displayed receipt method and the debited cash/bank ledger aligned."""
+    is_cash_account = account.get("name") in {"Cash", "Petty Cash"}
+    if payment_method == "cash" and not is_cash_account:
+        raise HTTPException(status_code=400, detail="Cash receipts must use Cash or Petty Cash")
+    if payment_method != "cash" and not account.get("is_bank"):
+        raise HTTPException(status_code=400, detail="Non-cash commission receipts must use a bank account")
+
 def _bill_purchase_base(bill: dict) -> float:
     """The number commission percentages apply to — subtotal (pre-tax, pre-TDS)."""
     return float(bill.get("subtotal") or 0)
@@ -1947,6 +1955,7 @@ async def receive_commission(vendor_id: str, payload: CommissionReceiveIn, reque
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
     bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
+    _validate_commission_receipt_account(payload.payment_method, bank)
     if payload.commission_ids and len(set(payload.commission_ids)) != len(payload.commission_ids):
         raise HTTPException(status_code=400, detail="Duplicate commission IDs in request")
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None

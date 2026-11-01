@@ -9,11 +9,12 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 import routes.accounting as accounting
+import routes.vendors as vendors
 from models.accounting import (
     CollectionReceiptIn, DEFAULT_COA, IncomeIn, JournalLine, MilestoneIn,
     NonOperatingTransactionIn, OtherReceivableIn,
 )
-from models.vendor import CommissionExpectedIn
+from models.vendor import CommissionExpectedIn, CommissionReceiveIn
 from routes.accounting import (
     _cash_flow_bucket,
     _cash_collection_source,
@@ -232,6 +233,11 @@ def test_money_in_models_allow_partial_receipts_but_reject_invalid_dates():
                              due_date="2026-10-31").amount == 5000
     commission = CommissionExpectedIn(amount=5000, due_date="2026-10-31")
     assert commission.recognition == "planned"
+    commission_receipt = CommissionReceiveIn(
+        amount=5000, received_date="2026-10-31", bank_account_id="bank",
+        payment_method="upi",
+    )
+    assert commission_receipt.payment_method == "upi"
     with pytest.raises(ValidationError):
         CollectionReceiptIn(source_type="invoice", source_id="inv_1", amount=100,
                             date="31/10/2026", bank_account_id="bank")
@@ -239,6 +245,24 @@ def test_money_in_models_allow_partial_receipts_but_reject_invalid_dates():
         OtherReceivableIn(name="Bad date", amount=100, due_date="31/10/2026")
     with pytest.raises(ValidationError):
         CommissionExpectedIn(amount=100, due_date="31/10/2026")
+    with pytest.raises(ValidationError):
+        CommissionReceiveIn(amount=100, received_date="31/10/2026",
+                            bank_account_id="bank")
+    with pytest.raises(ValidationError):
+        CommissionReceiveIn(amount=100, received_date="2026-10-31",
+                            bank_account_id="bank", payment_method="crypto")
+
+
+def test_commission_receipt_method_matches_cash_or_bank_account():
+    vendors._validate_commission_receipt_account("cash", {"name": "Cash"})
+    vendors._validate_commission_receipt_account(
+        "upi", {"name": "HDFC Current", "is_bank": True})
+    with pytest.raises(HTTPException, match="Cash receipts"):
+        vendors._validate_commission_receipt_account(
+            "cash", {"name": "HDFC Current", "is_bank": True})
+    with pytest.raises(HTTPException, match="Non-cash"):
+        vendors._validate_commission_receipt_account(
+            "upi", {"name": "Cash", "is_bank": False})
 
 
 def test_unified_collection_statuses_cover_partial_and_due_states():

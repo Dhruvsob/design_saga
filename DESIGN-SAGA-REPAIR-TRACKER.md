@@ -56,6 +56,15 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Database effect: no migration or historical rewrite. New payroll fields are additive and reversal updates only the selected paid run while posting a balanced journal.
 - Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
 
+### DS-051: Vendor commission planning and receipt correction parity
+
+- Root cause: the shared commission backend already supported planned receivables and safe receipt reversals, but the Vendor → Commissions screen exposed only receipt entry. Users could not create or edit the underlying expected commission there, so a direct ₹5,000 receipt appeared as unallocated while the table still said no commissions existed. Receipt method and account type could also disagree.
+- Correction: Vendor → Commissions now creates and edits the same `vendor_commissions` records used by Accounting → Collections Due, including amount, due/reminder dates, project, recognition basis, reference and notes. Manual plans show contextual details and permission-aware Edit/Cancel actions. Posted receipts retain the existing Delete action, which creates a balanced reversal and rebuilds allocations rather than deleting accounting history. Cash receipts must use Cash/Petty Cash; UPI/bank/cheque/online/card/other methods require a configured bank account. Receipt dates and methods are schema constrained.
+- Accounting policy: adding an expected commission creates no journal. Recording actual receipt posts one settlement/journal; direct excess receipts remain visible as unallocated advances instead of being double-counted as earned commission.
+- Verification: 47 focused accounting, vendor-commission visibility and financial-permission regressions pass. Frontend ESLint and production build pass; diff checks pass.
+- Database effect: no migration or historical rewrite. New plans and future corrections use the existing authoritative collections; posted receipt corrections remain reversal based.
+- Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.

@@ -52,10 +52,21 @@ class CommissionReceiveIn(FiniteModel):
     amount: float = Field(gt=0)
     received_date: str                          # YYYY-MM-DD
     bank_account_id: str                        # cash/bank account credited
-    payment_method: Optional[str] = "bank_transfer"
+    payment_method: Literal[
+        "cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"
+    ] = "bank_transfer"
     reference: Optional[str] = None
     notes: Optional[str] = None
     commission_ids: Optional[List[str]] = None  # settle specific commission rows (FIFO if empty)
+
+    @field_validator("received_date")
+    @classmethod
+    def validate_received_date(cls, value):
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
 
 
 class CommissionExpectedIn(FiniteModel):
