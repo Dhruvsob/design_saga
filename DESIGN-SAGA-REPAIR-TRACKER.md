@@ -82,6 +82,14 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Database effect: no migration or historical rewrite. Future GRN corrections add reversal metadata and one balanced journal.
 - Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
 
+### DS-054: Cash/Bank method consistency across Money In and Money Out
+
+- Root cause: generic Accounting Income, Expense and Collections Due forms could select the first Cash/Bank account while retaining an incompatible default payment method. That allowed the UI to describe Bank Transfer while the journal affected Cash, or vice versa.
+- Correction: choosing Cash/Petty Cash now selects Cash; choosing a configured bank selects Bank Transfer. Changing method selects a compatible account across Income, Expense and collection receipt forms. Backend schemas constrain dates and payment methods, and posting rejects Cash with a bank account or non-cash methods with Cash/Petty Cash. The rule now covers generic income/expense, invoice and milestone receipts, other receivables, vendor commissions and payroll.
+- Verification: 50 focused accounting, payroll and financial-permission regressions pass; frontend ESLint and production build pass; diff checks pass.
+- Database effect: none. Existing journals are unchanged; invalid future combinations fail before persistence.
+- Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.

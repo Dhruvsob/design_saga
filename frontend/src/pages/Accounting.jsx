@@ -1136,8 +1136,8 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs">Receipt date<input required type="date" className="input-flat mt-1 w-full" value={receipt.date} onChange={(e) => setReceipt({ ...receipt, date: e.target.value })} /></label>
               <label className="text-xs">Amount received<input required min="0.01" max={collecting.outstanding} step="0.01" type="number" className="input-flat mt-1 w-full" value={receipt.amount} onChange={(e) => setReceipt({ ...receipt, amount: e.target.value })} /></label>
-              <label className="text-xs">Payment method<select className="input-flat mt-1 w-full" value={receipt.payment_method} onChange={(e) => setReceipt({ ...receipt, payment_method: e.target.value })}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="online">Online</option><option value="other">Other</option></select></label>
-              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={receipt.bank_account_id} onChange={(e) => setReceipt({ ...receipt, bank_account_id: e.target.value })}><option value="" disabled>Select cash / bank</option>{banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+              <label className="text-xs">Payment method<select className="input-flat mt-1 w-full" value={receipt.payment_method} onChange={(e) => { const method = e.target.value; const compatible = method === "cash" ? banks.find((a) => ["Cash", "Petty Cash"].includes(a.name)) : banks.find((a) => a.is_bank); setReceipt({ ...receipt, payment_method: method, bank_account_id: compatible?.id || receipt.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="online">Online</option><option value="other">Other</option></select></label>
+              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={receipt.bank_account_id} onChange={(e) => { const account = banks.find((a) => a.id === e.target.value); setReceipt({ ...receipt, bank_account_id: e.target.value, payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer" }); }}><option value="" disabled>Select cash / bank</option>{banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
               <label className="text-xs">Income account<select required className="input-flat mt-1 w-full" value={receipt.income_account_id} onChange={(e) => setReceipt({ ...receipt, income_account_id: e.target.value })}><option value="" disabled>Select income account</option>{incomeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
               <label className="text-xs sm:col-span-2">Reference<input className="input-flat mt-1 w-full" value={receipt.reference} onChange={(e) => setReceipt({ ...receipt, reference: e.target.value })} placeholder="Bank / UPI / cheque reference" /></label>
             </div>
@@ -1161,8 +1161,9 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
 
   useEffect(() => {
     if (banks.length && !form.bank_account_id && !form.paid_from_account_id) {
-      if (kind === "income") setForm((s) => ({ ...s, bank_account_id: banks[0].id }));
-      else setForm((s) => ({ ...s, paid_from_account_id: banks[0].id }));
+      const method = ["Cash", "Petty Cash"].includes(banks[0].name) ? "cash" : "bank_transfer";
+      if (kind === "income") setForm((s) => ({ ...s, bank_account_id: banks[0].id, payment_method: method }));
+      else setForm((s) => ({ ...s, paid_from_account_id: banks[0].id, payment_method: method }));
     }
     if (txnAccs.length) {
       const key = kind === "income" ? "income_account_id" : "expense_account_id";
@@ -1200,7 +1201,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
               .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <select className="input-flat" value={kind === "income" ? form.bank_account_id : form.paid_from_account_id}
-            onChange={(e) => setForm({ ...form, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: e.target.value })}
+            onChange={(e) => { const account = banks.find((a) => a.id === e.target.value); setForm({ ...form, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: e.target.value, payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer" }); }}
             data-testid={`${kind}-bank`}>
             <option value="" disabled>Cash / Bank</option>
             {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -1261,7 +1262,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
             </>
           )}
 
-          <select className="input-flat" value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
+          <select className="input-flat" value={form.payment_method} onChange={(e) => { const method = e.target.value; const compatible = method === "cash" ? banks.find((a) => ["Cash", "Petty Cash"].includes(a.name)) : banks.find((a) => a.is_bank); setForm({ ...form, payment_method: method, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: compatible?.id || (kind === "income" ? form.bank_account_id : form.paid_from_account_id) }); }}>
             {["cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"].map((m) => <option key={m}>{m}</option>)}
           </select>
           <input className="input-flat" placeholder="Reference no." value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />

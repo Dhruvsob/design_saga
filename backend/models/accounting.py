@@ -213,11 +213,23 @@ class ExpenseIn(FiniteModel):
     project_id: Optional[str] = None
     client_id: Optional[str] = None
     employee_id: Optional[str] = None
-    payment_method: Optional[str] = "bank_transfer"
+    payment_method: Literal[
+        "cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"
+    ] = "bank_transfer"
     gst: Optional[float] = Field(default=0.0, ge=0)
     reference: Optional[str] = None
     bill_url: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def validate_expense_date(cls, value):
+        from datetime import date
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("Date must be YYYY-MM-DD")
+        return value
 
     @field_validator("bill_url")
     @classmethod

@@ -1569,6 +1569,14 @@ def _is_salary_expense_account(account: dict) -> bool:
     return str((account or {}).get("name") or "").strip().casefold() == "employee salary"
 
 
+def _validate_paid_from_account(payment_method: str, account: dict) -> None:
+    is_cash_account = account.get("name") in {"Cash", "Petty Cash"}
+    if payment_method == "cash" and not is_cash_account:
+        raise HTTPException(status_code=400, detail="Cash payments must use Cash or Petty Cash")
+    if payment_method != "cash" and not account.get("is_bank"):
+        raise HTTPException(status_code=400, detail="Non-cash payments must use a bank account")
+
+
 @router.post("/accounting/expense")
 async def create_expense(payload: ExpenseIn, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
@@ -1581,7 +1589,8 @@ async def create_expense(payload: ExpenseIn, request: Request,
     expense_account = await sdb.accounts.find_one(
         {"id": payload.expense_account_id}, {"_id": 0, "id": 1, "type": 1, "name": 1})
     paid_from = await sdb.accounts.find_one(
-        {"id": payload.paid_from_account_id}, {"_id": 0, "id": 1, "type": 1})
+        {"id": payload.paid_from_account_id},
+        {"_id": 0, "id": 1, "type": 1, "name": 1, "is_bank": 1})
     if not expense_account or expense_account.get("type") != "expense":
         raise HTTPException(status_code=400, detail="Expense account must be an expense account")
     if _is_salary_expense_account(expense_account):
@@ -1591,6 +1600,7 @@ async def create_expense(payload: ExpenseIn, request: Request,
         )
     if not paid_from or paid_from.get("type") != "asset":
         raise HTTPException(status_code=400, detail="Paid-from account must be a cash/bank asset account")
+    _validate_paid_from_account(payload.payment_method, paid_from)
     if expense_account["id"] == paid_from["id"]:
         raise HTTPException(status_code=400, detail="Expense and paid-from accounts must be different")
 

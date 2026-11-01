@@ -11,7 +11,7 @@ from pydantic import ValidationError
 import routes.accounting as accounting
 import routes.vendors as vendors
 from models.accounting import (
-    CollectionReceiptIn, DEFAULT_COA, IncomeIn, JournalLine, MilestoneIn,
+    CollectionReceiptIn, DEFAULT_COA, ExpenseIn, IncomeIn, JournalLine, MilestoneIn,
     NonOperatingTransactionIn, OtherReceivableIn,
 )
 from models.vendor import CommissionExpectedIn, CommissionReceiveIn
@@ -279,6 +279,29 @@ def test_money_in_method_matches_received_into_account():
     with pytest.raises(HTTPException, match="Non-cash"):
         accounting._validate_received_into_account(
             "upi", {"name": "Petty Cash", "is_bank": False})
+
+
+def test_money_out_method_matches_paid_from_account():
+    expense = ExpenseIn(
+        date="2026-10-31", amount=100, expense_account_id="expense",
+        paid_from_account_id="cash", payment_method="cash",
+    )
+    assert expense.payment_method == "cash"
+    accounting._validate_paid_from_account("cash", {"name": "Petty Cash"})
+    accounting._validate_paid_from_account(
+        "upi", {"name": "HDFC Current", "is_bank": True})
+    with pytest.raises(ValidationError):
+        ExpenseIn(date="31/10/2026", amount=100, expense_account_id="expense",
+                  paid_from_account_id="cash", payment_method="cash")
+    with pytest.raises(ValidationError):
+        ExpenseIn(date="2026-10-31", amount=100, expense_account_id="expense",
+                  paid_from_account_id="cash", payment_method="crypto")
+    with pytest.raises(HTTPException, match="Cash payments"):
+        accounting._validate_paid_from_account(
+            "cash", {"name": "HDFC Current", "is_bank": True})
+    with pytest.raises(HTTPException, match="Non-cash"):
+        accounting._validate_paid_from_account(
+            "upi", {"name": "Cash", "is_bank": False})
 
 
 def test_unified_collection_statuses_cover_partial_and_due_states():
