@@ -264,7 +264,8 @@ async def _cancel_po_locked(user: dict, po_id: str):
     if await sdb.vendor_bills.count_documents({"po_id": po_id, "status": {"$nin": ["cancelled", "void"]}}):
         raise HTTPException(400, "PO has vendor bills — cancel the bills first.")
     # Reject if any GRN exists
-    grn_count = await sdb.goods_receipts.count_documents({"po_id": po_id})
+    grn_count = await sdb.goods_receipts.count_documents(
+        {"po_id": po_id, "status": {"$nin": ["reversed", "cancelled"]}})
     if grn_count > 0:
         raise HTTPException(400, "PO has GRNs — cannot cancel. Reverse GRNs first.")
     await sdb.purchase_orders.update_one(
@@ -340,6 +341,64 @@ async def create_grn(payload: GRNCreateIn, request: Request,
                 await _reconcile_po_receipts(payload.po_id)
                 return prior
         return await _create_grn_locked(user, payload, client_key, request_key)
+
+
+@router.delete("/grns/{grn_id}")
+async def reverse_grn(grn_id: str, request: Request,
+                      session_token: Optional[str] = Cookie(default=None),
+                      authorization: Optional[str] = Header(default=None)):
+    """Reverse a mistaken goods receipt and its clearing journal as one unit."""
+    user = await require_user(request, session_token, authorization)
+    await require_module(user, "purchase_orders")
+    if not has_permission(user, "purchase_orders.update") or not has_permission(user, "finance.update"):
+        raise HTTPException(403, "Purchase-order update and finance update permissions are required")
+    grn = await sdb.goods_receipts.find_one({"id": grn_id}, {"_id": 0, "po_id": 1})
+    if not grn:
+        raise HTTPException(404, "GRN not found")
+    async with doc_lock(sdb.purchase_orders, grn["po_id"]):
+        return await _reverse_grn_locked(user, grn_id)
+
+
+async def _reverse_grn_locked(user: dict, grn_id: str) -> dict:
+    grn = await sdb.goods_receipts.find_one({"id": grn_id}, {"_id": 0})
+    if not grn:
+        raise HTTPException(404, "GRN not found")
+    if grn.get("status") in ("reversed", "cancelled"):
+        return {"ok": True, "already_reversed": True,
+                "reversal_je_id": grn.get("reversal_je_id")}
+    if await sdb.vendor_bills.count_documents(
+            {"po_id": grn["po_id"], "status": {"$nin": ["cancelled", "void"]}}):
+        raise HTTPException(409, "Cancel linked vendor bills before reversing this GRN")
+
+    reversal_id = None
+    journal_id = grn.get("journal_id")
+    if journal_id:
+        journal = await sdb.journal_entries.find_one({"id": journal_id}, {"_id": 0})
+        if not journal:
+            raise HTTPException(409, "Linked GRN journal is missing; administrator review required")
+        if journal.get("reversed") and journal.get("reversal_je_id"):
+            reversal_id = journal["reversal_je_id"]
+        else:
+            from routes.accounting import _reverse_journal_entry
+            reversal = await _reverse_journal_entry(
+                user, journal, action="grn_cancel",
+                reversal_date=grn.get("received_date"), hide_from_books=True,
+            )
+            reversal_id = reversal["id"]
+
+    changed_at = iso_now()
+    result = await sdb.goods_receipts.update_one(
+        {"id": grn_id, "status": {"$nin": ["reversed", "cancelled"]}},
+        {"$set": {"status": "reversed", "reversal_je_id": reversal_id,
+                  "reversed_at": changed_at, "reversed_by": user["user_id"]}},
+    )
+    if result.modified_count != 1:
+        raise HTTPException(409, "GRN changed; refresh and retry")
+    await _reconcile_po_receipts(grn["po_id"])
+    await audit(user, "grn.reverse", target=grn_id, target_type="grn",
+                meta={"po_id": grn["po_id"], "journal_id": journal_id,
+                      "reversal_je_id": reversal_id})
+    return {"ok": True, "reversed": True, "reversal_je_id": reversal_id}
 
 
 async def _create_grn_locked(user: dict, payload: GRNCreateIn,
@@ -475,7 +534,9 @@ async def _reconcile_po_receipts(po_id: str):
     if not po:
         raise HTTPException(404, "PO not found")
     received_by_line = {}
-    async for grn in sdb.goods_receipts.find({"po_id": po_id}, {"_id": 0, "lines": 1}):
+    async for grn in sdb.goods_receipts.find(
+            {"po_id": po_id, "status": {"$nin": ["reversed", "cancelled"]}},
+            {"_id": 0, "lines": 1}):
         for line in grn.get("lines") or []:
             line_id = line.get("po_line_id")
             if line_id:
@@ -519,7 +580,9 @@ async def three_way_match(po_id: str, request: Request,
 
     # Aggregate all GRN lines per po_line_id
     grn_agg = {}   # pol_id -> {received, rejected}
-    async for g in sdb.goods_receipts.find({"po_id": po_id}, {"_id": 0, "lines": 1}):
+    async for g in sdb.goods_receipts.find(
+            {"po_id": po_id, "status": {"$nin": ["reversed", "cancelled"]}},
+            {"_id": 0, "lines": 1}):
         for gl in g.get("lines", []):
             k = gl["po_line_id"]
             slot = grn_agg.setdefault(k, {"received": 0.0, "rejected": 0.0})

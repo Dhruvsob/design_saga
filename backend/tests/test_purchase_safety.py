@@ -26,7 +26,14 @@ class _Cursor:
 
 
 def _matches(row, query):
-    return all(row.get(key) == value for key, value in query.items())
+    for key, value in query.items():
+        actual = row.get(key)
+        if isinstance(value, dict) and "$nin" in value:
+            if actual in value["$nin"]:
+                return False
+        elif actual != value:
+            return False
+    return True
 
 
 class _Collection:
@@ -46,8 +53,11 @@ class _Collection:
         for row in self.rows:
             if _matches(row, query):
                 row.update(update.get("$set", {}))
-                return SimpleNamespace(matched_count=1)
-        return SimpleNamespace(matched_count=0)
+                return SimpleNamespace(matched_count=1, modified_count=1)
+        return SimpleNamespace(matched_count=0, modified_count=0)
+
+    async def count_documents(self, query):
+        return sum(1 for row in self.rows if _matches(row, query))
 
 
 def test_po_receipt_totals_are_rebuilt_from_grns(monkeypatch):
@@ -129,6 +139,46 @@ def test_grn_retry_recovers_existing_journal_without_reposting(monkeypatch):
     assert len(receipts.rows) == 1
     assert pos.rows[0]["lines"][0]["received_qty_total"] == 4
     assert pos.rows[0]["status"] == "partial"
+
+
+def test_grn_reversal_corrects_journal_and_po_quantities(monkeypatch):
+    user = {"user_id": "admin", "org_id": "org_a"}
+    receipts = _Collection([{
+        "id": "grn_1", "po_id": "po_1", "status": "received",
+        "received_date": "2026-10-31", "journal_id": "je_1",
+        "lines": [{"po_line_id": "line_1", "received_qty": 4}],
+    }])
+    journals = _Collection([{"id": "je_1", "source": "grn", "source_id": "grn_1"}])
+    bills = _Collection()
+    monkeypatch.setattr(purchase, "sdb", SimpleNamespace(
+        goods_receipts=receipts, journal_entries=journals, vendor_bills=bills,
+    ))
+    reconciled = []
+    audited = []
+
+    async def reverse(_user, journal, **kwargs):
+        assert journal["id"] == "je_1"
+        assert kwargs["hide_from_books"] is True
+        return {"id": "je_reverse"}
+
+    async def reconcile(po_id):
+        reconciled.append(po_id)
+
+    async def audit(*args, **kwargs):
+        audited.append((args, kwargs))
+
+    from routes import accounting
+    monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
+    monkeypatch.setattr(purchase, "_reconcile_po_receipts", reconcile)
+    monkeypatch.setattr(purchase, "audit", audit)
+
+    result = asyncio.run(purchase._reverse_grn_locked(user, "grn_1"))
+
+    assert result == {"ok": True, "reversed": True, "reversal_je_id": "je_reverse"}
+    assert receipts.rows[0]["status"] == "reversed"
+    assert receipts.rows[0]["reversal_je_id"] == "je_reverse"
+    assert reconciled == ["po_1"]
+    assert len(audited) == 1
 
 
 def test_read_only_purchase_visibility_is_limited_to_visible_projects(monkeypatch):

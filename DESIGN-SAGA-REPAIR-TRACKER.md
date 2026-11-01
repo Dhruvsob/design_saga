@@ -74,6 +74,14 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Database effect: no migration or historical rewrite. New receipts use existing journal/source records and corrections append balanced reversals.
 - Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
 
+### DS-053: Purchase-order GRN correction and 3-way-match recovery
+
+- Root cause: PO cancellation instructed users to reverse Goods Receipts first, but no GRN reversal API or UI existed. A mistaken receipt therefore permanently inflated received quantities and GRN clearing, and blocked PO cancellation.
+- Correction: authorized purchase/finance users can now reverse an active GRN from the PO detail screen. Reversal is blocked while an active linked vendor bill exists; users must cancel the bill first so clearing cannot be corrupted. The exact GRN journal receives a balanced hidden-from-books reversal, the GRN is retained with reversal metadata, and PO line receipts/status plus the 3-way match are rebuilt from active GRNs only. PO cancellation ignores already-reversed GRNs.
+- Verification: 52 focused purchase-order, invoice, accounting and permission regressions pass, including the new linked-journal/PO-reconciliation reversal test. Frontend ESLint and production build pass; diff checks pass.
+- Database effect: no migration or historical rewrite. Future GRN corrections add reversal metadata and one balanced journal.
+- Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
+
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 
 - Rate-limit identity now prefers Nginx's overwritten `X-Real-IP` and otherwise uses the nearest forwarded hop, preventing a public client from bypassing login/search/upload limits with a forged first `X-Forwarded-For` value.

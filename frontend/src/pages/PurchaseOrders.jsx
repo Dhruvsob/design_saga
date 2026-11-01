@@ -91,7 +91,9 @@ export default function PurchaseOrders() {
 
       {showCreate && <CreatePO vendors={vendors} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
       {detail && <PODetail poId={detail} canUpdate={hasPerm("purchase_orders.update")}
-        canReceive={hasPerm("purchase_orders.create")} onClose={() => setDetail(null)} onChange={load} />}
+        canReceive={hasPerm("purchase_orders.create")}
+        canReverseGrn={hasPerm("purchase_orders.update") && hasPerm("finance.update")}
+        onClose={() => setDetail(null)} onChange={load} />}
     </div>
   );
 }
@@ -166,7 +168,7 @@ function CreatePO({ vendors, onClose, onCreated }) {
   );
 }
 
-function PODetail({ poId, canUpdate, canReceive, onClose, onChange }) {
+function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChange }) {
   const [po, setPo] = useState(null);
   const [grns, setGrns] = useState([]);
   const [match, setMatch] = useState(null);
@@ -195,6 +197,12 @@ function PODetail({ poId, canUpdate, canReceive, onClose, onChange }) {
     if (!window.confirm("Cancel this PO?")) return;
     try { await api.post(`/purchase-orders/${poId}/cancel`); await load(); onChange && onChange(); }
     catch (e) { setErr(fmtErr(e?.response?.data?.detail)); }
+  };
+  const reverseGRN = async (grn) => {
+    if (!window.confirm(`Reverse ${grn.grn_number}?\n\nReceived quantities and the linked accounting journal will be corrected with a balanced reversal.`)) return;
+    setErr("");
+    try { await api.delete(`/grns/${grn.id}`); await load(); onChange && onChange(); }
+    catch (e) { setErr(fmtErr(e?.response?.data?.detail, "Could not reverse GRN")); }
   };
   const startEdit = () => {
     setEditForm({ expected_delivery: po.expected_delivery || "", delivery_address: po.delivery_address || "",
@@ -237,7 +245,7 @@ function PODetail({ poId, canUpdate, canReceive, onClose, onChange }) {
         {canReceive && ["sent","partial"].includes(po.status) && (
           <button onClick={() => setShowGRN(true)} className="btn-primary text-xs" data-testid="grn-btn"><Truck size={12}/> Record GRN</button>
         )}
-        {canUpdate && ["draft","sent"].includes(po.status) && grns.length === 0 && (
+        {canUpdate && ["draft","sent"].includes(po.status) && grns.filter((g) => g.status !== "reversed").length === 0 && (
           <button onClick={cancelPO} className="btn-ghost text-xs text-[#B22B22]"><X size={12}/> Cancel PO</button>
         )}
       </div>
@@ -294,7 +302,9 @@ function PODetail({ poId, canUpdate, canReceive, onClose, onChange }) {
             <div key={g.id} className="border border-[#E5E5E5] p-3 flex items-center gap-3 text-sm">
               <div className="font-mono accent-blue font-semibold">{g.grn_number}</div>
               <div className="text-[#5C5C5C]">{formatDate(g.received_date)}</div>
+              {g.status === "reversed" && <span className="text-[10px] font-mono uppercase text-[#9A9A9A]">Reversed</span>}
               <div className="font-mono ml-auto">{fmtMoney(g.total_value)}</div>
+              {canReverseGrn && g.status !== "reversed" && <button type="button" className="btn-ghost text-xs text-[#B22B22]" onClick={() => reverseGRN(g)}><ArrowsClockwise size={12}/> Reverse</button>}
             </div>
           ))}
         </div>
