@@ -8,7 +8,7 @@ balanced journal entry (DR Employee Salary  CR Cash/Bank) via
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
 from fastapi.responses import StreamingResponse
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
 from datetime import date as _date
 import io
@@ -18,11 +18,14 @@ from pymongo.errors import DuplicateKeyError
 
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import now_utc, iso_now, new_id
+from core.helpers import business_today, now_utc, iso_now, new_id
 from core.deps import require_user
 from core.downloads import content_disposition
 from core.rbac import has_permission
 from core.tenancy import DEFAULT_ORG_ID
+from core.tenancy import user_org_id
+from core.audit import audit
+from core.locks import doc_lock
 from core import attendance_engine as engine
 from routes.accounting import _post_journal
 from routes.attendance import _get_attendance_policy
@@ -40,7 +43,8 @@ class PaySalaryIn(BaseModel):
     overtime: Optional[float] = 0
     advances_recovered: Optional[float] = 0
     other_deductions: Optional[float] = 0
-    payment_method: Optional[str] = "bank_transfer"
+    payment_date: Optional[str] = None
+    payment_method: Literal["cash", "bank_transfer", "upi", "cheque", "online", "other"] = "bank_transfer"
     reference: Optional[str] = None
     notes: Optional[str] = None
     # Jewellers logic — deduct LOP days, late fines and short-leave hours
@@ -182,7 +186,8 @@ async def preview_salary(eid: str, year: int, month: int, request: Request,
     breakdown = await _apply_attendance_deductions(emp, breakdown, year, month)
 
     # Already paid check
-    paid = await sdb.payroll_runs.find_one({"employee_id": eid, "year": year, "month": month},
+    paid = await sdb.payroll_runs.find_one({"employee_id": eid, "year": year, "month": month,
+                                           "status": "paid"},
                                           {"_id": 0, "id": 1, "paid_at": 1, "net": 1})
     return {
         "employee": {"id": emp["id"], "name": f"{emp.get('first_name','')} {emp.get('last_name','')}".strip(),
@@ -205,6 +210,11 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         raise HTTPException(status_code=404, detail="Employee not found")
     if payload.month < 1 or payload.month > 12:
         raise HTTPException(status_code=400, detail="month must be 1..12")
+    payment_date = payload.payment_date or business_today().isoformat()
+    try:
+        _date.fromisoformat(payment_date)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="payment_date must be YYYY-MM-DD")
     await _assert_payroll_reviews_resolved(eid, payload.year, payload.month)
 
     # Idempotent guard
@@ -240,13 +250,19 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         acc = await sdb.accounts.find_one(
             {"id": salary_acc_id}, {"_id": 0, "id": 1, "type": 1})
     paid_from = await sdb.accounts.find_one(
-        {"id": payload.paid_from_account_id}, {"_id": 0, "id": 1, "type": 1})
+        {"id": payload.paid_from_account_id},
+        {"_id": 0, "id": 1, "type": 1, "name": 1, "is_bank": 1})
     if not acc or str(acc.get("type") or "").lower() != "expense":
         raise HTTPException(status_code=400, detail="Salary account must be an expense account")
     if not paid_from or str(paid_from.get("type") or "").lower() != "asset":
         raise HTTPException(status_code=400, detail="Paid-from account must be a cash/bank asset account")
     if salary_acc_id == payload.paid_from_account_id:
         raise HTTPException(status_code=400, detail="Salary and paid-from accounts must be different")
+    is_cash_account = paid_from.get("name") in {"Cash", "Petty Cash"}
+    if payload.payment_method == "cash" and not is_cash_account:
+        raise HTTPException(status_code=400, detail="Cash payments must use Cash or Petty Cash")
+    if payload.payment_method != "cash" and not paid_from.get("is_bank"):
+        raise HTTPException(status_code=400, detail="Non-cash salary payments must use a bank account")
 
     emp_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip() or emp.get("employee_id") or eid
     narration = f"Salary {payload.year}-{payload.month:02d} — {emp_name}"
@@ -254,7 +270,7 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         {"account_id": salary_acc_id, "debit": net, "credit": 0, "description": f"Payroll — {emp_name}"},
         {"account_id": payload.paid_from_account_id, "debit": 0, "credit": net, "description": "Paid"},
     ]
-    date_str = _date(payload.year, payload.month, 28).isoformat()   # end-of-month-ish
+    date_str = payment_date
     run_id = new_id("pr_")
     run = {
         "id": run_id,
@@ -269,6 +285,8 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         "net": net,
         "salary_account_id": salary_acc_id,
         "paid_from_account_id": payload.paid_from_account_id,
+        "paid_from_account_name": paid_from.get("name"),
+        "payment_date": payment_date,
         "payment_method": payload.payment_method,
         "reference": payload.reference,
         "notes": payload.notes,
@@ -324,6 +342,11 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         raise HTTPException(
             500, "Salary journal posted but payroll finalization needs administrator review")
     run.update({"journal_id": je["id"], "status": "paid", "paid_at": paid_at})
+    await audit(user, "payroll.payment", target=run_id, target_type="payroll_run",
+                meta={"employee_id": eid, "year": payload.year, "month": payload.month,
+                      "payment_date": payment_date, "payment_method": payload.payment_method,
+                      "paid_from_account_id": payload.paid_from_account_id},
+                org_id=user_org_id(user))
     return {"run": run, "journal": je}
 
 
@@ -341,6 +364,51 @@ async def list_runs(request: Request, employee_id: Optional[str] = None,
     if month: q["month"] = month
     rows = await sdb.payroll_runs.find(q, {"_id": 0}).sort("paid_at", -1).to_list(500)
     return rows
+
+
+@router.post("/payroll/runs/{run_id}/reverse")
+async def reverse_salary_payment(run_id: str, request: Request,
+                                 session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    """Cancel a mistaken salary payment by balanced reversal, never hard deletion."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "payroll.create") or not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Payroll create and finance update permissions are required")
+    async with doc_lock(sdb.payroll_runs, run_id):
+        run = await sdb.payroll_runs.find_one({"id": run_id}, {"_id": 0})
+        if not run:
+            raise HTTPException(status_code=404, detail="Payroll run not found")
+        if run.get("status") != "paid":
+            raise HTTPException(status_code=409, detail="Only a paid salary can be reversed")
+        journal = await sdb.journal_entries.find_one(
+            {"id": run.get("journal_id"), "source": "payroll", "source_id": run_id},
+            {"_id": 0},
+        )
+        if not journal:
+            raise HTTPException(status_code=409, detail="Linked payroll journal is missing; administrator review required")
+        from routes.accounting import _reverse_journal_entry
+        if journal.get("reversed") and journal.get("reversal_je_id"):
+            reversal = await sdb.journal_entries.find_one(
+                {"id": journal["reversal_je_id"]}, {"_id": 0})
+            if not reversal:
+                raise HTTPException(status_code=409, detail="Payroll reversal needs administrator review")
+        else:
+            reversal = await _reverse_journal_entry(user, journal, action="payroll_cancel")
+        changed_at = iso_now()
+        result = await sdb.payroll_runs.update_one(
+            {"id": run_id, "status": "paid"},
+            {"$set": {"status": "reversed", "reversed_at": changed_at,
+                      "reversed_by": user["user_id"], "reversal_journal_id": reversal["id"],
+                      "original_period_key": run.get("period_key")},
+             "$unset": {"period_key": ""}},
+        )
+        if result.modified_count != 1:
+            raise HTTPException(status_code=409, detail="Payroll run changed; refresh and retry")
+    await audit(user, "payroll.payment.reverse", target=run_id, target_type="payroll_run",
+                meta={"employee_id": run.get("employee_id"),
+                      "reversal_journal_id": reversal["id"]},
+                org_id=user_org_id(user))
+    return {"ok": True, "status": "reversed", "reversal_journal_id": reversal["id"]}
 
 
 # ==================================================================

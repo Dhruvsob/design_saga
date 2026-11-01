@@ -32,6 +32,7 @@ export default function EmployeeDetail() {
   const canDelete = hasPerm("employees.delete") || user?.role === "Admin";
   const canPayrollRead = hasPerm("payroll.read");
   const canPayrollWrite = hasPerm("payroll.create");
+  const canCorrectPayroll = canPayrollWrite && hasPerm("finance.update");
   const canReadUsers = hasPerm("users.read");
   const visibleTabs = TABS.filter((name) => {
     if (name === "Salary & Bank") return canPayrollRead;
@@ -418,7 +419,7 @@ export default function EmployeeDetail() {
 
           <SalaryRevisionsBlock employeeId={emp.id} currentSalary={s} canEdit={canPayrollWrite} />
 
-          <PaymentHistoryBlock employeeId={emp.id} />
+          <PaymentHistoryBlock employeeId={emp.id} canCorrect={canCorrectPayroll} />
         </div>
       )}
 
@@ -555,6 +556,9 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
   const [preview, setPreview] = useState(null);
   const [banks, setBanks] = useState([]);
   const [bankAccountId, setBankAccountId] = useState("");
+  const [paymentDate, setPaymentDate] = useState(dateForInput(new Date()));
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [reference, setReference] = useState("");
   const [extras, setExtras] = useState({ bonus: 0, incentives: 0, overtime: 0, advances_recovered: 0, other_deductions: 0 });
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -571,7 +575,10 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
       setPreview(p);
       const cash = (accs || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
       setBanks(cash);
-      if (!bankAccountId && cash.length) setBankAccountId(cash[0].id);
+      if (!bankAccountId && cash.length) {
+        setBankAccountId(cash[0].id);
+        setPaymentMethod(["Cash", "Petty Cash"].includes(cash[0].name) ? "cash" : "bank_transfer");
+      }
     } catch (e) {
       setMsg(e?.response?.data?.detail || "Failed to load preview (need finance.read)");
     }
@@ -584,7 +591,8 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
     try {
       const { data } = await api.post(`/employees/${employeeId}/pay-salary`, {
         year, month, paid_from_account_id: bankAccountId,
-        ...extras, notes,
+        payment_date: paymentDate, payment_method: paymentMethod,
+        reference, ...extras, notes,
       });
       setMsg(`✓ Paid ₹${data.run.net.toLocaleString("en-IN")} · JE ${data.journal.id}`);
       load();
@@ -630,9 +638,40 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs flex-1 min-w-[220px]">
           <div className="overline mb-1">Pay from</div>
-          <select className="input-flat w-full" value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} data-testid="pay-from">
+          <select className="input-flat w-full" value={bankAccountId} onChange={(e) => {
+            const id = e.target.value;
+            const account = banks.find((item) => item.id === id);
+            setBankAccountId(id);
+            setPaymentMethod(["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer");
+          }} data-testid="pay-from">
             {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
+        </label>
+        <label className="text-xs min-w-[150px]">
+          <div className="overline mb-1">Payment date</div>
+          <input type="date" className="input-flat w-full" value={paymentDate}
+            onChange={(e) => setPaymentDate(e.target.value)} data-testid="salary-payment-date" />
+        </label>
+        <label className="text-xs min-w-[170px]">
+          <div className="overline mb-1">Payment method</div>
+          <select className="input-flat w-full" value={paymentMethod}
+            onChange={(e) => {
+              const method = e.target.value;
+              setPaymentMethod(method);
+              const compatible = method === "cash"
+                ? banks.find((item) => ["Cash", "Petty Cash"].includes(item.name))
+                : banks.find((item) => item.is_bank);
+              if (compatible) setBankAccountId(compatible.id);
+            }} data-testid="salary-payment-method">
+            <option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option>
+            <option value="cheque">Cheque</option><option value="online">Online</option>
+            <option value="cash">Cash</option><option value="other">Other</option>
+          </select>
+        </label>
+        <label className="text-xs flex-1 min-w-[180px]">
+          <div className="overline mb-1">Reference</div>
+          <input className="input-flat w-full" value={reference} onChange={(e) => setReference(e.target.value)}
+            placeholder="UTR / cheque / voucher" data-testid="salary-payment-reference" />
         </label>
         <label className="text-xs flex-1 min-w-[220px]">
           <div className="overline mb-1">Notes</div>
@@ -1004,11 +1043,11 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
   );
 }
 
-function PaymentHistoryBlock({ employeeId }) {
+function PaymentHistoryBlock({ employeeId, canCorrect }) {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let alive = true;
     (async () => {
       try {
@@ -1022,6 +1061,17 @@ function PaymentHistoryBlock({ employeeId }) {
     })();
     return () => { alive = false; };
   }, [employeeId]);
+  useEffect(() => load(), [load]);
+
+  const reverse = async (run) => {
+    if (!window.confirm(`Reverse the salary payment for ${MONTHS[(run.month || 1) - 1]} ${run.year}? A balancing journal will be posted.`)) return;
+    try {
+      await api.post(`/payroll/runs/${run.id}/reverse`);
+      load();
+    } catch (error) {
+      window.alert(error?.response?.data?.detail || "Could not reverse salary payment");
+    }
+  };
 
   return (
     <div className="card-flat" data-testid="payment-history-block">
@@ -1041,7 +1091,9 @@ function PaymentHistoryBlock({ employeeId }) {
                 <th className="py-2 pr-3 text-right">Net paid</th>
                 <th className="py-2 pr-3">Paid on</th>
                 <th className="py-2 pr-3">Method</th>
+                <th className="py-2 pr-3">Account / reference</th>
                 <th className="py-2 pr-3">Slip</th>
+                {canCorrect && <th className="py-2 pr-3">Correction</th>}
               </tr>
             </thead>
             <tbody>
@@ -1049,8 +1101,9 @@ function PaymentHistoryBlock({ employeeId }) {
                 <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`payment-run-${r.id}`}>
                   <td className="py-2 pr-3 font-mono">{MONTHS[(r.month || 1) - 1]} {r.year}</td>
                   <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(r.net)}</td>
-                  <td className="py-2 pr-3 font-mono text-xs">{formatDate(r.paid_at)}</td>
+                  <td className="py-2 pr-3 font-mono text-xs">{formatDate(r.payment_date || r.paid_at)}</td>
                   <td className="py-2 pr-3 text-xs">{(r.payment_method || "—").replace(/_/g, " ")}</td>
+                  <td className="py-2 pr-3 text-xs">{r.paid_from_account_name || "—"}{r.reference ? ` · ${r.reference}` : ""}</td>
                   <td className="py-2 pr-3">
                     <a href={`${api.defaults.baseURL}/payroll/runs/${r.id}/slip.pdf`} target="_blank" rel="noreferrer"
                        className="text-[#8B7F6A] hover:underline text-xs inline-flex items-center gap-1"
@@ -1058,6 +1111,11 @@ function PaymentHistoryBlock({ employeeId }) {
                       <FileText size={12} /> PDF
                     </a>
                   </td>
+                  {canCorrect && <td className="py-2 pr-3">
+                    {r.status === "paid" ? <button className="btn-ghost text-xs text-[#B4001C]" onClick={() => reverse(r)}>
+                      <ClockCounterClockwise size={12} /> Reverse
+                    </button> : <span className="text-[10px] uppercase text-[#9A9A9A]">{r.status}</span>}
+                  </td>}
                 </tr>
               ))}
             </tbody>

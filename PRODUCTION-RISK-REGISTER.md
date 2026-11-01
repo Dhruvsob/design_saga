@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-10-30 (Asia/Kolkata)
+Last updated: 2026-11-01 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -31,7 +31,7 @@ yet received sufficient adversarial testing.
 | Attendance identity | Employees may check in/out only for themselves except explicit managers; geofence/site authorization enforced; rejected punches can be retried without losing audit history | Fixed, deployed, and verified live |
 | Attendance data integrity | Validate geo/type/schedule inputs, manual punch dates/order, employee references, overlapping leave, and employee-specific weekly offs | Fixed, deployed, and verified live |
 | Approval races | Concurrent attendance, leave, correction, and late-arrival approvals must produce one final decision | Fixed, deployed, and verified live |
-| Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed; interrupted finalization recovery tested locally, deployment pending |
+| Payroll integrity | One payroll per period, unresolved attendance blocks payroll, correct account types and idempotent posting | Fixed locally: payment date/method/account/reference are consistent across payroll and journal; account-method mismatch is rejected; controlled reversal reopens the period without deleting history; deployment pending |
 | Financial posting | Exact linked settlement, correct accounts, atomic idempotency, reversible immutable journal history | Fixed; interrupted receipt/loan and commission-allocation recovery tested locally, deployment pending |
 | Remaining module IDOR | Adversarially test clients, leads, quotations, vendors, purchase orders, expenses, loans, holidays, comments, calendar, notifications and search | Project/task/file/search/comments/calendar/notification/public-share fixed; nested project detail and dashboard aggregates now apply source-module permissions plus assignment visibility; vendor financial/privacy and linked project/task visibility fixed; quotation and lead composite-create permission boundaries fixed; expense APIs now enforce custom-role permissions before claimant/approver visibility; ambiguous task-user/vendor name fallbacks fail closed; purchase/GRN/search/comment/audit reads follow visible projects; remaining route audit continues |
 | Role overrides | Test empty/custom permission sets, protected roles, privilege escalation, role changes during active sessions | Empty/custom overrides are fail-closed; tenant user creation, approval, employee-account creation and role changes cannot mint a platform `SuperAdmin`; broader route audit continues |

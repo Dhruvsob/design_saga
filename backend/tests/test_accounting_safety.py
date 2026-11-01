@@ -84,6 +84,11 @@ def test_default_account_names_and_codes_are_unique():
     assert ("Investments - Gold", "asset", "1601") in DEFAULT_COA
 
 
+def test_employee_salary_account_is_reserved_for_connected_payroll():
+    assert accounting._is_salary_expense_account({"name": " Employee Salary "}) is True
+    assert accounting._is_salary_expense_account({"name": "Office Salary Advance"}) is False
+
+
 def test_invoice_accrual_splits_receivable_revenue_and_tax():
     assert _invoice_accrual_amounts({
         "subtotal": 1000, "tax": 180, "total": 1180,

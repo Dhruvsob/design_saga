@@ -1,6 +1,6 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-10-30 (Asia/Kolkata)
+Last updated: 2026-11-01 (Asia/Kolkata)
 
 ## Current Checkpoint
 
@@ -46,6 +46,15 @@ Last updated: 2026-10-30 (Asia/Kolkata)
 - The mandatory per-user App PIN now locks after five minutes (300 seconds) without activity instead of one minute. Backend unlock leases and frontend idle detection use the same duration, while manual Lock now, cross-tab locking, five-attempt/15-minute protection and hashed PIN storage remain unchanged.
 - All setup, lock-screen and security-dialog text now states five minutes. Existing users and PIN hashes require no migration.
 - Verification: 14 focused PIN/session regressions pass; full frontend ESLint and production build pass. Deployment and live timing verification remain pending restored VPS access.
+
+### DS-050: Connected salary payment and accounting correction
+
+- Root causes: payroll payment UI did not send payment date, method or reference; backend journals used a hard-coded 28th date; method/account compatibility was not enforced; mistaken paid runs had no controlled correction; and Accounting Expenses exposed Employee Salary as a disconnected second payment path.
+- Correction: payroll now records the selected payment date, Cash/Bank account, constrained payment method and reference in one payroll run and its linked balanced journal. Cash is limited to Cash/Petty Cash and non-cash methods require a configured bank account. Authorized payroll/finance users can reverse a paid run through an immutable balancing journal; retry recovery handles an already-created reversal and releases the period key so a corrected payment can be posted. Generic Employee Salary expenses are blocked and the UI directs users to Employee → Salary & Bank → Run Payroll, preserving one source of truth.
+- Integrity: salary preview treats only active paid runs as already paid; reversal retains the original period key and linked journal IDs for audit, emits tenant-bound audit events, and never deletes historical journals or existing production records.
+- Verification: 72 focused payroll, accounting, attendance and financial-permission regressions pass, including explicit payment metadata, invalid-method rejection and reversal/re-post eligibility. Frontend lint and the production build passed for the changed salary/payment UI; diff checks pass.
+- Database effect: no migration or historical rewrite. New payroll fields are additive and reversal updates only the selected paid run while posting a balanced journal.
+- Deployment: pending restored VPS access and the mandatory backup/service-specific release gate.
 
 ### DS-043: Authentication, rate-limit and lifecycle hardening batch
 

@@ -1196,7 +1196,8 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
             onChange={(e) => setForm({ ...form, [kind === "income" ? "income_account_id" : "expense_account_id"]: e.target.value })}
             data-testid={`${kind}-acc`}>
             <option value="" disabled>Select {kind} account</option>
-            {txnAccs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {txnAccs.filter((a) => kind !== "expense" || a.name?.trim().toLowerCase() !== "employee salary")
+              .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <select className="input-flat" value={kind === "income" ? form.bank_account_id : form.paid_from_account_id}
             onChange={(e) => setForm({ ...form, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: e.target.value })}
@@ -1228,6 +1229,9 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
 
           {kind === "expense" && (
             <>
+              <div className="md:col-span-3 text-xs text-[#5C5C5C] border-l-2 border-[#8B7F6A] pl-3">
+                Employee salary is paid from Employee → Salary &amp; Bank → Run Payroll so attendance, employee history and Accounting use one transaction.
+              </div>
               <select
                 data-testid="expense-vendor-select"
                 className="input-flat"
