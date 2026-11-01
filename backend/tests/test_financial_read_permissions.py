@@ -131,6 +131,38 @@ def test_quotation_actuals_require_invoice_or_finance_read(monkeypatch):
     assert exc.value.status_code == 403
 
 
+def test_journal_detail_requires_finance_read_before_database_access(monkeypatch):
+    from routes import accounting
+
+    class Journals:
+        def __init__(self):
+            self.reads = 0
+
+        async def find_one(self, *_args, **_kwargs):
+            self.reads += 1
+            return {"id": "je_1", "narration": "Private finance row"}
+
+    journals = Journals()
+    monkeypatch.setattr(accounting, "sdb", SimpleNamespace(journal_entries=journals))
+
+    async def employee(*_args, **_kwargs):
+        return {"user_id": "employee_1", "permissions": ["projects.read"]}
+
+    monkeypatch.setattr(accounting, "require_user", employee)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(accounting.get_journal("je_1", None))
+    assert exc.value.status_code == 403
+    assert journals.reads == 0
+
+    async def accountant(*_args, **_kwargs):
+        return {"user_id": "accountant_1", "permissions": ["finance.read"]}
+
+    monkeypatch.setattr(accounting, "require_user", accountant)
+    row = asyncio.run(accounting.get_journal("je_1", None))
+    assert row["id"] == "je_1"
+    assert journals.reads == 1
+
+
 def test_project_detail_separates_invoice_procurement_and_vendor_cost_access(monkeypatch):
     collections = SimpleNamespace(
         tasks=_Collection(), files=_Collection(), employees=_Collection(),

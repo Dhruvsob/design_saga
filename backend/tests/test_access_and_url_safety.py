@@ -1,5 +1,7 @@
 """Focused regression tests for resource visibility and rendered URLs."""
 import asyncio
+import ast
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -214,3 +216,39 @@ def test_dashboard_scopes_reuse_assignment_visibility(monkeypatch):
         server_module._dashboard_scope_queries({"user_id": "user_1"}))
     assert project_query == {"team_ids": "employee_1"}
     assert task_query == {"assignee_id": "employee_1"}
+
+def test_every_api_route_has_authentication_or_reviewed_public_delegation():
+    """Fail when a new route silently omits authentication.
+
+    The allowlist contains intentional login/OAuth/public-share/static-branding
+    endpoints and CSV wrappers that delegate to an authenticated handler.
+    """
+    reviewed = {
+        "create_session", "logout", "portal_view", "portal_message", "root",
+        "login_password", "google_calendar_callback", "download_logo",
+        "public_branding", "account_ledger_csv", "commissions_report_csv",
+    }
+    auth_calls = {"require_user", "require_super_admin", "get_current_user", "require_platform_owner"}
+    backend = Path(__file__).resolve().parents[1]
+    sources = [backend / "server.py", *(backend / "routes").glob("*.py")]
+    missing = []
+    for source in sources:
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            is_route = any(
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr in {"get", "post", "put", "patch", "delete"}
+                for decorator in node.decorator_list
+            )
+            if not is_route or node.name in reviewed:
+                continue
+            calls = {
+                child.func.id for child in ast.walk(node)
+                if isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+            }
+            if not calls.intersection(auth_calls):
+                missing.append(f"{source.name}:{node.lineno}:{node.name}")
+    assert missing == [], f"Routes missing explicit authentication review: {missing}"

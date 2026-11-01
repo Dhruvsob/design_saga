@@ -11,6 +11,12 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-058: Journal-detail authorization and route-authentication gate
+
+- The direct journal-detail endpoint previously read a tenant financial transaction without explicitly requiring an authenticated user or `finance.read`. It now authenticates and rejects non-finance roles before any journal lookup, matching Accounting list, ledger and report permissions.
+- Added a source-level regression inventory covering every FastAPI route in `server.py` and modular route files. A new endpoint fails the mandatory security suite unless it calls an approved authentication dependency or is deliberately added to the small reviewed public/delegating allowlist.
+- Verification: 35 focused access, URL and financial-read tests pass, including proof that unauthorized journal detail requests perform zero database reads. Deployment remains pending VPS SSH access.
+
 ### DS-057: Tenant-safe audit evidence export
 
 - Tenant Admins can export up to 10,000 rows of their own tamper-evident audit chain as formula-safe CSV. Platform SuperAdmin export defaults to platform-only evidence and accepts one explicit tenant ID; an omitted selector never produces an accidental all-tenant dump.

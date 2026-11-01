@@ -1052,6 +1052,9 @@ async def _reverse_journal_entry(user: dict, je: dict, *, action: str = "reverse
 async def get_journal(je_id: str, request: Request,
                       session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
     if not je:
         raise HTTPException(status_code=404, detail="Transaction not found")
