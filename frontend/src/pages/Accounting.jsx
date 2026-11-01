@@ -187,16 +187,34 @@ export default function Accounting() {
         />
       )}
 
-      <div className="flex items-center gap-1 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0" data-testid="accounting-tabs">
-        {TABS.map(({ id, label, Icon }) => (
-          <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
-            className={`px-3 md:px-4 py-2.5 text-xs md:text-sm border-b-2 -mb-px flex items-center gap-2 whitespace-nowrap transition ${tab === id
-              ? "border-[#8B7F6A] text-[#8B7F6A] font-semibold"
-              : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}>
-            <Icon size={14} /> {label}
-          </button>
-        ))}
-      </div>
+      <nav className="border border-[#E5E5E5] bg-white p-3 md:p-4" aria-label="Accounting sections" data-testid="accounting-tabs">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <div className="overline">ACCOUNTING WORKSPACE</div>
+            <p className="text-xs text-[#5C5C5C] mt-1">Choose a section — every module is visible without horizontal scrolling.</p>
+          </div>
+          <select
+            value={tab}
+            onChange={(event) => setTab(event.target.value)}
+            className="input-flat min-w-[180px] sm:hidden"
+            aria-label="Accounting section"
+            data-testid="accounting-section-select"
+          >
+            {TABS.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </div>
+        <div className="hidden sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+          {TABS.map(({ id, label, Icon }) => (
+            <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
+              aria-current={tab === id ? "page" : undefined}
+              className={`min-h-11 px-3 py-2 text-left text-xs flex items-center gap-2 border transition ${tab === id
+                ? "border-[#8B7F6A] bg-[#F5F1EB] text-[#5B4E3A] font-semibold"
+                : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#B9AE9B] hover:text-[#0A0A0A]"}`}>
+              <Icon size={15} className="shrink-0" /> <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {/* Shared financial period selector. "All time" is sent explicitly. */}
       {["income", "expense", "reports", "balance", "cashflow", "ledgers", "validation"].includes(tab) && (

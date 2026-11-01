@@ -149,6 +149,9 @@ async def _apply_attendance_deductions(emp: dict, breakdown: dict,
         breakdown["gross"] = round(flat + float(breakdown.get("additions") or 0), 2)
     breakdown["payable_days"] = s["payable_days"]
     breakdown["lop_days"] = s["lop_days"]
+    breakdown["monthly_paid_leave_allowance"] = s["monthly_paid_leave_allowance"]
+    breakdown["paid_leave_allowance_used"] = s["paid_leave_allowance_used"]
+    breakdown["excess_ordinary_leave_days"] = s["excess_ordinary_leave_days"]
     breakdown["lop_deduction"] = s["lop_deduction"]
     breakdown["late_fine"] = s["late_fine"]
     breakdown["short_leave_hours"] = s["short_leave_hours"]

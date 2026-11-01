@@ -76,6 +76,7 @@ class AttendancePolicyIn(BaseModel):
     half_day_min_hours: float = Field(default=4.0, ge=0, le=24)
     full_day_min_hours: float = Field(default=8.0, ge=0, le=24)
     weekly_off_days: List[int] = [6]         # 0=Mon..6=Sun (default Sunday)
+    monthly_paid_leave_allowance: int = Field(default=1, ge=0, le=31)
     holidays: List[dict] = []                # legacy inline holidays — new module lives in /api/holidays
     geo_fencing_enabled: bool = True
     require_geo_for_office: bool = True      # office check-in also requires geo?

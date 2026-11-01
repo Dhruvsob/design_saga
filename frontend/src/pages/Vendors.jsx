@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "sonner";
 import {
   Plus, MagnifyingGlass, Star, Buildings, Phone, Envelope, CurrencyInr,
-  CaretRight, X, HardHat,
+  CaretRight, X, HardHat, PencilSimple, Archive,
 } from "@phosphor-icons/react";
 
 const AGENCY_LABELS = {
@@ -67,6 +68,20 @@ export default function Vendors() {
   );
 
   const canCreate = hasPerm("vendors.create");
+  const canEdit = hasPerm("vendors.update");
+  const canArchive = hasPerm("vendors.delete");
+
+  const archiveVendor = async (vendor, event) => {
+    event.stopPropagation();
+    if (!window.confirm(`Archive ${vendor.name}? Existing bills, payments and accounting history will be preserved.`)) return;
+    try {
+      await api.delete(`/vendors/${vendor.id}`);
+      toast.success("Vendor archived");
+      await load();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not archive vendor");
+    }
+  };
 
   return (
     <div className="space-y-6" data-testid="vendors-page">
@@ -257,9 +272,21 @@ export default function Vendors() {
                   ) : <span className="text-[#5C5C5C]">—</span>}
                 </Td>
                 <Td className="text-right">
-                  <Link to={`/vendors/${v.id}`} className="text-[#8B7F6A] text-xs font-semibold flex items-center gap-1 justify-end">
-                    Open <CaretRight size={11} weight="bold" />
-                  </Link>
+                  <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+                    {canEdit && (
+                      <Link to={`/vendors/${v.id}?edit=1`} className="btn-ghost text-xs" data-testid={`vendor-edit-${v.id}`}>
+                        <PencilSimple size={12} /> Edit
+                      </Link>
+                    )}
+                    {canArchive && (
+                      <button type="button" className="btn-ghost text-xs text-[#B22B22]" onClick={(event) => archiveVendor(v, event)} data-testid={`vendor-archive-${v.id}`}>
+                        <Archive size={12} /> Archive
+                      </button>
+                    )}
+                    <Link to={`/vendors/${v.id}`} className="btn-ghost text-xs text-[#8B7F6A] font-semibold">
+                      Open <CaretRight size={11} weight="bold" />
+                    </Link>
+                  </div>
                 </Td>
               </tr>
             ))}

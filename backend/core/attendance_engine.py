@@ -30,6 +30,7 @@ from core.scoped_db import sdb
 IST = ZoneInfo("Asia/Kolkata")
 
 WORKED_STATUSES = {"present", "late", "half_day", "pending_approval"}
+MONTHLY_ALLOWANCE_LEAVE_TYPES = {"casual", "sick", "earned", ""}
 
 DEFAULT_LATE_CATEGORIES = [
     "traffic", "public_transport", "vehicle_breakdown",
@@ -106,6 +107,8 @@ async def monthly_summary(emp: dict, year: int, month: int,
     lop = 0.0
     late_fine_total = 0.0
     short_leave_hours_total = 0.0
+    paid_leave_used = 0
+    paid_leave_allowance = max(0, int(policy.get("monthly_paid_leave_allowance", 1) or 0))
     today = now_ist().date()
 
     for dnum in range(1, days_in_month + 1):
@@ -125,7 +128,16 @@ async def monthly_summary(emp: dict, year: int, month: int,
         elif is_weekly_off or rstatus == "week_off":
             status = "week_off"
         elif rec is not None and rstatus == "leave":
-            status = "unpaid_leave" if (rec.get("leave_type") == "unpaid") else "paid_leave"
+            leave_type = str(rec.get("leave_type") or "").lower()
+            if leave_type == "unpaid":
+                status = "unpaid_leave"
+            elif leave_type in MONTHLY_ALLOWANCE_LEAVE_TYPES:
+                status = "paid_leave" if paid_leave_used < paid_leave_allowance else "unpaid_leave"
+                paid_leave_used += 1
+            else:
+                # Statutory leave and approved comp-off are not consumed by the
+                # ordinary monthly casual/sick/earned-leave allowance.
+                status = "paid_leave"
         elif rec is not None and rstatus == "absent":
             status = "absent"
         elif cur > today:
@@ -228,6 +240,9 @@ async def monthly_summary(emp: dict, year: int, month: int,
         "summary": summary,
         "payable_days": round(payable, 2),
         "lop_days": round(lop, 2),
+        "monthly_paid_leave_allowance": paid_leave_allowance,
+        "paid_leave_allowance_used": min(paid_leave_used, paid_leave_allowance),
+        "excess_ordinary_leave_days": max(0, paid_leave_used - paid_leave_allowance),
         "salary_configured": monthly > 0,
         "late_rejection_penalty": policy.get("late_rejection_penalty") or "half_day",
         "late_fine_enabled": fine_enabled,

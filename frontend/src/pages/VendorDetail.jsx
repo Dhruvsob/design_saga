@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { dateForInput, formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
@@ -26,6 +26,7 @@ const TURNKEY_TABS     = ["overview", "commercial", "ledger", "bills", "payments
 export default function VendorDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { hasPerm, currentOrg } = useAuth();
   const businessMode = (currentOrg?.business_mode || "hybrid").toLowerCase();
   // Hybrid gets everything so all workflows stay reachable during transitions.
@@ -171,6 +172,16 @@ export default function VendorDetail() {
   const canBill = hasPerm("finance.create");
   const canEditVendor = hasPerm("vendors.update");
   const canDeleteVendor = hasPerm("vendors.delete");
+
+  useEffect(() => {
+    if (!v || !canEditVendor || searchParams.get("edit") !== "1") return;
+    const fields = ["name", "company", "agency_type", "contact_person", "phone", "email",
+      "address", "city", "state", "pincode", "gstin", "pan", "tds_applicable", "tds_rate",
+      "bank_name", "bank_account_number", "bank_ifsc", "bank_branch", "upi_id", "category", "notes"];
+    setVendorForm(Object.fromEntries(fields.map((field) => [field, v[field] ?? (field === "tds_applicable" ? false : "")])))
+    setEditOpen(true);
+    navigate(`/vendors/${id}`, { replace: true });
+  }, [v, canEditVendor, searchParams, navigate, id]);
 
   const openVendorEdit = () => {
     const fields = ["name", "company", "agency_type", "contact_person", "phone", "email",

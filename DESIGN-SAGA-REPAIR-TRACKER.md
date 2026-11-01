@@ -11,6 +11,18 @@ Last updated: 2026-11-01 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-055: Accounting navigation and vendor-action usability
+
+- Accounting's fourteen sections no longer depend on an invisible single-line horizontal scroller. Desktop and laptop widths use a fully visible responsive grid with a clear active state; small screens use an accessible section selector. Existing accounting routes, calculations and forms are unchanged.
+- The Vendor directory now exposes permission-aware Edit, Archive and Open actions on each row. Edit opens the existing vendor master form. Archive uses the existing backend lifecycle rule, preserving bills, payments and accounting history instead of hard-deleting financial records.
+- Verification: frontend ESLint and production build pass. Production deployment and live responsive-width/role validation remain pending restored VPS access.
+
+### DS-056: Configurable monthly paid-leave allowance
+
+- Attendance Policy now includes a tenant-configurable monthly ordinary paid-leave allowance, defaulting to one day. Casual, sick and earned leave consume that allowance in date order; excess approved ordinary leave becomes salary loss-of-pay. Explicit unpaid leave remains deductible, while maternity, paternity and approved comp-off are not incorrectly consumed by this ordinary-leave cap.
+- Payroll preview and paid-run breakdowns expose the allowance, allowance used and excess ordinary-leave days. Existing paid payroll runs and attendance records are not rewritten; the policy affects future previews/runs through the existing attendance-payroll source of truth.
+- Verification: 32 focused attendance/payroll regressions pass, including one paid ordinary day, excess ordinary leave, explicit unpaid leave and statutory leave. Frontend ESLint and production build pass. Deployment and live payroll preview validation remain pending restored VPS access.
+
 ### DS-044: IST-safe business-date defaults
 
 - Replaced UTC-derived or browser-local `today` defaults in accounting, attendance, payroll, employee onboarding/salary, tasks, loans, holidays, calendar, vendor entries, recurring expenses and account-ledger flows with the shared Asia/Kolkata calendar-date helper. Users working between midnight and 05:30 IST no longer receive the previous UTC date in forms, overdue checks, due-state calculations or the calendar's Today action.

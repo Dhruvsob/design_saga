@@ -58,6 +58,52 @@ def test_monthly_engine_materializes_holiday_without_punch_record(monkeypatch):
     assert result["summary"]["working_days"] == 27
 
 
+def test_monthly_paid_leave_allowance_converts_only_excess_ordinary_leave_to_lop(monkeypatch):
+    rows = [
+        {"employee_id": "emp_1", "date": "2026-12-01", "status": "leave", "leave_type": "casual"},
+        {"employee_id": "emp_1", "date": "2026-12-02", "status": "leave", "leave_type": "sick"},
+        {"employee_id": "emp_1", "date": "2026-12-03", "status": "leave", "leave_type": "unpaid"},
+        {"employee_id": "emp_1", "date": "2026-12-04", "status": "leave", "leave_type": "maternity"},
+    ]
+
+    class Cursor:
+        def __aiter__(self):
+            async def values():
+                for row in rows:
+                    yield row
+            return values()
+
+    class AttendanceRows:
+        def find(self, *_args, **_kwargs):
+            return Cursor()
+
+    monkeypatch.setattr(attendance.engine, "sdb", SimpleNamespace(attendance=AttendanceRows()))
+    monkeypatch.setattr(
+        attendance.engine,
+        "now_ist",
+        lambda: datetime(2026, 12, 1, tzinfo=timezone(timedelta(hours=5, minutes=30))),
+    )
+    result = asyncio.run(attendance.engine.monthly_summary(
+        {"id": "emp_1", "monthly_salary": 26000, "payroll_basis_days": 26, "weekly_offs": []},
+        2026, 12,
+        {"weekly_off_days": [], "full_day_min_hours": 8, "monthly_paid_leave_allowance": 1},
+        holiday_dates=set(),
+    ))
+
+    assert result["summary"]["paid_leave"] == 2  # one ordinary + maternity
+    assert result["summary"]["unpaid_leave"] == 2  # excess ordinary + explicitly unpaid
+    assert result["monthly_paid_leave_allowance"] == 1
+    assert result["paid_leave_allowance_used"] == 1
+    assert result["excess_ordinary_leave_days"] == 1
+    assert result["lop_days"] == 2
+    assert result["lop_deduction"] == 2000
+
+
+def test_attendance_policy_defaults_to_one_monthly_paid_leave():
+    policy = AttendancePolicyIn()
+    assert policy.monthly_paid_leave_allowance == 1
+
+
 def test_geofence_read_permissions_match_attendance_access():
     for permission in (
         "attendance.read", "attendance.create", "attendance.update", "attendance.approve",

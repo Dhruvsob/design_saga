@@ -43,6 +43,7 @@ DEFAULT_POLICY = {
     "half_day_min_hours": 4.0,
     "full_day_min_hours": 8.0,
     "weekly_off_days": [6],
+    "monthly_paid_leave_allowance": 1,
     "holidays": [],
     "geo_fencing_enabled": True,
     "require_geo_for_office": True,
@@ -258,7 +259,8 @@ async def update_att_policy(payload: AttendancePolicyIn, request: Request,
     await sdb.attendance_policies.update_one({}, {"$set": up}, upsert=True)
     await audit(user, "attendance_policy.update", target="policy", target_type="policy",
                 meta={"office_start": up.get("office_start"),
-                      "office_end": up.get("office_end")})
+                      "office_end": up.get("office_end"),
+                      "monthly_paid_leave_allowance": up.get("monthly_paid_leave_allowance")})
     return await _get_attendance_policy()
 
 

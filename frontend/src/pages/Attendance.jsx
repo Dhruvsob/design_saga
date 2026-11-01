@@ -1544,6 +1544,7 @@ function GeoPolicyTab({ projects }) {
         ...policy,
         office_start: policy.office_start, office_end: policy.office_end,
         grace_minutes: Number(policy.grace_minutes) || 0,
+        monthly_paid_leave_allowance: Math.max(0, Number(policy.monthly_paid_leave_allowance ?? 1)),
         half_day_min_hours: Number(policy.half_day_min_hours) || 4,
         full_day_min_hours: Number(policy.full_day_min_hours) || 8,
         weekly_off_days: policy.weekly_off_days || [6],
@@ -1666,6 +1667,14 @@ function GeoPolicyTab({ projects }) {
             <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Grace (minutes)</label>
             <input type="number" className="input-flat w-full" value={policy.grace_minutes ?? 15}
                    onChange={(e) => setP({ grace_minutes: e.target.value })} data-testid="policy-grace" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Paid leave / month</label>
+            <input type="number" min="0" max="31" step="1" className="input-flat w-full"
+                   value={policy.monthly_paid_leave_allowance ?? 1}
+                   onChange={(e) => setP({ monthly_paid_leave_allowance: e.target.value })}
+                   data-testid="policy-paid-leave-allowance" />
+            <p className="text-[10px] text-[#9A9A9A] mt-1">Approved ordinary leave above this allowance is deducted from salary.</p>
           </div>
           <div>
             <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Max GPS accuracy (m)</label>
