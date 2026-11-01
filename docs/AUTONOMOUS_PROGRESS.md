@@ -29,9 +29,13 @@ Last updated: 02/11/2026 (Asia/Kolkata)
   only bounded exception type/HTTP status, never raw provider/database messages.
 - DS-063: tenant notification-scan results and logo-storage API errors no longer
   return raw exception text to callers.
+- DS-064: expired/revoked sessions now clear protected UI immediately; auth and
+  five-minute app-lock activity synchronize across same-origin browser tabs.
 - Focused failure-detail regression suite: 31 passed. Complete mandatory
   security/integrity suite: 247 passed. Diff and tracked-secret release gates
   pass.
+- Frontend ESLint passes with zero warnings and the production Vite build
+  succeeds for DS-064.
 - Current dependency audit could not be refreshed: npm registry TLS validation
   failed locally and pip-audit could not reach its package index. Existing CI
   enforcement remains, but this batch must not be described as a fresh clean

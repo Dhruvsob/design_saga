@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-11-01 (Asia/Kolkata)
+Last updated: 2026-11-02 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -87,7 +87,7 @@ yet received sufficient adversarial testing.
 |---|---|---|
 | Production UI cleanup | Remove demo/seed/debug/tip controls while preserving real empty-state guidance and Ctrl/Cmd+K | Fixed in frontend inventory; no demo/seed/debug/tip controls remain, and backend seed routes are disabled plus hard-blocked in production |
 | Permission-aware UI | Hidden controls must match backend permissions; backend remains authoritative | Core actions and direct routes for clients, projects, tasks, leads, invoices, expenses, holidays, loans, purchase orders, quotations, vendors, employees, salary/private HR and Daybook now match backend permissions; live custom-role verification remains |
-| Authentication UX | Correct errors, no redirect loops, token refresh/expiry behavior and safe logout | Audit |
+| Authentication UX | Correct errors, no redirect loops, token refresh/expiry behavior and safe logout | Fixed locally: 401 expiry/revocation invalidates protected UI immediately; login/logout and five-minute PIN activity synchronize across tabs; live multi-tab validation remains pending deployment |
 | Form safety | Server errors shown clearly, double-submit prevention, validation parity and unsaved-change protection | Audit |
 | Accessibility | Keyboard navigation, labels, focus, contrast, table semantics and screen-reader checks | Audit |
 | Responsive layout | No clipped controls, overlapping text or unusable tables on supported mobile/desktop widths | Accounting module navigation fixed locally with a wrapped laptop/desktop grid and mobile selector; remaining screens require supported-width visual QA |

@@ -11,6 +11,12 @@ Last updated: 2026-11-02 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-064: Session-expiry and multi-tab app-lock consistency
+
+- A server-revoked or expired session could leave the current protected screen mounted until another navigation/auth refresh, producing repeated API failures and stale-looking UI. The five-minute PIN timer was also tab-local: an inactive background tab could lock every tab even while the user was actively working in another tab.
+- Global 401 handling now invalidates local authenticated state immediately, causing protected routes to return to login after expiry, password reset, tenant suspension or explicit revocation. Login/logout state synchronizes across tabs. PIN activity is shared across same-origin tabs while the server remains authoritative through the existing touch/lock endpoints; manual lock still locks every tab.
+- Verification: frontend ESLint passes with zero warnings and the production Vite build succeeds. Live multi-tab expiry/revocation validation remains pending deployment and stable VPS access.
+
 ### DS-063: API and notification failure-detail secret minimization
 
 - The cross-tenant notification scheduler returned raw per-tenant exception messages in its operational result, and the multipart company-logo endpoint returned raw object-storage failures to authenticated clients. Provider/database errors can include credentials, internal endpoints, request details or tenant data.

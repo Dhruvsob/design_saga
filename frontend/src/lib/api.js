@@ -51,8 +51,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 423 && typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("app-pin-locked"));
+    if (typeof window !== "undefined") {
+      if (error?.response?.status === 423) {
+        window.dispatchEvent(new CustomEvent("app-pin-locked"));
+      } else if (error?.response?.status === 401) {
+        // Keep protected routes from displaying stale data after server-side
+        // expiry, password reset, tenant suspension or explicit revocation.
+        window.dispatchEvent(new CustomEvent("session-invalid"));
+      }
     }
     return Promise.reject(error);
   }

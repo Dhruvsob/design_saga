@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import api, { setSessionToken } from "../lib/api";
 
 const PIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const PIN_ACTIVITY_KEY = "ds_app_pin_activity";
+const AUTH_STATE_KEY = "ds_auth_state";
 
 const AuthContext = createContext(null);
 
@@ -22,6 +24,12 @@ export function AuthProvider({ children }) {
   const broadcastPinState = useCallback((locked) => {
     try {
       localStorage.setItem("ds_app_pin_state", JSON.stringify({ locked, at: Date.now() }));
+    } catch { /* storage unavailable */ }
+  }, []);
+
+  const broadcastAuthState = useCallback((authenticated) => {
+    try {
+      localStorage.setItem(AUTH_STATE_KEY, JSON.stringify({ authenticated, at: Date.now() }));
     } catch { /* storage unavailable */ }
   }, []);
 
@@ -77,26 +85,41 @@ export function AuthProvider({ children }) {
       setPinLocked(true);
       setCurrentOrg(null);
     };
+    const invalidateSession = () => {
+      setSessionToken(null);
+      setUser(null);
+      setCurrentOrg(null);
+      setPinLocked(false);
+    };
     const sync = (event) => {
-      if (event.key !== "ds_app_pin_state" || !event.newValue) return;
+      if (!event.newValue) return;
       try {
-        const locked = Boolean(JSON.parse(event.newValue).locked);
-        setPinLocked(locked);
-        if (locked) setCurrentOrg(null);
+        const value = JSON.parse(event.newValue);
+        if (event.key === "ds_app_pin_state") {
+          const locked = Boolean(value.locked);
+          setPinLocked(locked);
+          if (locked) setCurrentOrg(null);
+        } else if (event.key === AUTH_STATE_KEY) {
+          if (value.authenticated) checkAuth();
+          else invalidateSession();
+        }
       } catch { /* ignore */ }
     };
     window.addEventListener("app-pin-locked", lock);
+    window.addEventListener("session-invalid", invalidateSession);
     window.addEventListener("storage", sync);
     return () => {
       window.removeEventListener("app-pin-locked", lock);
+      window.removeEventListener("session-invalid", invalidateSession);
       window.removeEventListener("storage", sync);
     };
-  }, []);
+  }, [checkAuth]);
 
   useEffect(() => {
     if (!user?.app_pin_enabled || pinLocked) return undefined;
     let lastActivity = Date.now();
     let lastTouch = 0;
+    let lastBroadcast = 0;
     let locking = false;
 
     const lockLocally = () => {
@@ -114,6 +137,10 @@ export function AuthProvider({ children }) {
         return;
       }
       lastActivity = now;
+      if (now - lastBroadcast >= 5000) {
+        lastBroadcast = now;
+        try { localStorage.setItem(PIN_ACTIVITY_KEY, String(now)); } catch { /* unavailable */ }
+      }
       if (now - lastTouch < 25000) return;
       lastTouch = now;
       api.post("/auth/pin/touch").catch((error) => {
@@ -123,12 +150,19 @@ export function AuthProvider({ children }) {
     const checkIdle = () => {
       if (Date.now() - lastActivity >= PIN_IDLE_TIMEOUT_MS) lockLocally();
     };
+    const syncActivity = (event) => {
+      if (event.key !== PIN_ACTIVITY_KEY || !event.newValue) return;
+      const at = Number(event.newValue);
+      if (Number.isFinite(at) && at > lastActivity) lastActivity = at;
+    };
     const events = ["pointerdown", "keydown", "touchstart", "scroll"];
     events.forEach((name) => window.addEventListener(name, activity, { passive: true }));
+    window.addEventListener("storage", syncActivity);
     const timer = window.setInterval(checkIdle, 1000);
     document.addEventListener("visibilitychange", checkIdle);
     return () => {
       events.forEach((name) => window.removeEventListener(name, activity));
+      window.removeEventListener("storage", syncActivity);
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", checkIdle);
     };
@@ -140,6 +174,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setCurrentOrg(null);
     setPinLocked(false);
+    broadcastAuthState(false);
     window.location.href = "/";
   };
 
@@ -148,6 +183,7 @@ export function AuthProvider({ children }) {
     if (data.session_token) setSessionToken(data.session_token);
     setUser(data.user);
     setPinLocked(Boolean(data.user?.app_pin_locked));
+    broadcastAuthState(true);
     if (!data.user?.app_pin_locked && !data.user?.app_pin_setup_required) await fetchOrg();
     return data.user;
   };
