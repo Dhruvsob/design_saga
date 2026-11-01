@@ -5,18 +5,54 @@
 - Per-record activity is only shown when the caller can read that record.
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from fastapi.responses import Response
 from typing import Optional
+from datetime import date as _date
+import io
+import json
 
 from core.db import db
 from core.scoped_db import sdb
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import is_super_admin, user_org_id
-from core.audit import verify_chain
+from core.audit import audit, verify_chain
+from core.csv_safe import SafeWriter
 from core.access_control import get_visible_project, get_visible_purchase_order, get_visible_task
 
 
 router = APIRouter()
+
+
+def _export_query(user: dict, requested_org: Optional[str], from_date: Optional[str],
+                  to_date: Optional[str]) -> tuple[dict, str]:
+    """Build a bounded export query without allowing accidental platform-wide dumps."""
+    q: dict = {}
+    if is_super_admin(user):
+        # Default to platform-only evidence; never make an omitted selector
+        # mean an accidental all-tenant export.
+        if not requested_org or requested_org == "platform":
+            q["org_id"] = None
+            chain = "platform"
+        else:
+            q["org_id"] = requested_org
+            chain = requested_org
+    else:
+        chain = user_org_id(user) or "org_default"
+    dates = {}
+    try:
+        if from_date:
+            dates["$gte"] = _date.fromisoformat(from_date).isoformat()
+        if to_date:
+            dates["$lt"] = (_date.fromisoformat(to_date).fromordinal(
+                _date.fromisoformat(to_date).toordinal() + 1)).isoformat()
+    except ValueError as exc:
+        raise HTTPException(400, "Dates must use YYYY-MM-DD") from exc
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(400, "from_date cannot be after to_date")
+    if dates:
+        q["at"] = dates
+    return q, chain
 
 # target_type -> permissions (any) required to read that record's history
 _ACTIVITY_PERMS = {
@@ -75,6 +111,36 @@ async def verify_audit(request: Request, org_id: Optional[str] = None,
     else:
         raise HTTPException(403, "Admin only")
     return await verify_chain(chain)
+
+
+@router.get("/audit-log/export")
+async def export_audit(request: Request, org_id: Optional[str] = None,
+                       from_date: Optional[str] = None, to_date: Optional[str] = None,
+                       session_token: Optional[str] = Cookie(default=None),
+                       authorization: Optional[str] = Header(default=None)):
+    """Export one tenant's audit evidence as formula-safe CSV (maximum 10,000 rows)."""
+    user = await require_user(request, session_token, authorization)
+    if not (has_permission(user, "*.*") or is_super_admin(user)):
+        raise HTTPException(403, "Admin only")
+    q, chain = _export_query(user, org_id, from_date, to_date)
+    collection = db.audit_log if is_super_admin(user) else sdb.audit_log
+    rows = await collection.find(q, {"_id": 0}).sort("at", -1).limit(10001).to_list(10001)
+    if len(rows) > 10000:
+        raise HTTPException(413, "Export exceeds 10,000 rows; narrow the date range")
+
+    buf = io.StringIO()
+    writer = SafeWriter(buf)
+    headers = ["at", "action", "actor_email", "actor_role", "target_type", "target",
+               "org_id", "seq", "prev_hash", "hash", "meta"]
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow([json.dumps(row.get(key), sort_keys=True, default=str)
+                         if key == "meta" else row.get(key, "") for key in headers])
+    await audit(user, "audit.export", target=chain, target_type="audit_chain",
+                meta={"rows": len(rows), "from_date": from_date, "to_date": to_date})
+    filename = f"audit-{chain}-{from_date or 'start'}-{to_date or 'latest'}.csv"
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.get("/activity/{target_type}/{target_id}")

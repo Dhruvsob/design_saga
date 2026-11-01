@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowClockwise, CheckCircle, MagnifyingGlass, ShieldCheck, Warning } from "@phosphor-icons/react";
+import { ArrowClockwise, CheckCircle, DownloadSimple, MagnifyingGlass, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { formatDateTime } from "../lib/format";
@@ -13,6 +13,7 @@ export default function AuditLog() {
   const [loading, setLoading] = useState(true);
   const [verification, setVerification] = useState(null);
   const [verifying, setVerifying] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -38,6 +39,22 @@ export default function AuditLog() {
     } finally { setVerifying(false); }
   };
 
+  const download = async () => {
+    setExporting(true);
+    try {
+      const { data } = await api.get("/audit-log/export", { responseType: "blob" });
+      const url = URL.createObjectURL(data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Audit evidence exported");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not export the audit log");
+    } finally { setExporting(false); }
+  };
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return rows;
@@ -56,6 +73,9 @@ export default function AuditLog() {
         <div className="flex items-center gap-2">
           <button className="btn-secondary" onClick={load} disabled={loading} data-testid="audit-refresh">
             <ArrowClockwise size={15} /> Refresh
+          </button>
+          <button className="btn-secondary" onClick={download} disabled={exporting} data-testid="audit-export">
+            <DownloadSimple size={15} /> {exporting ? "Exporting…" : "Export CSV"}
           </button>
           <button className="btn-primary" onClick={verify} disabled={verifying} data-testid="audit-verify">
             <ShieldCheck size={15} /> Verify integrity

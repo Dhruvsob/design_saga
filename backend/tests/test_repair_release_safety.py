@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from starlette.requests import Request
 
 import core.audit as audit_module
+from routes.audit import _export_query
 import core.helpers as helpers_module
 import core.jobs as jobs_module
 import core.indexes as indexes_module
@@ -200,6 +201,24 @@ def _row(seq, prev_hash, action):
 def test_audit_digest_uses_hmac_key(monkeypatch):
     monkeypatch.setenv("AUDIT_HMAC_KEY", "a" * 64)
     assert audit_digest(_row(1, "genesis", "signed"))[0:8] == "hmac256:"
+
+
+def test_tenant_audit_export_is_scoped_implicitly():
+    query, chain = _export_query(
+        {"role": "Admin", "org_id": "org_a"}, "org_b", "2026-10-01", "2026-10-31",
+    )
+    assert chain == "org_a"
+    assert "org_id" not in query  # scoped_db injects the authenticated tenant
+    assert query["at"] == {"$gte": "2026-10-01", "$lt": "2026-11-01"}
+
+
+def test_platform_audit_export_defaults_to_platform_chain_not_all_tenants():
+    default_query, default_chain = _export_query({"is_super_admin": True}, None, None, None)
+    assert default_query == {"org_id": None}
+    assert default_chain == "platform"
+    query, chain = _export_query({"is_super_admin": True}, "org_a", None, None)
+    assert query == {"org_id": "org_a"}
+    assert chain == "org_a"
 
 
 def test_audit_verifier_detects_deleted_tail(monkeypatch):
