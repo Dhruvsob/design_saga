@@ -163,6 +163,17 @@ export default function EmployeeDetail() {
     load();
   };
 
+  const editDocument = async (document) => {
+    const label = window.prompt("Document label", document.label || "");
+    if (!label?.trim()) return;
+    const url = window.prompt("Document URL", document.url || "");
+    if (!url?.trim()) return;
+    await api.patch(`/employees/${id}/documents/${document.id}`, {
+      label: label.trim(), url: url.trim(),
+    });
+    await load();
+  };
+
   if (!emp) {
     return (
       <div className="space-y-4" data-testid="emp-detail-loading">
@@ -479,9 +490,14 @@ export default function EmployeeDetail() {
                       </a>
                     )}
                     {canEdit && (
-                      <button onClick={() => removeDocument(d.id)} className="text-[#FF2A00] hover:scale-110 transition p-2">
-                        <Trash size={14} />
-                      </button>
+                      <>
+                        <button onClick={() => editDocument(d)} className="hover:scale-110 transition p-2" aria-label="Edit document">
+                          <PencilSimple size={14} />
+                        </button>
+                        <button onClick={() => removeDocument(d.id)} className="text-[#FF2A00] hover:scale-110 transition p-2" aria-label="Remove document">
+                          <Trash size={14} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

@@ -237,6 +237,12 @@ class VendorDocumentIn(FiniteModel):
     _validate_url = field_validator("url")(external_http_url)
 
 
+class VendorDocumentUpdate(FiniteModel):
+    label: Optional[str] = Field(default=None, min_length=1, max_length=180)
+    kind: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    expires_on: Optional[str] = Field(default=None, max_length=10)
+
+
 # ---------- Update (partial edit of vendor master) ----------
 class VendorUpdate(FiniteModel):
     name: Optional[str] = None

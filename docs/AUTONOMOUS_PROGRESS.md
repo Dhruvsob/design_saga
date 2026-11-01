@@ -34,8 +34,10 @@ Last updated: 02/11/2026 (Asia/Kolkata)
 - DS-065: Employee Performance warnings/rewards now have permission-aware,
   audited edit/delete APIs and UI actions. The cross-module correction inventory
   is maintained in `docs/CORRECTION-CAPABILITY-MATRIX.md`.
-- Focused employee correction/permission suite: 18 passed. Complete mandatory
-  security/integrity suite: 251 passed. Diff and tracked-secret release gates
+- DS-066: Vendor and employee document metadata can now be corrected in place
+  with nested-record scoping, URL/date validation and content-free audit events.
+- Focused document correction suite: 8 passed. Complete mandatory
+  security/integrity suite: 255 passed. Diff and tracked-secret release gates
   are rerun before each commit.
 - Frontend ESLint passes with zero warnings and the production Vite build
   succeeds for DS-064.

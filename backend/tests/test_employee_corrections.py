@@ -93,3 +93,24 @@ def test_employee_correction_requires_update_permission(monkeypatch):
     assert exc.value.status_code == 403
     assert employees.calls == []
     assert audits == []
+
+
+def test_employee_document_edit_is_nested_scoped_and_audited(monkeypatch):
+    employees, audits = _install(
+        monkeypatch,
+        {"user_id": "usr_admin", "permissions": ["employees.update"]},
+    )
+
+    result = asyncio.run(server.update_employee_doc(
+        "emp_1", "edoc_1",
+        server.DocumentIn(label=" Offer letter ", url="https://files.example/offer.pdf"),
+        object(), None, None,
+    ))
+
+    query, update = employees.calls[0]
+    assert query == {"id": "emp_1", "documents.id": "edoc_1"}
+    assert update["$set"]["documents.$.label"] == "Offer letter"
+    assert update["$set"]["documents.$.url"] == "https://files.example/offer.pdf"
+    assert result["id"] == "edoc_1"
+    assert audits[0][0][1] == "employee.document.update"
+    assert audits[0][1]["meta"] == {"document_id": "edoc_1"}

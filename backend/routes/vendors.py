@@ -53,7 +53,7 @@ import re as _re_mod
 from models.accounting import VendorIn
 from models.vendor import (
     VendorUpdate, VendorBillIn, VendorBillUpdate, VendorPaymentIn,
-    VendorRatingIn, VendorDocumentIn,
+    VendorRatingIn, VendorDocumentIn, VendorDocumentUpdate,
     CommissionConfig, CommissionReceiveIn, CommissionExpectedIn, CommissionExpectedUpdate,
     AGENCY_TYPES, VENDOR_BILL_STATUSES, COMMISSION_TYPES, COMMISSION_STATUSES,
 )
@@ -607,6 +607,48 @@ async def vendor_document_content(
         content_disposition_type=disposition,
         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
+
+
+@router.patch("/vendors/{vendor_id}/documents/{doc_id}")
+async def update_vendor_document(vendor_id: str, doc_id: str,
+                                 payload: VendorDocumentUpdate, request: Request,
+                                 session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    """Correct document metadata without replacing or duplicating the file."""
+    user = await require_user(request, session_token, authorization)
+    _require(user, "vendors.update")
+    patch = payload.model_dump(exclude_none=True)
+    if "label" in patch:
+        patch["label"] = patch["label"].strip()
+        if not patch["label"]:
+            raise HTTPException(422, "Document label is required")
+    if "kind" in patch:
+        patch["kind"] = patch["kind"].strip()
+        if not patch["kind"]:
+            raise HTTPException(422, "Document type is required")
+    if "expires_on" in patch:
+        patch["expires_on"] = patch["expires_on"].strip() or None
+        if patch["expires_on"]:
+            try:
+                if not _re_mod.fullmatch(r"\d{4}-\d{2}-\d{2}", patch["expires_on"]):
+                    raise ValueError("not an ISO calendar date")
+                datetime.fromisoformat(patch["expires_on"])
+            except ValueError as exc:
+                raise HTTPException(422, "Expiry date must use YYYY-MM-DD") from exc
+    if not patch:
+        raise HTTPException(400, "Nothing to update")
+    patch["updated_at"] = iso_now()
+    patch["updated_by"] = user["user_id"]
+    update = {f"documents.$.{key}": value for key, value in patch.items()}
+    res = await sdb.vendors_acc.update_one(
+        {"id": vendor_id, "documents.id": doc_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Vendor document not found")
+    await audit(user, "vendor.document_update", target=doc_id,
+                target_type="vendor_document",
+                meta={"vendor_id": vendor_id,
+                      "fields": sorted(k for k in patch if not k.startswith("updated_"))})
+    return {"ok": True, "id": doc_id}
 
 
 @router.delete("/vendors/{vendor_id}/documents/{doc_id}")

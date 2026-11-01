@@ -4963,6 +4963,35 @@ async def remove_employee_doc(eid: str, doc_id: str, request: Request,
     return {"ok": True}
 
 
+@api.patch("/employees/{eid}/documents/{doc_id}")
+async def update_employee_doc(eid: str, doc_id: str, payload: DocumentIn,
+                              request: Request,
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.update")
+    label = payload.label.strip()
+    if not label:
+        raise HTTPException(status_code=422, detail="Document label is required")
+    document_url = external_http_url(payload.url)
+    res = await sdb.employees.update_one(
+        {"id": eid, "documents.id": doc_id},
+        {"$set": {
+            "documents.$.label": label,
+            "documents.$.url": document_url,
+            "documents.$.updated_at": iso(now_utc()),
+            "documents.$.updated_by": user["user_id"],
+            "updated_at": iso(now_utc()),
+        }},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Employee document not found")
+    await audit_log(user, "employee.document.update", target=eid,
+                    target_type="employee", meta={"document_id": doc_id})
+    return {"ok": True, "id": doc_id, "label": label, "url": document_url}
+
+
 @api.post("/employees/{eid}/warnings")
 async def add_warning(eid: str, payload: WarningIn, request: Request,
                       session_token: Optional[str] = Cookie(default=None),

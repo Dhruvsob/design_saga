@@ -254,6 +254,18 @@ export default function VendorDetail() {
     if (!window.confirm("Remove this document?")) return;
     await api.delete(`/vendors/${id}/documents/${docId}`); await load();
   };
+  const editDoc = async (doc) => {
+    const label = window.prompt("Document label", doc.label || "");
+    if (!label?.trim()) return;
+    const kind = window.prompt("Document type", doc.kind || "other");
+    if (!kind?.trim()) return;
+    const expiresOn = window.prompt("Expiry date (YYYY-MM-DD, blank for none)", doc.expires_on || "");
+    if (expiresOn === null) return;
+    await api.patch(`/vendors/${id}/documents/${doc.id}`, {
+      label: label.trim(), kind: kind.trim(), expires_on: expiresOn.trim(),
+    });
+    await load();
+  };
 
   if (!v) {
     return <div className="overline">LOADING VENDOR…</div>;
@@ -353,7 +365,7 @@ export default function VendorDetail() {
       )}
       {tab === "projects" && <ProjectsTasks v={v} />}
       {tab === "documents" && (
-        <Documents v={v} canEdit={hasPerm("vendors.update")} onAdd={addDoc} onDelete={delDoc} busy={busy} />
+        <Documents v={v} canEdit={hasPerm("vendors.update")} onAdd={addDoc} onEdit={editDoc} onDelete={delDoc} busy={busy} />
       )}
       {tab === "performance" && <Performance perf={perf} />}
       {editOpen && vendorForm && <VendorEditModal form={vendorForm} setForm={setVendorForm}
@@ -835,7 +847,7 @@ function ProjectsTasks({ v }) {
 }
 
 /* -------------------- DOCUMENTS -------------------- */
-function Documents({ v, canEdit, onAdd, onDelete, busy }) {
+function Documents({ v, canEdit, onAdd, onEdit, onDelete, busy }) {
   const [f, setF] = useState({ label: "", url: "", kind: "gst_certificate", expires_on: "", file: null });
   return (
     <div className="space-y-4">
@@ -882,9 +894,10 @@ function Documents({ v, canEdit, onAdd, onDelete, busy }) {
               </div>
             </div>
             {canEdit && (
-              <button onClick={() => onDelete(d.id)} className="btn-ghost" aria-label="remove">
-                <Trash size={13} />
-              </button>
+              <div className="flex gap-1">
+                <button onClick={() => onEdit(d)} className="btn-ghost" aria-label="edit document metadata"><PencilSimple size={13} /></button>
+                <button onClick={() => onDelete(d.id)} className="btn-ghost text-[#B4001C]" aria-label="remove"><Trash size={13} /></button>
+              </div>
             )}
           </div>
         ))}

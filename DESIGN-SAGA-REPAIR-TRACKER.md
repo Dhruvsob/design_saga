@@ -11,6 +11,12 @@ Last updated: 2026-11-02 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-066: Vendor and employee document metadata correction
+
+- Vendor and employee documents were add/delete-only. Correcting a label, document type, expiry date or employee external URL required removing and recreating the record, risking lost context and unnecessary file churn.
+- Vendor documents now support permission-checked in-place label/type/expiry correction without replacing stored file bytes. Employee external document records support label/URL correction through the existing safe external-URL validator. Updates target the exact nested document ID and emit audit events that exclude document URLs and file contents.
+- Verification: 8 focused employee/vendor correction regressions pass, including nested-ID scoping, invalid date rejection, unauthorized zero-write behavior and audit metadata. Frontend ESLint and production build pass. Deployment remains pending stable VPS access.
+
 ### DS-065: Employee warning/reward correction lifecycle
 
 - The Employee Performance screen supported creating warnings and rewards but exposed no correction path. Mistyped nonfinancial records were permanently visible even to authorized HR/Admin users, contrary to the correction behavior in other master-data modules.
