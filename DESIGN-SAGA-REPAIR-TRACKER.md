@@ -1,6 +1,6 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-11-02 (Asia/Kolkata)
+Last updated: 2026-11-03 (Asia/Kolkata)
 
 ## Current Checkpoint
 
@@ -10,6 +10,25 @@ Last updated: 2026-11-02 (Asia/Kolkata)
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
+
+### DS-070: Source-backed vendor payment and commission receipt correction
+
+- A Daybook/Ledger Edit action could patch a generated journal without updating
+  its authoritative vendor payment or commission receipt. This created a real
+  source-of-truth divergence risk, while the Vendor receipt/payment histories
+  exposed reversal but no safe metadata correction.
+- Authorized finance users can now edit bounded reference/notes on active vendor
+  payments and commission receipts. Reference changes synchronize the linked
+  journal under the same document lock and every correction is audited. Reversed
+  records and records with missing journals fail closed.
+- Daybook/Ledger routes source-backed Edit/Delete to the authoritative endpoint
+  and no longer offer a generic direct reversal for source-generated journals.
+  Amount/date/account/allocation changes still require balanced reversal and
+  re-recording, preserving posted accounting history.
+- Verification: 6 focused vendor regressions and the 268-test mandatory backend
+  security/integrity suite pass. Full frontend ESLint, production build,
+  tracked-secret scan and diff checks pass. Deployment remains blocked by SSH
+  timing out before authentication.
 
 ### DS-067: Immutable salary-revision correction
 

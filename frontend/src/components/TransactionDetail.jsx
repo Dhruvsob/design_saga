@@ -43,7 +43,11 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const canReversePayroll = hasPerm("payroll.create") && canUpdate;
   const canUndoReversal = canUpdate && isReversal && !entry.undone &&
     ["manual_reversal", "income_reversal", "expense_reversal", "non_operating_reversal"].includes(source);
-  const canModify = canUpdate && !isReversal && !isReinstatement && !isReversed;
+  const isActive = !isReversal && !isReinstatement && !isReversed;
+  const sourceMetadataEdit = !!entry.source_id && ["commission_income", "vendor_payment"].includes(source);
+  const canModify = canUpdate && isActive && (!entry.source_id || sourceMetadataEdit);
+  const canReverse = canUpdate && isActive && !entry.source_id &&
+    ["", "manual", "income", "expense", "non_operating"].includes(source);
   const canCorrect = canModify && !entry.source_id && lines.length === 2 &&
     ["", "manual", "income", "expense", "non_operating"].includes(source);
   const canEditAmount = canCorrect;
@@ -83,11 +87,17 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const saveEdit = async () => {
     setBusy(true);
     try {
-      const payload = {
-        date: form.date,
-        narration: form.narration,
-        reference: form.reference,
-      };
+      if (sourceMetadataEdit) {
+        const route = source === "commission_income"
+          ? `/commission-settlements/${entry.source_id}`
+          : `/vendor-payments/${entry.source_id}`;
+        await api.patch(route, { reference: form.reference || null });
+        toast.success("Reference updated in the source record and journal");
+        onChanged && onChanged();
+        onClose();
+        return;
+      }
+      const payload = { date: form.date, narration: form.narration, reference: form.reference };
       const protectedFieldsChanged = canCorrect && (
         form.date !== entry.date || Number(form.amount) !== Number(entry.total)
       );
@@ -205,6 +215,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
             <div>
               <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Description</label>
               <input className="input-flat w-full" value={form.narration}
+                disabled={sourceMetadataEdit}
                 onChange={(e) => setForm({ ...form, narration: e.target.value })} data-testid="txn-edit-narration" />
             </div>
             <div>
@@ -285,7 +296,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                     </button>
                   )
                 )}
-                {canModify && (
+                {canReverse && (
                   confirmReverse ? (
                     <span className="flex items-center gap-1">
                       <button onClick={doReverse} disabled={busy} className="btn-primary bg-[#8B7F6A] text-sm" data-testid="txn-reverse-confirm">

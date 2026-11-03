@@ -53,6 +53,7 @@ import re as _re_mod
 from models.accounting import VendorIn
 from models.vendor import (
     VendorUpdate, VendorBillIn, VendorBillUpdate, VendorPaymentIn,
+    FinancialRecordMetadataUpdate,
     VendorRatingIn, VendorDocumentIn, VendorDocumentUpdate,
     CommissionConfig, CommissionReceiveIn, CommissionExpectedIn, CommissionExpectedUpdate,
     AGENCY_TYPES, VENDOR_BILL_STATUSES, COMMISSION_TYPES, COMMISSION_STATUSES,
@@ -1139,6 +1140,39 @@ async def list_vendor_payments(request: Request,
     return await sdb.vendor_payments.find(query, {"_id": 0}).sort("payment_date", -1).to_list(1000)
 
 
+@router.patch("/vendor-payments/{pmt_id}")
+async def update_vendor_payment_metadata(
+    pmt_id: str, payload: FinancialRecordMetadataUpdate, request: Request,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Edit non-financial payment metadata and keep its journal in sync."""
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.update")
+    async with doc_lock(sdb.vendor_payments, pmt_id):
+        payment = await sdb.vendor_payments.find_one({"id": pmt_id}, {"_id": 0})
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        if payment.get("status") == "reversed":
+            raise HTTPException(status_code=409, detail="A reversed payment cannot be edited")
+        journal_id = payment.get("journal_entry_id")
+        if not journal_id or not await sdb.journal_entries.find_one(
+                {"id": journal_id}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=409, detail="Linked journal entry is missing; reconcile it before editing")
+        changes = payload.model_dump(exclude_unset=True)
+        changes.update({"updated_at": iso_now(), "updated_by": user["user_id"]})
+        await sdb.vendor_payments.update_one({"id": pmt_id}, {"$set": changes})
+        if "reference" in changes:
+            await sdb.journal_entries.update_one(
+                {"id": journal_id},
+                {"$set": {"reference": changes["reference"], "updated_at": changes["updated_at"],
+                           "updated_by": user["user_id"]}},
+            )
+        await audit(user, "vendor_payment.update", target=pmt_id,
+                    target_type="vendor_payment", meta={"fields": sorted(payload.model_fields_set)})
+        return await sdb.vendor_payments.find_one({"id": pmt_id}, {"_id": 0})
+
+
 @router.delete("/vendor-payments/{pmt_id}")
 async def delete_vendor_payment(pmt_id: str, request: Request,
                                 session_token: Optional[str] = Cookie(default=None),
@@ -2160,6 +2194,43 @@ async def delete_commission_settlement(settlement_id: str, request: Request,
     _require(user, "finance.delete")
     async with doc_lock(sdb.commission_settlements, settlement_id):
         return await _reverse_commission_settlement_locked(user, settlement_id)
+
+
+@router.patch("/commission-settlements/{settlement_id}")
+async def update_commission_settlement_metadata(
+    settlement_id: str, payload: FinancialRecordMetadataUpdate, request: Request,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Edit receipt reference/notes while preserving posted financial facts."""
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.update")
+    async with doc_lock(sdb.commission_settlements, settlement_id):
+        settlement = await sdb.commission_settlements.find_one(
+            {"id": settlement_id}, {"_id": 0})
+        if not settlement:
+            raise HTTPException(status_code=404, detail="Commission receipt not found")
+        if settlement.get("status") in ("cancelled", "reversed"):
+            raise HTTPException(status_code=409, detail="A reversed receipt cannot be edited")
+        journal_id = settlement.get("journal_entry_id")
+        if not journal_id or not await sdb.journal_entries.find_one(
+                {"id": journal_id}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=409, detail="Linked journal entry is missing; reconcile it before editing")
+        changes = payload.model_dump(exclude_unset=True)
+        changes.update({"updated_at": iso_now(), "updated_by": user["user_id"]})
+        await sdb.commission_settlements.update_one(
+            {"id": settlement_id}, {"$set": changes})
+        if "reference" in changes:
+            await sdb.journal_entries.update_one(
+                {"id": journal_id},
+                {"$set": {"reference": changes["reference"], "updated_at": changes["updated_at"],
+                           "updated_by": user["user_id"]}},
+            )
+        await audit(user, "vendor_commission_receipt.update", target=settlement_id,
+                    target_type="commission_settlement",
+                    meta={"fields": sorted(payload.model_fields_set)})
+        return await sdb.commission_settlements.find_one(
+            {"id": settlement_id}, {"_id": 0})
 
 
 async def _reverse_commission_settlement_locked(user: dict, settlement_id: str) -> dict:

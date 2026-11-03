@@ -1,12 +1,14 @@
 """Commission receipts remain visible even when no bill earning is allocated."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 from starlette.requests import Request
 
 from routes import accounting
 from routes import vendors
+from models.vendor import FinancialRecordMetadataUpdate
 
 
 def _matches(row, query):
@@ -190,6 +192,77 @@ def test_commission_receipt_delete_posts_reversal_and_rebuilds_allocations(monke
     assert refreshed == ["commission_1"]
     assert fake.commission_settlements.rows[0]["status"] == "reversed"
     assert fake.commission_settlements.rows[0]["reversal_je_id"] == "je_reverse"
+
+
+def test_vendor_payment_metadata_edit_updates_source_and_linked_journal(monkeypatch):
+    fake = SimpleNamespace(
+        vendor_payments=_Collection([{
+            "id": "payment_1", "status": "posted", "reference": "OLD",
+            "notes": "old note", "journal_entry_id": "je_1",
+        }]),
+        journal_entries=_Collection([{"id": "je_1", "reference": "OLD"}]),
+    )
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin", "org_id": "org_a", "permissions": ["finance.update"]}
+
+    @asynccontextmanager
+    async def unlocked(*_args, **_kwargs):
+        yield "test-lock"
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(vendors, "sdb", fake)
+    monkeypatch.setattr(vendors, "require_user", user)
+    monkeypatch.setattr(vendors, "_require", lambda *_args: None)
+    monkeypatch.setattr(vendors, "doc_lock", unlocked)
+    monkeypatch.setattr(vendors, "audit", no_audit)
+
+    result = asyncio.run(vendors.update_vendor_payment_metadata(
+        "payment_1", FinancialRecordMetadataUpdate(reference="NEW", notes="new note"),
+        _request("/api/vendor-payments/payment_1"),
+    ))
+
+    assert result["reference"] == "NEW"
+    assert result["notes"] == "new note"
+    assert result["updated_by"] == "admin"
+    assert fake.journal_entries.rows[0]["reference"] == "NEW"
+
+
+def test_commission_receipt_metadata_edit_updates_source_and_linked_journal(monkeypatch):
+    fake = SimpleNamespace(
+        commission_settlements=_Collection([{
+            "id": "receipt_1", "status": "received", "reference": "OLD",
+            "journal_entry_id": "je_1",
+        }]),
+        journal_entries=_Collection([{"id": "je_1", "reference": "OLD"}]),
+    )
+
+    async def user(*_args, **_kwargs):
+        return {"user_id": "admin", "org_id": "org_a", "permissions": ["finance.update"]}
+
+    @asynccontextmanager
+    async def unlocked(*_args, **_kwargs):
+        yield "test-lock"
+
+    async def no_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(vendors, "sdb", fake)
+    monkeypatch.setattr(vendors, "require_user", user)
+    monkeypatch.setattr(vendors, "_require", lambda *_args: None)
+    monkeypatch.setattr(vendors, "doc_lock", unlocked)
+    monkeypatch.setattr(vendors, "audit", no_audit)
+
+    result = asyncio.run(vendors.update_commission_settlement_metadata(
+        "receipt_1", FinancialRecordMetadataUpdate(reference="NEW", notes="verified"),
+        _request("/api/commission-settlements/receipt_1"),
+    ))
+
+    assert result["reference"] == "NEW"
+    assert result["notes"] == "verified"
+    assert fake.journal_entries.rows[0]["reference"] == "NEW"
 
 
 def test_legacy_vendor_name_link_fails_closed_when_names_are_duplicated(monkeypatch):

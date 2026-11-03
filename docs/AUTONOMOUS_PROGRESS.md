@@ -5,7 +5,7 @@ Last updated: 03/11/2026 (Asia/Kolkata)
 ## Resume checkpoint
 
 - Branch: `codex/repair-release`
-- Last verified checkpoint before this batch: `233ce95`
+- Last verified checkpoint before this batch: `53c33c7`
 - Production remains at last verified runtime `3b15e23`; SSH to `gamaa.in:22`
   times out before authentication.
 - Canonical backlog: `DESIGN-SAGA-REPAIR-TRACKER.md`
@@ -24,6 +24,17 @@ Last updated: 03/11/2026 (Asia/Kolkata)
    `3b15e23`, and deploy only after stable VPS access, backup and health gates.
 
 ## Current local batch
+
+- DS-070: Vendor payments and commission receipts now support bounded
+  reference/notes correction from their authoritative source records. Reference
+  changes synchronize the linked journal atomically under a document lock and
+  emit an audit event. Daybook/Ledger no longer offer generic journal metadata
+  edits or direct reversals for source-driven entries; their Edit/Delete actions
+  route to the source-safe workflow so vendor history and accounting cannot
+  diverge. Amount/date/account/allocation corrections remain reversal/re-record.
+- Focused vendor correction suite: 6 passed. Complete mandatory backend
+  security/integrity suite: 268 passed. Frontend ESLint, production Vite build,
+  tracked-secret scan and diff checks pass.
 
 - DS-061/DS-062: Google Calendar retry state and scheduled-job status now retain
   only bounded exception type/HTTP status, never raw provider/database messages.
@@ -44,8 +55,8 @@ Last updated: 03/11/2026 (Asia/Kolkata)
 - DS-069: source-controlled accounting Delete actions now invoke commission,
   vendor and payroll correction workflows; employee selectors, ledgers and the
   Daybook display first/last names instead of only internal employee codes.
-- Focused invoice/accounting/public-share suite: 45 passed. Complete mandatory
-  backend security/integrity suite: 262 passed.
+- Focused invoice/accounting/public-share suite: 45 passed. The prior complete
+  mandatory backend security/integrity suite passed 262 tests before DS-070.
 - Frontend ESLint passes with zero warnings and the production Vite build
   succeeds for the current batch.
 - Current dependency audit could not be refreshed: npm registry TLS validation

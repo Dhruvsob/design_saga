@@ -69,6 +69,16 @@ class CommissionReceiveIn(FiniteModel):
         return value
 
 
+class FinancialRecordMetadataUpdate(FiniteModel):
+    """Safe edits for an already-posted vendor cash transaction.
+
+    Financial facts are deliberately excluded. Amount, date, account and
+    allocation changes must use the existing reversal/re-record workflow.
+    """
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
 class CommissionExpectedIn(FiniteModel):
     """A planned vendor commission collection.
 

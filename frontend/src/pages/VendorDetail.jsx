@@ -128,6 +128,14 @@ export default function VendorDetail() {
       toast.error(error?.response?.data?.detail || "Could not reverse payment");
     } finally { setBusy(false); }
   };
+  const updatePaymentMetadata = async (paymentId, patch) => {
+    setBusy(true);
+    try {
+      await api.patch(`/vendor-payments/${paymentId}`, patch);
+      await load();
+      toast.success("Payment reference and notes updated");
+    } finally { setBusy(false); }
+  };
   const reverseCommissionReceipt = async (receipt) => {
     if (!window.confirm(`Delete this ${INR_D(receipt.amount)} commission receipt?\n\nA balanced reversal will preserve the audit trail and correct all commission totals.`)) return;
     setBusy(true);
@@ -137,6 +145,14 @@ export default function VendorDetail() {
       toast.success("Commission receipt deleted with accounting reversal");
     } catch (error) {
       toast.error(error?.response?.data?.detail || "Could not delete commission receipt");
+    } finally { setBusy(false); }
+  };
+  const updateCommissionReceiptMetadata = async (receiptId, patch) => {
+    setBusy(true);
+    try {
+      await api.patch(`/commission-settlements/${receiptId}`, patch);
+      await refreshCommissions();
+      toast.success("Commission receipt reference and notes updated");
     } finally { setBusy(false); }
   };
   const cancelExpectedCommission = async (row) => {
@@ -352,15 +368,17 @@ export default function VendorDetail() {
       )}
       {tab === "payments" && (
         <Payments v={v} accounts={accounts} canBill={canBill}
+          canEdit={hasPerm("finance.update")}
           canDelete={hasPerm("finance.delete")} onCreate={submitPayment}
-          onDelete={reversePayment} busy={busy} />
+          onUpdate={updatePaymentMetadata} onDelete={reversePayment} busy={busy} />
       )}
       {tab === "commissions" && (
         <Commissions ledger={commissionLedger} accounts={accounts} projects={projects}
           canReceive={hasPerm("finance.create")}
           canPlan={hasPerm("finance.create")} canEdit={hasPerm("finance.update")}
           canDelete={hasPerm("finance.delete")}
-          onReceive={receiveCommission} onDeleteReceipt={reverseCommissionReceipt}
+          onReceive={receiveCommission} onUpdateReceipt={updateCommissionReceiptMetadata}
+          onDeleteReceipt={reverseCommissionReceipt}
           onSavePlan={saveExpectedCommission} onDeletePlan={cancelExpectedCommission} busy={busy} />
       )}
       {tab === "projects" && <ProjectsTasks v={v} />}
@@ -687,8 +705,10 @@ function BillStatus({ s }) {
 }
 
 /* -------------------- PAYMENTS -------------------- */
-function Payments({ v, accounts, canBill, canDelete, onCreate, onDelete, busy }) {
+function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate, onDelete, busy }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ reference: "", notes: "" });
   const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
   const [f, setF] = useState({
     amount: 0, payment_date: today(), paid_from_account_id: "",
@@ -775,6 +795,23 @@ function Payments({ v, accounts, canBill, canDelete, onCreate, onDelete, busy })
         </form>
       )}
 
+      {editing && (
+        <form className="card-flat space-y-3" onSubmit={async (event) => {
+          event.preventDefault();
+          await onUpdate(editing.id, editForm);
+          setEditing(null);
+        }} data-testid="edit-payment-metadata-form">
+          <div className="overline">EDIT PAYMENT DETAILS</div>
+          <div className="text-xs text-[#5C5C5C]">Amount, date and account are financial facts. Reverse and record again to correct them safely.</div>
+          <input className="input-flat w-full" maxLength={120} placeholder="Reference"
+            value={editForm.reference} onChange={(e) => setEditForm({ ...editForm, reference: e.target.value })} />
+          <textarea className="input-flat w-full" maxLength={500} placeholder="Notes"
+            value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+          <div className="flex gap-2"><button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+            <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button></div>
+        </form>
+      )}
+
       <div className="border border-[#E5E5E5]">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
@@ -796,7 +833,10 @@ function Payments({ v, accounts, canBill, canDelete, onCreate, onDelete, busy })
                 <Td className="text-xs font-mono">
                   {(p.bill_ids || []).length ? p.bill_ids.length + " bill(s)" : "on-account"}
                 </Td>
-                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[#9A9A9A]">Reversed</span> : canDelete ? <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDelete(p)}><ArrowCounterClockwise size={12} /> Reverse</button> : "—"}</Td>
+                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[#9A9A9A]">Reversed</span> : <div className="flex flex-wrap gap-1">
+                  {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => { setEditing(p); setEditForm({ reference: p.reference || "", notes: p.notes || "" }); }}><PencilSimple size={12} /> Edit</button>}
+                  {canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDelete(p)}><ArrowCounterClockwise size={12} /> Reverse</button>}
+                </div>}</Td>
               </tr>
             ))}
           </tbody>
@@ -1094,12 +1134,14 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
 
 /* -------------------- COMMISSIONS (list + receive) -------------------- */
 function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit, canDelete,
-  onReceive, onDeleteReceipt, onSavePlan, onDeletePlan, busy }) {
+  onReceive, onUpdateReceipt, onDeleteReceipt, onSavePlan, onDeletePlan, busy }) {
   const { id } = useParams();
   const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
   const [open, setOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
+  const [editingReceipt, setEditingReceipt] = useState(null);
+  const [receiptEdit, setReceiptEdit] = useState({ reference: "", notes: "" });
   const emptyPlan = {
     amount: "", due_date: "", project_id: "", recognition: "planned",
     reference: "", reminder_date: "", notes: "",
@@ -1308,7 +1350,10 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                   </Td>
                   <Td className="text-right font-mono text-[#1D633E]">{INR_D(receipt.amount)}</Td>
                   <Td className="text-right font-mono">{INR_D(receipt.unallocated || 0)}</Td>
-                  <Td>{canDelete ? <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeleteReceipt(receipt)}><Trash size={12} /> Delete</button> : "—"}</Td>
+                  <Td><div className="flex flex-wrap gap-1">
+                    {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => { setEditingReceipt(receipt); setReceiptEdit({ reference: receipt.reference || "", notes: receipt.notes || "" }); }}><PencilSimple size={12} /> Edit</button>}
+                    {canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeleteReceipt(receipt)}><Trash size={12} /> Delete</button>}
+                  </div></Td>
                 </tr>
               ))}
             </tbody>
@@ -1351,6 +1396,20 @@ function Field({ icon, label, value, mono }) {
         <div className={`text-sm ${mono ? "font-mono" : ""} ${!value ? "text-[#9A9A9A]" : ""}`}>
           {value || "—"}
         </div>
+          {editingReceipt && <form className="border-t border-[#E5E5E5] p-3 space-y-2" onSubmit={async (event) => {
+            event.preventDefault();
+            await onUpdateReceipt(editingReceipt.id, receiptEdit);
+            setEditingReceipt(null);
+          }} data-testid="edit-commission-receipt-form">
+            <div className="overline">EDIT RECEIPT DETAILS</div>
+            <div className="text-xs text-[#5C5C5C]">To correct amount, date or bank account, delete this receipt and record it again. The audit trail remains intact.</div>
+            <input className="input-flat w-full" maxLength={120} placeholder="Reference" value={receiptEdit.reference}
+              onChange={(e) => setReceiptEdit({ ...receiptEdit, reference: e.target.value })} />
+            <textarea className="input-flat w-full" maxLength={500} placeholder="Notes" value={receiptEdit.notes}
+              onChange={(e) => setReceiptEdit({ ...receiptEdit, notes: e.target.value })} />
+            <div className="flex gap-2"><button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+              <button type="button" className="btn-ghost" onClick={() => setEditingReceipt(null)}>Cancel</button></div>
+          </form>}
       </div>
     </div>
   );

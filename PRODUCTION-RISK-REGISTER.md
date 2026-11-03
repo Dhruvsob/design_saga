@@ -1,6 +1,6 @@
 # Design Saga ERP Production Risk Register
 
-Last updated: 2026-11-02 (Asia/Kolkata)
+Last updated: 2026-11-03 (Asia/Kolkata)
 
 This is a living production checklist, not a claim that unknown defects do not exist.
 `Fixed` means code and production behavior were verified. `Open` means remediation or
@@ -57,7 +57,7 @@ yet received sufficient adversarial testing.
 | Expense claims | Duplicate submission, concurrent approval/reimbursement, receipt ownership and account validation | Idempotency, duplicate submission, claimant visibility, approval concurrency, receipt URLs and reimbursement accounts fixed/tested; broader workflow QA continues |
 | Purchase orders/GRN | Approval races, quantity over-receipt, duplicate bills/payments and immutable history | Status transitions, cancellation dependencies, over-receipt, bill/payment idempotency and accounting-safe GRN reversal with receipt/match recomputation fixed/tested; deployment pending |
 | Loans/EMI | Concurrent payment/prepayment, balance floor, journal reconciliation and deletion rules | EMI/prepayment locking, balance floors, journal cardinality, request idempotency and interrupted-write recovery fixed/tested; deployment pending |
-| Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Stable request idempotency, partial reversal allocation, excess-as-liability accounting, Vendor-page plan Edit/Cancel parity and receipt method/account consistency fixed/tested; tax-policy review remains and deployment is pending |
+| Vendor commissions | Duplicate settlement, reversal, tax/account validation and tenant isolation | Stable request idempotency, partial reversal allocation, excess-as-liability accounting, Vendor-page plan Edit/Cancel parity, receipt method/account consistency and source-synchronized receipt metadata correction fixed/tested; tax-policy review remains and deployment is pending |
 | Commission visibility | Direct/excess receipts must reconcile across journals, vendor ledger and commission dashboard without double counting allocations | Fixed and deployed at `3b95ca1`; live three-receipt/₹21,000 production reconciliation passes and reversed settlement journals are excluded |
 | Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Dependency matrix blocks deletion when operational, attendance or financial history exists; archive path is available and tested |
 | Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | User ID, tenant employee counter, employee/document counters and key finance identifiers are protected; production duplicate preflight is clean; broader normalization audit continues |
