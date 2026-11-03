@@ -6,7 +6,7 @@ import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
 import { TransactionDetail } from "../components/TransactionDetail";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
-import { dateForInput, formatDate } from "../lib/format";
+import { dateForInput, empName, formatDate } from "../lib/format";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
@@ -1241,7 +1241,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
               </select>
               <select className="input-flat" value={form.employee_id || ""} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="income-employee-select">
                 <option value="">— Employee (optional) —</option>
-                {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{emp.name}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
+                {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{empName(emp)}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
               </select>
             </>
           )}
@@ -1274,7 +1274,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
               </select>
               <select className="input-flat" value={form.employee_id || ""} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="expense-employee-select">
                 <option value="">— Employee (optional) —</option>
-                {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{emp.name}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
+                {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{empName(emp)}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
               </select>
               <input type="number" step="0.01" className="input-flat" placeholder="GST amount (optional)" value={form.gst || ""} onChange={(e) => setForm({ ...form, gst: e.target.value })} />
             </>
@@ -1627,7 +1627,7 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
   const options = {
     client:   clients.map((c) => ({ id: c.id, label: c.name })),
     vendor:   vendors.map((v) => ({ id: v.id, label: v.name })),
-    employee: employees.map((e) => ({ id: e.id, label: `${e.name || ""}${e.employee_id ? ` · ${e.employee_id}` : ""}` })),
+    employee: employees.map((e) => ({ id: e.id, label: `${empName(e)}${e.employee_id ? ` · ${e.employee_id}` : ""}` })),
     project:  projects.map((p) => ({ id: p.id, label: p.name })),
   }[entityType] || [];
 

@@ -21,6 +21,7 @@ import secrets
 import logging
 import io
 import httpx
+import textwrap
 
 from fpdf import FPDF
 try:
@@ -1907,6 +1908,25 @@ def compute_invoice_totals(doc: dict) -> dict:
     return doc
 
 
+def _invoice_client_snapshot(client_doc: Optional[dict]) -> dict:
+    """Copy only invoice-facing client fields; later profile edits stay isolated."""
+    if not client_doc:
+        return {}
+    allowed = ("name", "company", "email", "phone", "address")
+    return {key: client_doc.get(key) for key in allowed if client_doc.get(key)}
+
+
+def _pdf_display_date(value) -> str:
+    """Render stored ISO dates/timestamps as the ERP's DD/MM/YYYY format."""
+    raw = str(value or "").strip()
+    if not raw:
+        return "—"
+    try:
+        return datetime.fromisoformat(raw[:10]).strftime("%d/%m/%Y")
+    except ValueError:
+        return raw[:10]
+
+
 @api.get("/invoices")
 async def list_invoices(request: Request, doc_type: Optional[str] = None,
                         session_token: Optional[str] = Cookie(default=None),
@@ -1941,6 +1961,22 @@ async def create_invoice(payload: InvoiceIn, request: Request,
         # Persist a draft first. The shared status workflow then posts the
         # invoice accrual (and, for paid, its receipt) before changing status.
         doc["status"] = "draft"
+
+    # Resolve foreign keys before allocating a permanent document number.  A
+    # caller-provided display name must never make an invalid client/project ID
+    # look valid or consume a sequence number.
+    if doc.get("client_id"):
+        c = await sdb.clients.find_one({"id": doc["client_id"]}, {"_id": 0})
+        if not c:
+            raise HTTPException(status_code=400, detail="Client not found")
+        doc["client_name"] = doc.get("client_name") or c.get("name")
+        doc["client_details"] = _invoice_client_snapshot(c)
+    if doc.get("project_id"):
+        p = await sdb.projects.find_one({"id": doc["project_id"]}, {"_id": 0})
+        if not p:
+            raise HTTPException(status_code=400, detail="Project not found")
+        doc["project_name"] = doc.get("project_name") or p.get("name")
+
     doc["id"] = new_id("inv_")
     # number — atomic per-org counter (never reused after delete); prefix from Company Settings
     from core.helpers import next_sequence, max_trailing_number
@@ -1956,14 +1992,6 @@ async def create_invoice(payload: InvoiceIn, request: Request,
     from core.helpers import business_today
     doc["issue_date"] = business_today().isoformat()
     doc["created_by"] = user["user_id"]
-    if doc.get("client_id") and not doc.get("client_name"):
-        c = await sdb.clients.find_one({"id": doc["client_id"]}, {"_id": 0})
-        if c:
-            doc["client_name"] = c.get("name")
-    if doc.get("project_id") and not doc.get("project_name"):
-        p = await sdb.projects.find_one({"id": doc["project_id"]}, {"_id": 0})
-        if p:
-            doc["project_name"] = p.get("name")
     doc = compute_invoice_totals(doc)
     try:
         await sdb.invoices.insert_one(dict(doc))
@@ -2018,6 +2046,7 @@ async def update_invoice(invoice_id: str, payload: InvoiceUpdate, request: Reque
         c = await sdb.clients.find_one({"id": upd["client_id"]}, {"_id": 0})
         if c:
             upd["client_name"] = c.get("name")
+            upd["client_details"] = _invoice_client_snapshot(c)
     if upd.get("project_id"):
         p = await sdb.projects.find_one({"id": upd["project_id"]}, {"_id": 0})
         if p:
@@ -2033,7 +2062,7 @@ async def update_invoice(invoice_id: str, payload: InvoiceUpdate, request: Reque
     res = await sdb.invoices.update_one({"id": invoice_id, "status": {"$nin": ["paid", "cancelled"]},
                                          "_lock": {"$exists": False}}, {"$set": {
         k: merged[k] for k in
-    ("client_id", "client_name", "project_id", "project_name", "items",
+    ("client_id", "client_name", "client_details", "project_id", "project_name", "items",
          "tax_rate", "notes", "due_date", "subtotal", "tax", "total", "updated_at")
         if k in merged
     }})
@@ -2398,10 +2427,10 @@ def generate_invoice_pdf(doc: dict, org: Optional[dict] = None) -> bytes:
     pdf.cell(65, 10, _safe(title), 0, 1, "R")
     meta_rows = [
         ("No.", doc.get("number") or "—"),
-        ("Date", (doc.get("created_at") or "")[:10]),
+        ("Date", _pdf_display_date(doc.get("issue_date") or doc.get("created_at"))),
     ]
     if doc.get("due_date"):
-        meta_rows.append(("Due Date", doc.get("due_date")[:10]))
+        meta_rows.append(("Due Date", _pdf_display_date(doc.get("due_date"))))
     status = (doc.get("status") or "").upper()
     if status:
         meta_rows.append(("Status", status))
@@ -2426,37 +2455,70 @@ def generate_invoice_pdf(doc: dict, org: Optional[dict] = None) -> bytes:
     pdf.set_text_color(*grey)
     pdf.cell(90, 4.5, "BILL TO", 0, 0)
     pdf.cell(90, 4.5, "PROJECT", 0, 1)
-    pdf.set_x(15)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.set_text_color(*ink)
-    pdf.cell(90, 6, _safe(doc.get("client_name") or "—"), 0, 0)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(90, 6, _safe(doc.get("project_name") or "—"), 0, 1)
-    pdf.ln(5)
+    details_y = pdf.get_y()
+    client = doc.get("client_details") or {}
+    client_lines = [doc.get("client_name") or client.get("name") or "—"]
+    client_lines.extend(value for value in (
+        client.get("company"), client.get("address"), client.get("email"),
+        client.get("phone")) if value)
+    project_lines = [doc.get("project_name") or "—"]
+    for index, value in enumerate(client_lines[:5]):
+        pdf.set_xy(15, details_y + index * 5)
+        pdf.set_font("Helvetica", "B" if index == 0 else "", 10 if index == 0 else 8.5)
+        pdf.set_text_color(*ink if index == 0 else grey)
+        pdf.cell(85, 5, _safe(str(value))[:72], 0, 0)
+    for index, value in enumerate(project_lines):
+        pdf.set_xy(105, details_y + index * 5)
+        pdf.set_font("Helvetica", "B" if index == 0 else "", 10 if index == 0 else 8.5)
+        pdf.set_text_color(*ink if index == 0 else grey)
+        pdf.cell(90, 5, _safe(str(value))[:72], 0, 0)
+    pdf.set_y(details_y + max(len(client_lines[:5]), len(project_lines)) * 5 + 5)
 
     # ---- Items table ----
     col_w = {"idx": 10, "desc": 92, "qty": 18, "rate": 30, "amt": 30}
-    pdf.set_fill_color(*ink)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 8.5)
-    pdf.cell(col_w["idx"], 8, " #", 0, 0, "L", fill=True)
-    pdf.cell(col_w["desc"], 8, "DESCRIPTION", 0, 0, "L", fill=True)
-    pdf.cell(col_w["qty"], 8, "QTY", 0, 0, "R", fill=True)
-    pdf.cell(col_w["rate"], 8, "RATE", 0, 0, "R", fill=True)
-    pdf.cell(col_w["amt"], 8, "AMOUNT  ", 0, 1, "R", fill=True)
+    def invoice_table_header():
+        pdf.set_fill_color(*ink)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 8.5)
+        pdf.cell(col_w["idx"], 8, " #", 0, 0, "L", fill=True)
+        pdf.cell(col_w["desc"], 8, "DESCRIPTION", 0, 0, "L", fill=True)
+        pdf.cell(col_w["qty"], 8, "QTY", 0, 0, "R", fill=True)
+        pdf.cell(col_w["rate"], 8, "RATE", 0, 0, "R", fill=True)
+        pdf.cell(col_w["amt"], 8, "AMOUNT  ", 0, 1, "R", fill=True)
+
+    invoice_table_header()
 
     pdf.set_text_color(*ink)
     pdf.set_font("Helvetica", "", 9.5)
     items = doc.get("items", []) or []
     for i, it in enumerate(items, start=1):
+        description = _safe(it.get("description", ""))
+        description_lines = textwrap.wrap(description, width=52,
+                                          break_long_words=True,
+                                          break_on_hyphens=False) or [""]
+        row_height = max(7.5, len(description_lines) * 4.8 + 2)
+        if pdf.get_y() + row_height > 270:
+            pdf.add_page()
+            invoice_table_header()
         fill = i % 2 == 0
         if fill:
             pdf.set_fill_color(*soft)
-        pdf.cell(col_w["idx"], 7.5, f" {i}", 0, 0, "L", fill=fill)
-        pdf.cell(col_w["desc"], 7.5, _safe(it.get("description", ""))[:62], 0, 0, "L", fill=fill)
-        pdf.cell(col_w["qty"], 7.5, f"{it.get('quantity', 0):g}", 0, 0, "R", fill=fill)
-        pdf.cell(col_w["rate"], 7.5, f"{it.get('rate', 0):,.2f}", 0, 0, "R", fill=fill)
-        pdf.cell(col_w["amt"], 7.5, f"{it.get('amount', 0):,.2f}  ", 0, 1, "R", fill=fill)
+        row_y = pdf.get_y()
+        row_x = pdf.get_x()
+        if fill:
+            pdf.rect(row_x, row_y, sum(col_w.values()), row_height, "F")
+        pdf.set_text_color(*ink)
+        pdf.set_font("Helvetica", "", 9.5)
+        pdf.set_xy(row_x, row_y)
+        pdf.cell(col_w["idx"], row_height, f" {i}", 0, 0, "L")
+        pdf.set_xy(row_x + col_w["idx"], row_y + 1)
+        pdf.multi_cell(col_w["desc"], 4.8, "\n".join(description_lines), 0, "L")
+        number_x = row_x + col_w["idx"] + col_w["desc"]
+        pdf.set_xy(number_x, row_y)
+        pdf.cell(col_w["qty"], row_height, f"{it.get('quantity', 0):g}", 0, 0, "R")
+        pdf.cell(col_w["rate"], row_height, f"{it.get('rate', 0):,.2f}", 0, 0, "R")
+        pdf.cell(col_w["amt"], row_height, f"{it.get('amount', 0):,.2f}  ", 0, 0, "R")
+        pdf.set_y(row_y + row_height)
     if not items:
         pdf.set_text_color(*grey)
         pdf.cell(0, 8, "No line items.", 0, 1, "C")
@@ -2492,11 +2554,20 @@ def generate_invoice_pdf(doc: dict, org: Optional[dict] = None) -> bytes:
 
     # ---- Bank / payment details ----
     bank = org.get("bank_details") or {}
-    if any(bank.get(k) for k in ("bank", "account", "ifsc", "upi")):
+    bank_rows = [v for v in [bank.get("account_name") or org_name, bank.get("bank"),
+                             bank.get("account"), bank.get("ifsc"), bank.get("upi")] if v]
+    has_bank_details = any(bank.get(k) for k in ("bank", "account", "ifsc", "upi"))
+    bank_block_h = (12 + len(bank_rows) * 4.6 + 7) if has_bank_details else 0
+    notes_lines = textwrap.wrap(_safe(doc.get("notes") or ""), width=105,
+                                break_long_words=True, break_on_hyphens=False)
+    notes_block_h = (7 + max(1, len(notes_lines)) * 4.6 + 4) if doc.get("notes") else 0
+    footer_block_h = 22
+    if pdf.get_y() + bank_block_h + notes_block_h + footer_block_h > 280:
+        pdf.add_page()
+
+    if has_bank_details:
         box_y = pdf.get_y()
-        n_rows = sum(1 for v in [bank.get("account_name") or org_name, bank.get("bank"),
-                                 bank.get("account"), bank.get("ifsc"), bank.get("upi")] if v)
-        box_h = 9 + n_rows * 4.6 + 3
+        box_h = 9 + len(bank_rows) * 4.6 + 3
         pdf.set_fill_color(*soft)
         pdf.rect(15, box_y, 110, box_h, "F")
         pdf.set_xy(19, box_y + 3)

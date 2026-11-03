@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { PERIOD_PRESETS, computeRange, periodLabel } from "../lib/period";
 import { downloadFile } from "../lib/download";
-import { formatDate } from "../lib/format";
+import { empName, formatDate } from "../lib/format";
 import { TransactionDetail } from "./TransactionDetail";
 import {
   MagnifyingGlass, ArrowDown, ArrowUp, ArrowsLeftRight,
@@ -50,7 +50,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
       client: m(clients),
       vendor: m(vendors),
       project: m(projects),
-      employee: m(employees),
+      employee: Object.fromEntries((employees || []).map((employee) => [employee.id, empName(employee)])),
     };
   }, [clients, vendors, projects, employees]);
 

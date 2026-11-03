@@ -739,6 +739,49 @@ This is the canonical intake list supplied after the repair-release deployment. 
 - Database effect: startup reconciled one existing platform-owner/user document and ensured indexes; no ERP business records were migrated or deleted. Rollback images are `design-saga-backend:rollback-bf9745c-hardening` and `design-saga-web:rollback-bf9745c-hardening`.
 - Remaining external operations: configure `DESIGN_SAGA_ALERT_WEBHOOK_URL` for off-host notifications, add encrypted off-server backup replication, and rotate the previously exposed Atlas/viewer credentials at their providers.
 
+### DS-068: Professional invoice PDF and foreign-key integrity
+
+- Root causes: invoice PDFs displayed stored ISO dates, truncated long service
+  descriptions, split payment/terms content onto an orphan page, and did not
+  retain a safe client-facing snapshot. A caller-supplied display name could
+  also accompany an invalid client/project ID until after a document number
+  was allocated.
+- Correction: client/project IDs are resolved before numbering, invoice-facing
+  client details are snapshotted without internal fields, dates render as
+  DD/MM/YYYY, item rows wrap across repeated multipage headers, and the
+  payment/terms/footer block stays together when the remaining page is short.
+- Verification: 45 focused invoice/accounting/public-share tests pass. A
+  four-page A4 invoice with 28 long service rows was rendered and inspected;
+  headers, rows, totals, payment details and terms remain readable without
+  clipping or an orphan terms page.
+- Database effect: none. Existing invoices without a snapshot continue to use
+  their stored client name.
+
+### DS-069: Accounting source correction actions and employee names
+
+- Root causes: the shared transaction modal intentionally blocked generic
+  journal deletion for source-controlled records, but did not route its Delete
+  action to existing commission/vendor/payroll correction APIs. Employee
+  selectors and Daybook labels read `employee.name`, while the Employee Master
+  stores `first_name`/`last_name`, leaving only the employee code visible.
+- Correction: Delete now routes commission receipts, vendor bills, vendor
+  payments and payroll runs to their authoritative reversal/cancellation
+  workflows with their existing backend permission checks. Accounting employee
+  selectors, employee ledgers and Daybook party labels use the shared defensive
+  full-name formatter and retain the employee code as secondary context.
+- Existing related repair verified: vendor profile Edit/Archive, planned
+  commission Edit/Cancel, commission-receipt Delete with balanced reversal,
+  responsive non-scrolling accounting navigation, explicit payroll Cash/Bank
+  selection, and the generic Employee Salary expense shortcut are already in
+  the repair branch. The salary shortcut is intentionally blocked so Payroll is
+  the single authoritative transaction and employee history cannot diverge.
+- Verification: 262 mandatory backend security/integrity regressions pass;
+  frontend ESLint passes with zero warnings and the production Vite bundle
+  builds.
+- Production status: pending deployment with the rest of the repair branch;
+  the live runtime remains `3b15e23` and therefore does not yet show these UI
+  changes.
+
 ## Deployment Safety
 
 ### DS-020: Mandatory personal App PIN and five-minute lock

@@ -40,15 +40,21 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const isReversed = !!entry.reversed;
   const canUpdate = hasPerm("finance.update");
   const canDeletePermission = hasPerm("finance.delete");
+  const canReversePayroll = hasPerm("payroll.create") && canUpdate;
   const canUndoReversal = canUpdate && isReversal && !entry.undone &&
     ["manual_reversal", "income_reversal", "expense_reversal", "non_operating_reversal"].includes(source);
   const canModify = canUpdate && !isReversal && !isReinstatement && !isReversed;
   const canCorrect = canModify && !entry.source_id && lines.length === 2 &&
     ["", "manual", "income", "expense", "non_operating"].includes(source);
   const canEditAmount = canCorrect;
-  const canDelete = canDeletePermission && !isReversal && !isReinstatement && !isReversed && (
-    (!entry.source_id && ["", "manual", "income", "expense", "non_operating"].includes(source)) ||
-    ["invoice_payment", "milestone_payment"].includes(source)
+  const sourceDeleteSupported = !!entry.source_id && [
+    "commission_income", "vendor_bill", "vendor_payment",
+  ].includes(source);
+  const canDelete = !isReversal && !isReinstatement && !isReversed && (
+    (canDeletePermission && (
+      (!entry.source_id && ["", "manual", "income", "expense", "non_operating"].includes(source)) ||
+      ["invoice_payment", "milestone_payment"].includes(source) || sourceDeleteSupported
+    )) || (source === "payroll" && !!entry.source_id && canReversePayroll)
   );
   // Drill-through: open the most relevant source record.
   const drillTarget = (() => {
@@ -105,7 +111,17 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const doDelete = async () => {
     setBusy(true);
     try {
-      await api.delete(`/journal-entries/${entry.id}`);
+      if (source === "commission_income" && entry.source_id) {
+        await api.delete(`/commission-settlements/${entry.source_id}`);
+      } else if (source === "vendor_bill" && entry.source_id) {
+        await api.delete(`/vendor-bills/${entry.source_id}`);
+      } else if (source === "vendor_payment" && entry.source_id) {
+        await api.delete(`/vendor-payments/${entry.source_id}`);
+      } else if (source === "payroll" && entry.source_id) {
+        await api.post(`/payroll/runs/${entry.source_id}/reverse`);
+      } else {
+        await api.delete(`/journal-entries/${entry.id}`);
+      }
       toast.success("Transaction deleted from the books; audit history retained");
       onChanged && onChanged();
       onClose();
