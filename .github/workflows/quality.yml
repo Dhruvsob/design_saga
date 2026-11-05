@@ -72,6 +72,7 @@ jobs:
           tests/test_download_safety.py
           tests/test_local_file_storage.py
           tests/test_accounting_source_integrity.py
+          tests/test_money_footing.py
 
   frontend:
     runs-on: ubuntu-latest
@@ -90,4 +91,6 @@ jobs:
       - name: Audit Node production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm test -- --max-warnings=0
+      - name: Frontend logic unit tests
+        run: node --test src/lib/frontend-logic.test.mjs
       - run: npm run build

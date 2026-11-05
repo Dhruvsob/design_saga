@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   SquaresFour, UsersThree, Briefcase, Kanban, Receipt, UserCircle,
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
-  IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard,
+  IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard, CalendarCheck,
   Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn,
   Scroll, LockKey,
 } from "@phosphor-icons/react";
@@ -13,28 +13,70 @@ import CalendarReminders from "./CalendarReminders";
 import { useEffect, useState } from "react";
 import { formatDate, formatTime } from "../lib/format";
 import { PinSecurityDialog } from "./AppPinLock";
+import { visibleNavGroups } from "../lib/navigation";
 
-const NAV = [
-  { to: "/dashboard",   label: "Dashboard",    section: "01", perm: "dashboard.read", Icon: SquaresFour },
-  { to: "/crm",         label: "Leads / CRM",  section: "02", perm: "leads.read",     Icon: UsersThree, module: "crm" },
-  { to: "/projects",    label: "Projects",     section: "03", perm: "projects.read",  Icon: Briefcase, module: "projects" },
-  { to: "/tasks",       label: "Tasks",        section: "04", perm: "tasks.read",     Icon: Kanban, module: "tasks" },
-  { to: "/calendar",    label: "Calendar",     section: "04b", perm: "calendar.read", Icon: CalendarBlank },
-  { to: "/clients",     label: "Clients",      section: "05", perm: "clients.read",   Icon: UserCircle, module: "clients" },
-  { to: "/vendors",     label: "Vendors",      section: "06", perm: "vendors.read",   Icon: HardHat },
-  { to: "/purchase-orders", label: "Purchase Orders", section: "07", perm: "purchase_orders.read", Icon: Package, module: "purchase_orders" },
-  { to: "/invoices",    label: "Invoices",     section: "08", perm: "invoices.read",  Icon: Receipt, module: "invoices" },
-  { to: "/quotations",  label: "Quotations",   section: "09", perm: "quotations.read", Icon: FilesIcon, module: "quotations" },
-  { to: "/expenses",    label: "Expenses",     section: "10", perm: "expenses.read", Icon: Wallet, module: "expenses" },
-  { to: "/employees",   label: "Employees",    section: "11", perm: "employees.read", Icon: IdentificationCard, module: "employees" },
-  { to: "/attendance",  label: "Attendance",   section: "12", perm: "attendance.read", Icon: Clock, module: "attendance" },
-  { to: "/holidays",    label: "Holidays",     section: "12b", perm: "holidays.read", Icon: Clock, module: "attendance" },
-  { to: "/accounting",  label: "Accounting",   section: "13", perm: "finance.read",   Icon: Bank, module: "accounting" },
-  { to: "/loans",       label: "Loans & EMI",  section: "14", perm: "loans.read",   Icon: CreditCard, module: "loans" },
-  { to: "/settings/company", label: "Company", section: "15", perm: "*.*",           Icon: Palette, admin: true },
-  { to: "/admin/rbac",  label: "Team & Roles", section: "16", perm: "users.read",     Icon: ShieldCheck, admin: true },
-  { to: "/settings/audit", label: "Audit Log", section: "17", perm: "*.*", Icon: Scroll, admin: true },
+// Grouped by how an architecture practice works, not by backend module.
+// URLs, permissions and module flags are unchanged; empty groups are hidden.
+const NAV_GROUPS = [
+  { id: "home", label: null, items: [
+    { to: "/dashboard",   label: "Dashboard",    perm: "dashboard.read", Icon: SquaresFour },
+  ] },
+  { id: "sales", label: "Sales", items: [
+    { to: "/crm",         label: "Leads",        perm: "leads.read",     Icon: UsersThree, module: "crm" },
+    { to: "/clients",     label: "Clients",      perm: "clients.read",   Icon: UserCircle, module: "clients" },
+    { to: "/quotations",  label: "Quotations",   perm: "quotations.read", Icon: FilesIcon, module: "quotations" },
+  ] },
+  { id: "projects", label: "Projects", items: [
+    { to: "/projects",    label: "Projects",     perm: "projects.read",  Icon: Briefcase, module: "projects" },
+    { to: "/tasks",       label: "Tasks",        perm: "tasks.read",     Icon: Kanban, module: "tasks" },
+    { to: "/calendar",    label: "Calendar",     perm: "calendar.read",  Icon: CalendarBlank },
+  ] },
+  { id: "procurement", label: "Procurement", items: [
+    { to: "/vendors",     label: "Vendors",      perm: "vendors.read",   Icon: HardHat },
+    { to: "/purchase-orders", label: "Purchase Orders", perm: "purchase_orders.read", Icon: Package, module: "purchase_orders" },
+  ] },
+  { id: "finance", label: "Finance", items: [
+    { to: "/invoices",    label: "Invoices",     perm: "invoices.read",  Icon: Receipt, module: "invoices" },
+    { to: "/accounting",  label: "Accounting",   perm: "finance.read",   Icon: Bank, module: "accounting" },
+    { to: "/expenses",    label: "Expenses",     perm: "expenses.read",  Icon: Wallet, module: "expenses" },
+    { to: "/loans",       label: "Loans & EMI",  perm: "loans.read",     Icon: CreditCard, module: "loans" },
+  ] },
+  { id: "people", label: "People", items: [
+    { to: "/employees",   label: "Employees",    perm: "employees.read", Icon: IdentificationCard, module: "employees" },
+    { to: "/attendance",  label: "Attendance",   perm: "attendance.read", Icon: Clock, module: "attendance" },
+    { to: "/holidays",    label: "Holidays",     perm: "holidays.read",  Icon: CalendarCheck, module: "attendance" },
+  ] },
+  { id: "admin", label: "Administration", items: [
+    { to: "/settings/company", label: "Company",  perm: "*.*",           Icon: Palette },
+    { to: "/admin/rbac",  label: "Team & Roles", perm: "users.read",     Icon: ShieldCheck },
+    { to: "/settings/audit", label: "Audit Log", perm: "*.*",            Icon: Scroll },
+  ] },
 ];
+
+function NavItem({ to, label, Icon }) {
+  return (
+    <NavLink
+      to={to}
+      data-testid={`nav-${to.replace("/", "")}`}
+      className={({ isActive }) =>
+        `group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all relative ${
+          isActive
+            ? "bg-[#F3EFE9] text-[#1A1A1A] font-semibold"
+            : "text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A]"
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#8B7F6A]" />}
+          <Icon size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#76705E]" : "text-[#9B9B9B] group-hover:text-[#6B6B6B]"} />
+          <span className="flex-1">{label}</span>
+          {isActive && <CaretRight size={12} weight="bold" aria-hidden="true" className="text-[#76705E]" />}
+        </>
+      )}
+    </NavLink>
+  );
+}
 
 const fmtClock = (d) => formatTime(d);
 
@@ -73,15 +115,16 @@ export default function Layout({ children }) {
     } catch { /* fullscreen not supported — no-op */ }
   };
 
-  // Filter nav by permission + module feature flag + admin flag.
+  // Filter nav by permission + module feature flag. Admin links follow the
+  // same permissions the backend enforces rather than the role's name.
   const enabledModules = currentOrg?.features?.modules || {};
-  const visibleNav = NAV.filter((n) => {
-    if (n.admin && !(user?.role === "Admin" || isSuperAdmin)) return false;
-    if (n.module && enabledModules[n.module] === false) return false;
-    return hasPerm(n.perm);
-  });
-
-  const currentNav = visibleNav.find((n) => location.pathname.startsWith(n.to));
+  const groups = visibleNavGroups(NAV_GROUPS, hasPerm, enabledModules);
+  let currentNav = null;
+  let currentGroup = null;
+  for (const g of groups) {
+    const hit = g.items.find((n) => location.pathname.startsWith(n.to));
+    if (hit) { currentNav = hit; currentGroup = g; break; }
+  }
   const brandName = currentOrg?.display_name || currentOrg?.name || "DESIGN SAGA";
   const brandTagline = currentOrg?.branding?.tagline || "STUDIO MANAGEMENT";
   const brandColor = currentOrg?.branding?.primary_color || "#8B7F6A";
@@ -128,8 +171,17 @@ export default function Layout({ children }) {
           </div>
         </button>
 
-        <nav className="flex-1 p-3 space-y-0.5">
-          <div className="overline px-3 py-3 text-[#A8A296]">NAVIGATE</div>
+        <button
+          type="button"
+          className="lg:hidden absolute top-3 right-3 btn-icon"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close menu"
+          data-testid="mobile-menu-close"
+        >
+          <X size={18} />
+        </button>
+
+        <nav className="flex-1 p-3" aria-label="Main">
           {isSuperAdmin && (
             <NavLink
               to="/super-admin"
@@ -145,37 +197,24 @@ export default function Layout({ children }) {
               {({ isActive }) => (
                 <>
                   {isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#C9A84C]" />}
-                  <span className="font-mono text-[10px] text-[#B0AA9E] w-5">00</span>
-                  <Crown size={17} weight={isActive ? "fill" : "regular"} />
+                  <Crown size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} />
                   <span className="flex-1">Super Admin</span>
-                  {isActive && <CaretRight size={12} weight="bold" />}
+                  {isActive && <CaretRight size={12} weight="bold" aria-hidden="true" />}
                 </>
               )}
             </NavLink>
           )}
-          {visibleNav.map(({ to, label, section, Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              data-testid={`nav-${to.replace("/", "")}`}
-              className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all relative ${
-                  isActive
-                    ? "bg-[#F3EFE9] text-[#1A1A1A] font-semibold"
-                    : "text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A] hover:translate-x-0.5"
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#8B7F6A]" />}
-                  <span className="font-mono text-[10px] text-[#B0AA9E] w-5">{section}</span>
-                  <Icon size={17} weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#76705E]" : "text-[#9B9B9B] group-hover:text-[#6B6B6B]"} />
-                  <span className="flex-1">{label}</span>
-                  {isActive && <CaretRight size={12} weight="bold" className="text-[#76705E]" />}
-                </>
+          {groups.map((g) => (
+            <div key={g.id} className={g.label ? "mt-4" : ""} role="group" aria-labelledby={g.label ? `nav-group-${g.id}` : undefined}>
+              {g.label && (
+                <div id={`nav-group-${g.id}`} className="overline px-3 pb-1.5 text-[#A8A296]" data-testid={`nav-group-${g.id}`}>
+                  {g.label}
+                </div>
               )}
-            </NavLink>
+              <div className="space-y-0.5">
+                {g.items.map((item) => <NavItem key={item.to} {...item} />)}
+              </div>
+            </div>
           ))}
         </nav>
 
@@ -231,11 +270,17 @@ export default function Layout({ children }) {
             <List size={18} />
           </button>
           {/* breadcrumb */}
-          <div className="hidden md:flex items-center gap-3 text-sm text-[#6B6B6B]">
+          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-3 text-sm text-[#6B6B6B]" data-testid="breadcrumb">
             <span className="overline">{(brandName || "").toUpperCase()}</span>
-            <CaretRight size={10} className="text-[#9B9B9B]" />
-            <span className="text-[#2C2C2C] font-semibold">{currentNav?.label || "Page"}</span>
-          </div>
+            {currentGroup?.label && (
+              <>
+                <CaretRight size={10} className="text-[#9B9B9B]" aria-hidden="true" />
+                <span>{currentGroup.label}</span>
+              </>
+            )}
+            <CaretRight size={10} className="text-[#9B9B9B]" aria-hidden="true" />
+            <span className="text-[#2C2C2C] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
+          </nav>
 
           {/* search — opens the command palette */}
           <button

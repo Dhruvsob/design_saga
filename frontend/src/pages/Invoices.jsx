@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { dateForInput, formatDate } from "../lib/format";
+import { dateForInput, formatDate, roundPaise } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 
 export default function Invoices({ docType = "invoice" }) {
@@ -53,16 +53,17 @@ export default function Invoices({ docType = "invoice" }) {
   const updateItem = (i, key, val) => {
     const items = [...form.items];
     items[i] = { ...items[i], [key]: val };
-    items[i].amount = (Number(items[i].quantity) || 0) * (Number(items[i].rate) || 0);
+    items[i].amount = roundPaise((Number(items[i].quantity) || 0) * (Number(items[i].rate) || 0));
     setForm({ ...form, items });
   };
 
   const addItem = () => setForm({ ...form, items: [...form.items, { description: "", quantity: 1, rate: "", amount: 0 }] });
   const removeItem = (i) => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) });
 
-  const subtotal = form.items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0);
-  const tax = subtotal * (Number(form.tax_rate) || 0) / 100;
-  const total = subtotal + tax;
+  // Mirrors backend compute_invoice_totals: round each line, then tax on the rounded subtotal.
+  const subtotal = roundPaise(form.items.reduce((s, it) => s + roundPaise((Number(it.quantity) || 0) * (Number(it.rate) || 0)), 0));
+  const tax = roundPaise(subtotal * (Number(form.tax_rate) || 0) / 100);
+  const total = roundPaise(subtotal + tax);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -113,7 +114,7 @@ export default function Invoices({ docType = "invoice" }) {
     const account = accounts[0];
     setPaying(row);
     setPayment({
-      amount: Math.max(0, Number(row.total || 0) - Number(row.paid_amount || 0)),
+      amount: roundPaise(Math.max(0, Number(row.total || 0) - Number(row.paid_amount || 0))),
       date: dateForInput(new Date()), bank_account_id: account?.id || "",
       payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer",
       reference: row.number || "", notes: `Payment received for ${row.number || "invoice"}`,
@@ -311,9 +312,9 @@ export default function Invoices({ docType = "invoice" }) {
       {paying && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <form onSubmit={recordPayment} className="bg-white border border-[#E5E5E5] w-full max-w-xl p-5 space-y-4">
-            <div className="flex items-start justify-between gap-3"><div><div className="overline">RECORD PAYMENT</div><h2 className="font-display font-bold text-2xl">{paying.number}</h2><div className="text-xs text-[#5C5C5C]">Outstanding ₹{Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0)).toLocaleString("en-IN")}</div></div><button type="button" className="btn-ghost" onClick={() => setPaying(null)}><X size={16}/></button></div>
+            <div className="flex items-start justify-between gap-3"><div><div className="overline">RECORD PAYMENT</div><h2 className="font-display font-bold text-2xl">{paying.number}</h2><div className="text-xs text-[#5C5C5C]">Outstanding ₹{roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0))).toLocaleString("en-IN")}</div></div><button type="button" className="btn-ghost" onClick={() => setPaying(null)}><X size={16}/></button></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="text-xs">Amount<input required min="0.01" max={Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0))} step="0.01" type="number" className="input-flat mt-1 w-full" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label>
+              <label className="text-xs">Amount<input required min="0.01" max={roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0)))} step="0.01" type="number" className="input-flat mt-1 w-full" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label>
               <label className="text-xs">Payment date<input required type="date" className="input-flat mt-1 w-full" value={payment.date} onChange={(e) => setPayment({ ...payment, date: e.target.value })}/></label>
               <label className="text-xs">Method<select className="input-flat mt-1 w-full" value={payment.payment_method} onChange={(e) => { const method = e.target.value; const compatible = method === "cash" ? accounts.find((a) => ["Cash", "Petty Cash"].includes(a.name)) : accounts.find((a) => a.is_bank); setPayment({ ...payment, payment_method: method, bank_account_id: compatible?.id || payment.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="credit_card">Credit card</option><option value="online">Online</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
               <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={payment.bank_account_id} onChange={(e) => { const account = accounts.find((a) => a.id === e.target.value); setPayment({ ...payment, bank_account_id: e.target.value, payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer" }); }}><option value="">Select Cash / Bank</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>

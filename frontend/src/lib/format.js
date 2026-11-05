@@ -141,3 +141,14 @@ export function financialYear(value = new Date()) {
     label: `FY ${startYear}-${String(startYear + 1).slice(-2)}`,
   };
 }
+
+/**
+ * Round to paise with half-up semantics, matching backend core/money.py.
+ * The exponent shift avoids binary-float drift (2.675 -> 2.68, not 2.67).
+ */
+export function roundPaise(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  const sign = n < 0 ? -1 : 1;
+  return sign * Number(`${Math.round(Number(`${Math.abs(n)}e2`))}e-2`);
+}

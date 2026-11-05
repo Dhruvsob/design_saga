@@ -1893,18 +1893,19 @@ def _ensure_invoice_read(user: dict):
 
 
 def compute_invoice_totals(doc: dict) -> dict:
+    """Decimal half-up totals that always foot: Σ lines = subtotal, subtotal + tax = total."""
+    from core.money import round_paise, percent_of, to_decimal
     items = doc.get("items", []) or []
-    subtotal = 0.0
+    subtotal = round_paise(0)
     for it in items:
-        amt = float(it.get("quantity", 1)) * float(it.get("rate", 0))
-        it["amount"] = round(amt, 2)
-        subtotal += amt
-    tax_rate = float(doc.get("tax_rate", 0) or 0)
-    tax = round(subtotal * tax_rate / 100.0, 2)
-    total = round(subtotal + tax, 2)
-    doc["subtotal"] = round(subtotal, 2)
-    doc["tax"] = tax
-    doc["total"] = total
+        qty = it.get("quantity", 1)
+        line = round_paise(to_decimal(1 if qty is None else qty) * to_decimal(it.get("rate", 0)))
+        it["amount"] = float(line)
+        subtotal += line
+    tax = percent_of(subtotal, doc.get("tax_rate", 0) or 0)
+    doc["subtotal"] = float(subtotal)
+    doc["tax"] = float(tax)
+    doc["total"] = float(subtotal + tax)
     return doc
 
 

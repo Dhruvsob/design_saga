@@ -5,6 +5,12 @@ Last updated: 05/11/2026 (Asia/Kolkata)
 ## Resume checkpoint
 
 - Branch: `codex/repair-release`
+- 05/11/2026 (later): canonical open backlog added to the tracker (12 streams,
+  stable IDs). DS-073 (Decimal invoice footing, scoped-DB fail-closed) and DS-074
+  (grouped permission-aware navigation) tested locally; backend gate 297 passed.
+  Decisions awaiting owner: SEC-02 default client/lead visibility, ACC-02 GST
+  split/rounding. Next: OPS-06 disposable-DB + browser E2E harness, UX-04
+  searchable selectors, ACC-04 shared money helper adoption.
 - 05/11/2026 Claude Code session: baseline at `dd480d2` re-verified (279 backend
   tests incl. three suites missing from CI, ESLint 0 warnings, Vite build, secret
   scan). Batch DS-071 (write-route authorization gate + CI coverage) and DS-072

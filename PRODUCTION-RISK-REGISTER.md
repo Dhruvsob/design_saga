@@ -62,7 +62,7 @@ yet received sufficient adversarial testing.
 | Project deletion | Preserve dependent financial/history records; archive instead of destructive cascades | Dependency matrix blocks deletion when operational, attendance or financial history exists; archive path is available and tested |
 | Unique identities | Case-insensitive email, employee ID, tenant slug, invoice number and vendor tax identifiers | User ID, tenant employee counter, employee/document counters and key finance identifiers are protected; production duplicate preflight is clean; broader normalization audit continues |
 | Time zones | All business dates use Asia/Kolkata while stored timestamps remain UTC; test midnight/month/year boundaries | Shared IST business-date helper and backend boundary regression cover audited modules; frontend form defaults, due-state checks, period presets and FY boundaries are now IST-safe, with live deployment verification pending |
-| Money precision | Decimal-safe calculations, rounding policy, GST/TDS, currency and reconciliation | Non-finite, zero/negative and out-of-range financial inputs are rejected before persistence; Decimal migration and tax-rounding policy audit remain open |
+| Money precision | Decimal-safe calculations, rounding policy, GST/TDS, currency and reconciliation | Non-finite, zero/negative and out-of-range financial inputs are rejected before persistence; invoices now use a shared Decimal half-up helper so lines, subtotal, tax and total foot (DS-073, local); other modules and the GST split/rounding policy remain open |
 
 ## P2 - Reliability, DevOps and Operations
 

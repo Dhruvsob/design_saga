@@ -182,8 +182,19 @@ class _ScopedColl:
         return self._c.distinct(key, _merge(self._s(), filter or {}), *a, **kw)
 
     def __getattr__(self, name):
-        # Passthrough for anything we haven't wrapped
+        # Methods that would silently read/write across tenants are refused
+        # instead of being passed through unscoped (SEC-03).
+        if name in _TENANT_UNSAFE:
+            raise AttributeError(
+                f"{name} is not tenant-scoped; use a scoped method or the raw "
+                f"platform `db` with an explicit org_id filter")
         return getattr(self._c, name)
+
+
+_TENANT_UNSAFE = frozenset({
+    "estimated_document_count", "bulk_write", "watch", "rename", "drop",
+    "find_raw_batches", "aggregate_raw_batches", "map_reduce", "inline_map_reduce",
+})
 
 
 class _ScopedDB:

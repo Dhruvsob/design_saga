@@ -11,6 +11,145 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+## Canonical Open Backlog (05/11/2026 delta from `f9e1351`)
+
+This is the single deduplicated list of genuinely open work. It supersedes the
+open rows scattered across the BR-/DS- tables, the risk register and the
+planning reports; those keep their history and evidence. Closed DS-/BR- items
+are not repeated. Status vocabulary: Confirmed, Audit Needed, Decision Needed,
+Externally Blocked, Implementing, Tested (local), Deployed, Live Verified.
+
+Investigation method for this delta: full route/guard inventory (DS-071),
+scoped-DB wrapper and raw-collection review, default RBAC matrix review,
+money/tax computation trace, sidebar/IA review, and existing test inventory.
+Browser journeys could not be executed: this workstation has no Docker, no
+local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
+
+### 1. Security, tenancy and authentication
+
+| ID | Sev | Item and evidence | Status | Smallest safe solution / acceptance |
+|---|---|---|---|---|
+| SEC-01 | P0 | Exposed Atlas password + Mongo viewer token in old commits/chat (risk register) | Externally Blocked | Owner rotates/revokes at provider; record date in secret inventory |
+| SEC-02 | P1 | Default `Employee` and `Designer` roles hold `clients.read` + `leads.read` (`core/rbac.py`), so every employee sees all client contacts and the full sales pipeline | Decision Needed | Owner decides default visibility; if restricted, change defaults with a migration note for tenants that customised roles |
+| SEC-03 | P2 | `_ScopedColl.__getattr__` passes unwrapped methods (`estimated_document_count`, `bulk_write`, `watch`, ...) straight to the raw collection; no current caller, but a future one would read/write across tenants | Tested (DS-073) | Fail closed for tenant-unsafe passthroughs; regression test |
+| SEC-04 | P2 | Admin sidebar entries gate on `role === "Admin"` instead of permission, so a tenant owner on a custom full-access role loses Company/Audit links while backend allows them | Tested (DS-074) | Gate on permission + platform flag only |
+| SEC-05 | P2 | Secret inventory document (owner/purpose/rotation/revocation, never values) | Confirmed | Add `docs/runbooks/secret-inventory.md` |
+| SEC-06 | P2 | Object-level assignment visibility for invoices/quotations/clients is tenant-wide by permission design; needs explicit product rule per role | Decision Needed | Tie to SEC-02 decision |
+| SEC-07 | P3 | Server-side malware scanning and orphan-object reconciliation for uploads | Confirmed (defense-in-depth) | ClamAV sidecar or documented acceptance |
+
+### 2. Accounting and financial integrity
+
+| ID | Sev | Item and evidence | Status | Smallest safe solution / acceptance |
+|---|---|---|---|---|
+| ACC-01 | P1 | `compute_invoice_totals` (`server.py`) rounds each line but sums unrounded amounts, adds tax to the unrounded subtotal, and uses binary-float `round()` (₹2.675 → ₹2.67): printed lines can fail to foot to subtotal/total | Tested (DS-073) | Decimal ROUND_HALF_UP per line; subtotal = Σ rounded lines; total = subtotal + tax; only affects new/edited drafts |
+| ACC-02 | P1 | GST is one tax amount; no CGST/SGST vs IGST split, place of supply, tenant GSTIN/state (BR-016) | Decision Needed | Needs tenant state + client state fields and accountant sign-off on rounding |
+| ACC-03 | P1 | Run DS-072 `/api/accounting/integrity/source-links` on production and reconcile record by record | Externally Blocked (VPS) | Report only; no automatic repair |
+| ACC-04 | P1 | Decimal/minor-unit policy across PO, bill, commission, payroll, loans (floats with `round(x, 2)` throughout) | Audit Needed | Shared money helper adopted module by module after ACC-01 proves the pattern |
+| ACC-05 | P2 | TDS, commission tax treatment, period close, credit notes | Decision Needed | Accountant policy first |
+| ACC-06 | P2 | Tally export (BR-017), invoice email sending (BR-014), payment link/UPI (BR-015) | Confirmed gaps | Product scope decision; not correctness defects |
+| ACC-07 | P3 | Plain-language Money In / Money Out / Collections Due / Banking / Daybook / Reports framing with advanced tools for finance roles | Audit Needed | After IA batch |
+
+### 3. Attendance, leave, payroll and HR
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| HR-01 | P1 | Live validation of payroll Cash/Bank posting, reversal/repost and monthly paid-leave/LOP | Externally Blocked (deploy) | Covered by local tests; verify after deploy |
+| HR-02 | P2 | Statutory payroll (PF/ESI/PT/TDS), payslip delivery, bank files | Decision Needed | Scope decision |
+| HR-03 | P2 | Leave carry-forward/encashment rules | Decision Needed | Policy |
+
+### 4. Projects, tasks, phases and site execution
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| PRJ-01 | P2 | Generic stages; no configurable architecture phase templates with fee/dates/deliverables | Confirmed gap | Smallest slice: per-tenant phase template applied at project creation, editable |
+| PRJ-02 | P2 | Site diary / issue / snag with photo evidence and closure is missing (supervisors use tasks) | Confirmed gap | First architecture vertical slice candidate after PRJ-01 |
+| PRJ-03 | P3 | Timesheets, capacity planning, planned-vs-actual hours | Confirmed gap | Later; depends on PRJ-01 |
+
+### 5. CRM, clients, quotations, invoices and collections
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| CRM-01 | P2 | Lead → quotation → project chain not verified end to end on current code | Audit Needed | Disposable-DB E2E (OPS-06) |
+| CRM-02 | P3 | Duplicate lead merge, source attribution | Confirmed gap | Later |
+
+### 6. Vendors, procurement, bills, payments and commissions
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| VEN-01 | P1 | Live 3-way-match correction and vendor/project/report reconciliation | Externally Blocked (deploy) | Verify after deploy |
+| VEN-02 | P3 | Bill creation discoverability from vendor and PO context (BR-027) | Confirmed UX | IA batch follow-up |
+
+### 7. Files, drawings, revisions, RFIs, submittals and approvals
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| DOC-01 | P2 | No drawing register (number, revision, issue purpose, supersession, transmittal) | Confirmed gap | Ranked after PRJ-01/PRJ-02 |
+| DOC-02 | P3 | RFIs/submittals, client selections, change orders | Confirmed gap | Validate demand first |
+
+### 8. Frontend information architecture and UI/UX
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| UX-01 | P2 | Flat 19-item sidebar with meaningless section codes ("04b", "12b") and no workflow grouping (`Layout.jsx`) | Tested (DS-074) | Permission-aware groups: Sales, Projects, Procurement, Finance, People, Administration; stable URLs |
+| UX-02 | P2 | Breadcrumb shows only Brand › Page; no group context | Tested (DS-074) | Brand › Group › Page |
+| UX-03 | P2 | Mobile drawer has no close button (only backdrop tap); `X` icon imported but unused | Tested (DS-074) | Accessible close button |
+| UX-04 | P2 | Large flat dropdowns for project/client/vendor/employee/account (BR-029) | Confirmed | Searchable combobox for high-volume selectors |
+| UX-05 | P2 | Form safety: double-submit, unsaved-change warning, field-level server errors (risk register "Audit") | Audit Needed | Shared form hooks, module by module |
+| UX-06 | P3 | Role-specific home (principal, PM, supervisor, accountant, HR, employee) | Confirmed gap | After IA batch |
+
+### 9. Accessibility, responsive behaviour and browsers
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| A11Y-01 | P2 | Keyboard/focus/contrast/table semantics audit; supported-width visual QA; Chrome/Edge/Safari/mobile smoke | Audit Needed | Needs running app (OPS-06) |
+
+### 10. Database, performance and scalability
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| DB-01 | P2 | Slow-query/index audit with large-tenant data; API latency budgets (DS-008) | Audit Needed | Needs disposable DB |
+| DB-02 | P2 | Rate-limit buckets in process memory; must move to shared storage before >1 worker | Confirmed constraint | Keep single worker until done |
+| DB-03 | P3 | Large-export streaming | Confirmed | Later |
+
+### 11. DevOps, backups, monitoring and deployment
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Externally Blocked: SSH to 187.52.124.46:22 times out from this workstation while 443 answers (05/11) | Owner checks Hostinger firewall / UFW / fail2ban ban for this IP |
+| OPS-02 | P1 | Encrypted off-server backup replication + alerting | Externally Blocked (destination/credentials) | Owner chooses provider |
+| OPS-03 | P1 | External alert delivery (uptime/5xx/TLS/disk/backup) | Externally Blocked | Owner chooses webhook/email target |
+| OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Confirmed | Add to quality workflow |
+| OPS-05 | P2 | Log retention/rotation evidence | Externally Blocked (VPS) | Verify on host |
+| OPS-06 | P2 | No repeatable browser E2E or disposable-DB integration harness locally or in CI | Confirmed | Add a CI job with a Mongo service + Playwright smoke for login and core journeys |
+
+### 12. Commercial product readiness
+
+| ID | Sev | Item | Status | Solution |
+|---|---|---|---|---|
+| PROD-01 | P3 | Onboarding checklist for a new tenant (company, roles, employees, first project) and useful empty states | Confirmed gap | After IA batch |
+| PROD-02 | P3 | In-app help/glossary for accounting terms (BR-035) | Confirmed gap | Inline help with ACC-07 |
+
+### Execution order
+
+1. Batch A (ACC-01, SEC-03): money footing and scoped-DB fail-closed.
+2. Batch B (UX-01..03, SEC-04): grouped permission-aware navigation.
+3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
+   PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
+
+### DS-074: Grouped permission-aware navigation
+
+- Root causes: the sidebar was one flat list of 19 backend modules with meaningless section codes ("04b", "12b"); the breadcrumb showed only Brand › Page; the mobile drawer could only be closed by tapping the backdrop; admin links were gated on `role === "Admin"` instead of the permissions `App.js` and the backend already enforce, hiding Company/Audit from full-access custom roles and Team & Roles from roles holding `users.read`.
+- Fix (`frontend/src/components/Layout.jsx`, `frontend/src/lib/navigation.js`): workflow groups Dashboard · Sales (Leads, Clients, Quotations) · Projects (Projects, Tasks, Calendar) · Procurement (Vendors, Purchase Orders) · Finance (Invoices, Accounting, Expenses, Loans & EMI) · People (Employees, Attendance, Holidays) · Administration (Company, Team & Roles, Audit Log). Every URL, `data-testid`, permission and tenant module flag is unchanged; groups with no permitted item are hidden; breadcrumb is Brand › Group › Page with `aria-current`; labelled `nav`/`group` landmarks; accessible mobile close button.
+- Verification: `node --test src/lib/frontend-logic.test.mjs` (permission filtering, disabled modules, permission-not-role admin gating, empty-group removal) added to CI; ESLint 0 warnings; production build passes. Not visually verified at mobile/laptop/desktop widths: no local backend/database is available to sign in (OPS-06). Not deployed.
+
+### DS-073: Invoice totals that always foot, and scoped-DB fail-closed passthrough
+
+- Root causes: `compute_invoice_totals` rounded each displayed line but summed unrounded products, then added tax to the unrounded subtotal, using binary-float `round()` (₹2.675 → ₹2.67), so a printed invoice could fail to foot by a paisa. The invoice form preview and outstanding figure used unrounded float arithmetic. Separately, `_ScopedColl.__getattr__` passed tenant-unsafe methods (`estimated_document_count`, `bulk_write`, `watch`, `drop`, ...) straight to the raw collection (no current caller).
+- Fix: new `backend/core/money.py` (Decimal, ROUND_HALF_UP to paise; inputs via `str()`); invoice line = round(qty × rate), subtotal = Σ rounded lines, tax = round(subtotal × rate), total = subtotal + tax; floats only at the API boundary. Frontend `roundPaise` mirrors the policy in the invoice preview and outstanding/payment cap. Scoped collections now raise for tenant-unsafe passthrough methods.
+- Data/migration effect: none. Stored invoices are not recomputed; only new or edited drafts use the new arithmetic (differences are at most one paisa per figure). Journals post the invoice's stored total/tax, so ledger and invoice stay identical.
+- Policy note: half-up to the paisa is the engineering default; whole-rupee GST rounding or CGST/SGST split rounding remains an accountant decision under ACC-02.
+- Verification: `tests/test_money_footing.py` (11 tests; 9 failed before the fix) added to CI; expanded backend gate 297 passed; frontend logic tests 4 passed. Not deployed.
+
 ### DS-072: Read-only accounting source-integrity report
 
 - Root cause: unique `idempotency_key` indexes (fail-closed at startup) prevent duplicate linked postings, but nothing detected ledger/source divergence they cannot prevent: unbalanced journals, active journals whose source record no longer exists, reversal links pointing to missing journals, or paid payroll runs / active vendor payments whose linked journal is missing or reversed. The existing `/accounting/dashboard/validation` only compares legacy revenue figures.
