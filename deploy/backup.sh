@@ -54,12 +54,21 @@ test -s "$temporary/postgres.dump"
 test -s "$temporary/postgres-globals.sql"
 test -s "$temporary/postgres-archive.list"
 
-mkdir -p "$file_root"
-chmod 700 "$file_root"
+# The scheduled systemd unit mounts the repository read-only, so never chmod an
+# existing upload root here (update-production.sh owns its permissions).
+if [ ! -d "$file_root" ]; then
+  mkdir -p "$file_root"
+  chmod 700 "$file_root"
+fi
 mkdir "$temporary/file-storage"
 # Uploaded blobs are immutable. Hard-link snapshots preserve deleted files while
 # avoiding a full duplicate of every unchanged document on each daily backup.
-cp -al "$file_root"/. "$temporary/file-storage"/
+# Hard links cannot cross the sandbox's read-only bind mount; copy instead.
+if ! cp -al "$file_root"/. "$temporary/file-storage"/ 2>/dev/null; then
+  find "$temporary/file-storage" -mindepth 1 -type f -delete
+  find "$temporary/file-storage" -mindepth 1 -depth -type d -empty -delete
+  cp -a "$file_root"/. "$temporary/file-storage"/
+fi
 (
   cd "$temporary/file-storage"
   find . -type f -print0 | sort -z | xargs -0 -r sha256sum > ../file-storage.sha256
