@@ -77,3 +77,60 @@ def test_integrity_route_rejects_non_admin_before_reading(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(accounting.accounting_source_integrity(request=None))
     assert exc.value.status_code == 403
+
+
+# --- ACC-09: historical Cash/Bank method vs ledger mismatches ---------------
+from routes.accounting import _journal_method_record, _method_account_mismatches
+
+ACCOUNTS = {
+    "cash": {"id": "cash", "name": "Cash", "is_bank": True},   # default chart flag
+    "bank": {"id": "bank", "name": "Bank - Primary", "is_bank": True},
+}
+
+
+def _rec(kind, method, account_id, **extra):
+    return {"kind": kind, "id": f"{kind}_1", "date": "2026-10-31", "amount": 20000,
+            "method": method, "account_id": account_id, "party": "Rahul", **extra}
+
+
+def test_bank_transfer_booked_to_cash_is_listed_for_every_record_type():
+    kinds = ["payroll_run", "vendor_payment", "commission_receipt", "collection_receipt"]
+    rows = _method_account_mismatches([_rec(k, "bank_transfer", "cash") for k in kinds], ACCOUNTS)
+    assert sorted(r["kind"] for r in rows) == sorted(kinds)
+    assert all(r["account_name"] == "Cash" and "bank transfer" in r["problem"] for r in rows)
+    assert all(r["fix"] and r["confidence"] == "recorded" for r in rows)
+
+
+def test_cash_method_booked_to_bank_is_listed():
+    rows = _method_account_mismatches([_rec("payroll_run", "cash", "bank")], ACCOUNTS)
+    assert len(rows) == 1 and "non-cash account" in rows[0]["problem"]
+
+
+def test_consistent_or_unknown_account_records_are_not_listed():
+    rows = _method_account_mismatches([
+        _rec("payroll_run", "cash", "cash"), _rec("vendor_payment", "upi", "bank"),
+        _rec("vendor_payment", None, "cash"), _rec("payroll_run", "bank_transfer", "deleted_acc"),
+    ], ACCOUNTS)
+    assert rows == []
+
+
+def test_generic_money_in_and_out_method_is_inferred_from_default_narration():
+    money_in = {"id": "je1", "date": "2026-10-01", "total": 500, "source": "income",
+                "narration": "Payment received via bank_transfer",
+                "lines": [{"account_id": "cash", "account_type": "asset", "debit": 500, "credit": 0},
+                          {"account_id": "inc", "account_type": "income", "debit": 0, "credit": 500}]}
+    money_out = {"id": "je2", "date": "2026-10-02", "total": 300, "source": "expense",
+                 "narration": "Expense — upi",
+                 "lines": [{"account_id": "rent", "account_type": "expense", "debit": 300, "credit": 0},
+                           {"account_id": "cash", "account_type": "asset", "debit": 0, "credit": 300}]}
+    records = [_journal_method_record(money_in), _journal_method_record(money_out)]
+    assert [r["method"] for r in records] == ["bank_transfer", "upi"]
+    rows = _method_account_mismatches(records, ACCOUNTS)
+    assert {r["kind"] for r in rows} == {"money_in", "money_out"}
+    assert all(r["confidence"] == "inferred" for r in rows)
+
+
+def test_custom_narration_is_not_guessed():
+    je = {"id": "je3", "source": "income", "narration": "Advance from Mehta for site work",
+          "lines": [{"account_id": "cash", "account_type": "asset", "debit": 10, "credit": 0}]}
+    assert _journal_method_record(je) is None

@@ -152,3 +152,18 @@ test("vendor commission: planned posts nothing, partial receipt posts once to ba
   await expect(page.getByTestId("commission-status").first()).toHaveText(/partially received/i);
   await ctx.dispose();
 });
+
+test("admin data check runs read-only and lists Cash/Bank mismatches", async ({ browser }) => {
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto("/accounting");
+  await page.getByTestId("tab-validation").click();
+  await page.getByTestId("run-data-check").click();
+  await expect(page.getByTestId("check-method_account_mismatches")).toBeVisible();
+  // Every journey above used matching method/account, so any listed row must
+  // carry a correction instruction rather than being silently accepted.
+  const table = page.getByTestId("mismatch-table");
+  if (await table.count()) await expect(table).toContainText(/reverse|delete/i);
+  expect(errors).toEqual([]);
+});

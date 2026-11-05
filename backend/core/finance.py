@@ -130,3 +130,17 @@ def validate_method_account(payment_method: str, account: dict, *, label: str = 
             status_code=400,
             detail=f"Non-cash {label} must use a bank account, not Cash or Petty Cash",
         )
+
+
+def method_account_problem(payment_method: Optional[str], account: Optional[dict]) -> Optional[str]:
+    """Non-raising form of validate_method_account for read-only reporting."""
+    method = (payment_method or "").strip()
+    if not method or account is None:
+        return None
+    if method not in PAYMENT_METHODS:
+        return f"unknown method '{method}'"
+    if method == "cash" and not is_cash_account(account):
+        return "cash method recorded against a non-cash account"
+    if method != "cash" and not is_bank_account(account):
+        return f"{method.replace('_', ' ')} recorded against {account.get('name') or 'a non-bank account'}"
+    return None

@@ -2655,6 +2655,64 @@ def _evaluate_source_integrity(journals: list, existing_sources: dict,
     }
 
 
+_MISMATCH_FIX = {
+    "payroll_run": "Employees > employee > Salary: reverse this payment, then pay again from the correct Cash/Bank account.",
+    "vendor_payment": "Vendors > vendor > Payments: delete (reverses) this payment, then record it again with the correct account.",
+    "commission_receipt": "Vendors > vendor > Commissions: delete (reverses) this receipt, then record it again with the correct account.",
+    "collection_receipt": "Accounting > Collections Due: reverse this receipt, then record it again with the correct account.",
+    "money_in": "Accounting > Daybook: reverse this entry, then enter it again with the correct account.",
+    "money_out": "Accounting > Daybook: reverse this entry, then enter it again with the correct account.",
+}
+_NARRATION_METHOD = re.compile(
+    r"^(?:Payment received via|Expense\s*[—-])\s*([a-z_]+)\s*$", re.IGNORECASE)
+_MISMATCH_LIMIT = 500
+
+
+def _method_account_mismatches(records: list, accounts: dict) -> list:
+    """Payments whose recorded method disagrees with the Cash/Bank ledger used.
+
+    ``records``: dicts with kind, id, date, amount, method, account_id, party,
+    journal_id and confidence ("recorded" or "inferred"). Read-only: nothing
+    is modified; the fix text points to the source module's reversal flow.
+    """
+    from core.finance import method_account_problem
+    rows = []
+    for record in records:
+        account = accounts.get(record.get("account_id"))
+        problem = method_account_problem(record.get("method"), account)
+        if not problem:
+            continue
+        rows.append({
+            "kind": record["kind"], "id": record.get("id"), "date": record.get("date"),
+            "amount": round(float(record.get("amount") or 0), 2),
+            "party": record.get("party"), "method": record.get("method"),
+            "account_id": record.get("account_id"),
+            "account_name": (account or {}).get("name"),
+            "journal_id": record.get("journal_id"), "problem": problem,
+            "confidence": record.get("confidence", "recorded"),
+            "fix": _MISMATCH_FIX.get(record["kind"], "Reverse in the source module and record again."),
+        })
+    rows.sort(key=lambda r: (str(r.get("date") or ""), r["kind"]), reverse=True)
+    return rows
+
+
+def _journal_method_record(je: dict) -> Optional[dict]:
+    """Infer method/account for generic Money In/Out from the default narration."""
+    match = _NARRATION_METHOD.match(str(je.get("narration") or "").strip())
+    if not match:
+        return None
+    money_in = je.get("source") in ("income", "invoice_payment", "milestone_payment")
+    side = "debit" if money_in else "credit"
+    line = next((l for l in je.get("lines") or []
+                 if l.get("account_type") == "asset" and float(l.get(side) or 0) > 0), None)
+    if not line:
+        return None
+    return {"kind": "money_in" if money_in else "money_out", "id": je.get("id"),
+            "date": je.get("date"), "amount": je.get("total"), "method": match.group(1).lower(),
+            "account_id": line.get("account_id"), "party": je.get("narration"),
+            "journal_id": je.get("id"), "confidence": "inferred"}
+
+
 @router.get("/accounting/integrity/source-links")
 async def accounting_source_integrity(request: Request,
                                       session_token: Optional[str] = Cookie(default=None),
@@ -2689,6 +2747,55 @@ async def accounting_source_integrity(request: Request,
         {"_id": 0, "id": 1, "vendor_id": 1, "payment_date": 1, "journal_entry_id": 1},
     ).to_list(50000)
     report = _evaluate_source_integrity(journals, existing, paid_payroll, vendor_payments)
+
+    # --- Historical Cash/Bank method vs ledger mismatches (ACC-09) ---
+    accounts = {a["id"]: a async for a in sdb.accounts.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "is_bank": 1, "type": 1})}
+    records = []
+    employee_names = {
+        e["id"]: " ".join(x for x in [e.get("first_name"), e.get("last_name")] if x) or e.get("employee_id")
+        async for e in sdb.employees.find({}, {"_id": 0, "id": 1, "first_name": 1,
+                                                "last_name": 1, "employee_id": 1})}
+    async for run in sdb.payroll_runs.find({"status": "paid"}, {"_id": 0}):
+        records.append({"kind": "payroll_run", "id": run.get("id"),
+                        "date": run.get("payment_date") or str(run.get("paid_at") or "")[:10],
+                        "amount": run.get("net"), "method": run.get("payment_method"),
+                        "account_id": run.get("paid_from_account_id"),
+                        "party": f"{employee_names.get(run.get('employee_id')) or run.get('employee_id')} "
+                                 f"- salary {run.get('month')}/{run.get('year')}",
+                        "journal_id": run.get("journal_id")})
+    async for pmt in sdb.vendor_payments.find({"status": {"$ne": "reversed"}}, {"_id": 0}):
+        records.append({"kind": "vendor_payment", "id": pmt.get("id"), "date": pmt.get("payment_date"),
+                        "amount": pmt.get("amount"), "method": pmt.get("payment_method"),
+                        "account_id": pmt.get("paid_from_account_id"),
+                        "party": pmt.get("vendor_name") or pmt.get("vendor_id"),
+                        "journal_id": pmt.get("journal_entry_id")})
+    async for st in sdb.commission_settlements.find(
+            {"status": {"$nin": ["reversed", "cancelled"]}}, {"_id": 0}):
+        records.append({"kind": "commission_receipt", "id": st.get("id"), "date": st.get("received_date"),
+                        "amount": st.get("amount"), "method": st.get("payment_method"),
+                        "account_id": st.get("bank_account_id"),
+                        "party": st.get("vendor_name") or st.get("vendor_id"),
+                        "journal_id": st.get("journal_entry_id")})
+    async for rc in sdb.collection_receipts.find({"status": "received"}, {"_id": 0}):
+        records.append({"kind": "collection_receipt", "id": rc.get("id"), "date": rc.get("date"),
+                        "amount": rc.get("amount"), "method": rc.get("payment_method"),
+                        "account_id": rc.get("bank_account_id"), "party": rc.get("source_type"),
+                        "journal_id": rc.get("journal_entry_id")})
+    async for je in sdb.journal_entries.find(
+            {"source": {"$in": ["income", "expense", "invoice_payment", "milestone_payment"]},
+             "reversed": {"$ne": True}, "voided_from_view": {"$ne": True}},
+            {"_id": 0, "id": 1, "date": 1, "total": 1, "source": 1, "narration": 1, "lines": 1}):
+        inferred = _journal_method_record(je)
+        if inferred:
+            records.append(inferred)
+    mismatches = _method_account_mismatches(records, accounts)
+    report["counts"]["method_account_mismatches"] = len(mismatches)
+    report["ok"] = report["ok"] and not mismatches
+    report["method_account_mismatches"] = {
+        "count": len(mismatches), "truncated": len(mismatches) > _MISMATCH_LIMIT,
+        "rows": mismatches[:_MISMATCH_LIMIT],
+    }
     report["generated_at"] = iso_now()
     report["read_only"] = True
     return report

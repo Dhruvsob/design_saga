@@ -4,6 +4,8 @@ import PageHero from "../components/PageHero";
 import { Daybook } from "../components/Daybook";
 import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
 import { TransactionDetail } from "../components/TransactionDetail";
+import { DataChecks } from "../components/DataChecks";
+import { useAuth } from "../context/AuthContext";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
 import { dateForInput, empName, formatDate } from "../lib/format";
@@ -35,6 +37,7 @@ const TABS = [
 ];
 
 export default function Accounting() {
+  const { hasPerm } = useAuth();
   const [tab, setTab] = useState("dashboard");
   const [dashboard, setDashboard] = useState(null);
   const [accounts, setAccounts] = useState([]);
@@ -355,7 +358,10 @@ export default function Accounting() {
       )}
 
       {tab === "validation" && (
-        <ValidationReport data={validation} />
+        <>
+          {hasPerm("*.*") && <DataChecks />}
+          <ValidationReport data={validation} />
+        </>
       )}
 
       {ledgerAccount && (

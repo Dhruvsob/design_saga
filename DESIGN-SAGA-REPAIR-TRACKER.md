@@ -44,7 +44,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 | ACC-01 | P1 | `compute_invoice_totals` (`server.py`) rounds each line but sums unrounded amounts, adds tax to the unrounded subtotal, and uses binary-float `round()` (₹2.675 → ₹2.67): printed lines can fail to foot to subtotal/total | Tested (DS-073) | Decimal ROUND_HALF_UP per line; subtotal = Σ rounded lines; total = subtotal + tax; only affects new/edited drafts |
 | ACC-02 | P1 | GST is one tax amount; no CGST/SGST vs IGST split, place of supply, tenant GSTIN/state (BR-016) | Decision Needed | Needs tenant state + client state fields and accountant sign-off on rounding |
 | ACC-03 | P1 | Run DS-072 `/api/accounting/integrity/source-links` on production and reconcile record by record | Externally Blocked (VPS) | Report only; no automatic repair |
-| ACC-09 | P1 | Historical payroll/vendor-payment rows booked to Cash with a non-cash method (DS-076 root cause) are not yet listed for correction | Confirmed | Add a method/account mismatch section to the DS-072 read-only report; correct record by record via reversal |
+| ACC-09 | P1 | Historical payroll/vendor-payment rows booked to Cash with a non-cash method (DS-076 root cause) are not yet listed for correction | Tested (DS-080) | Add a method/account mismatch section to the DS-072 read-only report; correct record by record via reversal |
 | ACC-04 | P1 | Decimal/minor-unit policy across PO, bill, commission, payroll, loans (floats with `round(x, 2)` throughout) | Audit Needed | Shared money helper adopted module by module after ACC-01 proves the pattern |
 | ACC-05 | P2 | TDS, commission tax treatment, period close, credit notes | Decision Needed | Accountant policy first |
 | ACC-06 | P2 | Tally export (BR-017), invoice email sending (BR-014), payment link/UPI (BR-015) | Confirmed gaps | Product scope decision; not correctness defects |
@@ -136,6 +136,15 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 2. Batch B (UX-01..03, SEC-04): grouped permission-aware navigation.
 3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
    PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
+
+### DS-080: List historical payments booked to the wrong Cash/Bank account (ACC-09)
+
+- Need: DS-076 stops new mismatches, but payments recorded before the fix (e.g. a salary marked Bank Transfer that credited Cash) stay in the books until corrected.
+- Fix: the read-only `/api/accounting/integrity/source-links` report adds `method_account_mismatches`, applying the same rule as the live check (`core.finance.method_account_problem`). Covered with certainty: salary runs, vendor payments, commission receipts and other-receivable collection receipts (method and account are stored). Generic Money In/Out (including invoice/milestone receipts) is covered when the default description "Payment received via <method>" / "Expense - <method>" is present and is labelled `inferred`; custom descriptions are never guessed. Each finding shows date, type, party (employee names, not codes), amount, recorded method, account used, the problem and the exact screen/action to correct it through reverse-and-record-again. Up to 500 rows are returned with a truncation flag.
+- UI: Accounting > Validation now starts with an admin-only "Data checks" panel (run on demand, plain-language counts for all five checks, mismatch table with correction steps). Screenshot: `docs/screenshots/accounting-data-check.png`.
+- Data effect: none; strictly read-only. No record is modified or auto-corrected.
+- Verification: 5 new unit tests in `tests/test_accounting_source_integrity.py` (all record types, cash-method-to-bank, no false positives for consistent/unknown-account rows, narration inference, custom narration not guessed); live QA run with two simulated pre-fix records (inserted only into the local disposable QA database) listed exactly those two while dozens of correct transactions were not flagged; browser E2E runs the panel without errors. Backend gate 324 passed; E2E 17 passed. Not deployed.
+- Owner action after deployment: open Accounting > Validation > Run data check and correct each listed payment from its own screen.
 
 ### DS-079: Branded PDFs with tenant logo on every document
 
