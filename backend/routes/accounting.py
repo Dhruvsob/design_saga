@@ -2568,6 +2568,139 @@ async def dashboard_validation(request: Request,
 
 
 # ==================================================
+# Source-integrity report  (Admin-only, strictly read-only)
+# ==================================================
+# Detects ledger/source divergence that idempotency keys cannot prevent:
+# unbalanced journals, active journals whose source record no longer exists,
+# broken reversal links, and paid source records whose linked journal is
+# missing or reversed. It never modifies data; corrections must go through
+# the source module's reversal workflow.
+_INTEGRITY_SOURCE_COLLECTIONS = {
+    "invoice_issue": "invoices",
+    "invoice_payment": "invoices",
+    "milestone_payment": "payment_milestones",
+    "vendor_bill": "vendor_bills",
+    "vendor_payment": "vendor_payments",
+    "commission_income": "commission_settlements",
+    "payroll": "payroll_runs",
+    "expense": "expenses",
+    "grn": "goods_receipts",
+    "loan_disbursement": "loans",
+    "loan_emi": "loans",
+    "loan_prepay": "loans",
+    "recurring_expense": "recurring_expenses",
+}
+_INTEGRITY_SAMPLE = 25
+
+
+def _journal_is_active(je: dict) -> bool:
+    source = je.get("source") or "manual"
+    return (not je.get("reversed")
+            and not je.get("voided_from_view")
+            and not source.endswith(("_reversal", "_reinstatement")))
+
+
+def _evaluate_source_integrity(journals: list, existing_sources: dict,
+                               paid_payroll: list, active_vendor_payments: list) -> dict:
+    """Pure integrity evaluation; `existing_sources` maps collection -> set(ids)."""
+    by_id = {je.get("id"): je for je in journals}
+    unbalanced, orphaned, broken_reversals, unlinked = [], [], [], []
+    for je in journals:
+        lines = je.get("lines") or []
+        debit = round(sum(float(l.get("debit") or 0) for l in lines), 2)
+        credit = round(sum(float(l.get("credit") or 0) for l in lines), 2)
+        if debit != credit or len(lines) < 2:
+            unbalanced.append({"id": je.get("id"), "date": je.get("date"),
+                               "source": je.get("source"), "debit": debit, "credit": credit})
+        if je.get("reversed"):
+            rev_id = je.get("reversal_je_id")
+            if rev_id and rev_id not in by_id:
+                broken_reversals.append({"id": je.get("id"), "date": je.get("date"),
+                                         "source": je.get("source"),
+                                         "missing_reversal_je_id": rev_id})
+        if not _journal_is_active(je):
+            continue
+        collection = _INTEGRITY_SOURCE_COLLECTIONS.get(je.get("source") or "")
+        source_id = je.get("source_id")
+        if collection and source_id and source_id not in existing_sources.get(collection, set()):
+            orphaned.append({"id": je.get("id"), "date": je.get("date"),
+                             "source": je.get("source"), "source_id": source_id,
+                             "total": je.get("total")})
+
+    def _linked_ok(journal_id: Optional[str]) -> bool:
+        je = by_id.get(journal_id)
+        return bool(je) and _journal_is_active(je)
+
+    for run in paid_payroll:
+        if not _linked_ok(run.get("journal_id")):
+            unlinked.append({"kind": "payroll_run", "id": run.get("id"),
+                             "employee_id": run.get("employee_id"),
+                             "period": f"{run.get('month')}/{run.get('year')}",
+                             "journal_id": run.get("journal_id")})
+    for pmt in active_vendor_payments:
+        if not _linked_ok(pmt.get("journal_entry_id")):
+            unlinked.append({"kind": "vendor_payment", "id": pmt.get("id"),
+                             "vendor_id": pmt.get("vendor_id"),
+                             "date": pmt.get("payment_date"),
+                             "journal_id": pmt.get("journal_entry_id")})
+
+    counts = {"unbalanced_journals": len(unbalanced),
+              "orphaned_source_journals": len(orphaned),
+              "broken_reversal_links": len(broken_reversals),
+              "paid_sources_without_active_journal": len(unlinked)}
+    return {
+        "journals_scanned": len(journals),
+        "counts": counts,
+        "ok": not any(counts.values()),
+        "samples": {
+            "unbalanced_journals": unbalanced[:_INTEGRITY_SAMPLE],
+            "orphaned_source_journals": orphaned[:_INTEGRITY_SAMPLE],
+            "broken_reversal_links": broken_reversals[:_INTEGRITY_SAMPLE],
+            "paid_sources_without_active_journal": unlinked[:_INTEGRITY_SAMPLE],
+        },
+    }
+
+
+@router.get("/accounting/integrity/source-links")
+async def accounting_source_integrity(request: Request,
+                                      session_token: Optional[str] = Cookie(default=None),
+                                      authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(403, "Admin only")
+    journals = await sdb.journal_entries.find(
+        {}, {"_id": 0, "id": 1, "date": 1, "source": 1, "source_id": 1, "total": 1,
+             "lines.debit": 1, "lines.credit": 1, "reversed": 1, "reversal_je_id": 1,
+             "voided_from_view": 1}).to_list(100000)
+    wanted: dict = {}
+    for je in journals:
+        collection = _INTEGRITY_SOURCE_COLLECTIONS.get(je.get("source") or "")
+        if collection and je.get("source_id") and _journal_is_active(je):
+            wanted.setdefault(collection, set()).add(je["source_id"])
+    existing: dict = {}
+    for collection, ids in wanted.items():
+        found = set()
+        id_list = list(ids)
+        for start in range(0, len(id_list), 1000):
+            async for row in sdb[collection].find(
+                    {"id": {"$in": id_list[start:start + 1000]}}, {"_id": 0, "id": 1}):
+                found.add(row["id"])
+        existing[collection] = found
+    paid_payroll = await sdb.payroll_runs.find(
+        {"status": "paid"},
+        {"_id": 0, "id": 1, "employee_id": 1, "month": 1, "year": 1, "journal_id": 1},
+    ).to_list(50000)
+    vendor_payments = await sdb.vendor_payments.find(
+        {"status": {"$ne": "reversed"}},
+        {"_id": 0, "id": 1, "vendor_id": 1, "payment_date": 1, "journal_entry_id": 1},
+    ).to_list(50000)
+    report = _evaluate_source_integrity(journals, existing, paid_payroll, vendor_payments)
+    report["generated_at"] = iso_now()
+    report["read_only"] = True
+    return report
+
+
+# ==================================================
 # Balance Sheet  (Assets = Liabilities + Equity + Net Income)
 # ==================================================
 @router.get("/accounting/reports/balance-sheet")

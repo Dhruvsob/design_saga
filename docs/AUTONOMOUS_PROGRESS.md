@@ -1,11 +1,18 @@
 # Autonomous Repair Progress
 
-Last updated: 03/11/2026 (Asia/Kolkata)
+Last updated: 05/11/2026 (Asia/Kolkata)
 
 ## Resume checkpoint
 
 - Branch: `codex/repair-release`
-- Last verified checkpoint before this batch: `53c33c7`
+- 05/11/2026 Claude Code session: baseline at `dd480d2` re-verified (279 backend
+  tests incl. three suites missing from CI, ESLint 0 warnings, Vite build, secret
+  scan). Batch DS-071 (write-route authorization gate + CI coverage) and DS-072
+  (read-only `/api/accounting/integrity/source-links` report) completed; expanded
+  mandatory list 286 passed. Next executable: run DS-072 on production after
+  deployment; continue P1 with Decimal/rounding policy evidence and object-level
+  assignment-visibility tests for limited roles.
+- Last verified checkpoint before the 03/11 batch: `53c33c7`
 - Production remains at last verified runtime `3b15e23`; SSH to `gamaa.in:22`
   times out before authentication.
 - Canonical backlog: `DESIGN-SAGA-REPAIR-TRACKER.md`

@@ -68,6 +68,10 @@ jobs:
           tests/test_public_share_safety.py
           tests/test_attendance_safety.py
           tests/test_payroll_safety.py
+          tests/test_vendor_payment_safety.py
+          tests/test_download_safety.py
+          tests/test_local_file_storage.py
+          tests/test_accounting_source_integrity.py
 
   frontend:
     runs-on: ubuntu-latest

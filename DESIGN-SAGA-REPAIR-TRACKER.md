@@ -1,6 +1,6 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-11-03 (Asia/Kolkata)
+Last updated: 2026-11-05 (Asia/Kolkata)
 
 ## Current Checkpoint
 
@@ -10,6 +10,20 @@ Last updated: 2026-11-03 (Asia/Kolkata)
 - Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
+
+### DS-072: Read-only accounting source-integrity report
+
+- Root cause: unique `idempotency_key` indexes (fail-closed at startup) prevent duplicate linked postings, but nothing detected ledger/source divergence they cannot prevent: unbalanced journals, active journals whose source record no longer exists, reversal links pointing to missing journals, or paid payroll runs / active vendor payments whose linked journal is missing or reversed. The existing `/accounting/dashboard/validation` only compares legacy revenue figures.
+- Fix: admin-only (`*.*`) `GET /api/accounting/integrity/source-links` evaluates the tenant-scoped ledger through a pure `_evaluate_source_integrity` function and returns counts plus bounded samples. It is strictly read-only; findings must be corrected through the source module's reversal workflow, never by editing journals.
+- Verification: `tests/test_accounting_source_integrity.py` (6 tests) covers clean ledgers, unbalanced/single-line journals, orphaned active vs reversed source journals, generic Money Out with no source record, broken reversal links, paid sources linked to reversed/missing journals, and proof that a non-admin finance reader is rejected with zero database access. Added to the CI gate.
+- Next: once deployed, run against production as an admin and reconcile any findings record by record (no automatic repair). Not yet deployed.
+
+### DS-071: Mutating-route authorization gate and CI coverage gap
+
+- Audit: every FastAPI handler in `server.py` and `routes/*.py` was statically inventoried for permission/ownership guards (beyond the DS-058 authentication gate). No new same-tenant authorization gap was confirmed. Remaining unguarded authenticated routes are self-service (`/attendance/me/*`, `/attendance/my-salary`, notifications, preferences, PIN/password) or delegate to guarded resolvers (`_resolve_employee_id` ignores a client-supplied employee ID unless the caller can edit punches; `commissions_report_csv` delegates to the permission-checked report). Notification mutations use `notification_owner_filter`; master data, portal, AI history, chat and invoice-PDF share paths apply explicit `org_id`/owner filters on raw collections.
+- Fix: `test_every_mutating_route_has_permission_or_ownership_guard` fails any new POST/PUT/PATCH/DELETE handler that authenticates without calling a permission, platform, employee-self-resolution or owner-filter guard, with a reviewed allowlist limited to login/session/PIN/password/preferences and the public share-token portal message. A negative check (removing an allowlist entry) proved the gate fails.
+- CI gap: DS-070's own regression suite `test_vendor_payment_safety.py`, plus `test_download_safety.py` and `test_local_file_storage.py`, passed locally but were not in `.github/workflows/quality.yml`; all three are now mandatory.
+- Verification: expanded mandatory backend list 286 passed; tracked-secret scan and diff check pass; frontend unchanged since the 05/11 baseline (ESLint 0 warnings, Vite build pass). Not yet deployed.
 
 ### DS-070: Source-backed vendor payment and commission receipt correction
 

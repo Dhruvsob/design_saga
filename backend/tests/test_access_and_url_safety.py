@@ -1,6 +1,7 @@
 """Focused regression tests for resource visibility and rendered URLs."""
 import asyncio
 import ast
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -252,3 +253,52 @@ def test_every_api_route_has_authentication_or_reviewed_public_delegation():
             if not calls.intersection(auth_calls):
                 missing.append(f"{source.name}:{node.lineno}:{node.name}")
     assert missing == [], f"Routes missing explicit authentication review: {missing}"
+
+
+def test_every_mutating_route_has_permission_or_ownership_guard():
+    """Fail when a new write route authenticates but never authorizes.
+
+    Authentication alone lets any same-tenant user mutate the resource, so
+    every POST/PUT/PATCH/DELETE handler must call a permission, platform,
+    employee-self-resolution or owner-filter guard. The allowlist holds only
+    login/session/PIN/password self-service and the public share-token portal.
+    """
+    reviewed = {
+        "create_session", "logout", "login_password", "portal_message",
+        "setup_app_pin", "unlock_app_pin", "touch_app_pin", "lock_app_pin",
+        "disable_app_pin", "change_password",
+        # Upserts only the caller's own {user_id, org_id} preference row.
+        "update_notification_preferences",
+    }
+    guard = re.compile(
+        r"^(enforce_permission|enforce_any_permission|has_permission|"
+        r"has_any_permission|require_permission|require_super_admin|"
+        r"require_platform_owner|is_super_admin|notification_owner_filter|"
+        r"_require\w*|_ensure\w*|_can_\w+|_assert\w*|get_visible_\w+|"
+        r"_resolve_employee_id|_select_employee_id)$")
+    backend = Path(__file__).resolve().parents[1]
+    sources = [backend / "server.py", *(backend / "routes").glob("*.py")]
+    missing = []
+    for source in sources:
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            is_write = any(
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr in {"post", "put", "patch", "delete"}
+                for decorator in node.decorator_list
+            )
+            if not is_write or node.name in reviewed:
+                continue
+            called = set()
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    if isinstance(child.func, ast.Name):
+                        called.add(child.func.id)
+                    elif isinstance(child.func, ast.Attribute):
+                        called.add(child.func.attr)
+            if not any(guard.match(name) for name in called):
+                missing.append(f"{source.name}:{node.lineno}:{node.name}")
+    assert missing == [], f"Write routes missing authorization review: {missing}"
