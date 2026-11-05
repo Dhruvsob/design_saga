@@ -4,6 +4,7 @@ import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate, roundPaise } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
+import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -116,7 +117,7 @@ export default function Invoices({ docType = "invoice" }) {
     setPayment({
       amount: roundPaise(Math.max(0, Number(row.total || 0) - Number(row.paid_amount || 0))),
       date: dateForInput(new Date()), bank_account_id: account?.id || "",
-      payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer",
+      payment_method: methodForAccount(account),
       reference: row.number || "", notes: `Payment received for ${row.number || "invoice"}`,
     });
   };
@@ -316,8 +317,8 @@ export default function Invoices({ docType = "invoice" }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs">Amount<input required min="0.01" max={roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0)))} step="0.01" type="number" className="input-flat mt-1 w-full" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label>
               <label className="text-xs">Payment date<input required type="date" className="input-flat mt-1 w-full" value={payment.date} onChange={(e) => setPayment({ ...payment, date: e.target.value })}/></label>
-              <label className="text-xs">Method<select className="input-flat mt-1 w-full" value={payment.payment_method} onChange={(e) => { const method = e.target.value; const compatible = method === "cash" ? accounts.find((a) => ["Cash", "Petty Cash"].includes(a.name)) : accounts.find((a) => a.is_bank); setPayment({ ...payment, payment_method: method, bank_account_id: compatible?.id || payment.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="credit_card">Credit card</option><option value="online">Online</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
-              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={payment.bank_account_id} onChange={(e) => { const account = accounts.find((a) => a.id === e.target.value); setPayment({ ...payment, bank_account_id: e.target.value, payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer" }); }}><option value="">Select Cash / Bank</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+              <label className="text-xs">Method<select className="input-flat mt-1 w-full" value={payment.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(accounts, method); setPayment({ ...payment, payment_method: method, bank_account_id: compatible?.id || payment.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="credit_card">Credit card</option><option value="online">Online</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
+              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={payment.bank_account_id} onChange={(e) => { const account = accounts.find((a) => a.id === e.target.value); setPayment({ ...payment, bank_account_id: e.target.value, payment_method: methodForAccount(account) }); }}><option value="">Select Cash / Bank</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
               <label className="text-xs sm:col-span-2">Reference<input className="input-flat mt-1 w-full" value={payment.reference} onChange={(e) => setPayment({ ...payment, reference: e.target.value })}/></label>
             </div>
             <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setPaying(null)}>Cancel</button><button className="btn-primary" disabled={paymentBusy}>{paymentBusy ? "Recording…" : "Record payment"}</button></div>

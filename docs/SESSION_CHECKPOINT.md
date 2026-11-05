@@ -7,17 +7,17 @@ Last updated: 05/11/2026 (Asia/Kolkata).
 
 - Branch `codex/repair-release`; see `git log -5 --oneline` for the exact head.
 - Production runtime is still `3b15e23`. Nothing after it is deployed.
-- Last completed: DS-075 (browser E2E harness) on top of DS-073 (invoice
-  footing, scoped-DB fail-closed) and DS-074 (grouped navigation).
-- Gates at checkpoint: backend mandatory list 297 passed; frontend logic tests
-  4 passed; Playwright E2E 10 passed / 2 skipped; ESLint 0 warnings; Vite build
-  pass; tracked-secret scan pass; `npm audit --omit=dev` 0 vulnerabilities.
+- Last completed: DS-076 (Cash/Bank mismatch), DS-077 (vendor page crash,
+  `no-undef`, page smoke), DS-078 (Attendance without employee profile) and
+  DS-079 (branded PDFs with logo, self-hosted logo storage).
+- Gates at checkpoint: backend mandatory list 319 passed; Playwright E2E 16
+  passed / 14 skipped (viewport-independent specs run on desktop only) against
+  the production build; frontend logic 4 passed; ESLint 0 warnings (now with
+  `no-undef`); Vite build pass; tracked-secret scan pass; npm audit 0.
 
 ## Next executable tasks (in order)
 
-1. Extend E2E to money journeys on the QA stack: invoice create → Record Payment
-   (partial/full) → outstanding → Daybook; payroll pay via Bank → employee
-   history → Daybook; vendor commission planned → receipt → vendor ledger.
+1. ACC-09: add historical method/account mismatch listing to the DS-072 report.
 2. UX-04: searchable selectors for client/project/vendor/employee/account lists.
 3. ACC-04: adopt `core/money.py` in PO, vendor bill, commission, payroll, loans.
 4. PRJ-01: per-tenant architecture phase templates (smallest slice).
@@ -48,11 +48,11 @@ cd backend && MONGO_URL=mongodb://127.0.0.1:27017 DB_NAME=design_saga_qa_e2e ../
 ```
 
 ```bash
-cd backend && MONGO_URL=mongodb://127.0.0.1:27017 DB_NAME=design_saga_qa_e2e SUPER_ADMIN_EMAILS="$QA_SUPERADMIN_EMAIL" CORS_ORIGINS=http://127.0.0.1:5173 COOKIE_SECURE=false APP_ENV=development BUSINESS_TIMEZONE=Asia/Kolkata APP_BASE_URL=http://127.0.0.1:5173 PYTHONPATH=. ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8001
+cd backend && FILE_STORAGE_ROOT="$LOCALAPPDATA/DesignSagaTools/qa-files" MONGO_URL=mongodb://127.0.0.1:27017 DB_NAME=design_saga_qa_e2e SUPER_ADMIN_EMAILS="$QA_SUPERADMIN_EMAIL" CORS_ORIGINS=http://127.0.0.1:5173 COOKIE_SECURE=false APP_ENV=development BUSINESS_TIMEZONE=Asia/Kolkata APP_BASE_URL=http://127.0.0.1:5173 PYTHONPATH=. ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8001
 ```
 
 ```bash
-cd frontend && node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 --strictPort
+cd frontend && node ./node_modules/vite/bin/vite.js build && node ./node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5173 --strictPort
 ```
 
 ```bash

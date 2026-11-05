@@ -4,6 +4,7 @@ import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate } from "../lib/format";
+import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import {
   ArrowLeft, FloppyDisk, Plus, Trash, PencilSimple, UserMinus, Warning, Trophy,
   FileText, ArrowSquareOut, ShieldWarning,
@@ -635,7 +636,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
       setBanks(cash);
       if (!bankAccountId && cash.length) {
         setBankAccountId(cash[0].id);
-        setPaymentMethod(["Cash", "Petty Cash"].includes(cash[0].name) ? "cash" : "bank_transfer");
+        setPaymentMethod(methodForAccount(cash[0]));
       }
     } catch (e) {
       setMsg(e?.response?.data?.detail || "Failed to load preview (need finance.read)");
@@ -700,7 +701,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
             const id = e.target.value;
             const account = banks.find((item) => item.id === id);
             setBankAccountId(id);
-            setPaymentMethod(["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer");
+            setPaymentMethod(methodForAccount(account));
           }} data-testid="pay-from">
             {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
@@ -716,9 +717,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
             onChange={(e) => {
               const method = e.target.value;
               setPaymentMethod(method);
-              const compatible = method === "cash"
-                ? banks.find((item) => ["Cash", "Petty Cash"].includes(item.name))
-                : banks.find((item) => item.is_bank);
+              const compatible = compatibleAccount(banks, method);
               if (compatible) setBankAccountId(compatible.id);
             }} data-testid="salary-payment-method">
             <option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option>

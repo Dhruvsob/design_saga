@@ -1005,6 +1005,9 @@ async def create_vendor_payment(payload: VendorPaymentIn, request: Request,
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
     bank_acc = await require_asset_account(payload.paid_from_account_id, "Bank/cash account")
+    from core.finance import validate_method_account
+    validate_method_account(payload.payment_method or "bank_transfer", bank_acc,
+                            label="vendor payments")
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
     request_key = f"{user_org_id(user)}:{payload.vendor_id}:{idem}" if idem else None
     async with doc_lock(sdb.vendors_acc, payload.vendor_id):
@@ -1455,11 +1458,8 @@ async def vendor_performance(vendor_id: str, request: Request,
 
 def _validate_commission_receipt_account(payment_method: str, account: dict) -> None:
     """Keep the displayed receipt method and the debited cash/bank ledger aligned."""
-    is_cash_account = account.get("name") in {"Cash", "Petty Cash"}
-    if payment_method == "cash" and not is_cash_account:
-        raise HTTPException(status_code=400, detail="Cash receipts must use Cash or Petty Cash")
-    if payment_method != "cash" and not account.get("is_bank"):
-        raise HTTPException(status_code=400, detail="Non-cash commission receipts must use a bank account")
+    from core.finance import validate_method_account
+    validate_method_account(payment_method, account, label="commission receipts")
 
 def _bill_purchase_base(bill: dict) -> float:
     """The number commission percentages apply to — subtotal (pre-tax, pre-TDS)."""

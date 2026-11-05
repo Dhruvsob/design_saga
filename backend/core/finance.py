@@ -96,3 +96,37 @@ async def require_asset_account(account_id, label: str = "Paid-from account") ->
     if acc.get("type") != "asset":
         raise HTTPException(400, f"{label} must be a bank/cash asset account")
     return acc
+
+
+# ---------------------------------------------------------------------------
+# Cash / Bank method-account consistency (ACC-08)
+# ---------------------------------------------------------------------------
+# The default chart flags "Cash" and "Petty Cash" with is_bank=True so they
+# appear in cash/bank pickers. That flag alone therefore cannot prove an
+# account is a real bank: a "bank transfer" posted to Cash would show Bank in
+# the source module and Cash in the Daybook. Every Money In / Money Out path
+# validates the recorded method against the ledger account with this rule.
+CASH_ACCOUNT_NAMES = frozenset({"cash", "petty cash"})
+PAYMENT_METHODS = ("cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other")
+
+
+def is_cash_account(account: Optional[dict]) -> bool:
+    return str((account or {}).get("name") or "").strip().casefold() in CASH_ACCOUNT_NAMES
+
+
+def is_bank_account(account: Optional[dict]) -> bool:
+    return bool((account or {}).get("is_bank")) and not is_cash_account(account)
+
+
+def validate_method_account(payment_method: str, account: dict, *, label: str = "payments") -> None:
+    from fastapi import HTTPException
+    if payment_method not in PAYMENT_METHODS:
+        raise HTTPException(status_code=400, detail="Unknown payment method")
+    if payment_method == "cash":
+        if not is_cash_account(account):
+            raise HTTPException(status_code=400, detail=f"Cash {label} must use Cash or Petty Cash")
+    elif not is_bank_account(account):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Non-cash {label} must use a bank account, not Cash or Petty Cash",
+        )

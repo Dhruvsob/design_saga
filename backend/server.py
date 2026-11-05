@@ -2334,289 +2334,167 @@ def _amount_in_words_inr(amount) -> str:
     return words.strip() + " Only"
 
 
-def _org_logo_bytes(org: Optional[dict]):
-    """Best-effort fetch of the org logo bytes from object storage.
-    Returns (bytes, ext) or (None, None)."""
-    try:
-        branding = (org or {}).get("branding") or {}
-        url = branding.get("logo_url") or ""
-        if not url:
-            return None, None
-        if url.startswith("data:"):
-            import base64
-            head, _, b64 = url.partition(",")
-            ext = "png" if "png" in head else "jpg"
-            return base64.b64decode(b64), ext
-        marker = "/api/org/logo/"
-        if marker in url:
-            path = url.split(marker, 1)[1]
-            from services import storage as _pdf_storage
-            data, ctype = _pdf_storage.get_object(path)
-            ext = "png" if "png" in (ctype or "") else "jpg"
-            return data, ext
-    except Exception:
-        pass
-    return None, None
+_INVOICE_STATUS_LABELS = {
+    "draft": "Draft", "sent": "Issued", "partially_paid": "Partially paid",
+    "paid": "Paid", "overdue": "Overdue", "cancelled": "Cancelled",
+    "accepted": "Accepted", "rejected": "Rejected",
+}
 
 
 def generate_invoice_pdf(doc: dict, org: Optional[dict] = None) -> bytes:
-    """Corporate invoice/quotation PDF — branded header, itemised table,
-    Indian currency formatting, amount-in-words, bank details, terms."""
-    pdf = FPDF(format="A4", unit="mm")
-    pdf.set_auto_page_break(auto=True, margin=20)
+    """Branded A4 invoice/quotation: tenant letterhead with logo, client and
+    project blocks, itemised table, totals with balance due, amount in words,
+    payment details, notes/terms, signatory and page-numbered footer."""
+    from core.pdf_brand import (
+        Brand, BrandedPDF, draw_letterhead, draw_bank_block, draw_signatory,
+        section_label, wrap, INK, GREY, LINE, SOFT, LEFT, RIGHT, CONTENT_W,
+    )
+    brand = Brand(org)
+    is_quote = doc.get("doc_type") == "quotation"
+    tax_amount = float(doc.get("tax") or 0)
+    if is_quote:
+        title = "QUOTATION"
+    elif (org or {}).get("gstin") and tax_amount > 0:
+        title = "TAX INVOICE"
+    else:
+        title = "INVOICE"
+    number = doc.get("number") or ""
+    pdf = BrandedPDF(brand, title.title(), number)
     pdf.add_page()
 
-    org = org or {}
-    branding = org.get("branding") or {}
-    primary = _hex_to_rgb(branding.get("primary_color") or "#002FA7")
-    ink = (16, 16, 16)
-    grey = (105, 105, 105)
-    line = (222, 222, 222)
-    soft = (247, 248, 250)
-
-    org_name = org.get("display_name") or org.get("name") or "Design Saga"
-    tagline = branding.get("tagline") or "Architecture & Interior Design Studio"
-    addr = org.get("address") or {}
-    addr_bits = [addr.get("line1"), addr.get("line2"),
-                 ", ".join(x for x in [addr.get("city"), addr.get("state")] if x),
-                 addr.get("pincode")]
-    addr_line = " · ".join(str(x) for x in addr_bits if x)
-    contact_bits = [org.get("phone"), org.get("email"), org.get("website")]
-    contact_line = " · ".join(str(x) for x in contact_bits if x)
-    footer_note = branding.get("pdf_footer") or f"Thank you for choosing {org_name}."
-    is_quote = doc.get("doc_type") == "quotation"
-    title = "QUOTATION" if is_quote else "INVOICE"
-
-    # ---- Brand bar ----
-    pdf.set_fill_color(*primary)
-    pdf.rect(0, 0, 210, 3, "F")
-
-    # ---- Header: logo + company (left) / doc title + meta (right) ----
-    top_y = 12.0
-    logo_bytes, logo_ext = _org_logo_bytes(org)
-    text_x = 15.0
-    if logo_bytes:
-        try:
-            pdf.image(io.BytesIO(logo_bytes), x=15, y=top_y, h=14,
-                      type="PNG" if logo_ext == "png" else "JPEG")
-            text_x = 34.0
-        except Exception:
-            text_x = 15.0
-
-    pdf.set_xy(text_x, top_y)
-    pdf.set_font("Helvetica", "B", 15)
-    pdf.set_text_color(*ink)
-    pdf.cell(110, 7, _safe(org_name.upper()), ln=1)
-    pdf.set_x(text_x)
-    pdf.set_font("Helvetica", "", 8.5)
-    pdf.set_text_color(*grey)
-    pdf.cell(110, 4.5, _safe(tagline), ln=1)
-    if addr_line:
-        pdf.set_x(text_x)
-        pdf.cell(110, 4.5, _safe(addr_line), ln=1)
-    if contact_line:
-        pdf.set_x(text_x)
-        pdf.cell(110, 4.5, _safe(contact_line), ln=1)
-    if org.get("gstin"):
-        pdf.set_x(text_x)
-        pdf.cell(110, 4.5, _safe(f"GSTIN: {org['gstin']}"), ln=1)
-
-    # Right block — title + meta
-    pdf.set_xy(130, top_y)
-    pdf.set_font("Helvetica", "B", 24)
-    pdf.set_text_color(*primary)
-    pdf.cell(65, 10, _safe(title), 0, 1, "R")
-    meta_rows = [
-        ("No.", doc.get("number") or "—"),
+    status = _INVOICE_STATUS_LABELS.get(doc.get("status") or "", (doc.get("status") or "").title())
+    meta = [
+        ("Quotation No." if is_quote else "Invoice No.", number or "—"),
         ("Date", _pdf_display_date(doc.get("issue_date") or doc.get("created_at"))),
+        ("Valid until" if is_quote else "Due date",
+         _pdf_display_date(doc.get("due_date")) if doc.get("due_date") else ""),
+        ("Status", status),
     ]
-    if doc.get("due_date"):
-        meta_rows.append(("Due Date", _pdf_display_date(doc.get("due_date"))))
-    status = (doc.get("status") or "").upper()
-    if status:
-        meta_rows.append(("Status", status))
-    pdf.set_font("Helvetica", "", 9)
-    for label, val in meta_rows:
-        pdf.set_x(130)
-        pdf.set_text_color(*grey)
-        pdf.cell(25, 5, _safe(label), 0, 0, "L")
-        pdf.set_text_color(*ink)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(40, 5, _safe(str(val)), 0, 1, "R")
-        pdf.set_font("Helvetica", "", 9)
-
-    y = max(pdf.get_y(), top_y + 26) + 4
-    pdf.set_draw_color(*line)
-    pdf.set_line_width(0.3)
-    pdf.line(15, y, 195, y)
+    draw_letterhead(pdf, title, meta)
 
     # ---- Bill To / Project ----
-    pdf.set_xy(15, y + 5)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.set_text_color(*grey)
-    pdf.cell(90, 4.5, "BILL TO", 0, 0)
-    pdf.cell(90, 4.5, "PROJECT", 0, 1)
-    details_y = pdf.get_y()
     client = doc.get("client_details") or {}
     client_lines = [doc.get("client_name") or client.get("name") or "—"]
-    client_lines.extend(value for value in (
-        client.get("company"), client.get("address"), client.get("email"),
-        client.get("phone")) if value)
+    client_lines += [v for v in (client.get("company"), client.get("address"),
+                                 client.get("email"), client.get("phone")) if v]
     project_lines = [doc.get("project_name") or "—"]
-    for index, value in enumerate(client_lines[:5]):
-        pdf.set_xy(15, details_y + index * 5)
-        pdf.set_font("Helvetica", "B" if index == 0 else "", 10 if index == 0 else 8.5)
-        pdf.set_text_color(*ink if index == 0 else grey)
-        pdf.cell(85, 5, _safe(str(value))[:72], 0, 0)
-    for index, value in enumerate(project_lines):
-        pdf.set_xy(105, details_y + index * 5)
-        pdf.set_font("Helvetica", "B" if index == 0 else "", 10 if index == 0 else 8.5)
-        pdf.set_text_color(*ink if index == 0 else grey)
-        pdf.cell(90, 5, _safe(str(value))[:72], 0, 0)
-    pdf.set_y(details_y + max(len(client_lines[:5]), len(project_lines)) * 5 + 5)
+    if doc.get("project_location"):
+        project_lines.append(doc["project_location"])
+    top = pdf.get_y()
+    block_bottom = top
+    for x, label, lines in ((LEFT, "BILL TO", client_lines), (110, "PROJECT", project_lines)):
+        pdf.set_xy(x, top)
+        section_label(pdf, label)
+        for index, value in enumerate(lines[:6]):
+            for part in wrap(str(value), 48)[:2]:
+                pdf.set_x(x)
+                pdf.set_font("Helvetica", "B" if index == 0 else "", 10 if index == 0 else 8.6)
+                pdf.set_text_color(*(INK if index == 0 else GREY))
+                pdf.cell(85, 4.8, part, 0, 1)
+        block_bottom = max(block_bottom, pdf.get_y())
+    pdf.set_y(max(block_bottom, top + 16) + 4)
 
-    # ---- Items table ----
-    col_w = {"idx": 10, "desc": 92, "qty": 18, "rate": 30, "amt": 30}
-    def invoice_table_header():
-        pdf.set_fill_color(*ink)
+    # ---- Items ----
+    col = {"idx": 10, "desc": 92, "qty": 18, "rate": 30, "amt": 30}
+
+    def table_header():
+        pdf.set_fill_color(*brand.primary)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 8.5)
-        pdf.cell(col_w["idx"], 8, " #", 0, 0, "L", fill=True)
-        pdf.cell(col_w["desc"], 8, "DESCRIPTION", 0, 0, "L", fill=True)
-        pdf.cell(col_w["qty"], 8, "QTY", 0, 0, "R", fill=True)
-        pdf.cell(col_w["rate"], 8, "RATE", 0, 0, "R", fill=True)
-        pdf.cell(col_w["amt"], 8, "AMOUNT  ", 0, 1, "R", fill=True)
+        pdf.cell(col["idx"], 8, " #", 0, 0, "L", fill=True)
+        pdf.cell(col["desc"], 8, "DESCRIPTION", 0, 0, "L", fill=True)
+        pdf.cell(col["qty"], 8, "QTY", 0, 0, "R", fill=True)
+        pdf.cell(col["rate"], 8, "RATE (Rs.)", 0, 0, "R", fill=True)
+        pdf.cell(col["amt"], 8, "AMOUNT (Rs.)  ", 0, 1, "R", fill=True)
 
-    invoice_table_header()
-
-    pdf.set_text_color(*ink)
-    pdf.set_font("Helvetica", "", 9.5)
-    items = doc.get("items", []) or []
+    table_header()
+    items = doc.get("items") or []
     for i, it in enumerate(items, start=1):
-        description = _safe(it.get("description", ""))
-        description_lines = textwrap.wrap(description, width=52,
-                                          break_long_words=True,
-                                          break_on_hyphens=False) or [""]
-        row_height = max(7.5, len(description_lines) * 4.8 + 2)
-        if pdf.get_y() + row_height > 270:
+        lines = wrap(it.get("description", ""), 52)
+        row_h = max(7.5, len(lines) * 4.8 + 2.5)
+        if pdf.get_y() + row_h > 272:
             pdf.add_page()
-            invoice_table_header()
-        fill = i % 2 == 0
-        if fill:
-            pdf.set_fill_color(*soft)
-        row_y = pdf.get_y()
-        row_x = pdf.get_x()
-        if fill:
-            pdf.rect(row_x, row_y, sum(col_w.values()), row_height, "F")
-        pdf.set_text_color(*ink)
-        pdf.set_font("Helvetica", "", 9.5)
-        pdf.set_xy(row_x, row_y)
-        pdf.cell(col_w["idx"], row_height, f" {i}", 0, 0, "L")
-        pdf.set_xy(row_x + col_w["idx"], row_y + 1)
-        pdf.multi_cell(col_w["desc"], 4.8, "\n".join(description_lines), 0, "L")
-        number_x = row_x + col_w["idx"] + col_w["desc"]
-        pdf.set_xy(number_x, row_y)
-        pdf.cell(col_w["qty"], row_height, f"{it.get('quantity', 0):g}", 0, 0, "R")
-        pdf.cell(col_w["rate"], row_height, f"{it.get('rate', 0):,.2f}", 0, 0, "R")
-        pdf.cell(col_w["amt"], row_height, f"{it.get('amount', 0):,.2f}  ", 0, 0, "R")
-        pdf.set_y(row_y + row_height)
+            table_header()
+        y = pdf.get_y()
+        if i % 2 == 0:
+            pdf.set_fill_color(*SOFT)
+            pdf.rect(LEFT, y, CONTENT_W, row_h, "F")
+        pdf.set_text_color(*INK)
+        pdf.set_font("Helvetica", "", 9.3)
+        pdf.set_xy(LEFT, y)
+        pdf.cell(col["idx"], row_h, f" {i}", 0, 0, "L")
+        pdf.set_xy(LEFT + col["idx"], y + 1.2)
+        pdf.multi_cell(col["desc"], 4.8, "\n".join(lines), 0, "L")
+        pdf.set_xy(LEFT + col["idx"] + col["desc"], y)
+        pdf.cell(col["qty"], row_h, f"{float(it.get('quantity') or 0):g}", 0, 0, "R")
+        pdf.cell(col["rate"], row_h, f"{float(it.get('rate') or 0):,.2f}", 0, 0, "R")
+        pdf.cell(col["amt"], row_h, f"{float(it.get('amount') or 0):,.2f}  ", 0, 0, "R")
+        pdf.set_y(y + row_h)
     if not items:
-        pdf.set_text_color(*grey)
+        pdf.set_text_color(*GREY)
         pdf.cell(0, 8, "No line items.", 0, 1, "C")
-        pdf.set_text_color(*ink)
-    pdf.set_draw_color(*line)
-    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.set_draw_color(*LINE)
+    pdf.line(LEFT, pdf.get_y(), RIGHT, pdf.get_y())
     pdf.ln(3)
 
-    # ---- Totals block (right-aligned) ----
-    totals = [("Subtotal", doc.get("subtotal", 0))]
+    # ---- Totals ----
+    total = float(doc.get("total") or 0)
+    paid = float(doc.get("paid_amount") or 0)
+    rows = [("Subtotal", doc.get("subtotal", 0))]
     if doc.get("discount"):
-        totals.append((f"Discount ({doc.get('discount_pct', 0)}%)", -float(doc.get("discount", 0))))
-    totals.append((f"GST ({doc.get('tax_rate', 0):g}%)", doc.get("tax", 0)))
-    pdf.set_font("Helvetica", "", 10)
-    for label, val in totals:
-        pdf.cell(130, 6.5, _safe(label), 0, 0, "R")
-        pdf.cell(60, 6.5, _safe(f"{_inr(val)}  "), 0, 1, "R")
-    # Grand total bar
-    pdf.set_fill_color(*primary)
+        rows.append((f"Discount ({doc.get('discount_pct', 0)}%)", -float(doc.get("discount") or 0)))
+    rows.append((f"GST ({float(doc.get('tax_rate') or 0):g}%)", tax_amount))
+    if pdf.get_y() + 8 * len(rows) + 30 > 272:
+        pdf.add_page()
+    for label, value in rows:
+        pdf.set_font("Helvetica", "", 9.8)
+        pdf.set_text_color(*GREY)
+        pdf.cell(130, 6.2, safe_label(label), 0, 0, "R")
+        pdf.set_text_color(*INK)
+        pdf.cell(50, 6.2, _safe(f"{_inr(value)}  "), 0, 1, "R")
+    pdf.set_fill_color(*brand.primary)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 11.5)
-    pdf.cell(130, 9, "TOTAL  ", 0, 0, "R", fill=True)
-    pdf.cell(60, 9, _safe(f"{_inr(doc.get('total', 0))}  "), 0, 1, "R", fill=True)
-    pdf.set_text_color(*ink)
+    pdf.cell(130, 9, "GRAND TOTAL  ", 0, 0, "R", fill=True)
+    pdf.cell(50, 9, _safe(f"{_inr(total)}  "), 0, 1, "R", fill=True)
+    if not is_quote and paid > 0.004:
+        balance = max(0.0, round(total - paid, 2))
+        pdf.set_text_color(*INK)
+        pdf.set_font("Helvetica", "", 9.8)
+        pdf.cell(130, 6.2, "Amount received", 0, 0, "R")
+        pdf.cell(50, 6.2, _safe(f"{_inr(paid)}  "), 0, 1, "R")
+        pdf.set_font("Helvetica", "B", 10.5)
+        pdf.cell(130, 7, "BALANCE DUE", 0, 0, "R")
+        pdf.cell(50, 7, _safe(f"{_inr(balance)}  "), 0, 1, "R")
     pdf.ln(2)
-
-    # ---- Amount in words ----
-    pdf.set_font("Helvetica", "BI", 9)
-    pdf.set_text_color(*grey)
-    pdf.multi_cell(0, 5, _safe(f"Amount in words: {_amount_in_words_inr(doc.get('total', 0))}"))
-    pdf.set_text_color(*ink)
+    pdf.set_font("Helvetica", "BI", 8.8)
+    pdf.set_text_color(*GREY)
+    pdf.multi_cell(0, 4.8, _safe(f"Amount in words: {_amount_in_words_inr(total)}"))
     pdf.ln(4)
 
-    # ---- Bank / payment details ----
-    bank = org.get("bank_details") or {}
-    bank_rows = [v for v in [bank.get("account_name") or org_name, bank.get("bank"),
-                             bank.get("account"), bank.get("ifsc"), bank.get("upi")] if v]
-    has_bank_details = any(bank.get(k) for k in ("bank", "account", "ifsc", "upi"))
-    bank_block_h = (12 + len(bank_rows) * 4.6 + 7) if has_bank_details else 0
-    notes_lines = textwrap.wrap(_safe(doc.get("notes") or ""), width=105,
-                                break_long_words=True, break_on_hyphens=False)
-    notes_block_h = (7 + max(1, len(notes_lines)) * 4.6 + 4) if doc.get("notes") else 0
-    footer_block_h = 22
-    if pdf.get_y() + bank_block_h + notes_block_h + footer_block_h > 280:
+    # ---- Payment details (left) + signatory (right) ----
+    if pdf.get_y() + 42 > 272:
         pdf.add_page()
+    block_top = pdf.get_y()
+    bank_h = draw_bank_block(pdf, LEFT, 105) if not is_quote or brand.has_bank else 0
+    pdf.set_y(block_top)
+    draw_signatory(pdf)
+    pdf.set_y(max(block_top + bank_h, block_top + 30) + 4)
 
-    if has_bank_details:
-        box_y = pdf.get_y()
-        box_h = 9 + len(bank_rows) * 4.6 + 3
-        pdf.set_fill_color(*soft)
-        pdf.rect(15, box_y, 110, box_h, "F")
-        pdf.set_xy(19, box_y + 3)
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_text_color(*grey)
-        pdf.cell(0, 4.5, "PAYMENT DETAILS", ln=1)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(*ink)
-        for label, val in [("Account Name", bank.get("account_name") or org_name),
-                           ("Bank", bank.get("bank")),
-                           ("A/C No.", bank.get("account")),
-                           ("IFSC", bank.get("ifsc")),
-                           ("UPI", bank.get("upi"))]:
-            if not val:
-                continue
-            pdf.set_x(19)
-            pdf.set_text_color(*grey)
-            pdf.cell(28, 4.6, _safe(label), 0, 0)
-            pdf.set_text_color(*ink)
-            pdf.cell(0, 4.6, _safe(str(val)), ln=1)
-        pdf.set_y(max(pdf.get_y(), box_y + box_h + 2))
-        pdf.ln(2)
+    # ---- Notes & terms ----
+    notes = (doc.get("notes") or "").strip()
+    if notes:
+        if pdf.get_y() + 14 > 272:
+            pdf.add_page()
+        section_label(pdf, "Notes & Terms")
+        pdf.set_font("Helvetica", "", 8.8)
+        pdf.set_text_color(*INK)
+        pdf.multi_cell(0, 4.6, _safe(notes))
+    return pdf.to_bytes()
 
-    # ---- Notes / terms ----
-    if doc.get("notes"):
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_text_color(*grey)
-        pdf.cell(0, 5, "NOTES & TERMS", ln=1)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(*ink)
-        pdf.multi_cell(0, 4.6, _safe(doc.get("notes")))
-        pdf.ln(2)
 
-    # ---- Footer ----
-    pdf.ln(4)
-    pdf.set_draw_color(*line)
-    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "I", 8.5)
-    pdf.set_text_color(*grey)
-    pdf.cell(0, 5, _safe(footer_note), ln=1, align="C")
-    pdf.cell(0, 4.5, _safe("This is a computer-generated document and does not require a physical signature."),
-             ln=1, align="C")
-
-    output = pdf.output(dest="S")
-    if isinstance(output, str):
-        return output.encode("latin-1")
-    return bytes(output)
+def safe_label(text) -> str:
+    return _safe(text)
 
 
 async def _public_project_by_token(token: str) -> tuple[dict, str]:
@@ -3913,8 +3791,9 @@ async def adv_ai_suggest(qid: str, request: Request, session_token: Optional[str
 
 # ---------- Premium PDF ----------
 def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
-    pdf = FPDF(format="A4", unit="mm")
-    pdf.set_auto_page_break(auto=True, margin=18)
+    from core.pdf_brand import Brand, BrandedPDF, draw_letterhead, draw_bank_block
+    brand = Brand(org)
+    pdf = BrandedPDF(brand, "Quotation", doc.get("number") or "")
     is_consult = (doc.get("type") or "turnkey") == "consultancy"
 
     org = org or {}
@@ -3932,30 +3811,28 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.line(15, pdf.get_y(), 195, pdf.get_y())
         pdf.ln(2)
 
+    section_no = [0]
+
     def header_section(title):
+        # Number only the sections actually present (no 01 -> 09 jumps).
+        section_no[0] += 1
+        label = re.sub(r"^\d+\s*/\s*", "", title)
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(*grey)
-        pdf.cell(0, 5, _safe(title.upper()), ln=1)
+        pdf.cell(0, 5, _safe(f"{section_no[0]:02d} / {label}".upper()), ln=1)
         pdf.set_font("Helvetica", "B", 16)
         pdf.set_text_color(*ink)
 
     # ============ COVER PAGE ============
     pdf.add_page()
-    # brand bar
-    pdf.set_fill_color(*klein)
-    pdf.rect(0, 0, 210, 14, "F")
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_xy(15, 4)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 6, _safe(f"{org_name.upper()}  ·  {org_tagline.upper()[:40]}"), ln=1)
-    pdf.set_text_color(*ink)
-
-    pdf.set_xy(15, 30)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(*grey)
-    pdf.cell(0, 5, _safe(f"QUOTATION  ·  {(doc.get('type') or 'turnkey').upper()}  ·  {doc.get('version_label', 'v1')}"), ln=1)
-
-    pdf.set_xy(15, 40)
+    draw_letterhead(pdf, "Quotation", [
+        ("Quotation No.", doc.get("number") or "—"),
+        ("Date", _pdf_display_date(doc.get("date") or doc.get("created_at"))),
+        ("Type", (doc.get("type") or "turnkey").title()),
+        ("Version", doc.get("version_label") or "v1"),
+    ])
+    pdf.ln(6)
+    pdf.set_x(15)
     pdf.set_text_color(*ink)
     pdf.set_font("Helvetica", "B", 28)
     pdf.multi_cell(180, 12, _safe(doc.get("project_title", "")))
@@ -3973,9 +3850,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         ("CLIENT", doc.get("client_name") or "—"),
         ("LOCATION", doc.get("project_location") or "—"),
         ("AREA", f"{doc.get('area_sqft', 0):g} sq.ft"),
-        ("QUOTATION NO.", doc.get("number") or "—"),
-        ("DATE", (doc.get("date") or "")[:10]),
-        ("VERSION", doc.get("version_label") or "v1"),
+        ("PREPARED BY", org_name),
     ]
     for label, val in cover_rows:
         pdf.set_font("Helvetica", "B", 8)
@@ -3986,7 +3861,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.cell(0, 6, _safe(str(val)), ln=1)
 
     # Cover footer
-    pdf.set_y(265)
+    pdf.set_y(258)
     pdf.set_draw_color(*ink)
     pdf.set_line_width(0.4)
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
@@ -4230,7 +4105,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
     if doc.get("terms"):
         pdf.add_page()
         header_section("09 / Terms & Conditions")
-        pdf.cell(0, 9, _safe("Smart blocks."), ln=1)
+        pdf.cell(0, 9, _safe("Terms of engagement."), ln=1)
         hr()
         for t in doc.get("terms", []):
             pdf.set_font("Helvetica", "B", 10)
@@ -4261,13 +4136,12 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
     pdf.set_xy(115, y + 32)
     pdf.cell(75, 5, _safe("Authorised signatory"), 0, 1)
 
-    # Page numbers footer (alias)
-    pdf.alias_nb_pages()
+    # Payment details from Company Settings, for advance/milestone payments.
+    if brand.has_bank:
+        pdf.set_y(y + 48)
+        draw_bank_block(pdf, 15, 110)
 
-    output = pdf.output(dest="S")
-    if isinstance(output, str):
-        return output.encode("latin-1")
-    return bytes(output)
+    return pdf.to_bytes()
 
 
 @api.get("/quotations-adv/{qid}/pdf")

@@ -436,96 +436,100 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     oid = user_org_id(user)
     org = await db.organizations.find_one(
         {"org_id": oid}, {"_id": 0}) if oid else None
-    org_name = (org or {}).get("name") or "Design Saga"
 
     earned = sum(float(r.get("amount") or 0) for r in rows if r.get("status") not in ("cancelled", "reversed"))
     received = sum(float(r.get("received_amount") or 0) for r in rows if r.get("status") not in ("cancelled", "reversed"))
     pending = round(earned - received, 2)
 
-    # Build PDF (fpdf2). We deliberately keep it simple + latin-1 safe.
-    from fpdf import FPDF
-
-    def _s(v):
-        if v is None:
-            return "-"
-        v = str(v)
-        return (v.replace("\u20B9", "Rs.")
-                 .replace("\u2013", "-").replace("\u2014", "-")
-                 .replace("\u2018", "'").replace("\u2019", "'")
-                 .replace("\u201C", '"').replace("\u201D", '"'))
+    # Build the branded PDF (shared tenant letterhead, logo, numbered footer).
+    from core.pdf_brand import (Brand, BrandedPDF, draw_letterhead, section_label,
+                                safe_text, INK, GREY, SOFT, LEFT, CONTENT_W)
 
     def _money(v):
         try:
             return f"Rs. {float(v or 0):,.2f}"
-        except Exception:
+        except (TypeError, ValueError):
             return "Rs. 0.00"
 
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=15)
+    def _dmy(value):
+        raw = str(value or "")[:10]
+        try:
+            from datetime import date as _d
+            return _d.fromisoformat(raw).strftime("%d/%m/%Y")
+        except ValueError:
+            return raw or "-"
+
+    status_label = {"pending": "Pending", "invoiced": "Partially received",
+                    "received": "Received", "cancelled": "Cancelled", "reversed": "Reversed"}
+    period = f"{_dmy(from_date) if from_date else 'Inception'} to {_dmy(to_date or business_today().isoformat())}"
+    pdf = BrandedPDF(Brand(org), "Commission Statement", vendor.get("name") or "")
     pdf.add_page()
+    draw_letterhead(pdf, "Commission Statement", [
+        ("Period", period if len(period) <= 24 else _dmy(to_date or business_today().isoformat())),
+        ("Generated", _dmy(business_today().isoformat())),
+    ])
 
-    # Header
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 8, _s(org_name), ln=1)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 5, _s("Commission Statement"), ln=1)
-    pdf.ln(2)
-
-    # Vendor block
+    section_label(pdf, "Vendor")
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 6, _s(f"Vendor: {vendor.get('name') or ''}"), ln=1)
-    pdf.set_font("Helvetica", "", 9)
-    if vendor.get("company"):    pdf.cell(0, 4, _s(vendor["company"]), ln=1)
-    if vendor.get("gstin"):      pdf.cell(0, 4, _s(f"GSTIN: {vendor['gstin']}"), ln=1)
-    if vendor.get("email"):      pdf.cell(0, 4, _s(f"Email: {vendor['email']}"), ln=1)
-    if vendor.get("phone"):      pdf.cell(0, 4, _s(f"Phone: {vendor['phone']}"), ln=1)
-    period = f"Period: {from_date or 'inception'}  to  {to_date or business_today().isoformat()}"
-    pdf.cell(0, 4, _s(period), ln=1)
+    pdf.cell(0, 6, safe_text(vendor.get("name") or ""), ln=1)
+    pdf.set_font("Helvetica", "", 8.8)
+    pdf.set_text_color(*GREY)
+    for value in (vendor.get("company"),
+                  f"GSTIN: {vendor['gstin']}" if vendor.get("gstin") else None,
+                  vendor.get("email"), vendor.get("phone"), f"Period: {period}"):
+        if value:
+            pdf.cell(0, 4.6, safe_text(value), ln=1)
     pdf.ln(3)
 
-    # Totals card
-    pdf.set_fill_color(245, 244, 240)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(60, 8, _s("Total earned"), fill=True)
-    pdf.cell(60, 8, _s("Received"), fill=True)
-    pdf.cell(60, 8, _s("Pending"), fill=True, ln=1)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(60, 8, _money(earned))
-    pdf.cell(60, 8, _money(received))
-    pdf.cell(60, 8, _money(pending), ln=1)
-    pdf.ln(3)
+    card_w = CONTENT_W / 3
+    y = pdf.get_y()
+    for i, (label, value) in enumerate((("Commission earned", earned), ("Received", received),
+                                        ("Pending", pending))):
+        x = LEFT + i * card_w
+        pdf.set_fill_color(*SOFT)
+        pdf.rect(x + (0 if i == 0 else 1.5), y, card_w - 1.5, 15, "F")
+        pdf.set_xy(x + 4, y + 2)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(*GREY)
+        pdf.cell(card_w - 8, 4.5, label.upper(), 0, 2)
+        pdf.set_font("Helvetica", "B", 11.5)
+        pdf.set_text_color(*INK)
+        pdf.cell(card_w - 8, 6.5, _money(value), 0, 0)
+    pdf.set_y(y + 19)
 
-    # Table header
-    pdf.set_fill_color(230, 226, 217)
-    pdf.set_font("Helvetica", "B", 9)
-    headers = [("Bill date", 22), ("Bill #", 26), ("Base", 26),
-               ("Earned", 26), ("Received", 26), ("Status", 22), ("Ref", 32)]
-    for h, w in headers:
-        pdf.cell(w, 6, _s(h), border=1, fill=True)
-    pdf.ln()
-    pdf.set_font("Helvetica", "", 8)
+    cols = [("Bill date", 22), ("Bill #", 26), ("Base", 27), ("Earned", 26),
+            ("Received", 26), ("Status", 28), ("Reference", 25)]
 
-    for r in rows:
-        pdf.cell(22, 6, _s(r.get("bill_date")), border=1)
-        pdf.cell(26, 6, _s(r.get("bill_number")), border=1)
-        pdf.cell(26, 6, _money(r.get("purchase_amount") or 0), border=1)
-        pdf.cell(26, 6, _money(r.get("amount") or 0), border=1)
-        pdf.cell(26, 6, _money(r.get("received_amount") or 0), border=1)
-        pdf.cell(22, 6, _s((r.get("status") or "").upper()), border=1)
-        pdf.cell(32, 6, _s(r.get("reference") or ""), border=1, ln=1)
+    def table_header():
+        pdf.set_fill_color(*pdf.brand.primary)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 8)
+        for title, width in cols:
+            pdf.cell(width, 7, safe_text(title), 0, 0, "L", fill=True)
+        pdf.ln()
 
+    table_header()
+    for i, r in enumerate(rows):
+        if pdf.get_y() + 6.5 > 272:
+            pdf.add_page()
+            table_header()
+        pdf.set_fill_color(*SOFT)
+        pdf.set_text_color(*INK)
+        pdf.set_font("Helvetica", "", 8)
+        fill = i % 2 == 1
+        values = [_dmy(r.get("bill_date")), r.get("bill_number") or "-",
+                  _money(r.get("purchase_amount") or 0), _money(r.get("amount") or 0),
+                  _money(r.get("received_amount") or 0),
+                  status_label.get(r.get("status") or "", (r.get("status") or "").title()),
+                  (r.get("reference") or "")[:16]]
+        for (title, width), value in zip(cols, values):
+            pdf.cell(width, 6.5, safe_text(value), 0, 0, "L", fill=fill)
+        pdf.ln()
     if not rows:
-        pdf.cell(0, 6, _s("No commission rows in this period."), ln=1)
+        pdf.set_text_color(*GREY)
+        pdf.cell(0, 8, "No commission rows in this period.", 0, 1, "C")
 
-    # Footer
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 4, _s(f"Generated {business_today().isoformat()} · {org_name}"), ln=1)
-
-    output = pdf.output(dest="S")
-    # fpdf2 >= 2.5 returns bytearray; older returns str.
-    body = bytes(output) if isinstance(output, (bytes, bytearray)) else output.encode("latin-1")
+    body = pdf.to_bytes()
     filename = f"commission-statement-{(vendor.get('name') or 'vendor').replace(' ', '-').lower()}.pdf"
     return FastAPIResponse(
         content=body,

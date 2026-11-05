@@ -39,6 +39,9 @@ module.exports = [
     rules: {
       "react-hooks/rules-of-hooks": "off",
       "react-hooks/exhaustive-deps": "off",
+      // An undefined identifier in JSX crashes the whole page at runtime
+      // (e.g. a component referencing another component's state).
+      "no-undef": "error",
     },
   },
 ];

@@ -30,8 +30,11 @@ reversal/reposting and remain auditable.
 - Tenant scoping is applied by the scoped business database; platform identity
   collections use explicit tenant filters.
 - UI permissions never replace backend permission checks.
-- Cash/Bank method-account compatibility is enforced for payroll, generic money
-  in/out, invoice/milestone receipts and vendor commissions.
+- Cash/Bank method-account compatibility is enforced by one shared rule
+  (`core.finance.validate_method_account`) for payroll, generic money in/out,
+  invoice/milestone receipts, vendor commissions and vendor payments; Cash and
+  Petty Cash never count as bank accounts even though the default chart flags
+  them `is_bank` (DS-076).
 - Posted journals are never physically removed through user correction APIs.
 - Source-linked transactions are corrected from the source workflow so every
   contextual view continues to reference one authoritative record.

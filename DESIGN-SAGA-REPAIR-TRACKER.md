@@ -44,6 +44,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 | ACC-01 | P1 | `compute_invoice_totals` (`server.py`) rounds each line but sums unrounded amounts, adds tax to the unrounded subtotal, and uses binary-float `round()` (₹2.675 → ₹2.67): printed lines can fail to foot to subtotal/total | Tested (DS-073) | Decimal ROUND_HALF_UP per line; subtotal = Σ rounded lines; total = subtotal + tax; only affects new/edited drafts |
 | ACC-02 | P1 | GST is one tax amount; no CGST/SGST vs IGST split, place of supply, tenant GSTIN/state (BR-016) | Decision Needed | Needs tenant state + client state fields and accountant sign-off on rounding |
 | ACC-03 | P1 | Run DS-072 `/api/accounting/integrity/source-links` on production and reconcile record by record | Externally Blocked (VPS) | Report only; no automatic repair |
+| ACC-09 | P1 | Historical payroll/vendor-payment rows booked to Cash with a non-cash method (DS-076 root cause) are not yet listed for correction | Confirmed | Add a method/account mismatch section to the DS-072 read-only report; correct record by record via reversal |
 | ACC-04 | P1 | Decimal/minor-unit policy across PO, bill, commission, payroll, loans (floats with `round(x, 2)` throughout) | Audit Needed | Shared money helper adopted module by module after ACC-01 proves the pattern |
 | ACC-05 | P2 | TDS, commission tax treatment, period close, credit notes | Decision Needed | Accountant policy first |
 | ACC-06 | P2 | Tally export (BR-017), invoice email sending (BR-014), payment link/UPI (BR-015) | Confirmed gaps | Product scope decision; not correctness defects |
@@ -135,6 +136,32 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 2. Batch B (UX-01..03, SEC-04): grouped permission-aware navigation.
 3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
    PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
+
+### DS-079: Branded PDFs with tenant logo on every document
+
+- User request (05/11): every PDF must show the company logo and full company details in a proper professional format, invoice and quotation first.
+- Root causes: (1) logo upload depended on the external Emergent object store; with `EMERGENT_LLM_KEY` blank (the deployment template default) uploads failed with 503, so no tenant could have a logo on any PDF; (2) the quotation PDF never drew a logo or company address/contact/GSTIN; salary slip, attendance payslip and commission statement had name-only headers; (3) https logo URLs were silently ignored by the PDF code.
+- Fix: `backend/core/pdf_brand.py` provides one letterhead (logo + name, tagline, address, phone/email/website, GSTIN/PAN; document title and meta on a fixed right column), a running header with logo on continuation pages, a footer on every page (company, GSTIN/PAN, footer note, "Page X of Y"), a payment-details block and an authorised-signatory block. All five PDFs use it: invoice (Tax Invoice when GSTIN + GST, Bill To/Project, balance due after part payment, amount in words), quotation (letterhead cover, numbered sections without gaps, payment details on the acceptance page), salary slip (employee bank account masked to the last 4 digits; payment line shows date, method, account and reference), attendance payslip (marked "Not a payment receipt") and commission statement (DD/MM/YYYY dates, plain-language statuses, repeating table header). Logos are normalised to PNG with Pillow; external logo URLs are never fetched server-side (SSRF). `services/storage.py` stores logos on the backed-up `/data/files/branding` volume when the external store is not configured, with a strict path allowlist.
+- Verification: `tests/test_pdf_branding.py` (11) and browser `e2e/pdf.spec.mjs` (uploads a test logo through the real API, downloads all five PDF types, asserts the embedded image and the masked account). Rendered samples were visually inspected, including a 3-page invoice with a 66-character company name; overlap/overflow defects found there were fixed. Not deployed.
+- Owner action after deployment: upload the real logo and fill address, contact, GSTIN/PAN and bank details in Company Settings. Nothing is invented when a field is blank.
+
+### DS-078: Attendance page for accounts without an employee profile
+
+- Root cause: the tenant owner (created by Super Admin) has no employee profile. Attendance loaded eight requests in one `Promise.all`; the personal calls returned 400 "link an employee profile", which rejected the whole batch, left unhandled errors and discarded attendance meta, policy and project data for admin tools.
+- Fix: personal calls fail independently; the "My attendance" tab explains how to link a profile; admin/HR data always loads. Verified by the page smoke E2E. Not deployed.
+
+### DS-077: Vendor detail page crash and undefined-identifier guard
+
+- Root cause: the DS-070 receipt-edit form was placed inside the generic `Field` component instead of `Commissions`, so `editingReceipt` was undefined and every vendor detail page rendered blank on the repair branch (production `3b15e23` predates it). ESLint had `no-undef` off.
+- Fix: form moved into `Commissions`; `no-undef` enabled (current code passes; it reports the original bug). New `e2e/smoke.spec.mjs` opens all 19 primary pages and vendor/employee/client detail pages and fails on any runtime error or blank page. Not deployed.
+
+### DS-076: Cash/Bank method-account mismatch (salary booked to Cash as "bank transfer")
+
+- Reported symptom: salary paid as Bank Transfer appeared under Cash in the Daybook.
+- Root causes (reproduced against the live QA stack): the default chart flags Cash and Petty Cash with `is_bank=True`, and every non-cash check only tested `is_bank`, so receipts, Money Out, salary and commission receipts accepted "bank_transfer" into Cash (HTTP 200). In the salary, Money In/Out, invoice payment and commission forms, choosing a non-cash method auto-selected the first `is_bank` account, which is Cash. Vendor payments validated nothing (free-text method, any asset account) and their form defaulted to Cash + Bank Transfer.
+- Fix: shared `core.finance.validate_method_account` (cash method requires Cash/Petty Cash; any other method requires a real bank account, never Cash) used by Money In, Money Out, collections, payroll, commission receipts and vendor payments; shared frontend `lib/cashbank.js` pairs method and account in all six forms. Commission status key `invoiced` is labelled "Partially received" in the UI (stored key unchanged).
+- Data effect: none; historical mismatched records are not rewritten. Follow-up ACC-09 lists them for record-by-record correction.
+- Verification: `tests/test_cash_bank_consistency.py` (14), updated `test_accounting_safety.py`, and browser `e2e/money.spec.mjs`: invoice issue + partial/full collection with idempotent retry and over-collection refusal; payroll bank payment posts once to the chosen bank with the employee name, duplicate refused, reversal and re-payment; vendor commission planned posts nothing, partial receipt posts once to bank, UI shows "Partially received". Not deployed.
 
 ### DS-075: Disposable-database browser E2E harness (OPS-06)
 

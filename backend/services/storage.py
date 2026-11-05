@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import uuid
+from pathlib import Path
 from typing import Optional, Tuple
 
 import requests
@@ -94,10 +95,37 @@ def init_storage(force: bool = False) -> Optional[str]:
         return None
 
 
+_LOCAL_EXT_MIME = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
+
+
+def _local_branding_path(path: str) -> Optional[Path]:
+    """Local, backed-up location for logo objects (strict path allowlist)."""
+    if not LOGO_PATH_RE.match(path or ""):
+        return None
+    root = Path(os.environ.get("FILE_STORAGE_ROOT", "/data/files")) / "branding"
+    target = (root / path).resolve()
+    if root.resolve() not in target.parents:
+        return None
+    return target
+
+
+def _put_local(path: str, data: bytes) -> dict:
+    target = _local_branding_path(path)
+    if target is None:
+        raise RuntimeError("Object storage not initialised")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, target)
+    return {"path": path, "size": len(data), "backend": "local"}
+
+
 def put_object(path: str, data: bytes, content_type: str) -> dict:
     key = init_storage()
     if not key:
-        raise RuntimeError("Object storage not initialised")
+        # Self-hosted deployments without the external object store keep
+        # logos on the persistent file volume (included in backups).
+        return _put_local(path, data)
     resp = requests.put(
         f"{STORAGE_URL}/objects/{path}",
         headers={"X-Storage-Key": key, "Content-Type": content_type},
@@ -117,6 +145,9 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
 
 
 def get_object(path: str) -> Tuple[bytes, str]:
+    local = _local_branding_path(path)
+    if local is not None and local.is_file():
+        return local.read_bytes(), _LOCAL_EXT_MIME.get(local.suffix.lstrip("."), "application/octet-stream")
     key = init_storage()
     if not key:
         raise RuntimeError("Object storage not initialised")

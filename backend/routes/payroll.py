@@ -261,11 +261,8 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         raise HTTPException(status_code=400, detail="Paid-from account must be a cash/bank asset account")
     if salary_acc_id == payload.paid_from_account_id:
         raise HTTPException(status_code=400, detail="Salary and paid-from accounts must be different")
-    is_cash_account = paid_from.get("name") in {"Cash", "Petty Cash"}
-    if payload.payment_method == "cash" and not is_cash_account:
-        raise HTTPException(status_code=400, detail="Cash payments must use Cash or Petty Cash")
-    if payload.payment_method != "cash" and not paid_from.get("is_bank"):
-        raise HTTPException(status_code=400, detail="Non-cash salary payments must use a bank account")
+    from core.finance import validate_method_account
+    validate_method_account(payload.payment_method, paid_from, label="salary payments")
 
     emp_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip() or emp.get("employee_id") or eid
     narration = f"Salary {payload.year}-{payload.month:02d} — {emp_name}"
@@ -451,38 +448,18 @@ def _fmt_amt(n: float) -> str:
 
 def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
                               attendance: dict) -> bytes:
-    branding = (org or {}).get("branding") or {}
-    org_name = ((org or {}).get("display_name") or (org or {}).get("name") or "DESIGN SAGA").upper()
-    org_tagline = branding.get("tagline") or "Architecture & Interior Design Studio"
-    footer = branding.get("pdf_footer") or "This is a computer-generated document. No signature required."
-    primary = _hex_to_rgb(branding.get("primary_color") or "#002FA7")
-
-    pdf = FPDF(format="A4", unit="mm")
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # === HEADER band ===
-    pdf.set_fill_color(*primary)
-    pdf.rect(0, 0, 210, 30, style="F")
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 22)
-    pdf.set_xy(12, 8)
-    pdf.cell(0, 10, _safe(org_name), ln=1)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_x(12)
-    pdf.cell(0, 5, _safe(org_tagline), ln=1)
-    if (org or {}).get("gstin"):
-        pdf.set_x(12)
-        pdf.cell(0, 5, _safe(f"GSTIN: {org['gstin']}"), ln=1)
-
-    # === Slip Title ===
-    pdf.set_y(38)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Helvetica", "B", 15)
+    from core.pdf_brand import Brand, BrandedPDF, draw_letterhead
     month_label = calendar.month_name[run["month"]]
-    pdf.cell(0, 8, _safe(f"SALARY SLIP · {month_label.upper()} {run['year']}"),
-             ln=1, align="C")
-    pdf.ln(2)
+    brand = Brand(org)
+    primary = brand.primary
+    pdf = BrandedPDF(brand, "Salary Slip", f"{month_label} {run['year']}", bottom_margin=20)
+    pdf.add_page()
+    draw_letterhead(pdf, "Salary Slip", [
+        ("Pay period", f"{month_label} {run['year']}"),
+        ("Paid on", _display_date(run.get("payment_date") or run.get("paid_at"))),
+        ("Status", "Reversed" if run.get("status") == "reversed" else "Paid"),
+    ])
+    pdf.set_text_color(0, 0, 0)
 
     # === Employee block ===
     emp_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip() or emp.get("employee_id") or ""
@@ -490,25 +467,25 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
     _kv(pdf, "Department", emp.get("department") or "-", "Designation", emp.get("designation") or "-")
     _kv(pdf, "Date of Joining", (emp.get("joining_date") or "-"),
          "Pay Period", f"{month_label} {run['year']}")
-    _kv(pdf, "Bank A/C", (emp.get("bank") or {}).get("account_number") or "-",
+    _kv(pdf, "Bank A/C", _mask_account((emp.get("bank") or {}).get("account_number")),
          "PAN", emp.get("pan") or "-")
     pdf.ln(2)
 
     # === Attendance summary ===
     pdf.set_fill_color(240, 240, 240)
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(37, 7, "Working Days", 1, 0, "C", fill=True)
-    pdf.cell(37, 7, "Present", 1, 0, "C", fill=True)
-    pdf.cell(37, 7, "Leaves", 1, 0, "C", fill=True)
-    pdf.cell(37, 7, "Absent", 1, 0, "C", fill=True)
-    pdf.cell(37, 7, "Half-days", 1, 1, "C", fill=True)
+    pdf.cell(36, 7, "Working Days", 1, 0, "C", fill=True)
+    pdf.cell(36, 7, "Present", 1, 0, "C", fill=True)
+    pdf.cell(36, 7, "Leaves", 1, 0, "C", fill=True)
+    pdf.cell(36, 7, "Absent", 1, 0, "C", fill=True)
+    pdf.cell(36, 7, "Half-days", 1, 1, "C", fill=True)
     pdf.set_font("Helvetica", "", 10)
     working_days = calendar.monthrange(run["year"], run["month"])[1]
-    pdf.cell(37, 7, str(working_days), 1, 0, "C")
-    pdf.cell(37, 7, str(attendance.get("present", 0)), 1, 0, "C")
-    pdf.cell(37, 7, str(attendance.get("leave", 0)), 1, 0, "C")
-    pdf.cell(37, 7, str(attendance.get("absent", 0)), 1, 0, "C")
-    pdf.cell(37, 7, str(attendance.get("half_day", 0)), 1, 1, "C")
+    pdf.cell(36, 7, str(working_days), 1, 0, "C")
+    pdf.cell(36, 7, str(attendance.get("present", 0)), 1, 0, "C")
+    pdf.cell(36, 7, str(attendance.get("leave", 0)), 1, 0, "C")
+    pdf.cell(36, 7, str(attendance.get("absent", 0)), 1, 0, "C")
+    pdf.cell(36, 7, str(attendance.get("half_day", 0)), 1, 1, "C")
     pdf.ln(3)
 
     # === Earnings / Deductions tables (side by side) ===
@@ -546,8 +523,8 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
     pdf.set_fill_color(*primary)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(95, 7, "EARNINGS", 1, 0, "L", fill=True)
-    pdf.cell(95, 7, "DEDUCTIONS", 1, 1, "L", fill=True)
+    pdf.cell(90, 7, "EARNINGS", 1, 0, "L", fill=True)
+    pdf.cell(90, 7, "DEDUCTIONS", 1, 1, "L", fill=True)
 
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Helvetica", "", 10)
@@ -555,17 +532,17 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
     for i in range(n):
         e = earn_rows[i] if i < len(earn_rows) else ("", 0)
         d = ded_rows[i] if i < len(ded_rows) else ("", 0)
-        pdf.cell(65, 6, _safe(e[0]), 1, 0, "L")
+        pdf.cell(60, 6, _safe(e[0]), 1, 0, "L")
         pdf.cell(30, 6, _fmt_amt(e[1]), 1, 0, "R")
-        pdf.cell(65, 6, _safe(d[0]), 1, 0, "L")
+        pdf.cell(60, 6, _safe(d[0]), 1, 0, "L")
         pdf.cell(30, 6, _fmt_amt(d[1]), 1, 1, "R")
 
     # Totals row
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(65, 7, "GROSS", 1, 0, "L", fill=True)
+    pdf.cell(60, 7, "GROSS", 1, 0, "L", fill=True)
     pdf.cell(30, 7, _fmt_amt(breakdown.get("gross")), 1, 0, "R", fill=True)
-    pdf.cell(65, 7, "TOTAL DEDUCTIONS", 1, 0, "L", fill=True)
+    pdf.cell(60, 7, "TOTAL DEDUCTIONS", 1, 0, "L", fill=True)
     pdf.cell(30, 7, _fmt_amt(breakdown.get("deductions_total")), 1, 1, "R", fill=True)
 
     pdf.ln(3)
@@ -579,24 +556,34 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
     # Amount in words (simple version)
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(0, 6, _safe(f"Paid on {(run.get('paid_at') or '')[:10]} via {run.get('payment_method') or 'bank_transfer'}"),
-             ln=1)
+    method = (run.get("payment_method") or "bank_transfer").replace("_", " ")
+    paid_line = f"Paid on {_display_date(run.get('payment_date') or run.get('paid_at'))} by {method}"
+    if run.get("paid_from_account_name"):
+        paid_line += f" from {run['paid_from_account_name']}"
+    if run.get("reference"):
+        paid_line += f"  (Ref: {run['reference']})"
+    pdf.cell(0, 6, _safe(paid_line), ln=1)
 
     if run.get("notes"):
         pdf.ln(1)
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(0, 5, _safe(f"Notes: {run['notes']}"))
+    return pdf.to_bytes()
 
-    # Footer
-    pdf.ln(8)
-    pdf.set_text_color(120, 120, 120)
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(0, 5, _safe(footer), ln=1, align="C")
 
-    output = pdf.output(dest="S")
-    if isinstance(output, str):
-        return output.encode("latin-1")
-    return bytes(output)
+def _mask_account(value) -> str:
+    digits = str(value or "").strip()
+    if not digits:
+        return "-"
+    return ("X" * max(0, min(len(digits) - 4, 8))) + digits[-4:]
+
+
+def _display_date(value) -> str:
+    raw = str(value or "").strip()[:10]
+    try:
+        return _date.fromisoformat(raw).strftime("%d/%m/%Y")
+    except ValueError:
+        return raw or "-"
 
 
 def _kv(pdf, k1, v1, k2, v2):
@@ -684,35 +671,21 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
     """Salary-impact payslip built from the attendance engine summary
     (works before payment — Jewellers 'my payslip' style)."""
     branding = (org or {}).get("branding") or {}
-    org_name = ((org or {}).get("display_name") or (org or {}).get("name") or "DESIGN SAGA").upper()
-    org_tagline = branding.get("tagline") or "Architecture & Interior Design Studio"
-    footer = branding.get("pdf_footer") or "This is a system-generated salary slip. No signature required."
     primary = _hex_to_rgb(branding.get("primary_color") or "#002FA7")
 
     emp = s["employee"]
     summ = s["summary"]
     month_label = f"{calendar.month_name[s['month']]} {s['year']}"
 
-    pdf = FPDF(format="A4", unit="mm")
+    from core.pdf_brand import Brand, BrandedPDF, draw_letterhead
+    pdf = BrandedPDF(Brand(org), "Salary Slip", month_label, bottom_margin=20)
     pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Header band
-    pdf.set_fill_color(*primary)
-    pdf.rect(0, 0, 210, 30, style="F")
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.set_xy(12, 8)
-    pdf.cell(0, 10, _safe(org_name), ln=1)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_x(12)
-    pdf.cell(0, 5, _safe(org_tagline), ln=1)
-
-    pdf.set_y(38)
+    draw_letterhead(pdf, "Salary Slip", [
+        ("Pay period", month_label),
+        ("Basis", "Attendance"),
+        ("Note", "Not a payment receipt"),
+    ])
     pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, _safe(f"SALARY SLIP · {month_label.upper()}"), ln=1, align="C")
-    pdf.ln(2)
 
     _kv(pdf, "Employee", emp.get("name") or "-", "Emp. Code", emp.get("employee_id") or "-")
     _kv(pdf, "Department", emp.get("department") or "-", "Designation", emp.get("designation") or "-")
@@ -728,7 +701,7 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
     heads = ["Present", "Late", "Half", "Paid Lv", "Unpaid", "W-Off", "Holiday", "Absent", "LOP"]
     vals = [summ["present"], summ["late"], summ["half_day"], summ["paid_leave"],
             summ["unpaid_leave"], summ["week_off"], summ["holidays"], summ["absent"], s["lop_days"]]
-    w = 190 / len(heads)
+    w = 180 / len(heads)
     for h in heads:
         pdf.cell(w, 7, h, 1, 0, "C", fill=True)
     pdf.ln()
@@ -741,8 +714,8 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
     pdf.set_fill_color(*primary)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(95, 7, "EARNINGS", 1, 0, "L", fill=True)
-    pdf.cell(95, 7, "DEDUCTIONS", 1, 1, "L", fill=True)
+    pdf.cell(90, 7, "EARNINGS", 1, 0, "L", fill=True)
+    pdf.cell(90, 7, "DEDUCTIONS", 1, 1, "L", fill=True)
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Helvetica", "", 10)
     earn_rows = [("Gross Salary", s["employee"].get("monthly_salary"))]
@@ -755,15 +728,15 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
     for i in range(n):
         e = earn_rows[i] if i < len(earn_rows) else ("", "")
         d = ded_rows[i] if i < len(ded_rows) else ("", "")
-        pdf.cell(65, 6, _safe(e[0]), 1, 0, "L")
+        pdf.cell(60, 6, _safe(e[0]), 1, 0, "L")
         pdf.cell(30, 6, _fmt_amt(e[1]) if e[0] else "", 1, 0, "R")
-        pdf.cell(65, 6, _safe(d[0]), 1, 0, "L")
+        pdf.cell(60, 6, _safe(d[0]), 1, 0, "L")
         pdf.cell(30, 6, _fmt_amt(d[1]) if d[0] else "", 1, 1, "R")
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(65, 7, "TOTAL", 1, 0, "L", fill=True)
+    pdf.cell(60, 7, "TOTAL", 1, 0, "L", fill=True)
     pdf.cell(30, 7, _fmt_amt(s["employee"].get("monthly_salary")), 1, 0, "R", fill=True)
-    pdf.cell(65, 7, "TOTAL DEDUCTIONS", 1, 0, "L", fill=True)
+    pdf.cell(60, 7, "TOTAL DEDUCTIONS", 1, 0, "L", fill=True)
     pdf.cell(30, 7, _fmt_amt(s.get("deduction")), 1, 1, "R", fill=True)
     pdf.ln(3)
 
@@ -777,16 +750,7 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
         pdf.set_font("Helvetica", "I", 9)
         pdf.ln(2)
         pdf.cell(0, 6, _safe("Note: monthly salary is not configured for this employee."), ln=1)
-
-    pdf.ln(8)
-    pdf.set_text_color(120, 120, 120)
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(0, 5, _safe(footer), ln=1, align="C")
-
-    output = pdf.output(dest="S")
-    if isinstance(output, str):
-        return output.encode("latin-1")
-    return bytes(output)
+    return pdf.to_bytes()
 
 
 @router.get("/payroll/payslip.pdf")

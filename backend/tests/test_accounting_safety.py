@@ -261,12 +261,17 @@ def test_commission_receipt_method_matches_cash_or_bank_account():
     vendors._validate_commission_receipt_account("cash", {"name": "Cash"})
     vendors._validate_commission_receipt_account(
         "upi", {"name": "HDFC Current", "is_bank": True})
-    with pytest.raises(HTTPException, match="Cash receipts"):
+    with pytest.raises(HTTPException, match=r"Cash (commission )?receipts"):
         vendors._validate_commission_receipt_account(
             "cash", {"name": "HDFC Current", "is_bank": True})
     with pytest.raises(HTTPException, match="Non-cash"):
         vendors._validate_commission_receipt_account(
             "upi", {"name": "Cash", "is_bank": False})
+    # The default chart flags Cash with is_bank=True; that must not let a
+    # non-cash receipt be booked into the Cash ledger (ACC-08).
+    with pytest.raises(HTTPException, match="Non-cash"):
+        vendors._validate_commission_receipt_account(
+            "upi", {"name": "Cash", "is_bank": True})
 
 
 def test_money_in_method_matches_received_into_account():

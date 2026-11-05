@@ -1383,11 +1383,8 @@ async def undo_journal_reversal(je_id: str, request: Request,
 # Income (payment received) — convenience wrapper
 # ==================================================
 def _validate_received_into_account(payment_method: str, account: dict) -> None:
-    is_cash_account = account.get("name") in {"Cash", "Petty Cash"}
-    if payment_method == "cash" and not is_cash_account:
-        raise HTTPException(status_code=400, detail="Cash receipts must use Cash or Petty Cash")
-    if payment_method != "cash" and not account.get("is_bank"):
-        raise HTTPException(status_code=400, detail="Non-cash receipts must use a bank account")
+    from core.finance import validate_method_account
+    validate_method_account(payment_method, account, label="receipts")
 
 
 @router.post("/accounting/income")
@@ -1573,11 +1570,8 @@ def _is_salary_expense_account(account: dict) -> bool:
 
 
 def _validate_paid_from_account(payment_method: str, account: dict) -> None:
-    is_cash_account = account.get("name") in {"Cash", "Petty Cash"}
-    if payment_method == "cash" and not is_cash_account:
-        raise HTTPException(status_code=400, detail="Cash payments must use Cash or Petty Cash")
-    if payment_method != "cash" and not account.get("is_bank"):
-        raise HTTPException(status_code=400, detail="Non-cash payments must use a bank account")
+    from core.finance import validate_method_account
+    validate_method_account(payment_method, account, label="payments")
 
 
 @router.post("/accounting/expense")

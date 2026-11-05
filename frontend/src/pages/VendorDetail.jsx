@@ -5,6 +5,7 @@ import { dateForInput, formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
+import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import {
   ArrowLeft, Star, Buildings, Phone, Envelope, MapPin, Bank as BankIcon,
   IdentificationCard, CurrencyInr, Plus, Trash, FileText, Gauge, Receipt,
@@ -717,7 +718,9 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
 
   useEffect(() => {
     if (!f.paid_from_account_id && bankAccounts[0]) {
-      setF((s) => ({ ...s, paid_from_account_id: bankAccounts[0].id }));
+      // Keep the recorded method and the credited ledger in agreement.
+      setF((s) => ({ ...s, paid_from_account_id: bankAccounts[0].id,
+                     payment_method: methodForAccount(bankAccounts[0]) }));
     }
     // eslint-disable-next-line
   }, [accounts.length]);
@@ -757,12 +760,21 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
             <input required type="date" className="input-flat" value={f.payment_date}
               onChange={(e) => setF({ ...f, payment_date: e.target.value })} />
             <select required className="input-flat" value={f.paid_from_account_id}
-              onChange={(e) => setF({ ...f, paid_from_account_id: e.target.value })} data-testid="pf-bank">
+              onChange={(e) => {
+                const account = bankAccounts.find((a) => a.id === e.target.value);
+                setF({ ...f, paid_from_account_id: e.target.value,
+                       payment_method: account ? methodForAccount(account) : f.payment_method });
+              }} data-testid="pf-bank">
               <option value="">Paid from…</option>
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <select className="input-flat" value={f.payment_method}
-              onChange={(e) => setF({ ...f, payment_method: e.target.value })}>
+              onChange={(e) => {
+                const method = e.target.value;
+                const compatible = compatibleAccount(bankAccounts, method);
+                setF({ ...f, payment_method: method,
+                       paid_from_account_id: compatible?.id || f.paid_from_account_id });
+              }} data-testid="pf-method">
               {["bank_transfer","upi","cash","cheque","credit_card","online","other"].map((m) => (
                 <option key={m} value={m}>{m.replace("_", " ")}</option>
               ))}
@@ -1154,7 +1166,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
   useEffect(() => {
     if (!f.bank_account_id && bankAccounts[0]) {
       setF((s) => ({ ...s, bank_account_id: bankAccounts[0].id,
-        payment_method: ["Cash", "Petty Cash"].includes(bankAccounts[0].name) ? "cash" : "bank_transfer" }));
+        payment_method: methodForAccount(bankAccounts[0]) }));
     }
     // eslint-disable-next-line
   }, [accounts.length]);
@@ -1248,7 +1260,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
               onChange={(e) => {
                 const account = bankAccounts.find((item) => item.id === e.target.value);
                 setF({ ...f, bank_account_id: e.target.value,
-                  payment_method: ["Cash", "Petty Cash"].includes(account?.name) ? "cash" : "bank_transfer" });
+                  payment_method: methodForAccount(account) });
               }}>
               <option value="">Deposited to…</option>
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -1256,9 +1268,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
             <select className="input-flat" value={f.payment_method}
               onChange={(e) => {
                 const method = e.target.value;
-                const compatible = method === "cash"
-                  ? bankAccounts.find((item) => ["Cash", "Petty Cash"].includes(item.name))
-                  : bankAccounts.find((item) => item.is_bank);
+                const compatible = compatibleAccount(bankAccounts, method);
                 setF({ ...f, payment_method: method,
                   bank_account_id: compatible?.id || f.bank_account_id });
               }}>
@@ -1358,11 +1368,32 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
               ))}
             </tbody>
           </table></div>
+          {editingReceipt && <form className="border-t border-[#E5E5E5] p-3 space-y-2" onSubmit={async (event) => {
+            event.preventDefault();
+            await onUpdateReceipt(editingReceipt.id, receiptEdit);
+            setEditingReceipt(null);
+          }} data-testid="edit-commission-receipt-form">
+            <div className="overline">EDIT RECEIPT DETAILS</div>
+            <div className="text-xs text-[#5C5C5C]">To correct amount, date or bank account, delete this receipt and record it again. The audit trail remains intact.</div>
+            <input className="input-flat w-full" maxLength={120} placeholder="Reference" value={receiptEdit.reference}
+              onChange={(e) => setReceiptEdit({ ...receiptEdit, reference: e.target.value })} />
+            <textarea className="input-flat w-full" maxLength={500} placeholder="Notes" value={receiptEdit.notes}
+              onChange={(e) => setReceiptEdit({ ...receiptEdit, notes: e.target.value })} />
+            <div className="flex gap-2"><button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+              <button type="button" className="btn-ghost" onClick={() => setEditingReceipt(null)}>Cancel</button></div>
+          </form>}
         </div>
       )}
     </div>
   );
 }
+
+// Stored status keys are kept for compatibility; "invoiced" has always meant
+// "some money received, balance still pending" and must not read as an invoice.
+const COMMISSION_STATUS_LABELS = {
+  pending: "Pending", invoiced: "Partially received", received: "Received",
+  cancelled: "Cancelled", reversed: "Reversed",
+};
 
 function CommissionStatus({ s }) {
   const map = {
@@ -1372,8 +1403,9 @@ function CommissionStatus({ s }) {
     cancelled: "bg-[#F2F2F2] text-[#9A9A9A]",
   };
   return (
-    <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 ${map[s] || map.pending}`}>
-      {s || "pending"}
+    <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 ${map[s] || map.pending}`}
+          data-testid="commission-status">
+      {COMMISSION_STATUS_LABELS[s] || s || "Pending"}
     </span>
   );
 }
@@ -1396,20 +1428,6 @@ function Field({ icon, label, value, mono }) {
         <div className={`text-sm ${mono ? "font-mono" : ""} ${!value ? "text-[#9A9A9A]" : ""}`}>
           {value || "—"}
         </div>
-          {editingReceipt && <form className="border-t border-[#E5E5E5] p-3 space-y-2" onSubmit={async (event) => {
-            event.preventDefault();
-            await onUpdateReceipt(editingReceipt.id, receiptEdit);
-            setEditingReceipt(null);
-          }} data-testid="edit-commission-receipt-form">
-            <div className="overline">EDIT RECEIPT DETAILS</div>
-            <div className="text-xs text-[#5C5C5C]">To correct amount, date or bank account, delete this receipt and record it again. The audit trail remains intact.</div>
-            <input className="input-flat w-full" maxLength={120} placeholder="Reference" value={receiptEdit.reference}
-              onChange={(e) => setReceiptEdit({ ...receiptEdit, reference: e.target.value })} />
-            <textarea className="input-flat w-full" maxLength={500} placeholder="Notes" value={receiptEdit.notes}
-              onChange={(e) => setReceiptEdit({ ...receiptEdit, notes: e.target.value })} />
-            <div className="flex gap-2"><button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
-              <button type="button" className="btn-ghost" onClick={() => setEditingReceipt(null)}>Cancel</button></div>
-          </form>}
       </div>
     </div>
   );

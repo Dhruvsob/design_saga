@@ -72,11 +72,21 @@ export default function Attendance() {
   const [projects, setProjects] = useState([]);
   const [siteForm, setSiteForm] = useState({ project_id: "", site_location: "", reason: "", expected_time: "" });
 
+  // Accounts without a linked employee profile (e.g. the company owner) have
+  // no personal attendance. Each personal call fails on its own so admin/HR
+  // data (meta, policy, projects) still loads, and the page explains why.
+  const [noProfile, setNoProfile] = useState(false);
+  const personal = (request, empty) => request.catch((error) => {
+    const detail = String(error?.response?.data?.detail || "");
+    if (error?.response?.status === 400 && /employee profile/i.test(detail)) setNoProfile(true);
+    return { data: empty };
+  });
+
   const loadMe = async () => {
     const [t, s, l, m, p, pol, sal, corr] = await Promise.all([
-      api.get("/attendance/me/today"),
-      api.get(`/attendance/me/summary?year=${ym.y}&month=${ym.m}`),
-      api.get("/leaves?mine=true"),
+      personal(api.get("/attendance/me/today"), null),
+      personal(api.get(`/attendance/me/summary?year=${ym.y}&month=${ym.m}`), null),
+      personal(api.get("/leaves?mine=true"), []),
       api.get("/attendance/meta"),
       api.get("/attendance/project-options").catch(() => ({ data: [] })),
       api.get("/attendance/policy").catch(() => ({ data: null })),
@@ -255,7 +265,21 @@ export default function Attendance() {
         {isAdmin && <TabBtn id="geo" tab={tab} setTab={setTab} label="Geo & Policy" />}
       </div>
 
-      {tab === "me" && (
+      {tab === "me" && noProfile && (
+        <div className="card-flat" data-testid="attendance-no-profile">
+          <div className="overline mb-2">MY ATTENDANCE</div>
+          <p className="text-sm text-[#2C2C2C]">
+            Your login is not linked to an employee profile, so personal check-in, leave and
+            correction requests are not available for this account.
+          </p>
+          <p className="text-xs text-[#6B6B6B] mt-2">
+            To track your own attendance, open Employees, edit your employee record and link it to
+            this login. Team attendance, approvals and settings remain available in the other tabs.
+          </p>
+        </div>
+      )}
+
+      {tab === "me" && !noProfile && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="card-flat">

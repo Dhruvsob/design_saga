@@ -73,6 +73,8 @@ jobs:
           tests/test_local_file_storage.py
           tests/test_accounting_source_integrity.py
           tests/test_money_footing.py
+          tests/test_pdf_branding.py
+          tests/test_cash_bank_consistency.py
 
   frontend:
     runs-on: ubuntu-latest
@@ -134,11 +136,13 @@ jobs:
         run: python scripts/qa_bootstrap.py
       - name: Start backend and frontend
         run: |
-          (cd backend && SUPER_ADMIN_EMAILS="$QA_SUPERADMIN_EMAIL" \
+          mkdir -p "$RUNNER_TEMP/files"
+          (cd frontend && npx vite build)
+          (cd backend && SUPER_ADMIN_EMAILS="$QA_SUPERADMIN_EMAIL" FILE_STORAGE_ROOT="$RUNNER_TEMP/files" \
             CORS_ORIGINS="$E2E_BASE_URL" COOKIE_SECURE=false APP_ENV=development \
             BUSINESS_TIMEZONE=Asia/Kolkata APP_BASE_URL="$E2E_BASE_URL" PYTHONPATH=. \
             nohup python -m uvicorn server:app --host 127.0.0.1 --port 8001 > ../backend.log 2>&1 &)
-          (cd frontend && nohup npx vite --host 127.0.0.1 --port 5173 --strictPort > ../vite.log 2>&1 &)
+          (cd frontend && nohup npx vite preview --host 127.0.0.1 --port 5173 --strictPort > ../vite.log 2>&1 &)
           for i in $(seq 1 60); do curl -sf -o /dev/null "$E2E_BASE_URL/" && \
             [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_BASE_URL/api/auth/me")" = 401 ] && exit 0; sleep 2; done
           tail -50 backend.log vite.log; exit 1
