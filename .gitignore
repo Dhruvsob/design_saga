@@ -94,3 +94,8 @@ credentials.json
 *.key
 .credentials
 frontend/node_modules/.cache/default-development/11.pack
+
+# Playwright E2E session state and reports (contain QA session cookies)
+frontend/e2e/.auth/
+frontend/test-results/
+frontend/playwright-report/

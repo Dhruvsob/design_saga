@@ -5,6 +5,9 @@ Last updated: 05/11/2026 (Asia/Kolkata)
 ## Resume checkpoint
 
 - Branch: `codex/repair-release`
+- 05/11/2026 (latest): DS-075 browser E2E harness added and passing (10 passed);
+  grouped navigation browser-verified at three widths. Resume from
+  `docs/SESSION_CHECKPOINT.md`.
 - 05/11/2026 (later): canonical open backlog added to the tracker (12 streams,
   stable IDs). DS-073 (Decimal invoice footing, scoped-DB fail-closed) and DS-074
   (grouped permission-aware navigation) tested locally; backend gate 297 passed.

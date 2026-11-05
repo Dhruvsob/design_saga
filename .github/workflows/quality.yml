@@ -94,3 +94,54 @@ jobs:
       - name: Frontend logic unit tests
         run: node --test src/lib/frontend-logic.test.mjs
       - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mongo:
+        image: mongo:8.0
+        ports: ["27017:27017"]
+    env:
+      MONGO_URL: mongodb://127.0.0.1:27017
+      DB_NAME: design_saga_qa_e2e
+      QA_SUPERADMIN_EMAIL: owner@qa.test
+      E2E_BASE_URL: http://127.0.0.1:5173
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.production.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Generate per-run QA secrets
+        run: |
+          echo "QA_PASSWORD=Qa-$(openssl rand -hex 12)-Zx9" >> "$GITHUB_ENV"
+          echo "AUDIT_HMAC_KEY=$(openssl rand -hex 40)" >> "$GITHUB_ENV"
+          echo "QA_PIN=$(shuf -i 1-9 -n 6 | tr -d '\n')" >> "$GITHUB_ENV"
+      - run: pip install -r backend/requirements.production.txt
+      - working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Bootstrap QA platform owner
+        working-directory: backend
+        run: python scripts/qa_bootstrap.py
+      - name: Start backend and frontend
+        run: |
+          (cd backend && SUPER_ADMIN_EMAILS="$QA_SUPERADMIN_EMAIL" \
+            CORS_ORIGINS="$E2E_BASE_URL" COOKIE_SECURE=false APP_ENV=development \
+            BUSINESS_TIMEZONE=Asia/Kolkata APP_BASE_URL="$E2E_BASE_URL" PYTHONPATH=. \
+            nohup python -m uvicorn server:app --host 127.0.0.1 --port 8001 > ../backend.log 2>&1 &)
+          (cd frontend && nohup npx vite --host 127.0.0.1 --port 5173 --strictPort > ../vite.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf -o /dev/null "$E2E_BASE_URL/" && \
+            [ "$(curl -s -o /dev/null -w '%{http_code}' "$E2E_BASE_URL/api/auth/me")" = 401 ] && exit 0; sleep 2; done
+          tail -50 backend.log vite.log; exit 1
+      - name: Browser E2E
+        working-directory: frontend
+        run: npx playwright test

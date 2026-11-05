@@ -57,6 +57,7 @@
     "test": "eslint src"
   },
   "devDependencies": {
+    "@playwright/test": "1.49.1",
     "@vitejs/plugin-react": "6.1.2",
     "autoprefixer": "^10.4.20",
     "eslint": "9.39.5",

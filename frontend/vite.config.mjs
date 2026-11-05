@@ -21,4 +21,8 @@ export default defineConfig({
   build: {
     sourcemap: false,
   },
+  // Local dev/E2E only: same-origin /api proxy so session cookies behave as in
+  // production behind Caddy. Has no effect on the production build.
+  server: { proxy: { "/api": process.env.DEV_API_TARGET || "http://127.0.0.1:8001" } },
+  preview: { proxy: { "/api": process.env.DEV_API_TARGET || "http://127.0.0.1:8001" } },
 });

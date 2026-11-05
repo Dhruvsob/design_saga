@@ -149,7 +149,7 @@ export default function Layout({ children }) {
       >
         <button
           onClick={() => navigate(isSuperAdmin ? "/super-admin" : "/dashboard")}
-          className="p-6 flex items-center gap-3 text-left hover:bg-black/[0.03] transition group"
+          className="p-6 pr-16 lg:pr-6 flex items-center gap-3 text-left hover:bg-black/[0.03] transition group"
           style={{ borderBottom: "1px solid #E8E6E1" }}
           data-testid="sidebar-logo-btn"
         >

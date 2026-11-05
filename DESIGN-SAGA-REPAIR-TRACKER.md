@@ -120,7 +120,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 | OPS-03 | P1 | External alert delivery (uptime/5xx/TLS/disk/backup) | Externally Blocked | Owner chooses webhook/email target |
 | OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Confirmed | Add to quality workflow |
 | OPS-05 | P2 | Log retention/rotation evidence | Externally Blocked (VPS) | Verify on host |
-| OPS-06 | P2 | No repeatable browser E2E or disposable-DB integration harness locally or in CI | Confirmed | Add a CI job with a Mongo service + Playwright smoke for login and core journeys |
+| OPS-06 | P2 | No repeatable browser E2E or disposable-DB integration harness locally or in CI | Tested (DS-075) | Add a CI job with a Mongo service + Playwright smoke for login and core journeys |
 
 ### 12. Commercial product readiness
 
@@ -136,11 +136,19 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
    PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
 
+### DS-075: Disposable-database browser E2E harness (OPS-06)
+
+- Root cause: no repeatable way existed to sign in and exercise the real UI against a database; all UI claims rested on code inspection, lint and build.
+- Fix: `backend/scripts/qa_bootstrap.py` creates a QA platform owner only when `MONGO_URL` is localhost and `DB_NAME` starts with `design_saga_qa` (refusals verified for a remote host and a production-like name) and resets that owner's PIN/sessions per run. `frontend/e2e/global-setup.mjs` then creates a fresh tenant, Admin and Employee through the real API (including the mandatory App PIN step) and refuses non-local targets. `frontend/playwright.config.mjs` runs desktop (1440), laptop (1280) and Pixel 7 projects. Vite dev/preview gained a same-origin `/api` proxy (no production effect). New CI job `e2e` runs the stack against a `mongo:8.0` service with per-run generated QA secrets.
+- Evidence: 10 passed, 2 skipped (mobile-only test on wide viewports): workflow groups and Finance › Invoices breadcrumb, mobile drawer close, no sidebar horizontal overflow, Employee sees no Administration/Accounting/Invoices/Loans/Employees/Quotations. Screenshots in `docs/screenshots/`.
+- Also: pre-existing high-severity `follow-redirects` advisory (via axios) resolved by a lockfile-only update to 1.16.2; `npm audit --omit=dev` reports 0 vulnerabilities. `@playwright/test` 1.49.1 added as a pinned dev dependency.
+- Limits: local QA runs on MongoDB 8.0, not FerretDB/PostgreSQL as in production, so FerretDB-specific behaviour still needs staging/production verification. `quality.yml` triggers on `main` pushes/PRs and manual dispatch, so pushes to `codex/repair-release` do not run it automatically.
+
 ### DS-074: Grouped permission-aware navigation
 
 - Root causes: the sidebar was one flat list of 19 backend modules with meaningless section codes ("04b", "12b"); the breadcrumb showed only Brand › Page; the mobile drawer could only be closed by tapping the backdrop; admin links were gated on `role === "Admin"` instead of the permissions `App.js` and the backend already enforce, hiding Company/Audit from full-access custom roles and Team & Roles from roles holding `users.read`.
 - Fix (`frontend/src/components/Layout.jsx`, `frontend/src/lib/navigation.js`): workflow groups Dashboard · Sales (Leads, Clients, Quotations) · Projects (Projects, Tasks, Calendar) · Procurement (Vendors, Purchase Orders) · Finance (Invoices, Accounting, Expenses, Loans & EMI) · People (Employees, Attendance, Holidays) · Administration (Company, Team & Roles, Audit Log). Every URL, `data-testid`, permission and tenant module flag is unchanged; groups with no permitted item are hidden; breadcrumb is Brand › Group › Page with `aria-current`; labelled `nav`/`group` landmarks; accessible mobile close button.
-- Verification: `node --test src/lib/frontend-logic.test.mjs` (permission filtering, disabled modules, permission-not-role admin gating, empty-group removal) added to CI; ESLint 0 warnings; production build passes. Not visually verified at mobile/laptop/desktop widths: no local backend/database is available to sign in (OPS-06). Not deployed.
+- Verification: `node --test src/lib/frontend-logic.test.mjs` (permission filtering, disabled modules, permission-not-role admin gating, empty-group removal) added to CI; ESLint 0 warnings; production build passes. Browser-verified under DS-075 at 1440px, 1280px and Pixel 7 widths with real Admin and Employee sessions; a mobile brand/close-button overlap found in screenshots was fixed. Not deployed.
 
 ### DS-073: Invoice totals that always foot, and scoped-DB fail-closed passthrough
 
