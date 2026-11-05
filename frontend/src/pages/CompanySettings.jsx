@@ -307,7 +307,7 @@ function ColorField({ label, value, onChange, testid }) {
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
                className="w-10 h-10 border-none cursor-pointer" data-testid={`${testid}-picker`} />
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
-               className="flex-1 font-mono text-sm outline-none px-2" data-testid={testid} />
+               className="flex-1 min-w-0 font-mono text-sm outline-none px-2" data-testid={testid} />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import {
   MagnifyingGlass, ArrowDown, ArrowUp, ArrowsLeftRight,
   CaretRight, DownloadSimple, Printer, FunnelSimple, X,
 } from "@phosphor-icons/react";
+import SearchSelect from "./SearchSelect";
 
 const CURRENCY = (n) =>
   `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -229,24 +230,24 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
         )}
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs" data-testid="daybook-filter-panel">
-            <select className="input-flat" value={accountId} onChange={(e) => setAccountId(e.target.value)} data-testid="daybook-account-filter">
+            <SearchSelect className="input-flat" value={accountId} onChange={(e) => setAccountId(e.target.value)} data-testid="daybook-account-filter">
               <option value="">All accounts</option>
               {accounts.filter((a) => a.active !== false).map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
-            </select>
-            <select className="input-flat" value={projectId} onChange={(e) => setProjectId(e.target.value)} data-testid="daybook-project-filter">
+            </SearchSelect>
+            <SearchSelect className="input-flat" value={projectId} onChange={(e) => setProjectId(e.target.value)} data-testid="daybook-project-filter">
               <option value="">All projects</option>
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select className="input-flat" value={clientId} onChange={(e) => setClientId(e.target.value)} data-testid="daybook-client-filter">
+            </SearchSelect>
+            <SearchSelect className="input-flat" value={clientId} onChange={(e) => setClientId(e.target.value)} data-testid="daybook-client-filter">
               <option value="">All clients</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select className="input-flat" value={vendorId} onChange={(e) => setVendorId(e.target.value)} data-testid="daybook-vendor-filter">
+            </SearchSelect>
+            <SearchSelect className="input-flat" value={vendorId} onChange={(e) => setVendorId(e.target.value)} data-testid="daybook-vendor-filter">
               <option value="">All vendors</option>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            </SearchSelect>
             {activeFilterCount > 0 && (
               <button onClick={clearFilters} className="btn-ghost text-xs md:col-span-4 justify-self-end" data-testid="daybook-clear-filters">
                 <X size={12} /> Clear filters

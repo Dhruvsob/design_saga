@@ -7,6 +7,7 @@ import {
   Bank, Plus, Warning, Check, CurrencyInr, CalendarBlank, X,
   ChartLineUp, TrendUp, PencilSimple, Archive,
 } from "@phosphor-icons/react";
+import SearchSelect from "../components/SearchSelect";
 
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
@@ -184,10 +185,10 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
           <F label="Start date *"><input required type="date" className="input-flat w-full" value={f.start_date} onChange={(e) => setF({...f, start_date: e.target.value})} /></F>
           <F label="EMI day of month"><input type="number" min="1" max="31" className="input-flat w-full" value={f.emi_day} onChange={(e) => setF({...f, emi_day: Number(e.target.value)})} /></F>
           <F label="Disburse into (Bank) *">
-            <select required data-testid="l-bank" className="input-flat w-full" value={f.disbursement_account_id} onChange={(e) => setF({...f, disbursement_account_id: e.target.value})}>
+            <SearchSelect required data-testid="l-bank" className="input-flat w-full" value={f.disbursement_account_id} onChange={(e) => setF({...f, disbursement_account_id: e.target.value})}>
               <option value="">— Select —</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+            </SearchSelect>
           </F>
           <F label="Loan account #"><input className="input-flat w-full font-mono" value={f.account_number} onChange={(e) => setF({...f, account_number: e.target.value})} /></F>
         </div>

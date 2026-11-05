@@ -94,7 +94,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 | UX-01 | P2 | Flat 19-item sidebar with meaningless section codes ("04b", "12b") and no workflow grouping (`Layout.jsx`) | Tested (DS-074) | Permission-aware groups: Sales, Projects, Procurement, Finance, People, Administration; stable URLs |
 | UX-02 | P2 | Breadcrumb shows only Brand › Page; no group context | Tested (DS-074) | Brand › Group › Page |
 | UX-03 | P2 | Mobile drawer has no close button (only backdrop tap); `X` icon imported but unused | Tested (DS-074) | Accessible close button |
-| UX-04 | P2 | Large flat dropdowns for project/client/vendor/employee/account (BR-029) | Confirmed | Searchable combobox for high-volume selectors |
+| UX-04 | P2 | Large flat dropdowns for project/client/vendor/employee/account (BR-029) | Tested (DS-081) | Searchable combobox for high-volume selectors |
 | UX-05 | P2 | Form safety: double-submit, unsaved-change warning, field-level server errors (risk register "Audit") | Audit Needed | Shared form hooks, module by module |
 | UX-06 | P3 | Role-specific home (principal, PM, supervisor, accountant, HR, employee) | Confirmed gap | After IA batch |
 
@@ -136,6 +136,13 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 2. Batch B (UX-01..03, SEC-04): grouped permission-aware navigation.
 3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
    PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
+
+### DS-081: Searchable selectors and phone-width layout fixes (UX-04)
+
+- Root cause: 52 client/project/vendor/employee/account pickers across 14 screens (Accounting forms and Daybook filters, Invoices, Record Payment, Vendor bills/payments/commissions, Purchase Orders, Quotations, Projects, Tasks, Calendar, Attendance, Loans, Salary, Ledger panel, Recurring expenses) were plain dropdowns that become unusable as a firm accumulates records.
+- Fix: `frontend/src/components/SearchSelect.jsx` is a drop-in replacement for `<select>`: it reads the same `<option>`/`<optgroup>` children and calls `onChange({ target: { value } })`, so every handler is unchanged (a guarded scan converted only selects bound to an entity id; no handler uses native-only select APIs). It shows a search box above 7 options, supports keyboard (Enter/Space/ArrowDown open, arrows, Enter select, Escape close, focus returns), exposes `role="combobox"`/`aria-expanded`/accessible name, and keeps native `required` validation through a hidden input. Built on the existing cmdk + Radix popover UI kit; no new dependency.
+- Responsive defects found by a new phone-width sweep and fixed: Invoices list table widened the whole page on phones (now scrolls inside its own container); the shared PageHero action row never wrapped (Accounting reached 650px on a 412px phone; now wraps for every page); a Company Settings colour input could not shrink.
+- Verification: unit test for option parsing; browser `e2e/forms.spec.mjs` on desktop and mobile (long client list is searchable, keyboard open/close, the saved invoice carries the searched client); new `smoke.spec.mjs` phone test asserts none of the 19 primary pages scrolls sideways. E2E 20 passed; backend gate 324 passed. Screenshot: `docs/screenshots/searchable-client-picker.png`. Not deployed.
 
 ### DS-080: List historical payments booked to the wrong Cash/Bank account (ACC-09)
 

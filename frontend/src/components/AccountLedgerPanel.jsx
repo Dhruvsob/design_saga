@@ -9,6 +9,7 @@ import { TransactionDetail } from "./TransactionDetail";
 import {
   X, MagnifyingGlass, Bank, ArrowSquareOut, DownloadSimple, Printer, Plus,
 } from "@phosphor-icons/react";
+import SearchSelect from "./SearchSelect";
 
 const CURRENCY = (n) =>
   `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -209,21 +210,21 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
                 <button onClick={submitAdd} className="btn-primary" data-testid="ledger-add-submit">Save</button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                <select className="input-flat" value={addForm.client_id}
+                <SearchSelect className="input-flat" value={addForm.client_id}
                   onChange={(e) => setAddForm({ ...addForm, client_id: e.target.value })} data-testid="ledger-add-client">
                   <option value="">— Client (optional) —</option>
                   {(clients || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <select className="input-flat" value={addForm.project_id}
+                </SearchSelect>
+                <SearchSelect className="input-flat" value={addForm.project_id}
                   onChange={(e) => setAddForm({ ...addForm, project_id: e.target.value })} data-testid="ledger-add-project">
                   <option value="">— Project (optional) —</option>
                   {(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <select className="input-flat" value={addForm.vendor_id}
+                </SearchSelect>
+                <SearchSelect className="input-flat" value={addForm.vendor_id}
                   onChange={(e) => setAddForm({ ...addForm, vendor_id: e.target.value })} data-testid="ledger-add-vendor">
                   <option value="">— Vendor (optional) —</option>
                   {(vendors || []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
+                </SearchSelect>
               </div>
               <input className="input-flat w-full mt-2" placeholder="Note (optional)" value={addForm.notes}
                 onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })} data-testid="ledger-add-notes" />

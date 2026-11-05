@@ -6,6 +6,7 @@ import {
   Plus, X, PencilSimple, Trash, Play, ClockCounterClockwise, Warning, Pause,
   DownloadSimple, ClockClockwise, CaretDown, CaretRight,
 } from "@phosphor-icons/react";
+import SearchSelect from "./SearchSelect";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const FREQ = [
@@ -233,16 +234,16 @@ const RuleForm = ({ initial, expenseAccs, banks, vendors, projects, clients, onC
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => <option key={i} value={i}>{d}</option>)}
           </select>
         )}
-        <select required className="input-flat" value={form.expense_account_id}
+        <SearchSelect required className="input-flat" value={form.expense_account_id}
           onChange={(e) => setForm({ ...form, expense_account_id: e.target.value })} data-testid="rec-expense-acc">
           <option value="" disabled>Expense account</option>
           {expenseAccs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <select required className="input-flat" value={form.paid_from_account_id}
+        </SearchSelect>
+        <SearchSelect required className="input-flat" value={form.paid_from_account_id}
           onChange={(e) => setForm({ ...form, paid_from_account_id: e.target.value })} data-testid="rec-bank-acc">
           <option value="" disabled>Paid from (bank/cash)</option>
           {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
+        </SearchSelect>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <input type="date" className="input-flat" value={form.start_date}
@@ -251,21 +252,21 @@ const RuleForm = ({ initial, expenseAccs, banks, vendors, projects, clients, onC
           onChange={(e) => setForm({ ...form, end_date: e.target.value })} placeholder="End date (optional)" />
         <input type="number" step="0.01" className="input-flat" placeholder="GST amount (optional)"
           value={form.gst} onChange={(e) => setForm({ ...form, gst: e.target.value })} />
-        <select className="input-flat" value={form.vendor_id}
+        <SearchSelect className="input-flat" value={form.vendor_id}
           onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
           <option value="">— Vendor (optional) —</option>
           {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
-        <select className="input-flat" value={form.project_id}
+        </SearchSelect>
+        <SearchSelect className="input-flat" value={form.project_id}
           onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
           <option value="">— Project (optional) —</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select className="input-flat" value={form.client_id}
+        </SearchSelect>
+        <SearchSelect className="input-flat" value={form.client_id}
           onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
           <option value="">— Client (optional) —</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        </SearchSelect>
       </div>
       <input className="input-flat" placeholder="Reference (optional)"
         value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />

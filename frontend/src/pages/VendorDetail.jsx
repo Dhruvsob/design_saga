@@ -13,6 +13,7 @@ import {
   Handshake, Percent, TrendUp, DownloadSimple, PencilSimple, ArrowCounterClockwise,
   Archive,
 } from "@phosphor-icons/react";
+import SearchSelect from "../components/SearchSelect";
 
 const INR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
@@ -600,13 +601,13 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
               ))}
             </select>
             {!f.po_id && (
-              <select required className="input-flat" value={f.expense_account_id}
+              <SearchSelect required className="input-flat" value={f.expense_account_id}
                 onChange={(e) => setF({ ...f, expense_account_id: e.target.value })}>
                 <option value="">Expense account *</option>
                 {expenseAccounts.map((account) => (
                   <option key={account.id} value={account.id}>{account.name}</option>
                 ))}
-              </select>
+              </SearchSelect>
             )}
           </div>
           <div className="space-y-2">
@@ -759,7 +760,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
               value={f.amount} onChange={(e) => setF({ ...f, amount: parseFloat(e.target.value) || 0 })} data-testid="pf-amount" />
             <input required type="date" className="input-flat" value={f.payment_date}
               onChange={(e) => setF({ ...f, payment_date: e.target.value })} />
-            <select required className="input-flat" value={f.paid_from_account_id}
+            <SearchSelect required className="input-flat" value={f.paid_from_account_id}
               onChange={(e) => {
                 const account = bankAccounts.find((a) => a.id === e.target.value);
                 setF({ ...f, paid_from_account_id: e.target.value,
@@ -767,7 +768,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
               }} data-testid="pf-bank">
               <option value="">Paid from…</option>
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+            </SearchSelect>
             <select className="input-flat" value={f.payment_method}
               onChange={(e) => {
                 const method = e.target.value;
@@ -1235,7 +1236,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <label className="text-xs">Expected amount<input required min="0.01" step="0.01" type="number" className="input-flat mt-1 w-full" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: e.target.value })} /></label>
             <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={plan.due_date} onChange={(e) => setPlan({ ...plan, due_date: e.target.value })} /></label>
-            <label className="text-xs">Project<select className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+            <label className="text-xs">Project<SearchSelect className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</SearchSelect></label>
             <label className="text-xs">Accounting basis<select className="input-flat mt-1 w-full" value={plan.recognition} onChange={(e) => setPlan({ ...plan, recognition: e.target.value })}><option value="planned">Expected only - not earned</option><option value="earned">Already earned - awaiting receipt</option></select></label>
             <label className="text-xs">Reminder date<input type="date" className="input-flat mt-1 w-full" value={plan.reminder_date} onChange={(e) => setPlan({ ...plan, reminder_date: e.target.value })} /></label>
             <label className="text-xs md:col-span-2">Reference<input className="input-flat mt-1 w-full" value={plan.reference} onChange={(e) => setPlan({ ...plan, reference: e.target.value })} /></label>
@@ -1255,7 +1256,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
               value={f.amount} onChange={(e) => setF({ ...f, amount: parseFloat(e.target.value) || 0 })} />
             <input required type="date" className="input-flat" value={f.received_date}
               onChange={(e) => setF({ ...f, received_date: e.target.value })} />
-            <select required className="input-flat" value={f.bank_account_id}
+            <SearchSelect required className="input-flat" value={f.bank_account_id}
               data-testid="rcm-bank"
               onChange={(e) => {
                 const account = bankAccounts.find((item) => item.id === e.target.value);
@@ -1264,7 +1265,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
               }}>
               <option value="">Deposited to…</option>
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+            </SearchSelect>
             <select className="input-flat" value={f.payment_method}
               onChange={(e) => {
                 const method = e.target.value;

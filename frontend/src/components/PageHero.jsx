@@ -32,7 +32,8 @@ export default function PageHero({
         </h1>
         {kicker && <p className="text-[#5C5C5C] mt-2 max-w-xl text-sm sm:text-base">{kicker}</p>}
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">{children}</div>
+      {/* Actions wrap on narrow screens instead of widening the page. */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 max-w-full">{children}</div>
     </div>
   );
 }

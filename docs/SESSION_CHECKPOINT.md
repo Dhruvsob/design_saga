@@ -7,20 +7,20 @@ Last updated: 05/11/2026 (Asia/Kolkata).
 
 - Branch `codex/repair-release`; see `git log -5 --oneline` for the exact head.
 - Production runtime is still `3b15e23`. Nothing after it is deployed.
-- Last completed: DS-080 (historical Cash/Bank mismatch listing and Data
-  checks panel), after DS-076 (Cash/Bank mismatch), DS-077 (vendor page crash,
+- Last completed: DS-081 (searchable selectors, phone-width fixes), after
+  DS-080 (historical Cash/Bank mismatch listing), DS-076 (Cash/Bank mismatch), DS-077 (vendor page crash,
   `no-undef`, page smoke), DS-078 (Attendance without employee profile) and
   DS-079 (branded PDFs with logo, self-hosted logo storage).
-- Gates at checkpoint: backend mandatory list 324 passed; Playwright E2E 17
-  passed / 16 skipped (viewport-independent specs run on desktop only) against
+- Gates at checkpoint: backend mandatory list 324 passed; Playwright E2E 20
+  passed / 19 skipped (viewport-independent specs run on desktop only) against
   the production build; frontend logic 4 passed; ESLint 0 warnings (now with
   `no-undef`); Vite build pass; tracked-secret scan pass; npm audit 0.
 
 ## Next executable tasks (in order)
 
-1. UX-04: searchable selectors for client/project/vendor/employee/account lists.
-2. ACC-04: adopt `core/money.py` in PO, vendor bill, commission, payroll, loans.
-3. PRJ-01: per-tenant architecture phase templates (smallest slice).
+1. ACC-04: adopt `core/money.py` in PO, vendor bill, commission, payroll, loans.
+2. PRJ-01: per-tenant architecture phase templates (smallest slice).
+3. A11Y-01: modal focus traps, detail-page/tablet visual QA, contrast audit.
 
 ## Waiting on the owner
 

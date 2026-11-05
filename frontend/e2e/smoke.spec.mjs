@@ -14,7 +14,8 @@ test.use({ storageState: authFile("admin") });
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;
-  test.skip(testInfo.project.name !== "desktop", "crash smoke runs once");
+  const phoneCheck = testInfo.titlePath.includes("phone layout");
+  test.skip(!phoneCheck && testInfo.project.name !== "desktop", "crash smoke runs once");
 });
 
 async function expectRendersCleanly(page, path) {
@@ -53,4 +54,25 @@ test("detail pages render without runtime errors", async ({ page }) => {
       await expect(page.locator("main")).not.toBeEmpty();
     }
   }
+});
+
+test.describe("phone layout", () => {
+  test.beforeEach(async ({ browserName }, testInfo) => {
+    void browserName;
+    test.skip(testInfo.project.name !== "mobile", "phone width only");
+  });
+
+  test("no page scrolls sideways on a phone", async ({ page }) => {
+    test.setTimeout(180_000);
+    const overflowing = [];
+    for (const path of ROUTES) {
+      await page.goto(path);
+      await page.waitForLoadState("networkidle");
+      await page.locator("main").waitFor({ state: "visible", timeout: 20_000 });
+      const { sw, vw } = await page.evaluate(() => ({
+        sw: document.documentElement.scrollWidth, vw: document.documentElement.clientWidth }));
+      if (sw > vw + 1) overflowing.push(`${path} (${sw}px > ${vw}px)`);
+    }
+    expect(overflowing, "pages wider than the phone screen").toEqual([]);
+  });
 });

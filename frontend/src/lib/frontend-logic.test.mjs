@@ -36,3 +36,21 @@ test("roundPaise matches backend half-up policy", () => {
   assert.equal(roundPaise(3 * 33.335), 100.01);
   assert.equal(roundPaise("bad"), 0);
 });
+
+import { createElement as h, Fragment } from "react";
+import { readOptions } from "./selectOptions.js";
+
+test("SearchSelect reads native <option>/<optgroup> children unchanged", () => {
+  const children = [
+    h("option", { key: "e", value: "" }, "Select client"),
+    [1, 2].map((n) => h("option", { key: n, value: `c${n}` }, "Client ", n)),
+    false && h("option", { value: "hidden" }, "never"),
+    h(Fragment, { key: "f" }, h("optgroup", { label: "Bank" }, h("option", { value: "b1", disabled: true }, "HDFC"))),
+  ];
+  assert.deepEqual(readOptions(children), [
+    { value: "", label: "Select client", disabled: false, group: "" },
+    { value: "c1", label: "Client 1", disabled: false, group: "" },
+    { value: "c2", label: "Client 2", disabled: false, group: "" },
+    { value: "b1", label: "HDFC", disabled: true, group: "Bank" },
+  ]);
+});

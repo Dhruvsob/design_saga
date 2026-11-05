@@ -10,6 +10,7 @@ import {
   FileText, ArrowSquareOut, ShieldWarning,
   TrendUp, ClockCounterClockwise, Key, Receipt,
 } from "@phosphor-icons/react";
+import SearchSelect from "../components/SearchSelect";
 
 const TABS = ["Overview", "Employment", "Salary & Bank", "Documents", "Performance", "ERP Access"];
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -697,14 +698,14 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs flex-1 min-w-[220px]">
           <div className="overline mb-1">Pay from</div>
-          <select className="input-flat w-full" value={bankAccountId} onChange={(e) => {
+          <SearchSelect className="input-flat w-full" value={bankAccountId} onChange={(e) => {
             const id = e.target.value;
             const account = banks.find((item) => item.id === id);
             setBankAccountId(id);
             setPaymentMethod(methodForAccount(account));
           }} data-testid="pay-from">
             {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+          </SearchSelect>
         </label>
         <label className="text-xs min-w-[150px]">
           <div className="overline mb-1">Payment date</div>

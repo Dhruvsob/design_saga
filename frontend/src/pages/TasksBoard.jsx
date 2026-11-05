@@ -9,6 +9,7 @@ import {
   Table as TableIcon, SquaresFour, Warning, Bell, DownloadSimple,
   CheckSquare, Square,
 } from "@phosphor-icons/react";
+import SearchSelect from "../components/SearchSelect";
 
 const LANES = [
   { id: "todo", label: "To do", color: "#5C5C5C" },
@@ -222,10 +223,10 @@ export default function TasksBoard() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, item, vendor…"
             className="input-flat pl-9 !w-72" data-testid="task-search" />
         </div>
-        <select className="input-flat !w-auto min-w-[150px]" value={filters.project_id} onChange={(e) => setFilters({ ...filters, project_id: e.target.value })} data-testid="filter-project">
+        <SearchSelect className="input-flat !w-auto min-w-[150px]" value={filters.project_id} onChange={(e) => setFilters({ ...filters, project_id: e.target.value })} data-testid="filter-project">
           <option value="">All projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        </SearchSelect>
         <select className="input-flat !w-auto min-w-[120px]" value={filters.area} onChange={(e) => setFilters({ ...filters, area: e.target.value })} data-testid="filter-area">
           <option value="">All areas</option>
           {areas.map((a) => <option key={a}>{a}</option>)}
@@ -648,10 +649,10 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <input required className="input-flat md:col-span-2" placeholder="Task title" value={form.title}
           onChange={(e) => set("title", e.target.value)} data-testid="task-title" />
-        <select className="input-flat" value={form.project_id} onChange={(e) => set("project_id", e.target.value)}>
+        <SearchSelect className="input-flat" value={form.project_id} onChange={(e) => set("project_id", e.target.value)}>
           <option value="">— No project —</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        </SearchSelect>
 
         <select className="input-flat" value={form.area} onChange={(e) => set("area", e.target.value)}>
           <option value="">Area</option>
@@ -678,7 +679,7 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
           onChange={(e) => set("due_date", e.target.value)} placeholder="Due" />
         {isVendor ? (
           <>
-            <select
+            <SearchSelect
               data-testid="task-vendor-picker"
               className="input-flat"
               value={form.vendor_id || ""}
@@ -690,7 +691,7 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
                   {v.name}{v.company ? ` · ${v.company}` : ""}{v.agency_type ? ` · ${v.agency_type}` : ""}
                 </option>
               ))}
-            </select>
+            </SearchSelect>
             <input className="input-flat" placeholder="Or type ad-hoc vendor name"
               value={form.vendor_contact?.vendor_name || ""}
               onChange={(e) => setVendor("vendor_name", e.target.value)} />

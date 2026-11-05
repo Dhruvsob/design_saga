@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate, roundPaise } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
+import SearchSelect from "../components/SearchSelect";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -184,14 +185,14 @@ export default function Invoices({ docType = "invoice" }) {
           <div className="card-flat space-y-4">
             <div className="overline">DETAILS</div>
             <div className="grid grid-cols-2 gap-3">
-              <select className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+              <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
                 <option value="">Select client</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <select className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
+              </SearchSelect>
+              <SearchSelect className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
                 <option value="">Select project</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              </SearchSelect>
               <input type="date" className="input-flat" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
               <input type="number" className="input-flat" placeholder="Tax %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
             </div>
@@ -251,8 +252,8 @@ export default function Invoices({ docType = "invoice" }) {
         </form>
       )}
 
-      <div className="border border-[#E5E5E5]">
-        <table className="w-full">
+      <div className="border border-[#E5E5E5] overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
             <tr className="text-left">
               <Th>Number</Th><Th>Client</Th><Th>Project</Th><Th>Due</Th><Th>Total</Th><Th>Status</Th><Th>Actions</Th>
@@ -318,7 +319,7 @@ export default function Invoices({ docType = "invoice" }) {
               <label className="text-xs">Amount<input required min="0.01" max={roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0)))} step="0.01" type="number" className="input-flat mt-1 w-full" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label>
               <label className="text-xs">Payment date<input required type="date" className="input-flat mt-1 w-full" value={payment.date} onChange={(e) => setPayment({ ...payment, date: e.target.value })}/></label>
               <label className="text-xs">Method<select className="input-flat mt-1 w-full" value={payment.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(accounts, method); setPayment({ ...payment, payment_method: method, bank_account_id: compatible?.id || payment.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="credit_card">Credit card</option><option value="online">Online</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
-              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={payment.bank_account_id} onChange={(e) => { const account = accounts.find((a) => a.id === e.target.value); setPayment({ ...payment, bank_account_id: e.target.value, payment_method: methodForAccount(account) }); }}><option value="">Select Cash / Bank</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+              <label className="text-xs">Received into<SearchSelect required className="input-flat mt-1 w-full" value={payment.bank_account_id} onChange={(e) => { const account = accounts.find((a) => a.id === e.target.value); setPayment({ ...payment, bank_account_id: e.target.value, payment_method: methodForAccount(account) }); }}><option value="">Select Cash / Bank</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</SearchSelect></label>
               <label className="text-xs sm:col-span-2">Reference<input className="input-flat mt-1 w-full" value={payment.reference} onChange={(e) => setPayment({ ...payment, reference: e.target.value })}/></label>
             </div>
             <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setPaying(null)}>Cancel</button><button className="btn-primary" disabled={paymentBusy}>{paymentBusy ? "Recording…" : "Record payment"}</button></div>

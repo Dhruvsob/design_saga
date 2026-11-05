@@ -16,6 +16,7 @@ import {
   Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
   HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle,
 } from "@phosphor-icons/react";
+import SearchSelect from "../components/SearchSelect";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -426,11 +427,11 @@ function OwnerWithdrawalForm({ accounts, banks, onClose, onSaved }) {
           <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="owner-withdrawal-amount" /></label>
         <label className="block"><span className="text-xs text-[#5C5C5C]">Paid from</span>
-          <select required className="input-flat w-full mt-1" value={form.paid_from_account_id}
+          <SearchSelect required className="input-flat w-full mt-1" value={form.paid_from_account_id}
             onChange={(e) => setForm({ ...form, paid_from_account_id: e.target.value })}>
             <option value="">Select cash or bank</option>
             {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-          </select></label>
+          </SearchSelect></label>
         <label className="block"><span className="text-xs text-[#5C5C5C]">Reference</span>
           <input className="input-flat w-full mt-1" value={form.reference}
             onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Optional" /></label>
@@ -522,11 +523,11 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
           <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
             onChange={(event) => setForm({ ...form, amount: event.target.value })} data-testid="transfer-amount" /></label>
         <label className="block"><span className="text-xs text-[#5C5C5C]">Cash / Bank</span>
-          <select required className="input-flat w-full mt-1" value={form.bank_account_id}
+          <SearchSelect required className="input-flat w-full mt-1" value={form.bank_account_id}
             onChange={(event) => setForm({ ...form, bank_account_id: event.target.value })}>
             <option value="">Select cash or bank</option>
             {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-          </select></label>
+          </SearchSelect></label>
         {needsParty && <label className="block"><span className="text-xs text-[#5C5C5C]">Person / party</span>
           <input required className="input-flat w-full mt-1" value={form.party_name}
             onChange={(event) => setForm({ ...form, party_name: event.target.value })}
@@ -1062,18 +1063,18 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <label className="text-xs">Collection type<select disabled={Boolean(editingRow)} className="input-flat mt-1 w-full" value={plan.type} onChange={(e) => setPlan({ ...emptyPlan, type: e.target.value })}><option value="vendor_commission">Vendor commission</option><option value="other_receivable">Other receivable</option></select></label>
             {plan.type === "vendor_commission" ? (
-              <label className="text-xs">Vendor<select required className="input-flat mt-1 w-full" value={plan.vendor_id} onChange={(e) => setPlan({ ...plan, vendor_id: e.target.value })}><option value="">Select vendor</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
+              <label className="text-xs">Vendor<SearchSelect required className="input-flat mt-1 w-full" value={plan.vendor_id} onChange={(e) => setPlan({ ...plan, vendor_id: e.target.value })}><option value="">Select vendor</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</SearchSelect></label>
             ) : (
               <label className="text-xs">What is due?<input required className="input-flat mt-1 w-full" value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} placeholder="Referral fee, reimbursement…" /></label>
             )}
             <label className="text-xs">Expected amount<input required min="0.01" step="0.01" type="number" className="input-flat mt-1 w-full" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: e.target.value })} /></label>
             <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={plan.due_date} onChange={(e) => setPlan({ ...plan, due_date: e.target.value })} /></label>
-            <label className="text-xs">Project<select className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+            <label className="text-xs">Project<SearchSelect className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</SearchSelect></label>
             {plan.type === "vendor_commission" ? (
               <label className="text-xs">Accounting basis<select className="input-flat mt-1 w-full" value={plan.recognition} onChange={(e) => setPlan({ ...plan, recognition: e.target.value })}><option value="planned">Expected only - not earned yet</option><option value="earned">Already earned - awaiting receipt</option></select></label>
             ) : <>
-              <label className="text-xs">Related client<select className="input-flat mt-1 w-full" value={plan.client_id} onChange={(e) => setPlan({ ...plan, client_id: e.target.value })}><option value="">No client</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-              <label className="text-xs">Income account on receipt<select className="input-flat mt-1 w-full" value={plan.income_account_id} onChange={(e) => setPlan({ ...plan, income_account_id: e.target.value })}><option value="">Choose when received</option>{incomeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+              <label className="text-xs">Related client<SearchSelect className="input-flat mt-1 w-full" value={plan.client_id} onChange={(e) => setPlan({ ...plan, client_id: e.target.value })}><option value="">No client</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</SearchSelect></label>
+              <label className="text-xs">Income account on receipt<SearchSelect className="input-flat mt-1 w-full" value={plan.income_account_id} onChange={(e) => setPlan({ ...plan, income_account_id: e.target.value })}><option value="">Choose when received</option>{incomeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</SearchSelect></label>
             </>}
             <label className="text-xs">Reference<input className="input-flat mt-1 w-full" value={plan.reference} onChange={(e) => setPlan({ ...plan, reference: e.target.value })} /></label>
             <label className="text-xs">Reminder date<input type="date" className="input-flat mt-1 w-full" value={plan.reminder_date} onChange={(e) => setPlan({ ...plan, reminder_date: e.target.value })} /></label>
@@ -1162,8 +1163,8 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
               <label className="text-xs">Receipt date<input required type="date" className="input-flat mt-1 w-full" value={receipt.date} onChange={(e) => setReceipt({ ...receipt, date: e.target.value })} /></label>
               <label className="text-xs">Amount received<input required min="0.01" max={collecting.outstanding} step="0.01" type="number" className="input-flat mt-1 w-full" value={receipt.amount} onChange={(e) => setReceipt({ ...receipt, amount: e.target.value })} /></label>
               <label className="text-xs">Payment method<select className="input-flat mt-1 w-full" value={receipt.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(banks, method); setReceipt({ ...receipt, payment_method: method, bank_account_id: compatible?.id || receipt.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="online">Online</option><option value="other">Other</option></select></label>
-              <label className="text-xs">Received into<select required className="input-flat mt-1 w-full" value={receipt.bank_account_id} onChange={(e) => { const account = banks.find((a) => a.id === e.target.value); setReceipt({ ...receipt, bank_account_id: e.target.value, payment_method: methodForAccount(account) }); }}><option value="" disabled>Select cash / bank</option>{banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-              <label className="text-xs">Income account<select required className="input-flat mt-1 w-full" value={receipt.income_account_id} onChange={(e) => setReceipt({ ...receipt, income_account_id: e.target.value })}><option value="" disabled>Select income account</option>{incomeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+              <label className="text-xs">Received into<SearchSelect required className="input-flat mt-1 w-full" value={receipt.bank_account_id} onChange={(e) => { const account = banks.find((a) => a.id === e.target.value); setReceipt({ ...receipt, bank_account_id: e.target.value, payment_method: methodForAccount(account) }); }}><option value="" disabled>Select cash / bank</option>{banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</SearchSelect></label>
+              <label className="text-xs">Income account<SearchSelect required className="input-flat mt-1 w-full" value={receipt.income_account_id} onChange={(e) => setReceipt({ ...receipt, income_account_id: e.target.value })}><option value="" disabled>Select income account</option>{incomeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</SearchSelect></label>
               <label className="text-xs sm:col-span-2">Reference<input className="input-flat mt-1 w-full" value={receipt.reference} onChange={(e) => setReceipt({ ...receipt, reference: e.target.value })} placeholder="Bank / UPI / cheque reference" /></label>
             </div>
             <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setCollecting(null)}>Cancel</button><button type="submit" className="btn-primary" disabled={saving}>{saving ? "Recording…" : "Record receipt"}</button></div>
@@ -1218,38 +1219,38 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
           <input type="date" required className="input-flat" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           <input type="number" required step="0.01" className="input-flat" placeholder="Amount"
             value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid={`${kind}-amount`} />
-          <select className="input-flat" value={kind === "income" ? form.income_account_id : form.expense_account_id}
+          <SearchSelect className="input-flat" value={kind === "income" ? form.income_account_id : form.expense_account_id}
             onChange={(e) => setForm({ ...form, [kind === "income" ? "income_account_id" : "expense_account_id"]: e.target.value })}
             data-testid={`${kind}-acc`}>
             <option value="" disabled>Select {kind} account</option>
             {txnAccs.filter((a) => kind !== "expense" || a.name?.trim().toLowerCase() !== "employee salary")
               .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <select className="input-flat" value={kind === "income" ? form.bank_account_id : form.paid_from_account_id}
+          </SearchSelect>
+          <SearchSelect className="input-flat" value={kind === "income" ? form.bank_account_id : form.paid_from_account_id}
             onChange={(e) => { const account = banks.find((a) => a.id === e.target.value); setForm({ ...form, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: e.target.value, payment_method: methodForAccount(account) }); }}
             data-testid={`${kind}-bank`}>
             <option value="" disabled>Cash / Bank</option>
             {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+          </SearchSelect>
 
           {kind === "income" && (
             <>
-              <select className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+              <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
                 <option value="">— Client (optional) —</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <select className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
+              </SearchSelect>
+              <SearchSelect className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
                 <option value="">— Project (optional) —</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              <select className="input-flat" value={form.vendor_id || ""} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })} data-testid="income-vendor-select">
+              </SearchSelect>
+              <SearchSelect className="input-flat" value={form.vendor_id || ""} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })} data-testid="income-vendor-select">
                 <option value="">— Vendor (optional) —</option>
                 {(vendors || []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-              <select className="input-flat" value={form.employee_id || ""} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="income-employee-select">
+              </SearchSelect>
+              <SearchSelect className="input-flat" value={form.employee_id || ""} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="income-employee-select">
                 <option value="">— Employee (optional) —</option>
                 {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{empName(emp)}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
-              </select>
+              </SearchSelect>
             </>
           )}
 
@@ -1258,7 +1259,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
               <div className="md:col-span-3 text-xs text-[#5C5C5C] border-l-2 border-[#8B7F6A] pl-3">
                 Employee salary is paid from Employee → Salary &amp; Bank → Run Payroll so attendance, employee history and Accounting use one transaction.
               </div>
-              <select
+              <SearchSelect
                 data-testid="expense-vendor-select"
                 className="input-flat"
                 value={form.vendor_id || ""}
@@ -1270,19 +1271,19 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
                     {v.name}{v.company ? ` · ${v.company}` : ""}
                   </option>
                 ))}
-              </select>
-              <select className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
+              </SearchSelect>
+              <SearchSelect className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
                 <option value="">— Project (optional) —</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              <select className="input-flat" value={form.client_id || ""} onChange={(e) => setForm({ ...form, client_id: e.target.value })} data-testid="expense-client-select">
+              </SearchSelect>
+              <SearchSelect className="input-flat" value={form.client_id || ""} onChange={(e) => setForm({ ...form, client_id: e.target.value })} data-testid="expense-client-select">
                 <option value="">— Client (optional) —</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <select className="input-flat" value={form.employee_id || ""} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="expense-employee-select">
+              </SearchSelect>
+              <SearchSelect className="input-flat" value={form.employee_id || ""} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="expense-employee-select">
                 <option value="">— Employee (optional) —</option>
                 {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{empName(emp)}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
-              </select>
+              </SearchSelect>
               <input type="number" step="0.01" className="input-flat" placeholder="GST amount (optional)" value={form.gst || ""} onChange={(e) => setForm({ ...form, gst: e.target.value })} />
             </>
           )}

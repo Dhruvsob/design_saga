@@ -10,6 +10,7 @@ import {
   Bell, Users, Lock, Globe, HardHat, UserCircle, SpeakerHigh, SpeakerSlash,
   GoogleLogo, ArrowsClockwise, CheckCircle,
 } from "@phosphor-icons/react";
+import SearchSelect from "../components/SearchSelect";
 
 /* ---------- constants ---------- */
 const KIND_META = {
@@ -636,21 +637,21 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
               {opts.vendors.length > 0 && (
                 <div>
                   <label className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1"><HardHat size={11} /> Vendor / Agency</label>
-                  <select className="input-flat w-full" value={f.vendor_id}
+                  <SearchSelect className="input-flat w-full" value={f.vendor_id}
                           onChange={(e) => setF({ ...f, vendor_id: e.target.value })} data-testid="event-vendor-select">
                     <option value="">— None —</option>
                     {opts.vendors.map((v) => <option key={v.id} value={v.id}>{v.name || v.vendor_name || v.company_name || "Vendor"}</option>)}
-                  </select>
+                  </SearchSelect>
                 </div>
               )}
               {opts.clients.length > 0 && (
                 <div>
                   <label className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1"><UserCircle size={11} /> Client</label>
-                  <select className="input-flat w-full" value={f.client_id}
+                  <SearchSelect className="input-flat w-full" value={f.client_id}
                           onChange={(e) => setF({ ...f, client_id: e.target.value })} data-testid="event-client-select">
                     <option value="">— None —</option>
                     {opts.clients.map((c) => <option key={c.id} value={c.id}>{c.name || "Client"}</option>)}
-                  </select>
+                  </SearchSelect>
                 </div>
               )}
             </div>

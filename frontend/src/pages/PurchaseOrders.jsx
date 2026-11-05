@@ -7,6 +7,7 @@ import {
   Package, Plus, Warning, CheckSquare, PaperPlaneTilt, X, ArrowsClockwise, Truck, ClipboardText,
   PencilSimple, Trash,
 } from "@phosphor-icons/react";
+import SearchSelect from "../components/SearchSelect";
 
 const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 function fmtErr(d, fb = "Failed") {
@@ -126,10 +127,10 @@ function CreatePO({ vendors, onClose, onCreated }) {
       <form onSubmit={submit} className="space-y-4" data-testid="po-create-form">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <F label="Vendor *">
-            <select required data-testid="po-vendor" className="input-flat w-full" value={f.vendor_id} onChange={(e) => setF({...f, vendor_id: e.target.value})}>
+            <SearchSelect required data-testid="po-vendor" className="input-flat w-full" value={f.vendor_id} onChange={(e) => setF({...f, vendor_id: e.target.value})}>
               <option value="">— Select —</option>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            </SearchSelect>
           </F>
           <F label="Expected delivery"><input type="date" className="input-flat w-full" value={f.expected_delivery} onChange={(e) => setF({...f, expected_delivery: e.target.value})} /></F>
           <F label="Payment terms"><input className="input-flat w-full" value={f.payment_terms} onChange={(e) => setF({...f, payment_terms: e.target.value})} /></F>

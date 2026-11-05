@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate, formatDateTime } from "../lib/format";
+import SearchSelect from "../components/SearchSelect";
 
 const STATUS_COLORS = {
   present: "#1D633E", late: "#B87500", absent: "#B4001C", half_day: "#F0A93A",
@@ -327,12 +328,12 @@ export default function Attendance() {
 
               {!checkedIn && siteVisit && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3" data-testid="site-visit-form">
-                  <select className="input-flat" value={siteForm.project_id}
+                  <SearchSelect className="input-flat" value={siteForm.project_id}
                     disabled={projects.length === 0}
                     onChange={(e) => setSiteForm({ ...siteForm, project_id: e.target.value })}>
                     <option value="">{projects.length ? "Select project…" : "No authorized projects available"}</option>
                     {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  </SearchSelect>
                   <input className="input-flat" placeholder="Location / address" value={siteForm.site_location}
                     onChange={(e) => setSiteForm({ ...siteForm, site_location: e.target.value })} data-testid="site-location" />
                   <input type="time" className="input-flat" placeholder="Expected time" value={siteForm.expected_time}
@@ -1367,10 +1368,10 @@ function ShortLeaveCard() {
       <div className="text-[11px] text-[#9A9A9A]">
         Record a few hours off on a day. Salary deducts <b>hourly-rate × hours</b> (hourly rate = per-day ÷ full-day hours).
       </div>
-      <select className="input-flat w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="sl-employee">
+      <SearchSelect className="input-flat w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="sl-employee">
         <option value="">Select employee…</option>
         {emps.map((e) => <option key={e.id} value={e.id}>{empLabel(e)} — {e.department || "Staff"}</option>)}
-      </select>
+      </SearchSelect>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date"><input type="date" className="input-flat w-full" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="sl-date" /></Field>
         <Field label="Hours"><input type="number" min="0.5" step="0.5" className="input-flat w-full" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} data-testid="sl-hours" /></Field>
@@ -1505,10 +1506,10 @@ function ManualAttendanceCard() {
         <div className="overline">MANUAL ATTENDANCE ENTRY</div>
         {ok && <span className="text-xs text-[#1D633E] font-mono">SAVED</span>}
       </div>
-      <select className="input-flat w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="manual-employee">
+      <SearchSelect className="input-flat w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="manual-employee">
         <option value="">Select employee…</option>
         {emps.map((e) => <option key={e.id} value={e.id}>{empLabel(e)} — {e.department || "Staff"}</option>)}
-      </select>
+      </SearchSelect>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date"><input type="date" className="input-flat w-full" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="manual-date" /></Field>
         <Field label="Status">
@@ -1763,11 +1764,11 @@ function GeoPolicyTab({ projects }) {
             <input type="number" className="input-flat" placeholder="Radius (m)" value={locForm.radius_m}
                    onChange={(e) => setLocForm({ ...locForm, radius_m: e.target.value })} data-testid="loc-radius" />
             {locForm.kind === "site" && (
-              <select className="input-flat" value={locForm.project_id}
+              <SearchSelect className="input-flat" value={locForm.project_id}
                       onChange={(e) => setLocForm({ ...locForm, project_id: e.target.value })} data-testid="loc-project">
                 <option value="">Link project (optional)…</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              </SearchSelect>
             )}
           </div>
           <input className="input-flat w-full" placeholder="Address (optional)" value={locForm.address}

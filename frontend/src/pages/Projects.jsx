@@ -6,6 +6,7 @@ import useMasterData from "../hooks/useMasterData";
 import { Plus, ArrowRight, CaretRight } from "@phosphor-icons/react";
 import PageHero from "../components/PageHero";
 import { formatINR, empName } from "../lib/format";
+import SearchSelect from "../components/SearchSelect";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
 const FALLBACK_TYPES = ["Residential", "Commercial"];
@@ -87,10 +88,10 @@ export default function Projects() {
       {showForm && (
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-2 gap-4 scale-in" data-testid="project-form">
           <input className="input-flat" placeholder="Project name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="project-name" />
-          <select className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+          <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
             <option value="">Select client (optional)</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          </SearchSelect>
           <select className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
             {TYPES.map((s) => <option key={s}>{s}</option>)}
           </select>
