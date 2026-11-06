@@ -83,6 +83,7 @@ const fmtClock = (d) => formatTime(d);
 export default function Layout({ children }) {
   const { user, logout, hasPerm, currentOrg, isSuperAdmin, lockNow } = useAuth();
   const pinEnabled = Boolean(user?.app_pin_enabled);
+  const subState = currentOrg?.subscription_state;
   const lockApp = () => (pinEnabled ? lockNow() : setPinSettingsOpen(true));
   useEffect(() => {
     // Ctrl/Cmd + Shift + L locks the app from anywhere
@@ -332,6 +333,17 @@ export default function Layout({ children }) {
           </div>
         </header>
 
+        {subState?.read_only && (
+          <div role="status" className="px-4 lg:px-8 py-2.5 bg-[#FBEDEA] border-b border-[#F1D3CC] text-sm text-[#7A2A1C] flex items-center gap-2 no-print" data-testid="read-only-banner">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#B22B22] shrink-0" />
+            <span><strong>Read-only mode.</strong> {subState.ended_on ? `The plan ended on ${formatDate(subState.ended_on)}. ` : ""}Your work is preserved and can be viewed or downloaded, but editing is paused until the studio owner renews the plan.</span>
+          </div>
+        )}
+        {!subState?.read_only && subState?.status === "trial" && subState?.days_left != null && subState.days_left <= 7 && (
+          <div role="status" className="px-4 lg:px-8 py-2 bg-[#FFF6E8] border-b border-[#F3E2C2] text-xs text-[#7A4E1A] no-print" data-testid="trial-banner">
+            Trial ends {subState.days_left === 0 ? "today" : `in ${subState.days_left} day${subState.days_left === 1 ? "" : "s"}`} ({formatDate(subState.trial_ends_on)}). Your data stays safe; editing pauses when it ends.
+          </div>
+        )}
         <div className="p-4 lg:p-8 fade-in">{children}</div>
       </main>
 

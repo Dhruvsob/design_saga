@@ -147,6 +147,9 @@ async def require_user(
     await ensure_user_access(user)
     from .session_lock import enforce_session_pin
     await enforce_session_pin(request)
+    # Expired subscription: viewing stays available, changes are refused.
+    from .subscription import enforce_writable
+    await enforce_writable(request, user)
     # Tenant scope re-affirmed (get_current_user already set it)
     set_scope_from_user(user)
     return user

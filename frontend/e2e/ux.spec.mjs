@@ -82,14 +82,54 @@ test("employees never see maternity/paternity or the HR leave table", async () =
   await admin.dispose();
 });
 
-test("lock sits beside the bell; project hub tiles open their section", async ({ page }) => {
+test("lock sits beside the bell; project overview shows facts and attention without duplicates", async ({ page }) => {
   const ctx = await api("admin");
   const proj = await json(ctx.post("/api/projects", { data: { name: `Hub ${uid()}`, engagement_type: "consultancy" } }));
+  await ctx.post("/api/tasks", { data: { title: "Late drawing", project_id: proj.id, due_date: "2026-01-05" } });
   await ctx.dispose();
   await page.goto(`/projects/${proj.id}`);
   await expect(page.getByTestId("header-lock-btn")).toBeVisible();
   await expect(page.getByRole("button", { name: /^App lock$/ })).toHaveCount(0);
-  await expect(page.getByTestId("project-hub")).toBeVisible();
-  await page.getByTestId("hub-Tasks").click();
+  await expect(page.getByTestId("project-facts")).toBeVisible();
+  await expect(page.getByTestId("project-facts")).not.toContainText("Stage");
+  await expect(page.getByTestId("project-hub")).toHaveCount(0);
+  const attention = page.getByTestId("project-attention");
+  await expect(attention).toContainText("past due");
+  await attention.getByTestId("attention-Tasks").click();
   await expect(page.getByTestId("tab-Tasks")).toHaveClass(/border-\[#8B7F6A\]/);
+});
+
+test("ended subscription makes the workspace read-only but viewable", async ({ browser }) => {
+  const { session, ensurePin } = await import("./global-setup.mjs");
+  const { baseURL } = await import("./helpers.mjs");
+  const password = process.env.QA_PASSWORD;
+  const sa = await session(process.env.QA_SUPERADMIN_EMAIL, password);
+  await ensurePin(sa);
+  const stamp = uid();
+  const email = `ro-${stamp}@qa.example.com`;
+  const org = await json(sa.post("/api/platform/orgs", { data: {
+    name: `RO Studio ${stamp}`, admin_email: email, admin_name: "RO Admin", admin_password: password, business_mode: "hybrid" } }));
+  const orgId = org.org_id || org.org?.org_id || org.id;
+  const admin = await session(email, password);
+  await ensurePin(admin);
+  await json(admin.post("/api/clients", { data: { name: "Before expiry" } }));
+
+  const set = await json(sa.patch(`/api/platform/orgs/${orgId}/subscription`, { data: { status: "trial", trial_ends_on: "2026-01-01" } }));
+  expect(set.state.read_only).toBe(true);
+  const blocked = await admin.post("/api/clients", { data: { name: "After expiry" } });
+  expect(blocked.status()).toBe(403);
+  expect((await blocked.json()).detail).toContain("Read-only");
+  expect((await admin.get("/api/clients")).status(), "viewing still works").toBe(200);
+  const me = await json(admin.get("/api/org/current"));
+  expect(me.subscription_state.read_only).toBe(true);
+
+  const state = await admin.storageState();
+  const page = await (await browser.newContext({ baseURL, storageState: state })).newPage();
+  await page.goto("/dashboard");
+  await expect(page.getByTestId("read-only-banner")).toContainText("Read-only mode");
+
+  await json(sa.patch(`/api/platform/orgs/${orgId}/subscription`, { data: { status: "active" } }));
+  await json(admin.post("/api/clients", { data: { name: "After renewal" } }));
+  await sa.dispose();
+  await admin.dispose();
 });

@@ -119,6 +119,8 @@ def _pack_org(o: dict) -> dict:
         modules.setdefault(k, v)
     features["modules"] = modules
     out["features"] = features
+    from core.subscription import subscription_state
+    out["subscription_state"] = subscription_state(o)
     return out
 
 

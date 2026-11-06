@@ -7,7 +7,7 @@ import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import ProjectPhases from "../components/ProjectPhases";
-import ProjectHub, { ProjectFacts } from "../components/ProjectHub";
+import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import {
@@ -309,9 +309,8 @@ export default function ProjectDetail() {
       {tab === "Overview" && (
         <div className="space-y-8">
           <ProjectFacts p={p} />
-          <ProjectHub p={p} visibleTabs={visibleTabs} canSeeFinancials={canSeeFinancials}
-                      onOpen={(t) => { setTab(t); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                      onCopyPortal={hasPerm("projects.update") && p.share_token ? copyShare : null} />
+          <ProjectAttention p={p} visibleTabs={visibleTabs} canSeeFinancials={canSeeFinancials}
+                            onOpen={(t) => setTab(t)} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[#E5E5E5]" data-testid="project-financials">
@@ -330,7 +329,7 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             {/* team */}
             <div className="border border-[#E5E5E5] p-5">
               <div className="flex items-center justify-between mb-4">
@@ -366,17 +365,6 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            {/* site info */}
-            <div className="border border-[#E5E5E5] p-5">
-              <div className="overline mb-4">SITE / SCHEDULE</div>
-              <dl className="space-y-2 text-sm">
-                <Row k="Site address" v={p.site_address || "—"} />
-                <Row k="Site area" v={p.site_area_sqft ? `${p.site_area_sqft} sq.ft` : "—"} />
-                <Row k="Start date" v={formatDate(p.start_date)} />
-                <Row k="End date" v={formatDate(p.end_date)} />
-                <Row k="Created" v={formatDate(p.created_at)} />
-              </dl>
-            </div>
           </div>
         </div>
       )}

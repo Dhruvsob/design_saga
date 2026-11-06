@@ -299,6 +299,7 @@ export default function SuperAdminPanel() {
                   ) : (
                     <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EFF7EF] text-[#1D633E]">active</span>
                   )}
+                  {!o.is_default && <SubscriptionControl org={o} onSaved={load} />}
                 </Td>
                 <Td className="text-right">
                   <div className="flex items-center justify-end gap-1">
@@ -909,6 +910,50 @@ function OrgHealthModal({ org, onClose, onSaved }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Trial / active / expired. Expired (or a past trial end) = read-only workspace. */
+function SubscriptionControl({ org, onSaved }) {
+  const sub = org.subscription || {};
+  const [status, setStatus] = useState(sub.status || "");
+  const [trialEnd, setTrialEnd] = useState(sub.trial_ends_on || "");
+  const [busy, setBusy] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const readOnly = sub.status === "expired" || (sub.status === "trial" && sub.trial_ends_on && sub.trial_ends_on < today);
+  const save = async (nextStatus, nextEnd) => {
+    if (nextStatus === "trial" && !nextEnd) return;
+    if (nextStatus === "expired" && !await confirmAction({
+      title: `Make "${org.name}" read-only?`,
+      body: "Users can still sign in, view and download everything, but cannot create, edit or delete until the plan is active again.",
+      confirmLabel: "Make read-only", danger: true,
+    })) { setStatus(sub.status || ""); return; }
+    setBusy(true);
+    try {
+      await api.patch(`/platform/orgs/${org.org_id}/subscription`, {
+        status: nextStatus || null, trial_ends_on: nextStatus === "trial" ? nextEnd : null,
+      });
+      toast.success("Subscription updated");
+      onSaved?.();
+    } catch (e) {
+      toast.error(fmtErr(e?.response?.data?.detail, "Could not update the subscription"));
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-1.5 flex flex-col gap-1" data-testid={`sub-${org.org_id}`}>
+      <select aria-label={`Subscription for ${org.name}`} className="input-flat !py-1 !text-xs !w-auto" value={status} disabled={busy}
+              onChange={(e) => { setStatus(e.target.value); if (e.target.value !== "trial") save(e.target.value, null); }}>
+        <option value="">Plan: not set</option>
+        <option value="trial">Trial</option>
+        <option value="active">Active (paid)</option>
+        <option value="expired">Ended (read-only)</option>
+      </select>
+      {status === "trial" && (
+        <input type="date" aria-label="Trial ends on" className="input-flat !py-1 !text-xs !w-auto" value={trialEnd} disabled={busy}
+               onChange={(e) => { setTrialEnd(e.target.value); save("trial", e.target.value); }} />
+      )}
+      {readOnly && <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FCEEEC] text-[#B22B22] w-fit">read-only</span>}
     </div>
   );
 }

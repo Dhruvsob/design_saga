@@ -14,14 +14,14 @@ function qaPin() {
   return pin;
 }
 
-async function session(identifier, password) {
+export async function session(identifier, password) {
   const ctx = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL } });
   const res = await ctx.post("/api/auth/login-password", { data: { identifier, password } });
   if (!res.ok()) throw new Error(`login failed for ${identifier}: ${res.status()}`);
   return ctx;
 }
 
-async function ensurePin(ctx) {
+export async function ensurePin(ctx) {
   const status = await (await ctx.get("/api/auth/pin/status")).json();
   let res = null;
   if (status.setup_required) {

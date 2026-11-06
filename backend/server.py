@@ -175,6 +175,8 @@ async def require_user(request: Request, session_token: Optional[str] = Cookie(d
     await ensure_user_access(user)
     from core.session_lock import enforce_session_pin
     await enforce_session_pin(request)
+    from core.subscription import enforce_writable
+    await enforce_writable(request, user)
     return user
 
 

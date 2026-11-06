@@ -275,6 +275,40 @@ async def change_org_status(org_id: str, payload: OrgStatusIn, request: Request,
     return await get_org(org_id)
 
 
+class OrgSubscriptionIn(BaseModel):
+    status: Optional[str] = None          # trial | active | expired | None (no restriction)
+    trial_ends_on: Optional[str] = None   # YYYY-MM-DD, used with status "trial"
+
+
+@router.patch("/orgs/{org_id}/subscription")
+async def set_org_subscription(org_id: str, payload: OrgSubscriptionIn, request: Request,
+                               session_token: Optional[str] = Cookie(default=None),
+                               authorization: Optional[str] = Header(default=None)):
+    """Platform owner sets a tenant's trial/active/expired state (read-only mode)."""
+    from datetime import date as _d
+    from core.subscription import STATUSES, subscription_state
+    sa = await require_super_admin(request, session_token, authorization)
+    org = await get_org(org_id)
+    if not org:
+        raise HTTPException(404, "Organisation not found")
+    if payload.status is not None and payload.status not in STATUSES:
+        raise HTTPException(400, "status must be trial, active or expired")
+    if payload.status == "trial":
+        try:
+            _d.fromisoformat(payload.trial_ends_on or "")
+        except ValueError:
+            raise HTTPException(400, "trial_ends_on (YYYY-MM-DD) is required for a trial")
+    sub = {"status": payload.status, "trial_ends_on": payload.trial_ends_on if payload.status == "trial" else None,
+           "updated_at": iso_now(), "updated_by": sa["user_id"]}
+    if payload.status == "expired":
+        sub["ended_on"] = iso_now()[:10]
+    await db.organizations.update_one({"org_id": org_id}, {"$set": {"subscription": sub, "updated_at": iso_now()}})
+    await audit(sa, "org.subscription", target=org_id, target_type="org",
+                meta={"status": payload.status, "trial_ends_on": sub["trial_ends_on"]})
+    fresh = await get_org(org_id)
+    return {"org_id": org_id, "subscription": sub, "state": subscription_state(fresh)}
+
+
 @router.delete("/orgs/{org_id}")
 async def delete_org(org_id: str, request: Request,
                      purge: bool = False,
