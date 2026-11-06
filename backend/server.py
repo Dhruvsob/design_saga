@@ -5332,6 +5332,8 @@ api.include_router(phases_router)
 api.include_router(attendance_router)
 api.include_router(accounting_router)
 api.include_router(payroll_router)
+from routes.employee_advances import router as employee_advances_router  # noqa: E402
+api.include_router(employee_advances_router)
 api.include_router(vendors_router)
 api.include_router(auth_router)
 api.include_router(notifications_router)

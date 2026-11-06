@@ -167,3 +167,58 @@ test("admin data check runs read-only and lists Cash/Bank mismatches", async ({ 
   if (await table.count()) await expect(table).toContainText(/reverse|delete/i);
   expect(errors).toEqual([]);
 });
+
+test("employee advance: give 5,000 cash, recover 2,000 + 3,000 through payroll, reversal restores", async ({ browser }) => {
+  const ctx = await api("admin");
+  const { cash, bank, rows } = await accounts(ctx);
+  const emp = await json(ctx.post("/api/employees", { data: {
+    first_name: "Asha", last_name: `ADV${uid()}`, salary: { basic: 24000 },
+  } }));
+  const adv = await json(ctx.post(`/api/employees/${emp.id}/advances`, { data: {
+    amount: 5000, date: today(), reason: "Medical emergency", bank_account_id: cash.id,
+    payment_method: "cash", monthly_recovery: 2000,
+  } }));
+  expect(adv.outstanding).toBe(5000);
+  const given = await journals(ctx, { source: "employee_advance", employee_id: emp.id });
+  expect(given).toHaveLength(1);
+  expect(balanced(given[0])).toBe(true);
+  expect(given[0].lines.find((l) => l.credit > 0).account_id).toBe(cash.id);
+
+  const pay = (month, recovered) => ctx.post(`/api/employees/${emp.id}/pay-salary`, { data: {
+    year: 2026, month, apply_attendance_deductions: false, payment_date: today(),
+    paid_from_account_id: bank.id, payment_method: "bank_transfer", advances_recovered: recovered } });
+
+  const tooMuch = await pay(9, 6000);
+  expect(tooMuch.status(), "cannot recover more than outstanding").toBe(400);
+
+  const oct = await json(pay(9, 2000));
+  expect(oct.run.net).toBe(22000);
+  const je = oct.journal;
+  expect(balanced(je)).toBe(true);
+  const advAccount = rows.find((a) => a.name === "Employee Advances")
+    || (await json(ctx.get("/api/accounts"))).find((a) => a.name === "Employee Advances");
+  expect(je.lines.find((l) => l.account_id === advAccount.id).credit).toBe(2000);
+  expect(je.lines.find((l) => l.account_id === bank.id).credit).toBe(22000);
+  expect(je.lines.find((l) => l.debit > 0).debit, "salary expense is the full 24,000").toBe(24000);
+
+  let list = await json(ctx.get(`/api/employees/${emp.id}/advances`));
+  expect(list.outstanding).toBe(3000);
+  const cancelBlocked = await ctx.post(`/api/employees/${emp.id}/advances/${adv.id}/cancel`);
+  expect(cancelBlocked.status(), "partly recovered advance cannot be cancelled").toBe(409);
+
+  const nov = await json(pay(10, 3000));
+  list = await json(ctx.get(`/api/employees/${emp.id}/advances`));
+  expect(list.outstanding).toBe(0);
+  expect(list.items[0].status).toBe("closed");
+
+  await json(ctx.post(`/api/payroll/runs/${nov.run.id}/reverse`, { data: { reason: "E2E" } }));
+  list = await json(ctx.get(`/api/employees/${emp.id}/advances`));
+  expect(list.outstanding, "reversal makes the recovered amount owed again").toBe(3000);
+
+  // the employee page shows the outstanding balance
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto(`/employees/${emp.id}`);
+  await page.getByTestId("emp-tab-Salary---Bank").click();
+  await expect(page.getByTestId("advance-outstanding")).toContainText("3,000");
+  await ctx.dispose();
+});

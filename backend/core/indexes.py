@@ -79,6 +79,7 @@ _INDEXES = [
     ("accounts",           [("org_id", 1), ("type", 1)], {}),
     ("payment_milestones", [("org_id", 1), ("status", 1), ("due_date", 1)], {}),
     ("project_phases",     [("org_id", 1), ("project_id", 1), ("order", 1)], {}),
+    ("employee_advances",  [("org_id", 1), ("employee_id", 1), ("status", 1)], {}),
     ("collection_receivables", [("org_id", 1), ("status", 1), ("due_date", 1)], {}),
     ("collection_receipts", [("request_key", 1)],
                             {"name": "collection_receipt_request_unique", "unique": True,

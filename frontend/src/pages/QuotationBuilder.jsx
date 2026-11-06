@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { ProposalDetails, ProposalFees } from "../components/ConsultancyProposal";
 import { confirmAction } from "../lib/confirm";
+import useUnsavedWarning from "../lib/useUnsavedWarning";
 
 const TABS = ["Overview", "BOQ Builder", "Rooms", "Materials", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
 const CONSULT_TABS = ["Overview", "Fee Schedule", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
@@ -27,6 +28,7 @@ export default function QuotationBuilder() {
   const [tab, setTab] = useState("Overview");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  useUnsavedWarning(dirty);
   const [aiPanel, setAiPanel] = useState({ open: false, focus: "missing_items", loading: false, response: "" });
 
   const load = useCallback(async () => {

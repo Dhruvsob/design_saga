@@ -6,6 +6,7 @@ import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate } from "../lib/format";
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
+import EmployeeAdvances from "../components/EmployeeAdvances";
 import {
   ArrowLeft, FloppyDisk, Plus, Trash, PencilSimple, UserMinus, Warning, Trophy,
   FileText, ArrowSquareOut, ShieldWarning,
@@ -13,6 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import useUnsavedWarning from "../lib/useUnsavedWarning";
 
 const TABS = ["Overview", "Employment", "Salary & Bank", "Documents", "Performance", "ERP Access"];
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -28,7 +30,9 @@ export default function EmployeeDetail() {
   const [emp, setEmp] = useState(null);
   const [meta, setMeta] = useState({ departments: [], employment_types: [], employment_statuses: [] });
   const [tab, setTab] = useState("Overview");
+  const [advanceVersion, setAdvanceVersion] = useState(0);
   const [dirty, setDirty] = useState(false);
+  useUnsavedWarning(dirty);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -459,8 +463,11 @@ export default function EmployeeDetail() {
           </div>
 
           {canPayrollWrite && (
-            <PaySalaryBlock employeeId={emp.id} netMonthly={s.net_monthly} />
+            <PaySalaryBlock employeeId={emp.id} netMonthly={s.net_monthly} advanceVersion={advanceVersion} />
           )}
+
+          <EmployeeAdvances employeeId={emp.id} canWrite={canPayrollWrite}
+                            onChanged={() => setAdvanceVersion((v) => v + 1)} />
 
           <SalaryRevisionsBlock employeeId={emp.id} currentSalary={s} canEdit={canPayrollWrite} />
 
@@ -611,7 +618,8 @@ function Row({ label, children }) {
   );
 }
 
-function PaySalaryBlock({ employeeId, netMonthly }) {
+function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
+  const [advance, setAdvance] = useState({ outstanding: 0, suggested_recovery: 0 });
   const [todayYear, todayMonth] = dateForInput(new Date()).split("-").map(Number);
   const [year, setYear] = useState(todayYear);
   const [month, setMonth] = useState(todayMonth);
@@ -635,6 +643,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
         api.get("/accounts?type=asset"),
       ]);
       setPreview(p);
+      api.get(`/employees/${employeeId}/advances`).then(({ data: a }) => setAdvance(a)).catch(() => {});
       const cash = (accs || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
       setBanks(cash);
       if (!bankAccountId && cash.length) {
@@ -644,7 +653,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
     } catch (e) {
       setMsg(e?.response?.data?.detail || "Failed to load preview (need finance.read)");
     }
-  }, [employeeId, year, month, extras]);
+  }, [employeeId, year, month, extras, advanceVersion]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -684,6 +693,15 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
           <label key={k} className="text-xs">
             <div className="overline mb-1">{k.replace(/_/g, " ")}</div>
             <input type="number" className="input-flat w-full text-right font-mono" value={extras[k]} onChange={(e) => setExtras({ ...extras, [k]: Number(e.target.value) || 0 })} data-testid={`extra-${k}`} />
+            {k === "advances_recovered" && (
+              advance.outstanding > 0 ? (
+                <button type="button" className="mt-1 text-[11px] text-[#76705E] underline"
+                        onClick={() => setExtras({ ...extras, advances_recovered: advance.suggested_recovery || advance.outstanding })}
+                        data-testid="use-suggested-recovery">
+                  {fmt(advance.outstanding)} outstanding · use {fmt(advance.suggested_recovery || advance.outstanding)}
+                </button>
+              ) : <div className="mt-1 text-[11px] text-[#6E6A63]">No advance outstanding</div>
+            )}
           </label>
         ))}
       </div>

@@ -259,6 +259,16 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         "advances_recovered": payload.advances_recovered,
         "other_deductions": payload.other_deductions,
     }
+    from routes import employee_advances as _adv
+    recovered = round(float(payload.advances_recovered or 0), 2)
+    if recovered < 0:
+        raise HTTPException(status_code=400, detail="Advance recovery cannot be negative")
+    if recovered > 0:
+        outstanding = float(await _adv.outstanding_for(eid))
+        if recovered > outstanding + 0.004:
+            raise HTTPException(status_code=400, detail=(
+                f"Only Rs. {outstanding:,.2f} of advances is outstanding for this employee. "
+                "Record the advance first (Employee > Advances) or reduce the recovery."))
     breakdown = _compute_net(emp.get("salary"), extras)
     if payload.apply_attendance_deductions:
         breakdown = await _apply_attendance_deductions(emp, breakdown, payload.year, payload.month)
@@ -292,9 +302,15 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
     emp_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip() or emp.get("employee_id") or eid
     narration = f"Salary {payload.year}-{payload.month:02d} — {emp_name}"
     lines = [
-        {"account_id": salary_acc_id, "debit": net, "credit": 0, "description": f"Payroll — {emp_name}"},
+        {"account_id": salary_acc_id, "debit": round(net + recovered, 2), "credit": 0,
+         "description": f"Payroll — {emp_name}"},
         {"account_id": payload.paid_from_account_id, "debit": 0, "credit": net, "description": "Paid"},
     ]
+    if recovered > 0:
+        # The recovered part of salary settles the employee's advance, not cash.
+        adv_account = await _adv.advances_account()
+        lines.append({"account_id": adv_account["id"], "debit": 0, "credit": recovered,
+                      "description": f"Advance recovered — {emp_name}"})
     date_str = payment_date
     run_id = new_id("pr_")
     run = {
@@ -367,6 +383,11 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
         raise HTTPException(
             500, "Salary journal posted but payroll finalization needs administrator review")
     run.update({"journal_id": je["id"], "status": "paid", "paid_at": paid_at})
+    if recovered > 0:
+        run["advance_recoveries"] = await _adv.apply_recovery(
+            eid, run_id, payload.year, payload.month, recovered, payment_date)
+        await sdb.payroll_runs.update_one(
+            {"id": run_id}, {"$set": {"advance_recoveries": run["advance_recoveries"]}})
     await audit(user, "payroll.payment", target=run_id, target_type="payroll_run",
                 meta={"employee_id": eid, "year": payload.year, "month": payload.month,
                       "payment_date": payment_date, "payment_method": payload.payment_method,
@@ -429,6 +450,9 @@ async def reverse_salary_payment(run_id: str, request: Request,
         )
         if result.modified_count != 1:
             raise HTTPException(status_code=409, detail="Payroll run changed; refresh and retry")
+        # money recovered from this salary is owed again
+        from routes.employee_advances import restore_recovery
+        await restore_recovery(run_id)
     await audit(user, "payroll.payment.reverse", target=run_id, target_type="payroll_run",
                 meta={"employee_id": run.get("employee_id"),
                       "reversal_journal_id": reversal["id"]},

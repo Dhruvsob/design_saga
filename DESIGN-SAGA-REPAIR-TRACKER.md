@@ -11,6 +11,14 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-091: Employee advances - give, recover through payroll, reverse (mandate 08, T06)
+
+- Gap: "Advance recovered" only lowered net pay; nothing recorded the advance, salary expense was booked at net (understated by the recovery) and there was no outstanding balance.
+- Built: `routes/employee_advances.py` - Give advance (amount, date, reason, Cash/Bank with method check, reference, optional monthly recovery) posts Dr Employee Advances / Cr Cash-Bank (source `employee_advance`). Payroll recovery is refused above the outstanding balance; the salary journal is now Dr Salary (net + recovered) / Cr Cash-Bank (net) / Cr Employee Advances (recovered); recoveries are allocated oldest-first and recorded per payroll run. Reversing a salary payment restores the recovered amount. Cancel = balancing journal, blocked once partly recovered. Audited, tenant-scoped, indexed.
+- UI: Employee > Salary & Bank > Advances panel (outstanding, suggested monthly recovery, history with per-month recoveries, give/cancel); Pay Salary shows outstanding with a one-click suggested recovery.
+- Also: unsaved-change browser warning on the quotation builder and employee form (`lib/useUnsavedWarning.js`).
+- Verified: `e2e/money.spec.mjs` advance test (5,000 cash -> recover 2,000 [expense 24,000, bank 22,000, advances 2,000] -> over-recovery 400 -> cancel blocked 409 -> recover 3,000 closed -> reversal restores 3,000 -> UI shows 3,000); backend gate 366 passed.
+
 ### DS-088: Collections Due - active queue vs Received history (mandate 11, T08)
 
 - Bug: the default "All" view kept fully received items in the queue at Rs. 0.
