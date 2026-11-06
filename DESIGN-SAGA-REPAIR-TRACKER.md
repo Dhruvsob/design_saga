@@ -11,6 +11,14 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-085: Architecture phase templates on projects (PRJ-01)
+
+- Gap: projects had one `stage` value on a fixed pipeline, with no per-phase dates, fee share or deliverables.
+- Smallest connected slice: built-in templates (Consultancy design services, 8 phases; Turnkey design-and-build, 6 phases; fee shares total 100%). Applying one creates editable, tenant-scoped `project_phases` with sequential planned dates from the project start, deliverable checklists and status (not started / in progress / done, actual dates recorded). Optional fee milestones go into the existing payment-milestone (Collections Due) workflow with exact paise that sum to the project fee, only when the project has no milestones yet; phases with paid milestones cannot be removed. Read uses project visibility; apply/update/delete require `projects.update` plus visibility; audited.
+- UI: Project > Phases tab (template picker pre-selected from the project's engagement type, progress, current/overdue phases, inline status/date edits, deliverable toggles; fee amounts only for users who can see project financials). Breadcrumb no longer repeats a group name equal to the page name.
+- Verification: `tests/test_project_phases.py` (12) incl. visibility-first and `projects.update` gates; backend gate 340 passed; `e2e/phases.spec.mjs` desktop+mobile (apply with fee milestones summing to the fee, track status/deliverables, double apply refused, Employee refused, axe clean). Screenshot `docs/screenshots/project-phases.png`. Not deployed.
+- Next slice: tenant-editable templates; link phase progress to the lifecycle stage.
+
 ### DEPLOY-2026-11-06: Release `fbe0311` deployed to production
 
 - Contents: DS-082 (money footing), DS-083 (WCAG 2.1 A/AA pass), DS-084 (double-submit guard, toasts, setup checklist). Owner approved the deploy in chat on 06/11.
@@ -79,7 +87,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| PRJ-01 | P2 | Generic stages; no configurable architecture phase templates with fee/dates/deliverables | Confirmed gap | Smallest slice: per-tenant phase template applied at project creation, editable |
+| PRJ-01 | P2 | Generic stages; no configurable architecture phase templates with fee/dates/deliverables | Tested (DS-085) | Smallest slice: per-tenant phase template applied at project creation, editable |
 | PRJ-02 | P2 | Site diary / issue / snag with photo evidence and closure is missing (supervisors use tasks) | Confirmed gap | First architecture vertical slice candidate after PRJ-01 |
 | PRJ-03 | P3 | Timesheets, capacity planning, planned-vs-actual hours | Confirmed gap | Later; depends on PRJ-01 |
 

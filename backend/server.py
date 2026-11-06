@@ -5229,6 +5229,7 @@ async def seed_employees(request: Request,
 # ============================================================
 # Include modular routers (Phase-1 refactor: Tasks module extracted)
 from routes.tasks import router as tasks_router  # noqa: E402
+from routes.phases import router as phases_router  # noqa: E402
 from routes.attendance import router as attendance_router  # noqa: E402
 from routes.accounting import router as accounting_router  # noqa: E402
 from routes.payroll import router as payroll_router  # noqa: E402
@@ -5249,6 +5250,7 @@ from routes.calendar import router as calendar_router  # noqa: E402
 from routes.google_calendar import router as google_calendar_router  # noqa: E402
 from routes.finance_extras import router as finance_extras_router  # noqa: E402
 api.include_router(tasks_router)
+api.include_router(phases_router)
 api.include_router(attendance_router)
 api.include_router(accounting_router)
 api.include_router(payroll_router)

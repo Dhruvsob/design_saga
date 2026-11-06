@@ -272,7 +272,7 @@ export default function Layout({ children }) {
           {/* breadcrumb */}
           <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-3 text-sm text-[#6B6B6B]" data-testid="breadcrumb">
             <span className="overline">{(brandName || "").toUpperCase()}</span>
-            {currentGroup?.label && (
+            {currentGroup?.label && currentGroup.label !== currentNav?.label && (
               <>
                 <CaretRight size={10} className="text-[#6E6A63]" aria-hidden="true" />
                 <span>{currentGroup.label}</span>

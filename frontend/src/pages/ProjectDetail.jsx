@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
+import ProjectPhases from "../components/ProjectPhases";
 import { empName, formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import {
@@ -14,7 +15,7 @@ import {
 } from "@phosphor-icons/react";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
-const TABS = ["Overview", "Tasks", "Milestones", "Vendors", "Files", "Invoices", "Activity"];
+const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Invoices", "Activity"];
 const inr = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 
 export default function ProjectDetail() {
@@ -372,6 +373,11 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {tab === "Phases" && (
+        <ProjectPhases projectId={id} project={p} canEdit={hasPerm("projects.update")}
+          canSeeFinancials={canSeeFinancials} onChanged={load} />
       )}
 
       {tab === "Tasks" && (
