@@ -11,6 +11,12 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-096: Sidebar redesign (same brand colours)
+
+- Owner: "sidebar is not looking good". Colours unchanged (cream #F5F4F0, taupe #8B7F6A, warm grey #EDECE8).
+- Structure: full-height sidebar where only the menu scrolls; brand and profile stay pinned. Active page = soft taupe tint, taupe icon and an inside marker bar (was a white pill with the bar outside on the edge). Group headings are clear uppercase labels that collapse/expand (remembered; the group holding the current page always opens). Footer is one compact row: avatar, name, role, App PIN settings and Sign out icons. New desktop "Collapse" control shrinks the sidebar to a 76px icon rail with tooltips (remembered), like the owner's Tanvika ERP.
+- Verified: navigation/a11y/ux/smoke 30 passed; new `ux.spec.mjs` sidebar test (group collapse + rail, both persist across reload).
+
 ### DS-095: Original Design Saga palette restored (owner correction)
 
 - Owner rejected the DS-094 colour change (espresso/walnut/caramel): "never told you to do this". The original palette from the pre-redesign CSS is restored exactly and documented as fixed: taupe #8B7F6A (buttons #76705E, hover #5F5A4B), sidebar cream #F5F4F0, background #FAF9F6, logo brown-gold #8B7A55, warm grey #EDECE8, charcoal #2C2C2C, Playfair Display headings (now with lining tabular figures for money), Inter text. Light cream sidebar restored; dark sidebar removed; 189 inline colours reverted to their original values; Tailwind stone/gold restored.

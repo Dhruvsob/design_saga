@@ -5,7 +5,7 @@ import {
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard, CalendarCheck,
   Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn,
-  Scroll, LockKey,
+  Scroll, LockKey, CaretDown, CaretDoubleLeft, CaretDoubleRight,
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
@@ -53,15 +53,19 @@ const NAV_GROUPS = [
   ] },
 ];
 
-function NavItem({ to, label, Icon }) {
+function NavItem({ to, label, Icon, rail }) {
   return (
     <NavLink
       to={to}
+      title={rail ? label : undefined}
+      aria-label={rail ? label : undefined}
       data-testid={`nav-${to.replace("/", "")}`}
       className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 h-9 text-[13.5px] rounded-lg transition-colors relative ${
+        `group relative flex items-center gap-3 h-9 rounded-lg text-[13.5px] transition-colors duration-150 ${
+          rail ? "justify-center px-0" : "px-3"
+        } ${
           isActive
-            ? "bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-[0_1px_2px_rgba(17,17,17,0.05)] ring-1 ring-[var(--line)]"
+            ? "bg-[rgba(139,127,106,0.14)] text-[var(--ink)] font-semibold"
             : "text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)]"
         }`
       }
@@ -69,12 +73,20 @@ function NavItem({ to, label, Icon }) {
       {({ isActive }) => (
         <>
           {isActive && <span className="nav-active-bar" aria-hidden="true" />}
-          <Icon size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[var(--accent)]" : "text-[var(--ink-3)] group-hover:text-[var(--ink-2)] transition-colors"} />
-          <span className="flex-1">{label}</span>
+          <Icon size={18} aria-hidden="true" weight={isActive ? "fill" : "regular"}
+                className={`shrink-0 transition-colors ${isActive ? "text-[var(--accent-strong)]" : "text-[var(--ink-3)] group-hover:text-[var(--ink-2)]"}`} />
+          {!rail && <span className="flex-1 truncate">{label}</span>}
         </>
       )}
     </NavLink>
   );
+}
+
+function readPref(key, fallback) {
+  try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
+}
+function writePref(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
 
 const fmtClock = (d) => formatTime(d);
@@ -102,6 +114,14 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pinSettingsOpen, setPinSettingsOpen] = useState(false);
+  const [rail, setRail] = useState(() => readPref("ds_sidebar_rail", false));
+  const [closedGroups, setClosedGroups] = useState(() => readPref("ds_sidebar_closed", []));
+  const toggleRail = () => setRail((r) => { writePref("ds_sidebar_rail", !r); return !r; });
+  const toggleGroup = (id) => setClosedGroups((list) => {
+    const next = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+    writePref("ds_sidebar_closed", next);
+    return next;
+  });
 
   // Close the mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -153,32 +173,34 @@ export default function Layout({ children }) {
       )}
       {/* ============== SIDEBAR ============== */}
       <aside
-        className={`w-64 shrink-0 flex flex-col text-[var(--ink-2)] z-40
-          fixed inset-y-0 left-0 h-full overflow-y-auto transform transition-transform duration-200
+        className={`shrink-0 flex flex-col text-[var(--ink-2)] z-40 w-64 ${rail ? "lg:w-[76px]" : "lg:w-64"}
+          fixed inset-y-0 left-0 h-full transform transition-[transform,width] duration-200 ease-out
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
-          lg:translate-x-0 lg:sticky lg:top-0 lg:min-h-screen lg:h-auto`}
+          lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen`}
         style={{ background: "var(--sidebar)", borderRight: "1px solid var(--line)" }}
         data-testid="app-sidebar"
       >
+        {/* brand */}
         <button
           onClick={() => navigate(isSuperAdmin ? "/super-admin" : "/dashboard")}
-          className="px-5 py-5 pr-16 lg:pr-5 flex items-center gap-3 text-left hover:bg-[var(--sidebar-2)] transition-colors group"
+          className={`flex items-center gap-3 text-left hover:bg-[var(--sidebar-2)] transition-colors group shrink-0 ${rail ? "lg:justify-center lg:px-0 px-4 py-4" : "px-4 py-4 pr-14 lg:pr-4"}`}
           style={{ borderBottom: "1px solid var(--line)" }}
+          title={rail ? brandName : undefined}
           data-testid="sidebar-logo-btn"
         >
           {brandLogo ? (
             <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
-                 className="h-12 w-auto max-w-[72px] shrink-0 object-contain transition-transform duration-200 group-hover:scale-[1.03]" />
+                 className="h-11 w-auto max-w-[56px] shrink-0 object-contain transition-transform duration-200 group-hover:scale-[1.03]" />
           ) : (
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[var(--logo-brown)] shadow-sm">
               <span className="text-white font-display font-bold text-[20px] leading-none">{brandInitials}</span>
             </div>
           )}
-          <div className="min-w-0">
-            <div className="font-display font-bold tracking-tight text-base text-[var(--ink)] truncate" data-testid="sidebar-brand-name">
+          <div className={`min-w-0 ${rail ? "lg:hidden" : ""}`}>
+            <div className="font-display font-bold text-[17px] leading-tight text-[var(--ink)] truncate" data-testid="sidebar-brand-name">
               {brandName}
             </div>
-            <div className="text-[11px] text-[var(--ink-3)] truncate mt-0.5">{brandTagline}</div>
+            <div className="text-[10.5px] uppercase tracking-[0.14em] text-[var(--ink-3)] truncate mt-0.5">{brandTagline}</div>
           </div>
         </button>
 
@@ -192,68 +214,71 @@ export default function Layout({ children }) {
           <X size={18} />
         </button>
 
-        <nav className="flex-1 p-3" aria-label="Main">
+        {/* menu: the only part that scrolls */}
+        <nav className={`flex-1 overflow-y-auto overscroll-contain py-3 ${rail ? "lg:px-2 px-3" : "px-3"}`} aria-label="Main">
           {isSuperAdmin && (
-            <NavLink
-              to="/super-admin"
-              data-testid="nav-super-admin"
-              className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all relative mb-1 ${
-                  isActive
-                    ? "bg-[var(--surface)] text-[var(--ink)] font-semibold ring-1 ring-[var(--line)]"
-                    : "text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)]"
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Crown size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[var(--accent)]" : ""} />
-                  <span className="flex-1">Super Admin</span>
-                </>
-              )}
-            </NavLink>
-          )}
-          {groups.map((g) => (
-            <div key={g.id} className={g.label ? "mt-4" : ""} role="group" aria-labelledby={g.label ? `nav-group-${g.id}` : undefined}>
-              {g.label && (
-                <div id={`nav-group-${g.id}`} className="px-3 pb-1 text-[11px] font-semibold text-[var(--ink-3)]" data-testid={`nav-group-${g.id}`}>
-                  {g.label}
-                </div>
-              )}
-              <div className="space-y-0.5">
-                {g.items.map((item) => <NavItem key={item.to} {...item} />)}
-              </div>
+            <div className="mb-2">
+              <NavItem to="/super-admin" label="Super Admin" Icon={Crown} rail={rail} />
             </div>
-          ))}
+          )}
+          {groups.map((g) => {
+            const hasCurrent = g.items.some((n) => location.pathname.startsWith(n.to));
+            const open = rail || !g.label || hasCurrent || !closedGroups.includes(g.id);
+            return (
+              <div key={g.id} className={g.label ? "mt-3" : ""} role="group" aria-labelledby={g.label ? `nav-group-${g.id}` : undefined}>
+                {g.label && (rail ? (
+                  <div className="hidden lg:block mx-3 my-2 border-t border-[var(--line)]" aria-hidden="true" />
+                ) : null)}
+                {g.label && (
+                  <button type="button" id={`nav-group-${g.id}`} onClick={() => toggleGroup(g.id)}
+                          aria-expanded={open}
+                          className={`w-full flex items-center justify-between px-3 h-7 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-3)] hover:text-[var(--ink-2)] transition-colors ${rail ? "lg:hidden" : ""}`}
+                          data-testid={`nav-group-${g.id}`}>
+                    {g.label}
+                    <CaretDown size={10} weight="bold" aria-hidden="true"
+                               className={`transition-transform duration-200 ${open ? "" : "-rotate-90"}`} />
+                  </button>
+                )}
+                {open && (
+                  <div className="space-y-0.5 mt-0.5 nav-group-items">
+                    {g.items.map((item) => <NavItem key={item.to} {...item} rail={rail} />)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
-        <div className="p-3" style={{ borderTop: "1px solid var(--line)" }}>
-          <div className="flex items-center gap-3 mb-3">
+        {/* profile + controls */}
+        <div className="shrink-0 p-3 space-y-1" style={{ borderTop: "1px solid var(--line)" }}>
+          <div className={`flex items-center gap-2.5 rounded-lg p-1.5 ${rail ? "lg:flex-col lg:gap-1.5" : ""}`}>
             {user?.picture ? (
-              <img src={user.picture} alt="" className="w-9 h-9 rounded-lg object-cover ring-1 ring-[var(--line)]" />
+              <img src={user.picture} alt="" className="w-9 h-9 rounded-lg object-cover ring-1 ring-[var(--line)] shrink-0" />
             ) : (
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display font-bold text-xs bg-[var(--accent-strong)] text-white">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display font-bold text-sm bg-[var(--accent-strong)] text-white shrink-0"
+                   title={rail ? user?.name : undefined}>
                 {(user?.name || "?").slice(0, 1).toUpperCase()}
               </div>
             )}
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-[var(--ink)] truncate" data-testid="sidebar-user-name">{user?.name}</div>
-              <div className="text-[11px] text-[var(--ink-3)] capitalize truncate">
-                {user?.role || "employee"}
-              </div>
+            <div className={`min-w-0 flex-1 ${rail ? "lg:hidden" : ""}`}>
+              <div className="text-[13px] font-semibold text-[var(--ink)] truncate" data-testid="sidebar-user-name">{user?.name}</div>
+              <div className="text-[11px] text-[var(--ink-3)] capitalize truncate">{user?.role || "employee"}</div>
             </div>
-            <button type="button" onClick={() => setPinSettingsOpen(true)} className="btn-icon shrink-0"
+            <button type="button" onClick={() => setPinSettingsOpen(true)} className="btn-icon !w-8 !h-8 shrink-0"
                     aria-label="App PIN and security settings" title="App PIN settings"
                     data-testid="sidebar-app-lock-btn">
               <ShieldCheck size={16} />
             </button>
+            <button type="button" onClick={logout} className="btn-icon !w-8 !h-8 shrink-0"
+                    aria-label="Sign out" title="Sign out" data-testid="sidebar-logout-btn">
+              <SignOut size={16} />
+            </button>
           </div>
-          <button
-            onClick={logout}
-            data-testid="sidebar-logout-btn"
-            className="w-full flex items-center justify-center gap-2 text-xs font-semibold h-9 rounded-lg text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)] transition-colors"
-          >
-            <SignOut size={14} /> Sign out
+          <button type="button" onClick={toggleRail}
+                  className={`hidden lg:flex w-full items-center gap-2 h-8 rounded-lg text-xs text-[var(--ink-3)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)] transition-colors ${rail ? "justify-center" : "px-3"}`}
+                  aria-label={rail ? "Expand sidebar" : "Collapse sidebar"} title={rail ? "Expand sidebar" : "Collapse sidebar"}
+                  data-testid="sidebar-collapse-btn">
+            {rail ? <CaretDoubleRight size={14} /> : <><CaretDoubleLeft size={14} /> Collapse</>}
           </button>
         </div>
       </aside>

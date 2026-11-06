@@ -133,3 +133,25 @@ test("ended subscription makes the workspace read-only but viewable", async ({ b
   await sa.dispose();
   await admin.dispose();
 });
+
+test("sidebar groups collapse, the rail collapses and both are remembered", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "rail is a desktop control");
+  await page.goto("/dashboard");
+  const sales = page.getByTestId("nav-group-sales");
+  await expect(page.getByTestId("nav-crm")).toBeVisible({ timeout: 20000 });
+  await sales.click();
+  await expect(sales).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByTestId("nav-crm")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("nav-crm")).toHaveCount(0);
+  await page.getByTestId("nav-group-sales").click();
+  await expect(page.getByTestId("nav-crm")).toBeVisible();
+
+  await page.getByTestId("sidebar-collapse-btn").click();
+  await expect(page.getByTestId("sidebar-brand-name")).toBeHidden();
+  await expect(page.getByTestId("nav-accounting")).toHaveAttribute("title", "Accounting");
+  await page.reload();
+  await expect(page.getByTestId("sidebar-brand-name")).toBeHidden();
+  await page.getByTestId("sidebar-collapse-btn").click();
+  await expect(page.getByTestId("sidebar-brand-name")).toBeVisible();
+});
