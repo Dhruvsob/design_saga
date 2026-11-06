@@ -1,7 +1,7 @@
 # Session Checkpoint
 
 Read this first, then `DESIGN-SAGA-REPAIR-TRACKER.md` → "Canonical Open Backlog".
-Last updated: 05/11/2026 (Asia/Kolkata).
+Last updated: 06/11/2026 (Asia/Kolkata).
 
 ## Where things stand
 
@@ -11,19 +11,24 @@ Last updated: 05/11/2026 (Asia/Kolkata).
 - Deploy recipe: `git bundle create x.bundle <prod-head>..codex/repair-release`,
   `scp` to `root@srv2020574.hstgr.cloud` (IPv6), then on the VPS run in a
   transient unit: `git fetch /root/x.bundle codex/repair-release:refs/remotes/origin/codex/repair-release && git merge --ff-only origin/codex/repair-release`.
-- Last completed: DS-081 (searchable selectors, phone-width fixes), after
-  DS-080 (historical Cash/Bank mismatch listing), DS-076 (Cash/Bank mismatch), DS-077 (vendor page crash,
-  `no-undef`, page smoke), DS-078 (Attendance without employee profile) and
-  DS-079 (branded PDFs with logo, self-hosted logo storage).
-- Gates at checkpoint: backend mandatory list 324 passed; Playwright E2E 20
-  passed / 19 skipped (viewport-independent specs run on desktop only) against
-  the production build; frontend logic 4 passed; ESLint 0 warnings (now with
-  `no-undef`); Vite build pass; tracked-secret scan pass; npm audit 0.
+- Branch head `fbe0311` is pushed and ready but NOT deployed (production `8d17a12`).
+  Pending release: DS-082 money footing, DS-083 accessibility, DS-084 form safety
+  and setup checklist. Verified bundle already on the VPS:
+  `/root/ds-release-fbe0311.bundle` (SHA-256 `e077212c...5c0f`). The deploy step
+  was blocked by the agent permission policy; it needs the owner's go-ahead.
+- Last completed: DS-084, after DS-083, DS-082, DS-081, DS-080, DS-076..DS-079.
+- Gates at checkpoint: backend mandatory list 330 passed; Playwright E2E full run
+  (navigation 16 re-run after PIN-unlock fix; forms, money, pdf, smoke, a11y
+  passed) against the production build; ESLint 0 warnings; Vite build pass;
+  npm audit 0. Local note: OneDrive turns spec files into cloud placeholders that
+  Playwright skips; re-create them locally before a run (see DS-083).
 
 ## Next executable tasks (in order)
 
-1. PRJ-01: per-tenant architecture phase templates (smallest slice).
-2. A11Y-01: modal focus traps, detail-page/tablet visual QA, contrast audit.
+1. Deploy `fbe0311` (owner approval) and live-verify.
+2. PRJ-01: per-tenant architecture phase templates (smallest slice).
+3. A11Y-01 remainder: modal focus traps, tablet visual QA, screen-reader pass.
+4. UX: styled confirmation dialog (47 native confirms), unsaved-change warnings.
 
 ## Waiting on the owner
 
