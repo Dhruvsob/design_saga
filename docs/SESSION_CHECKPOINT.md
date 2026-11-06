@@ -1,28 +1,39 @@
 # Session Checkpoint
 
 Read this first, then `DESIGN-SAGA-REPAIR-TRACKER.md` → "Canonical Open Backlog".
-Last updated: 06/11/2026 (Asia/Kolkata).
+Last updated: 06/11/2026 16:30 IST.
 
 ## Where things stand
 
 - Branch `codex/repair-release`; see `git log -5 --oneline` for the exact head.
-- Production runtime is `bfb70cf` (deployed 06/11/2026 08:10 UTC via git bundle;
-  the VPS cannot reach github.com). Scheduled backups fixed and verified.
+- Production runtime is `7edf02e` (deployed 06/11/2026 10:43 UTC, backup
+  `/opt/design-saga-backups/20261106T104203Z`). Head `6dc7382` (employee
+  advances + unsaved warnings, DS-091) is pushed, tested and its verified bundle
+  is at `/root/ds-6dc7382.bundle` on the VPS; deploy is waiting for the owner's
+  explicit approval.
 - Deploy recipe: `git bundle create x.bundle <prod-head>..codex/repair-release`,
-  `scp` to `root@srv2020574.hstgr.cloud` (IPv6), then on the VPS run in a
-  transient unit: `git fetch /root/x.bundle codex/repair-release:refs/remotes/origin/codex/repair-release && git merge --ff-only origin/codex/repair-release`.
-- Last completed: DS-084, after DS-083, DS-082, DS-081, DS-080, DS-076..DS-079.
-- Gates at checkpoint: backend mandatory list 330 passed; Playwright E2E full run
-  (navigation 16 re-run after PIN-unlock fix; forms, money, pdf, smoke, a11y
-  passed) against the production build; ESLint 0 warnings; Vite build pass;
-  npm audit 0. Local note: OneDrive turns spec files into cloud placeholders that
-  Playwright skips; re-create them locally before a run (see DS-083).
+  `scp` to `root@srv2020574.hstgr.cloud` (IPv6), verify sha256 both ends, then on
+  the VPS in a transient unit: `git fetch /root/x.bundle codex/repair-release:refs/remotes/origin/codex/repair-release && git merge --ff-only origin/codex/repair-release`
+  (post-merge hook: backup -> rebuild -> health check -> auto rollback).
+- Completed this session: DS-085 phases, DS-086 logo + upload normalisation,
+  DS-087 consultancy proposal + quotation modes + flowing turnkey PDF, DS-088
+  collections active/history, DS-089 leave privacy, DS-090 salary working +
+  styled confirms, DS-091 employee advances + unsaved warnings.
+- Gates: backend mandatory list 366 passed; Playwright full run passed (35) plus
+  targeted runs of proposal/ux/forms/money/pdf/navigation after later changes;
+  ESLint 0 warnings; Vite build pass. OneDrive placeholder note (DS-083) still applies.
+- Logo: production tenant DESIGN SAGA (`org_759bcccd654c`) still has the 6250px
+  JPG with grid. Owner to re-upload `Design Saga - logo (final, transparent).png`
+  via Company Settings (direct DB write is blocked by the safety classifier).
 
 ## Next executable tasks (in order)
 
-1. Upload the Design Saga logo once the owner provides the file and confirms the tenant.
-2. A11Y-01 remainder: modal focus traps, tablet visual QA, screen-reader pass.
-3. UX: styled confirmation dialog (47 native confirms), unsaved-change warnings.
+1. Deploy `6dc7382` once approved; verify live (advances panel, payroll recovery).
+2. Attendance policy: effective-dated versions, late tiers with preview (mandate 09, T07).
+3. Tenant-editable phase templates; link phase progress to lifecycle stage.
+4. A11Y-01 remainder: modal focus traps, tablet visual QA, screen-reader pass.
+5. Edit/Delete matrix re-audit across modules (mandate 13) and vendor/project
+   commission views (mandate 12).
 
 ## Waiting on the owner
 
