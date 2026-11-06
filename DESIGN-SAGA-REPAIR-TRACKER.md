@@ -11,6 +11,11 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DEPLOY-2026-11-06b: Release `bfb70cf` (phase templates) deployed
+
+- Owner approved in chat. Bundle `fbe0311..bfb70cf` (SHA-256 `5bc69ba6...394c`, matched both ends) fast-forwarded in a transient unit; pre-deploy backup `/opt/design-saga-backups/20261106T080953Z`; backend and web healthy; `/healthz` ok; `/api/project-phase-templates` 401 (present, login required); 0 exceptions, 0 5xx.
+- Read-only tenant check: tenants "Design Saga", "DESIGN SAGA" and "sample(Demo)" have no logo, address, GSTIN or bank details yet, so PDFs show name only until Company Settings is completed. The owner supplied the logo image in chat only; a file is needed to upload it, and the owner must confirm which Design Saga tenant is the real one.
+
 ### DS-085: Architecture phase templates on projects (PRJ-01)
 
 - Gap: projects had one `stage` value on a fixed pipeline, with no per-phase dates, fee share or deliverables.

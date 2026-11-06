@@ -6,7 +6,7 @@ Last updated: 06/11/2026 (Asia/Kolkata).
 ## Where things stand
 
 - Branch `codex/repair-release`; see `git log -5 --oneline` for the exact head.
-- Production runtime is `fbe0311` (deployed 06/11/2026 07:45 UTC via git bundle;
+- Production runtime is `bfb70cf` (deployed 06/11/2026 08:10 UTC via git bundle;
   the VPS cannot reach github.com). Scheduled backups fixed and verified.
 - Deploy recipe: `git bundle create x.bundle <prod-head>..codex/repair-release`,
   `scp` to `root@srv2020574.hstgr.cloud` (IPv6), then on the VPS run in a
@@ -20,7 +20,7 @@ Last updated: 06/11/2026 (Asia/Kolkata).
 
 ## Next executable tasks (in order)
 
-1. PRJ-01: per-tenant architecture phase templates (smallest slice).
+1. Upload the Design Saga logo once the owner provides the file and confirms the tenant.
 2. A11Y-01 remainder: modal focus traps, tablet visual QA, screen-reader pass.
 3. UX: styled confirmation dialog (47 native confirms), unsaved-change warnings.
 
