@@ -11,6 +11,12 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-095: Original Design Saga palette restored (owner correction)
+
+- Owner rejected the DS-094 colour change (espresso/walnut/caramel): "never told you to do this". The original palette from the pre-redesign CSS is restored exactly and documented as fixed: taupe #8B7F6A (buttons #76705E, hover #5F5A4B), sidebar cream #F5F4F0, background #FAF9F6, logo brown-gold #8B7A55, warm grey #EDECE8, charcoal #2C2C2C, Playfair Display headings (now with lining tabular figures for money), Inter text. Light cream sidebar restored; dark sidebar removed; 189 inline colours reverted to their original values; Tailwind stone/gold restored.
+- Kept from DS-094 (no colour impact): shared tokens (now holding the original values), page names instead of slogans, dashboard greeting, stray `overline` line fix, visible search, consistent buttons/inputs/tables/chips, purposeful motion with reduced-motion support.
+- Contrast fixes without changing the palette: logo initials enlarged on #8B7A55, taupe chip text uses #5F5A4B, TEAM badge and `.accent-blue` use #76705E (as in the original CSS). Axe colour-contrast clean on all 19 primary pages.
+
 ### DS-094: Design system — brown identity, tokens, shell, motion
 
 - Owner: "still not looking good; keep the brown pattern; sidebar colours; animations/touch".

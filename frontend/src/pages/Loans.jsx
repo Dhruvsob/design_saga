@@ -68,10 +68,10 @@ export default function Loans() {
       {/* Summary KPIs */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPI icon={Bank} label="ACTIVE LOANS" value={summary.active_loans} tone="#9C4A28" />
-          <KPI icon={CurrencyInr} label="TOTAL OUTSTANDING" display={fmtMoney(summary.total_outstanding)} tone="#B3261E" />
-          <KPI icon={CalendarBlank} label="NEXT EMI DUE" display={formatDate(summary.next_emi_due_date)} tone="#85570F" />
-          <KPI icon={ChartLineUp} label="NEXT EMI AMOUNT" display={fmtMoney(summary.next_emi_amount)} tone="#1E6A45" />
+          <KPI icon={Bank} label="ACTIVE LOANS" value={summary.active_loans} tone="#8B7F6A" />
+          <KPI icon={CurrencyInr} label="TOTAL OUTSTANDING" display={fmtMoney(summary.total_outstanding)} tone="#B22B22" />
+          <KPI icon={CalendarBlank} label="NEXT EMI DUE" display={formatDate(summary.next_emi_due_date)} tone="#7A4E1A" />
+          <KPI icon={ChartLineUp} label="NEXT EMI AMOUNT" display={fmtMoney(summary.next_emi_amount)} tone="#1D633E" />
         </div>
       )}
 
@@ -91,7 +91,7 @@ export default function Loans() {
                   <div className="font-semibold text-sm">{l.lender_name}</div>
                   <div className="text-xs text-[var(--ink-2)]">{l.account_number || "—"}</div>
                 </Td>
-                <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">{l.loan_type}</span></Td>
+                <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">{l.loan_type}</span></Td>
                 <Td className="font-mono text-sm">{fmtMoney(l.principal)}</Td>
                 <Td className="font-mono text-sm">{l.interest_rate_pa}%</Td>
                 <Td className="font-mono text-sm">{l.tenure_months}mo</Td>
@@ -306,8 +306,8 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
         <MiniStat label="Principal" value={fmtMoney(loan.principal)} />
         <MiniStat label="Rate" value={`${loan.interest_rate_pa}% p.a.`} />
         <MiniStat label="Tenure" value={`${loan.tenure_months}mo`} />
-        <MiniStat label="EMI" value={fmtMoney(loan.emi_amount)} tone="#9C4A28"/>
-        <MiniStat label="Outstanding" value={fmtMoney(loan.outstanding)} tone="#B3261E"/>
+        <MiniStat label="EMI" value={fmtMoney(loan.emi_amount)} tone="#8B7F6A"/>
+        <MiniStat label="Outstanding" value={fmtMoney(loan.outstanding)} tone="#B22B22"/>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 text-xs">
@@ -391,7 +391,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
 function F({ label, children }) {
   return <label className="block"><div className="text-xs text-[var(--ink-2)] mb-1">{label}</div>{children}</label>;
 }
-function MiniStat({ label, value, tone = "#18181B" }) {
+function MiniStat({ label, value, tone = "#0A0A0A" }) {
   return (
     <div className="border border-[var(--line)] p-3">
       <div className="overline text-[10px] mb-1">{label}</div>

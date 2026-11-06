@@ -61,7 +61,7 @@ function NavItem({ to, label, Icon }) {
       className={({ isActive }) =>
         `group flex items-center gap-3 px-3 h-9 text-[13.5px] rounded-lg transition-colors relative ${
           isActive
-            ? "bg-[var(--surface)] text-[var(--ink)] font-semibold"
+            ? "bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-[0_1px_2px_rgba(17,17,17,0.05)] ring-1 ring-[var(--line)]"
             : "text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)]"
         }`
       }
@@ -140,7 +140,7 @@ export default function Layout({ children }) {
   }
   const brandName = currentOrg?.display_name || currentOrg?.name || "DESIGN SAGA";
   const brandTagline = currentOrg?.branding?.tagline || "STUDIO MANAGEMENT";
-  const brandColor = currentOrg?.branding?.primary_color || "#9C4A28";
+  const brandColor = currentOrg?.branding?.primary_color || "#8B7F6A";
   const brandLogo = currentOrg?.branding?.logo_url;
   const brandInitials = (brandName || "DS").split(/\s+/).slice(0, 2)
     .map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -153,11 +153,11 @@ export default function Layout({ children }) {
       )}
       {/* ============== SIDEBAR ============== */}
       <aside
-        className={`sidebar-dark w-64 shrink-0 flex flex-col text-[var(--ink-2)] z-40
+        className={`w-64 shrink-0 flex flex-col text-[var(--ink-2)] z-40
           fixed inset-y-0 left-0 h-full overflow-y-auto transform transition-transform duration-200
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:sticky lg:top-0 lg:min-h-screen lg:h-auto`}
-        style={{ borderRight: "1px solid var(--line)" }}
+        style={{ background: "var(--sidebar)", borderRight: "1px solid var(--line)" }}
         data-testid="app-sidebar"
       >
         <button
@@ -167,13 +167,11 @@ export default function Layout({ children }) {
           data-testid="sidebar-logo-btn"
         >
           {brandLogo ? (
-            <span className="h-12 min-w-[48px] max-w-[76px] px-1.5 rounded-xl bg-[#F7F2EA] flex items-center justify-center shrink-0 shadow-[0_2px_8px_-3px_rgba(0,0,0,0.4)]">
-              <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
-                   className="h-10 w-auto max-w-[64px] object-contain transition-transform duration-200 group-hover:scale-[1.04]" />
-            </span>
+            <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
+                 className="h-12 w-auto max-w-[72px] shrink-0 object-contain transition-transform duration-200 group-hover:scale-[1.03]" />
           ) : (
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#F7F2EA]">
-              <span className="text-[#2A211A] font-display font-bold text-sm tracking-wide">{brandInitials}</span>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[var(--logo-brown)] shadow-sm">
+              <span className="text-white font-display font-bold text-[20px] leading-none">{brandInitials}</span>
             </div>
           )}
           <div className="min-w-0">
@@ -234,7 +232,7 @@ export default function Layout({ children }) {
             {user?.picture ? (
               <img src={user.picture} alt="" className="w-9 h-9 rounded-lg object-cover ring-1 ring-[var(--line)]" />
             ) : (
-              <div className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs bg-[var(--caramel)] text-[#2A211A]">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display font-bold text-xs bg-[var(--accent-strong)] text-white">
                 {(user?.name || "?").slice(0, 1).toUpperCase()}
               </div>
             )}

@@ -125,14 +125,14 @@ export default function SuperAdminPanel() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPI icon={Buildings} label="ACTIVE WORKSPACES"
                value={analytics.orgs.active} total={analytics.orgs.total}
-               tone="#9C4A28" testid="kpi-active-orgs" />
+               tone="#8B7F6A" testid="kpi-active-orgs" />
           <KPI icon={Users} label="TOTAL USERS"
                value={analytics.users.active} total={analytics.users.total}
-               tone="#1E6A45" testid="kpi-users" />
+               tone="#1D633E" testid="kpi-users" />
           <KPI icon={Briefcase} label="TOTAL PROJECTS"
                value={analytics.projects} tone="#7A1FA2" testid="kpi-projects" />
           <KPI icon={CurrencyInr} label="PLATFORM REVENUE"
-               display={fmtMoney(analytics.revenue_total)} tone="#85570F" testid="kpi-revenue" />
+               display={fmtMoney(analytics.revenue_total)} tone="#7A4E1A" testid="kpi-revenue" />
         </div>
       )}
 
@@ -255,7 +255,7 @@ export default function SuperAdminPanel() {
                       <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[var(--line)] bg-white" />
                     ) : (
                       <div className="w-8 h-8 flex items-center justify-center text-white font-display font-bold text-xs"
-                           style={{ backgroundColor: o.branding?.primary_color || "#9C4A28" }}>
+                           style={{ backgroundColor: o.branding?.primary_color || "#8B7F6A" }}>
                         {(o.name || "?").slice(0, 2).toUpperCase()}
                       </div>
                     )}
@@ -273,14 +273,14 @@ export default function SuperAdminPanel() {
                 </Td>
                 <Td>
                   {(() => {
-                    const tone = { consultancy: "bg-[var(--hover)] text-[var(--accent-strong)]",
+                    const tone = { consultancy: "bg-[var(--hover)] text-[#5F5A4B]",
                                    turnkey: "bg-[var(--warning-soft)] text-[var(--warning)]",
                                    hybrid: "bg-[var(--success-soft)] text-[var(--success)]" }[o.business_mode || "hybrid"];
                     return <span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${tone}`}>{o.business_mode || "hybrid"}</span>;
                   })()}
                 </Td>
                 <Td>
-                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">{o.plan || "starter"}</span>
+                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">{o.plan || "starter"}</span>
                 </Td>
                 <Td className="font-mono text-xs tabular-nums">
                   {o.billing?.amount_charged != null ? fmtMoney(o.billing.amount_charged) : "—"}
@@ -701,7 +701,7 @@ function OrgAdminsModal({ org, onClose }) {
             <tr key={u.user_id} className="border-b border-[var(--line-soft)]">
               <Td className="font-semibold text-sm">{u.name}</Td>
               <Td className="font-mono text-xs">{u.email}</Td>
-              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">{u.role}</span></Td>
+              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">{u.role}</span></Td>
               <Td className="text-right">
                 <button onClick={() => setResetting(u.user_id)} className="btn-ghost text-xs">
                   <Key size={11} /> Reset password

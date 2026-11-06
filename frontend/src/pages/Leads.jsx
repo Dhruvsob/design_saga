@@ -14,12 +14,12 @@ const FALLBACK_SOURCES = ["Website", "Instagram", "Referral", "Marketplace", "Wa
 const FALLBACK_TYPES = ["Residential", "Commercial"];
 
 const STAGE_COLORS = {
-  New: "#4A4741",
-  Qualified: "#9C4A28",
-  Proposal: "#9C4A28",
-  Negotiation: "#B45309",
-  Won: "#1E6A45",
-  Lost: "#B3261E",
+  New: "#5C5C5C",
+  Qualified: "#8B7F6A",
+  Proposal: "#8B7F6A",
+  Negotiation: "#B87500",
+  Won: "#1D633E",
+  Lost: "#B22B22",
 };
 
 export default function Leads() {

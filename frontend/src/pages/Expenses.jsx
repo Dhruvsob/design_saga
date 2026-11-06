@@ -23,7 +23,7 @@ const STATUS_TONE = {
   pending_l1: "bg-[var(--warning-soft)] text-[var(--warning)]",
   pending_l2: "bg-[var(--warning-soft)] text-[var(--warning)]",
   receipt_required: "bg-[var(--warning-soft)] text-[var(--warning)]",
-  approved: "bg-[var(--hover)] text-[var(--accent-strong)]",
+  approved: "bg-[var(--hover)] text-[#5F5A4B]",
   rejected: "bg-[var(--danger-soft)] text-[var(--danger)]",
   reimbursed: "bg-[var(--success-soft)] text-[var(--success)]",
   cancelled: "bg-[var(--line-soft)] text-[var(--ink-2)]",
@@ -85,10 +85,10 @@ export default function Expenses() {
 
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPI label="PENDING APPROVAL" value={summary.pending} tone="#85570F" />
-          <KPI label="APPROVED · TO PAY" value={summary.approved} tone="#9C4A28" />
-          <KPI label="REIMBURSED · MONTH" value={summary.reimbursed_this_month} tone="#1E6A45" />
-          <KPI label="MY PENDING" value={summary.my_pending} tone="#85570F" />
+          <KPI label="PENDING APPROVAL" value={summary.pending} tone="#7A4E1A" />
+          <KPI label="APPROVED · TO PAY" value={summary.approved} tone="#8B7F6A" />
+          <KPI label="REIMBURSED · MONTH" value={summary.reimbursed_this_month} tone="#1D633E" />
+          <KPI label="MY PENDING" value={summary.my_pending} tone="#7A4E1A" />
         </div>
       )}
 

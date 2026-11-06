@@ -132,7 +132,7 @@ export default function CompanySettings() {
                   <img src={branding.logo_url} alt="Current logo" className="w-28 h-28 object-contain ring-1 ring-[var(--line)] bg-white p-2 rounded-lg" data-testid="logo-preview" />
                 ) : (
                   <div className="w-20 h-20 flex items-center justify-center text-white font-display font-bold text-lg ring-1 ring-[var(--line)]"
-                       style={{ backgroundColor: branding.primary_color || "#9C4A28" }}>
+                       style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
                     {(org.name || "DS").slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -160,9 +160,9 @@ export default function CompanySettings() {
             <div className="card-flat">
               <div className="overline mb-4"><PaintBrush size={11} className="inline mr-1"/> COLOURS</div>
               <div className="grid grid-cols-2 gap-4">
-                <ColorField label="Primary" value={branding.primary_color || "#9C4A28"}
+                <ColorField label="Primary" value={branding.primary_color || "#8B7F6A"}
                             onChange={(v) => setBranding({ primary_color: v })} testid="color-primary" />
-                <ColorField label="Accent" value={branding.accent_color || "#18181B"}
+                <ColorField label="Accent" value={branding.accent_color || "#0A0A0A"}
                             onChange={(v) => setBranding({ accent_color: v })} testid="color-accent" />
               </div>
               <div className="mt-4">
@@ -190,7 +190,7 @@ export default function CompanySettings() {
                   <img src={branding.logo_url} alt="" className="h-10 w-auto max-w-[64px] object-contain" />
                 ) : (
                   <div className="w-9 h-9 flex items-center justify-center text-white font-display font-bold text-sm"
-                       style={{ backgroundColor: branding.primary_color || "#9C4A28" }}>
+                       style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
                     {(org.name || "DS").slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -207,7 +207,7 @@ export default function CompanySettings() {
               <div className="mb-4">
                 <div className="overline mb-2 text-[9px]">BUTTON</div>
                 <button className="text-white text-xs font-semibold px-4 py-2 w-full"
-                        style={{ backgroundColor: branding.primary_color || "#9C4A28" }}>
+                        style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
                   Continue
                 </button>
               </div>
@@ -217,7 +217,7 @@ export default function CompanySettings() {
                 <div className="border border-[var(--line)] p-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="text-sm font-display font-bold" style={{ color: branding.primary_color || "#9C4A28" }}>
+                      <div className="text-sm font-display font-bold" style={{ color: branding.primary_color || "#8B7F6A" }}>
                         {org.display_name || org.name}
                       </div>
                       <div className="text-[10px] text-[var(--ink-2)] font-mono">
@@ -228,7 +228,7 @@ export default function CompanySettings() {
                       <img src={branding.logo_url} alt="" className="w-10 h-10 object-contain" />
                     )}
                   </div>
-                  <div className="mt-2 h-[3px]" style={{ background: branding.primary_color || "#9C4A28" }} />
+                  <div className="mt-2 h-[3px]" style={{ background: branding.primary_color || "#8B7F6A" }} />
                 </div>
               </div>
             </div>

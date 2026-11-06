@@ -410,11 +410,11 @@ export const BankReconciliation = ({ accounts = [] }) => {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
           {[
-            { k: "unmatched", label: "Unmatched", tint: "#B3261E" },
-            { k: "auto_matched", label: "Auto-matched", tint: "#85570F" },
-            { k: "matched", label: "Matched", tint: "#9C4A28" },
-            { k: "reconciled", label: "Reconciled", tint: "#1E6A45" },
-            { k: "ignored", label: "Ignored", tint: "#4A4741" },
+            { k: "unmatched", label: "Unmatched", tint: "#B22B22" },
+            { k: "auto_matched", label: "Auto-matched", tint: "#7A4E1A" },
+            { k: "matched", label: "Matched", tint: "#8B7F6A" },
+            { k: "reconciled", label: "Reconciled", tint: "#1D633E" },
+            { k: "ignored", label: "Ignored", tint: "#5C5C5C" },
           ].map((s) => (
             <div key={s.k} className="border border-[var(--line)] p-2 text-center">
               <div className="overline">{s.label}</div>
@@ -566,11 +566,11 @@ export const BankReconciliation = ({ accounts = [] }) => {
 
 const StatusChip = ({ status }) => {
   const map = {
-    unmatched:    { label: "Unmatched",    tint: "#B3261E", bg: "#FBE9E7", border: "#F1CFCF" },
-    auto_matched: { label: "Auto-matched", tint: "#85570F", bg: "#FBF1DC", border: "#EADFB9" },
-    matched:      { label: "Matched",      tint: "#9C4A28", bg: "#F5F4F0", border: "#E3E0D8" },
-    reconciled:   { label: "Reconciled",   tint: "#1E6A45", bg: "#EFF7EF", border: "#CDE5D8" },
-    ignored:      { label: "Ignored",      tint: "#4A4741", bg: "#F1EFEA", border: "#E3E0D8" },
+    unmatched:    { label: "Unmatched",    tint: "#B22B22", bg: "#FCEEEC", border: "#F1CFCF" },
+    auto_matched: { label: "Auto-matched", tint: "#7A4E1A", bg: "#FFF4E5", border: "#EADFB9" },
+    matched:      { label: "Matched",      tint: "#8B7F6A", bg: "#F5F4F0", border: "#E5E5E5" },
+    reconciled:   { label: "Reconciled",   tint: "#1D633E", bg: "#EFF7EF", border: "#CDE5D8" },
+    ignored:      { label: "Ignored",      tint: "#5C5C5C", bg: "#F5F5F5", border: "#E5E5E5" },
   };
   const s = map[status] || map.unmatched;
   return (

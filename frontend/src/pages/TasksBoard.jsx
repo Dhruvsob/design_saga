@@ -13,24 +13,24 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
 const LANES = [
-  { id: "todo", label: "To do", color: "#4A4741" },
-  { id: "in_progress", label: "In progress", color: "#9C4A28" },
-  { id: "review", label: "Review", color: "#B45309" },
-  { id: "done", label: "Done", color: "#1E6A45" },
+  { id: "todo", label: "To do", color: "#5C5C5C" },
+  { id: "in_progress", label: "In progress", color: "#8B7F6A" },
+  { id: "review", label: "Review", color: "#B87500" },
+  { id: "done", label: "Done", color: "#1D633E" },
 ];
 
 const PRIORITY_COLORS = {
-  low: "#4A4741", medium: "#18181B", high: "#B45309",
-  urgent: "#B3261E", critical: "#B3261E",
+  low: "#5C5C5C", medium: "#0A0A0A", high: "#B87500",
+  urgent: "#B22B22", critical: "#B22B22",
 };
 
 const STATUS_COLORS = {
-  "Pending": "#4A4741", "Selection Required": "#2E5694",
-  "Reference Required": "#B45309", "Vendor Required": "#B45309",
-  "Quotation Requested": "#B45309", "Quotation Received": "#2E5694",
-  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#9C4A28",
+  "Pending": "#5C5C5C", "Selection Required": "#2B5299",
+  "Reference Required": "#B87500", "Vendor Required": "#B87500",
+  "Quotation Requested": "#B87500", "Quotation Received": "#2B5299",
+  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#8B7F6A",
   "On Hold": "#F59E0B", "Inspection Pending": "#EAB308",
-  "Completed": "#1E6A45", "Cancelled": "#B3261E",
+  "Completed": "#1D633E", "Cancelled": "#B22B22",
 };
 
 const EMPTY_TASK = {
@@ -407,7 +407,7 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                       >
                         {isSel ? <CheckSquare size={14} weight="fill" /> : <Square size={14} />}
                       </button>
-                      <span className="px-1.5 py-0.5 border" style={{ borderColor: isVendor ? "#2E5694" : "#9C4A28", color: isVendor ? "#2E5694" : "#9C4A28" }}>
+                      <span className="px-1.5 py-0.5 border" style={{ borderColor: isVendor ? "#2B5299" : "#8B7F6A", color: isVendor ? "#2B5299" : "#76705E" }}>
                         {isVendor ? "AGENCY" : "TEAM"}
                       </span>
                       <span style={{ color: PRIORITY_COLORS[t.priority] || "#000" }}>{t.priority}</span>
@@ -708,7 +708,7 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
                   return (
                     <button type="button" key={emp.id} onClick={() => toggleAssignee(emp.id)}
                       className={`px-2.5 py-1 text-xs rounded-full border transition ${on
-                        ? "border-[var(--accent)] bg-[var(--hover)] text-[var(--accent-strong)] font-semibold"
+                        ? "border-[var(--accent)] bg-[var(--hover)] text-[#5F5A4B] font-semibold"
                         : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--accent)]"}`}
                       data-testid={`assignee-opt-${emp.id}`}>
                       {empName(emp)}

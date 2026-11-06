@@ -1,66 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ============================================================
-   DESIGN SAGA STUDIO — design tokens
-   Brown identity: warm walnut brand on warm paper, espresso sidebar,
-   clean geometric type. Every page colour comes from these tokens.
-   Every page colour should come from these tokens.
+   DESIGN SAGA — original brand palette (source of truth: the
+   pre-redesign CSS). Warm taupe brown, cream, off-white, charcoal.
+   Do not change these values; improve layout, type and interaction.
 ============================================================ */
 :root {
-  --font-display: 'Manrope', 'Inter', -apple-system, "Segoe UI", sans-serif;
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   /* surfaces */
-  --app: #F5F2EC;          /* warm paper */
+  --app: #FAF9F6;          /* main background (off-white) */
   --surface: #FFFFFF;
-  --surface-2: #F8F7F4;    /* table headers, quiet fills */
-  --hover: #F1EFEA;
-  --sidebar: #2A211A;      /* espresso */
-  --sidebar-2: #3A2E25;
+  --surface-2: #F7F6F3;
+  --hover: #F5F4F0;
+  --sidebar: #F5F4F0;      /* sidebar cream */
+  --sidebar-2: #EDECE8;    /* warm grey */
+  --header: #EDECE8;
 
   /* lines */
-  --line: #E3E0D8;
-  --line-soft: #EEEBE5;
-  --line-strong: #D2CEC4;
+  --line: #E8E6E1;
+  --line-soft: #F0EEE9;
+  --line-strong: #D8D2C4;
   --border: var(--line);
 
-  /* text (all AA on white and paper) */
-  --ink: #18181B;
-  --ink-2: #4A4741;
-  --ink-3: #6A665F;
-  --ink-4: #A9A49A;        /* decorative icons only, not text */
+  /* text */
+  --ink: #2C2C2C;          /* charcoal */
+  --ink-2: #5C5C5C;
+  --ink-3: #6E6A63;        /* AA: 4.9:1 on cream, 5.4:1 on white */
+  --ink-4: #B8B3A8;        /* decorative icons only */
 
-  /* brand — walnut brown (white text 6.4:1) */
-  --accent: #7A5A3C;
-  --accent-strong: #5E432B;
-  --accent-soft: #F3ECE3;
-  --accent-ring: rgba(122, 90, 60, 0.20);
-  --caramel: #D2A777;      /* highlights on the dark sidebar */
+  /* brand — taupe brown */
+  --accent: #8B7F6A;       /* primary brown */
+  --accent-strong: #76705E;/* button fill: white text 5:1 */
+  --accent-soft: #F3EFE9;
+  --accent-ring: rgba(139, 127, 106, 0.18);
+  --logo-brown: #8B7A55;   /* logo brown-gold */
 
-  /* semantic */
-  --success: #1E6A45;  --success-soft: #E7F1EB;
-  --warning: #85570F;  --warning-soft: #FBF1DC;
-  --danger:  #B3261E;  --danger-soft:  #FBE9E7;
-  --info:    #2E5694;  --info-soft:    #E9EFF8;
+  /* semantic (unchanged from the original screens) */
+  --success: #1D633E;  --success-soft: #EFF7EF;
+  --warning: #7A4E1A;  --warning-soft: #FFF4E5;
+  --danger:  #B22B22;  --danger-soft:  #FCEEEC;
+  --info:    #2B5299;  --info-soft:    #EAEFFC;
 
-  /* legacy names kept so older classes resolve to the new identity */
+  /* legacy names */
   --stone: var(--accent);
   --stone-600: var(--accent-strong);
-  --stone-subtle: var(--accent-ring);
-  --gold-500: var(--accent);
-  --gold-600: var(--accent-strong);
-  --gold-100: var(--accent-soft);
+  --stone-subtle: rgba(139, 127, 106, 0.10);
+  --gold-500: #C9A84C;
+  --gold-600: #B3923A;
+  --gold-100: #F9F6ED;
 
   --radius-sm: 8px;
   --radius: 10px;
   --radius-lg: 14px;
-  --shadow-1: 0 1px 2px rgba(24, 24, 27, 0.05);
-  --shadow-2: 0 8px 24px -12px rgba(24, 24, 27, 0.18);
+  --shadow-1: 0 1px 2px rgba(17, 17, 17, 0.04);
+  --shadow-2: 0 14px 34px -16px rgba(17, 17, 17, 0.18);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -90,32 +90,32 @@ code, .font-mono {
 
 .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.02em;
-  font-feature-settings: "tnum", "lnum";   /* aligned figures for money */
+  letter-spacing: -0.01em;
+  font-variant-numeric: lining-nums tabular-nums;   /* even, aligned money figures */
 }
 .tabular, td, .font-mono { font-variant-numeric: tabular-nums; }
 
 @layer base {
   :root {
-    --background: 45 17% 95%;      /* paper #F4F3EF */
-    --foreground: 240 6% 10%;      /* ink #18181B */
+    --background: 48 27% 97%;      /* off-white #FAF9F6 */
+    --foreground: 0 0% 17%;        /* charcoal #2C2C2C */
     --card: 0 0% 100%;
-    --card-foreground: 240 6% 10%;
+    --card-foreground: 0 0% 17%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 6% 10%;
-    --primary: 30 34% 36%;         /* walnut buttons */
+    --popover-foreground: 0 0% 17%;
+    --primary: 48 12% 42%;         /* taupe #76705E */
     --primary-foreground: 0 0% 100%;
-    --secondary: 45 15% 96%;
-    --secondary-foreground: 240 6% 10%;
-    --muted: 45 15% 96%;
-    --muted-foreground: 40 5% 39%;
-    --accent: 45 15% 93%;
-    --accent-foreground: 240 6% 10%;
-    --destructive: 3 71% 41%;
+    --secondary: 40 19% 95%;       /* cream #F5F4F0 */
+    --secondary-foreground: 0 0% 17%;
+    --muted: 40 19% 95%;
+    --muted-foreground: 0 0% 36%;
+    --accent: 40 19% 95%;
+    --accent-foreground: 0 0% 17%;
+    --destructive: 4 62% 44%;
     --destructive-foreground: 0 0% 100%;
-    --border: 43 15% 87%;
-    --input: 43 15% 87%;
-    --ring: 30 34% 36%;            /* walnut */
+    --border: 43 14% 90%;          /* #E8E6E1 */
+    --input: 43 14% 90%;
+    --ring: 41 14% 48%;            /* taupe #8B7F6A */
     --radius: 0.625rem;
   }
 }
@@ -230,7 +230,7 @@ code, .font-mono {
   text-transform: uppercase;
   font-weight: 600;
 }
-.accent-blue { color: var(--accent); }
+.accent-blue { color: var(--accent-strong); }
 .bg-accent-blue { background-color: var(--accent); }
 .tracking-tight { letter-spacing: -0.02em; }
 .tracking-tighter { letter-spacing: -0.025em; }
@@ -248,10 +248,10 @@ code, .font-mono {
   white-space: nowrap;
 }
 .btn-primary {
-  background: var(--accent); color: #FFFFFF; border: 1px solid var(--accent-strong);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 1px 2px rgba(94, 67, 43, 0.25);
+  background: var(--accent-strong); color: #FFFFFF; border: 1px solid var(--accent-strong);
+  box-shadow: var(--shadow-1);
 }
-.btn-primary:hover { background: var(--accent-strong); box-shadow: 0 6px 16px -8px rgba(94, 67, 43, 0.55); }
+.btn-primary:hover { background: #5F5A4B; border-color: #5F5A4B; box-shadow: 0 8px 22px -8px rgba(139, 127, 106, 0.55); }
 .btn-primary:disabled, .btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-ghost {
@@ -307,7 +307,7 @@ select.input-flat { padding-right: 32px; }
 .input-flat:disabled { background: var(--surface-2); color: var(--ink-3); }
 
 .glass-header {
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(250, 249, 246, 0.88);
   backdrop-filter: saturate(160%) blur(14px);
   -webkit-backdrop-filter: saturate(160%) blur(14px);
   border-bottom: 1px solid var(--line);
@@ -479,29 +479,8 @@ main > div:last-child { animation: page-in 260ms var(--ease) both; }
 }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.98) translateY(-2px); } to { opacity: 1; transform: none; } }
 
-/* ============================================================
-   DARK SIDEBAR — tokens re-scoped so every child adapts
-============================================================ */
-.sidebar-dark {
-  --ink: #F4EDE3;
-  --ink-2: #D8CDBF;
-  --ink-3: #A99A89;
-  --ink-4: #7E6F60;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --surface: rgba(255, 255, 255, 0.08);
-  --hover: rgba(255, 255, 255, 0.06);
-  --accent: var(--caramel);
-  color: var(--ink-2);
-  background:
-    radial-gradient(120% 60% at 0% 0%, rgba(210, 167, 119, 0.10), transparent 60%),
-    var(--sidebar);
-}
-.sidebar-dark .btn-icon { color: var(--ink-2); }
-.sidebar-dark .btn-icon:hover { background: var(--sidebar-2); border-color: var(--line); color: var(--ink); }
-.sidebar-dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-color: var(--sidebar); }
 .nav-active-bar {
   position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0;
-  background: var(--caramel); animation: bar-in 220ms var(--ease) both;
+  background: var(--accent); animation: bar-in 220ms var(--ease) both;
 }
 @keyframes bar-in { from { transform: scaleY(0.3); opacity: 0; } to { transform: none; opacity: 1; } }

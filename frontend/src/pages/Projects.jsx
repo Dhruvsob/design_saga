@@ -164,7 +164,7 @@ export default function Projects() {
                     return (
                       <button type="button" key={emp.id} onClick={() => toggleTeam(emp.id)}
                         className={`px-2.5 py-1 text-xs rounded-full border transition ${on
-                          ? "border-[var(--accent)] bg-[var(--hover)] text-[var(--accent-strong)] font-semibold"
+                          ? "border-[var(--accent)] bg-[var(--hover)] text-[#5F5A4B] font-semibold"
                           : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--accent)]"}`}
                         data-testid={`team-opt-${emp.id}`}>
                         {empName(emp)}
@@ -260,7 +260,7 @@ export default function Projects() {
                 {p.project_type}
                 {p.engagement_type && (
                   <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                    p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[var(--accent-strong)]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
+                    p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[#5F5A4B]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
                   }`}>{p.engagement_type}</span>
                 )}
               </div>

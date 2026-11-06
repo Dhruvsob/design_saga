@@ -111,7 +111,7 @@ export default function MasterDataManager() {
         {Object.entries(kinds).map(([k, label]) => (
           <button key={k} onClick={() => { setSelected(k); setEditingId(null); }}
             className={`w-full text-left px-3 py-2.5 text-sm border-b border-[var(--line-soft)] transition flex items-center justify-between ${
-              selected === k ? "bg-[var(--hover)] text-[var(--accent-strong)] font-semibold" : "hover:bg-[var(--surface-2)]"
+              selected === k ? "bg-[var(--hover)] text-[#5F5A4B] font-semibold" : "hover:bg-[var(--surface-2)]"
             }`}
             data-testid={`md-kind-${k}`}
           >

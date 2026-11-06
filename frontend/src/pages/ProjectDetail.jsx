@@ -227,7 +227,7 @@ export default function ProjectDetail() {
             ) : (p.client_name || "—")}
             {p.engagement_type && (
               <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[var(--accent-strong)]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
+                p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[#5F5A4B]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
               }`}>{p.engagement_type}</span>
             )}
             {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
@@ -316,8 +316,8 @@ export default function ProjectDetail() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[var(--line)]" data-testid="project-financials">
               <MiniStat label="Budget" value={inr(fin.budget)} />
               <MiniStat label="Invoiced" value={inr(fin.invoiced)} />
-              <MiniStat label="Collected" value={inr(fin.collected)} accent="#1E6A45" />
-              <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B3261E" : undefined} />
+              <MiniStat label="Collected" value={inr(fin.collected)} accent="#1D633E" />
+              <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B22B22" : undefined} />
               {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (

@@ -12,12 +12,12 @@ import {
 import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
-  "Pending": "#4A4741", "Selection Required": "#2E5694",
-  "Reference Required": "#B45309", "Vendor Required": "#B45309",
-  "Quotation Requested": "#B45309", "Quotation Received": "#2E5694",
-  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#9C4A28",
+  "Pending": "#5C5C5C", "Selection Required": "#2B5299",
+  "Reference Required": "#B87500", "Vendor Required": "#B87500",
+  "Quotation Requested": "#B87500", "Quotation Received": "#2B5299",
+  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#8B7F6A",
   "On Hold": "#F59E0B", "Inspection Pending": "#EAB308",
-  "Completed": "#1E6A45", "Cancelled": "#B3261E",
+  "Completed": "#1D633E", "Cancelled": "#B22B22",
 };
 
 const TABS = [
@@ -70,7 +70,7 @@ export default function TaskDetail() {
         kicker={[task.project_name, task.area, task.category].filter(Boolean).join(" · ")}
       >
         {overdue && (
-          <span className="status-chip" style={{ background: "#FFF2F0", color: "#B3261E" }}>
+          <span className="status-chip" style={{ background: "#FFF2F0", color: "#B22B22" }}>
             <Warning size={12} weight="fill" /> OVERDUE
           </span>
         )}
@@ -99,7 +99,7 @@ export default function TaskDetail() {
           >
             <Icon size={14} /> {label}
             {tid === "followups" && task.follow_ups?.length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 bg-[var(--hover)] text-[var(--accent-strong)]">{task.follow_ups.length}</span>
+              <span className="text-[10px] font-mono px-1.5 bg-[var(--hover)] text-[#5F5A4B]">{task.follow_ups.length}</span>
             )}
             {tid === "timeline" && task.timeline?.length > 0 && (
               <span className="text-[10px] font-mono px-1.5 bg-[var(--surface-2)]">{task.timeline.length}</span>

@@ -14,12 +14,12 @@ module.exports = {
                 },
                 fontFamily: {
                         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-                        display: ['Manrope', 'Inter', 'sans-serif'],
+                        display: ['Playfair Display', 'Georgia', 'serif'],
                         mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
                 },
                 colors: {
-                        stone: { DEFAULT: '#9C4A28', 600: '#7E3A1E' },
-                        gold: { 100: '#F5E9E2', 500: '#9C4A28', 600: '#7E3A1E' },
+                        stone: { DEFAULT: '#8B7F6A', 600: '#76705E' },
+                        gold: { 100: '#F9F6ED', 500: '#C9A84C', 600: '#B3923A' },
                         ink: { DEFAULT: '#2C2C2C', 2: '#6B6B6B', 3: '#9B9B9B' },
                         background: 'hsl(var(--background))',
                         foreground: 'hsl(var(--foreground))',

@@ -15,8 +15,8 @@ const ACTION_LABELS = {
 };
 
 const ACTION_COLORS = {
-  create: "#1E6A45", update: "#9C4A28", stage_change: "#9C4A28",
-  archive: "#B3261E", restore: "#1E6A45", convert: "#2E5694",
+  create: "#1D633E", update: "#8B7F6A", stage_change: "#8B7F6A",
+  archive: "#B22B22", restore: "#1D633E", convert: "#2B5299",
 };
 
 const fmtWhen = (iso) => {
@@ -54,7 +54,7 @@ export default function ActivityTimeline({ entityType, entityId }) {
         <div className="relative">
           {rows.map((r, i) => {
             const verb = r.action?.split(".").pop() || "update";
-            const color = ACTION_COLORS[verb] || "#4A4741";
+            const color = ACTION_COLORS[verb] || "#5C5C5C";
             return (
               <div key={r.id || i} className="flex gap-3 px-4 py-3 border-b border-[var(--line-soft)]" data-testid={`activity-row-${i}`}>
                 <div className="flex flex-col items-center pt-1">

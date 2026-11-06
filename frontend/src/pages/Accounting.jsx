@@ -567,11 +567,11 @@ function CommissionsDashboard({ data, onDownload }) {
         </button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KPI label="Total earned" value={CURRENCY(t.total_earned)} Icon={Coins} tint="#9C4A28" />
-        <KPI label="Received" value={CURRENCY(t.total_received)} Icon={TrendUp} tint="#1E6A45" />
-        <KPI label="Pending" value={CURRENCY(t.pending)} Icon={TrendDown} tint={t.pending > 0 ? "#B3261E" : "#4A4741"} />
-        <KPI label="Unallocated" value={CURRENCY(t.unallocated_received)} Icon={WarningCircle} tint={t.unallocated_received > 0 ? "#85570F" : "#4A4741"} />
-        <KPI label="This month" value={CURRENCY(t.this_month)} Icon={ChartLine} tint="#85570F" />
+        <KPI label="Total earned" value={CURRENCY(t.total_earned)} Icon={Coins} tint="#8B7F6A" />
+        <KPI label="Received" value={CURRENCY(t.total_received)} Icon={TrendUp} tint="#1D633E" />
+        <KPI label="Pending" value={CURRENCY(t.pending)} Icon={TrendDown} tint={t.pending > 0 ? "#B22B22" : "#5C5C5C"} />
+        <KPI label="Unallocated" value={CURRENCY(t.unallocated_received)} Icon={WarningCircle} tint={t.unallocated_received > 0 ? "#7A4E1A" : "#5C5C5C"} />
+        <KPI label="This month" value={CURRENCY(t.this_month)} Icon={ChartLine} tint="#7A4E1A" />
       </div>
 
       <div className="card-flat" data-testid="commissions-vendor-table">
@@ -734,10 +734,10 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <KPI label="Opening balance" value={CURRENCY(cf.opening_balance)} Icon={Wallet} tint="#4A4741" />
-        <KPI label="Inflows" value={CURRENCY(cf.total_inflow)} Icon={TrendUp} tint="#1E6A45" />
-        <KPI label="Outflows" value={CURRENCY(cf.total_outflow)} Icon={TrendDown} tint="#B3261E" />
-        <KPI label="Closing balance" value={CURRENCY(cf.closing_balance)} Icon={Wallet} tint={cf.closing_balance >= 0 ? "#9C4A28" : "#B3261E"} />
+        <KPI label="Opening balance" value={CURRENCY(cf.opening_balance)} Icon={Wallet} tint="#5C5C5C" />
+        <KPI label="Inflows" value={CURRENCY(cf.total_inflow)} Icon={TrendUp} tint="#1D633E" />
+        <KPI label="Outflows" value={CURRENCY(cf.total_outflow)} Icon={TrendDown} tint="#B22B22" />
+        <KPI label="Closing balance" value={CURRENCY(cf.closing_balance)} Icon={Wallet} tint={cf.closing_balance >= 0 ? "#8B7F6A" : "#B22B22"} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -816,16 +816,16 @@ function Dashboard({ d, onRefresh }) {
   return (
     <div className="space-y-6" data-testid="dashboard-tab">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <KPI label="Cash & Bank" value={CURRENCY(k.cash_bank)} Icon={Wallet} tint="#9C4A28" testid="kpi-cash" />
-        <KPI label="This month P&L" value={CURRENCY(k.profit_month)} Icon={ChartLine} tint={k.profit_month >= 0 ? "#1E6A45" : "#B3261E"} testid="kpi-profit" />
+        <KPI label="Cash & Bank" value={CURRENCY(k.cash_bank)} Icon={Wallet} tint="#8B7F6A" testid="kpi-cash" />
+        <KPI label="This month P&L" value={CURRENCY(k.profit_month)} Icon={ChartLine} tint={k.profit_month >= 0 ? "#1D633E" : "#B22B22"} testid="kpi-profit" />
         <KPI label="Outstanding" value={CURRENCY(k.outstanding)} Icon={TrendDown} tint="#A86400" testid="kpi-outstanding" />
-        <KPI label="Overdue" value={CURRENCY(k.overdue)} Icon={TrendDown} tint="#B3261E" testid="kpi-overdue" />
+        <KPI label="Overdue" value={CURRENCY(k.overdue)} Icon={TrendDown} tint="#B22B22" testid="kpi-overdue" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <SubKPI label="Income (month)" value={CURRENCY(k.income_month)} tint="#1E6A45" />
-        <SubKPI label="Expense (month)" value={CURRENCY(k.expense_month)} tint="#B3261E" />
-        <SubKPI label="Salary (month)" value={CURRENCY(k.salary_month)} tint="#2E5694" />
+        <SubKPI label="Income (month)" value={CURRENCY(k.income_month)} tint="#1D633E" />
+        <SubKPI label="Expense (month)" value={CURRENCY(k.expense_month)} tint="#B22B22" />
+        <SubKPI label="Salary (month)" value={CURRENCY(k.salary_month)} tint="#2B5299" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1103,10 +1103,10 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPI label="Pending collection" value={CURRENCY(data.totals?.all)} Icon={Money} tint="#18181B" />
-        <KPI label="Overdue" value={CURRENCY(data.totals?.overdue)} Icon={ArrowUp} tint="#B3261E" />
-        <KPI label="Due today / upcoming" value={CURRENCY((data.totals?.due_today || 0) + (data.totals?.upcoming || 0))} Icon={ArrowDown} tint="#85570F" />
-        <KPI label="Received" value={CURRENCY(data.totals?.received)} Icon={ChartLine} tint="#1E6A45" />
+        <KPI label="Pending collection" value={CURRENCY(data.totals?.all)} Icon={Money} tint="#0A0A0A" />
+        <KPI label="Overdue" value={CURRENCY(data.totals?.overdue)} Icon={ArrowUp} tint="#B22B22" />
+        <KPI label="Due today / upcoming" value={CURRENCY((data.totals?.due_today || 0) + (data.totals?.upcoming || 0))} Icon={ArrowDown} tint="#7A4E1A" />
+        <KPI label="Received" value={CURRENCY(data.totals?.received)} Icon={ChartLine} tint="#1D633E" />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -1612,8 +1612,8 @@ function Reports({ pl, tb, onReload, onDownload, periodQs }) {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ReportBlock title="INCOME" rows={pl.income} total={pl.total_income} tint="#1E6A45" testid="pl-income" />
-          <ReportBlock title="EXPENSE" rows={pl.expense} total={pl.total_expense} tint="#B3261E" testid="pl-expense" />
+          <ReportBlock title="INCOME" rows={pl.income} total={pl.total_income} tint="#1D633E" testid="pl-income" />
+          <ReportBlock title="EXPENSE" rows={pl.expense} total={pl.total_expense} tint="#B22B22" testid="pl-expense" />
         </div>
       </div>
 

@@ -127,8 +127,8 @@ export default function ClientDetail() {
       <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)]">
         <Stat label="Projects" value={s.projects ?? 0} />
         <Stat label="Invoiced" value={inr(s.total_invoiced)} />
-        <Stat label="Collected" value={inr(s.total_paid)} accent="#1E6A45" />
-        <Stat label="Outstanding" value={inr(s.outstanding)} accent={s.outstanding > 0 ? "#B3261E" : undefined} />
+        <Stat label="Collected" value={inr(s.total_paid)} accent="#1D633E" />
+        <Stat label="Outstanding" value={inr(s.outstanding)} accent={s.outstanding > 0 ? "#B22B22" : undefined} />
       </div>
 
       {/* tabs */}
@@ -190,8 +190,8 @@ export default function ClientDetail() {
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)]">
                 <Stat label="Opening" value={inr(ledger.opening_balance)} />
-                <Stat label="Inflow" value={inr(ledger.inflow)} accent="#1E6A45" />
-                <Stat label="Outflow" value={inr(ledger.outflow)} accent="#B3261E" />
+                <Stat label="Inflow" value={inr(ledger.inflow)} accent="#1D633E" />
+                <Stat label="Outflow" value={inr(ledger.outflow)} accent="#B22B22" />
                 <Stat label="Closing" value={inr(ledger.closing_balance)} />
               </div>
               <div className="border border-[var(--line)] overflow-x-auto">

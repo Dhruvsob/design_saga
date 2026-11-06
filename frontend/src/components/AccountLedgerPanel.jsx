@@ -159,8 +159,8 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--line)] border-b border-[var(--line)]">
           <SummaryCell label="Closing balance" value={CURRENCY(data?.closing_balance)} strong testid="ledger-closing" />
           <SummaryCell label="Transactions" value={loading ? "…" : String(rows.length)} testid="ledger-count" />
-          <SummaryCell label="Total in (Dr)" value={CURRENCY(data?.total_debit)} tint="#1E6A45" testid="ledger-debit" />
-          <SummaryCell label="Total out (Cr)" value={CURRENCY(data?.total_credit)} tint="#B3261E" testid="ledger-credit" />
+          <SummaryCell label="Total in (Dr)" value={CURRENCY(data?.total_debit)} tint="#1D633E" testid="ledger-debit" />
+          <SummaryCell label="Total out (Cr)" value={CURRENCY(data?.total_credit)} tint="#B22B22" testid="ledger-credit" />
         </div>
 
         {/* Controls */}

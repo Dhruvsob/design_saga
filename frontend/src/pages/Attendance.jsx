@@ -14,10 +14,10 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
-  present: "#1E6A45", late: "#85570F", absent: "#B3261E", half_day: "#B45309",
-  leave: "#2E5694", paid_leave: "#2E5694", unpaid_leave: "#B3261E",
-  holiday: "#2E5694", week_off: "#4A4741", pending_approval: "#B45309",
-  upcoming: "#D2CEC4", site_visit: "#0E7490",
+  present: "#1D633E", late: "#7A4E1A", absent: "#B22B22", half_day: "#B87500",
+  leave: "#2B5299", paid_leave: "#2B5299", unpaid_leave: "#B22B22",
+  holiday: "#2B5299", week_off: "#5C5C5C", pending_approval: "#B87500",
+  upcoming: "#C9C9C9", site_visit: "#0E7490",
 };
 const WEEKDAYS = [
   { v: 0, l: "Mon" }, { v: 1, l: "Tue" }, { v: 2, l: "Wed" }, { v: 3, l: "Thu" },
@@ -474,7 +474,7 @@ export default function Attendance() {
                       style={{ background: `${STATUS_COLORS[d.status] || "#EEE"}12` }}
                       title={`${formatDate(d.date)} · ${d.status}${d.check_in ? ` · in ${d.check_in}` : ""}${d.check_out ? ` · out ${d.check_out}` : ""}`}>
                       <div className="text-[10px] font-mono">{Number(d.date.slice(8, 10))}</div>
-                      <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[d.status] || "#6A665F" }}>
+                      <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[d.status] || "#6E6A63" }}>
                         {d.status.replace(/_/g, " ")}
                       </div>
                     </div>
@@ -810,13 +810,13 @@ function TeamDashboardTab() {
 
   if (!dash) return <div className="skeleton h-64 w-full" />;
   const cards = [
-    ["Present Today", dash.present_today, "#1E6A45"],
-    ["Late Today", dash.late_today, "#85570F"],
-    ["Absent Today", dash.absent_today, "#B3261E"],
-    ["On Leave", dash.on_leave, "#2E5694"],
-    ["Checked In Now", dash.currently_checked_in, "#9C4A28"],
-    ["Checked Out", dash.checked_out, "#4A4741"],
-    ["Pending Late Approvals", dash.pending_late_approvals, "#B45309"],
+    ["Present Today", dash.present_today, "#1D633E"],
+    ["Late Today", dash.late_today, "#7A4E1A"],
+    ["Absent Today", dash.absent_today, "#B22B22"],
+    ["On Leave", dash.on_leave, "#2B5299"],
+    ["Checked In Now", dash.currently_checked_in, "#8B7F6A"],
+    ["Checked Out", dash.checked_out, "#5C5C5C"],
+    ["Pending Late Approvals", dash.pending_late_approvals, "#B87500"],
     ["Pending Leaves", dash.pending_leaves, "#0E7490"],
   ];
   return (
@@ -877,10 +877,10 @@ function TeamDashboardTab() {
    Live Board — auto-refreshing who's in / out
    ================================================== */
 const LIVE_LABEL = {
-  checked_in: ["Checked In", "#1E6A45"], late: ["Late", "#85570F"],
-  checked_out: ["Checked Out", "#4A4741"], absent: ["Absent", "#B3261E"],
-  on_leave: ["On Leave", "#2E5694"], weekly_off: ["Weekly Off", "#6A665F"],
-  holiday: ["Holiday", "#2E5694"],
+  checked_in: ["Checked In", "#1D633E"], late: ["Late", "#7A4E1A"],
+  checked_out: ["Checked Out", "#5C5C5C"], absent: ["Absent", "#B22B22"],
+  on_leave: ["On Leave", "#2B5299"], weekly_off: ["Weekly Off", "#6E6A63"],
+  holiday: ["Holiday", "#2B5299"],
 };
 function LiveBoardTab() {
   const [data, setData] = useState(null);
@@ -889,9 +889,9 @@ function LiveBoardTab() {
   if (!data) return <div className="skeleton h-64 w-full" />;
   const c = data.counts;
   const chips = [
-    ["Checked In", c.checked_in, "#1E6A45"], ["Late", c.late, "#85570F"],
-    ["Absent", c.absent, "#B3261E"], ["On Leave", c.on_leave, "#2E5694"],
-    ["Checked Out", c.checked_out, "#4A4741"], ["Off / Holiday", c.off, "#2E5694"],
+    ["Checked In", c.checked_in, "#1D633E"], ["Late", c.late, "#7A4E1A"],
+    ["Absent", c.absent, "#B22B22"], ["On Leave", c.on_leave, "#2B5299"],
+    ["Checked Out", c.checked_out, "#5C5C5C"], ["Off / Holiday", c.off, "#2B5299"],
   ];
   return (
     <div className="space-y-5" data-testid="live-board">
@@ -1442,7 +1442,7 @@ function LateConfigCard({ policy, onSaved }) {
         <div className="text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Late reason categories</div>
         <div className="flex flex-wrap gap-1.5 mb-2" data-testid="late-cats">
           {cats.map((c) => (
-            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[var(--hover)] text-[var(--accent-strong)] font-mono">
+            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[var(--hover)] text-[#5F5A4B] font-mono">
               {capWords(c)}
               <button onClick={() => setP({ ...p, late_reason_categories: cats.filter((x) => x !== c) })}
                 className="text-[var(--ink-3)] hover:text-[var(--danger)]"><X size={11} /></button>
@@ -1795,7 +1795,7 @@ function GeoPolicyTab({ projects }) {
           <div className="space-y-2">
             {locations.map((l) => (
               <div key={l.id} className="flex items-center gap-3 border border-[var(--line-soft)] p-2.5" data-testid={`loc-${l.id}`}>
-                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">
+                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">
                   {KIND_LABELS[l.kind] || l.kind}
                 </span>
                 <div className="flex-1 min-w-0">
@@ -1842,7 +1842,7 @@ function MonthPicker({ ym, setYm }) {
 }
 
 function LeaveStatus({ s }) {
-  const col = { pending: "#B45309", approved: "#1E6A45", rejected: "#B3261E", cancelled: "#4A4741" }[s] || "#4A4741";
+  const col = { pending: "#B87500", approved: "#1D633E", rejected: "#B22B22", cancelled: "#5C5C5C" }[s] || "#5C5C5C";
   return <span className="status-chip" style={{ background: `${col}15`, color: col }}>{s}</span>;
 }
 

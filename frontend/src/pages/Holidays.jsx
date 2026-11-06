@@ -7,11 +7,11 @@ import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 
 const KINDS = [
-  { id: "national", label: "National", color: "#B3261E" },
+  { id: "national", label: "National", color: "#B22B22" },
   { id: "festival", label: "Festival", color: "#B87F00" },
   { id: "optional", label: "Optional", color: "#6B7280" },
-  { id: "company",  label: "Company",  color: "#9C4A28" },
-  { id: "regional", label: "Regional", color: "#1E6A45" },
+  { id: "company",  label: "Company",  color: "#8B7F6A" },
+  { id: "regional", label: "Regional", color: "#1D633E" },
 ];
 
 const kindMeta = (id) => KINDS.find((k) => k.id === id) || KINDS[3];

@@ -257,7 +257,7 @@ export default function EmployeeDetail() {
             <FileText size={14} /> Add document
           </button>
           {canDelete && (
-            <button onClick={remove} className="btn-ghost ml-auto" style={{ color: "#B3261E", borderColor: "#B3261E" }}>
+            <button onClick={remove} className="btn-ghost ml-auto" style={{ color: "#B22B22", borderColor: "#B22B22" }}>
               <UserMinus size={14} /> Terminate
             </button>
           )}
@@ -709,9 +709,9 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
       {b && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
           <StatBox label="Gross" value={fmt(b.gross)} />
-          <StatBox label="Deductions" value={fmt(b.deductions_total)} tint="#B3261E" />
-          <StatBox label="Additions" value={fmt(b.additions)} tint="#1E6A45" />
-          <StatBox label="Net payable" value={fmt(b.net)} tint="#9C4A28" big />
+          <StatBox label="Deductions" value={fmt(b.deductions_total)} tint="#B22B22" />
+          <StatBox label="Additions" value={fmt(b.additions)} tint="#1D633E" />
+          <StatBox label="Net payable" value={fmt(b.net)} tint="#8B7F6A" big />
         </div>
       )}
       {b && <SalaryWorking b={b} />}
@@ -784,7 +784,7 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
   );
 }
 
-function StatBox({ label, value, tint = "#18181B", big }) {
+function StatBox({ label, value, tint = "#0A0A0A", big }) {
   return (
     <div className="border border-[var(--line)] p-3">
       <div className="overline">{label}</div>

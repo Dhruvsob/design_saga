@@ -60,8 +60,8 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
     }
     if (!circleRef.current) {
       circleRef.current = L.circle(pos, {
-        radius: Number(radius) || 150, color: "#9C4A28", weight: 2,
-        fillColor: "#9C4A28", fillOpacity: 0.12,
+        radius: Number(radius) || 150, color: "#8B7F6A", weight: 2,
+        fillColor: "#8B7F6A", fillOpacity: 0.12,
       }).addTo(map);
     } else {
       circleRef.current.setLatLng(pos);
@@ -79,8 +79,8 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
     (locations || []).forEach((l) => {
       if (l.lat == null || l.lng == null) return;
       L.circle([Number(l.lat), Number(l.lng)], {
-        radius: Number(l.radius_m) || 150, color: "#7E3A1E", weight: 1,
-        fillColor: "#9C4A28", fillOpacity: 0.08, dashArray: "4 4",
+        radius: Number(l.radius_m) || 150, color: "#76705E", weight: 1,
+        fillColor: "#8B7F6A", fillOpacity: 0.08, dashArray: "4 4",
       }).addTo(layer).bindPopup(`${l.name || "Location"} · ${l.radius_m || 150}m`);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

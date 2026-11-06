@@ -16,15 +16,15 @@ import { confirmAction } from "../lib/confirm";
 /* ---------- constants ---------- */
 const KIND_META = {
   task:             { label: "Tasks",       color: "#625C4D" },
-  meeting:          { label: "Meetings",    color: "#1E6A45" },
+  meeting:          { label: "Meetings",    color: "#1D633E" },
   reminder:         { label: "Reminders",   color: "#8F5B00" },
   milestone:        { label: "Milestones",  color: "#5A4AB8" },
-  project_deadline: { label: "Deadlines",   color: "#18181B" },
-  invoice_due:      { label: "Invoices",    color: "#B3261E" },
-  holiday:          { label: "Holidays",    color: "#2E5694" },
+  project_deadline: { label: "Deadlines",   color: "#0A0A0A" },
+  invoice_due:      { label: "Invoices",    color: "#B22B22" },
+  holiday:          { label: "Holidays",    color: "#2B5299" },
   leave:            { label: "Leaves",      color: "#7F4F00" },
-  deadline:         { label: "Deadlines",   color: "#18181B" },
-  other:            { label: "Other",       color: "#4A4741" },
+  deadline:         { label: "Deadlines",   color: "#0A0A0A" },
+  other:            { label: "Other",       color: "#5C5C5C" },
 };
 const kindColor = (k) => (KIND_META[k] || KIND_META.other).color;
 
@@ -274,7 +274,7 @@ export default function CalendarPage() {
               className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition ${off ? "border-[var(--line)] text-[var(--ink-3)] line-through" : "border-transparent"}`}
               style={off ? {} : { background: `${meta.color}14`, color: meta.color }}
               data-testid={`filter-${k}`}>
-              <span className="w-2 h-2 rounded-full" style={{ background: off ? "#D2CEC4" : meta.color }} />
+              <span className="w-2 h-2 rounded-full" style={{ background: off ? "#C9C9C9" : meta.color }} />
               {meta.label}
             </button>
           );

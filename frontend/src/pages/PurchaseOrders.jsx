@@ -20,7 +20,7 @@ function fmtErr(d, fb = "Failed") {
 
 const STATUS_TONE = {
   draft: "bg-[var(--line-soft)] text-[var(--ink-2)]",
-  sent: "bg-[var(--hover)] text-[var(--accent-strong)]",
+  sent: "bg-[var(--hover)] text-[#5F5A4B]",
   partial: "bg-[var(--warning-soft)] text-[var(--warning)]",
   received: "bg-[var(--success-soft)] text-[var(--success)]",
   closed: "bg-[var(--success-soft)] text-[var(--success)]",

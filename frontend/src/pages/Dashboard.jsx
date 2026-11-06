@@ -90,7 +90,7 @@ export default function Dashboard() {
               value={compactMoney(kpis.revenue)}
               sub={fmtMoney(kpis.revenue)}
               Icon={Money}
-              accent="#1E6A45"
+              accent="#1D633E"
               onClick={() => navigate("/accounting")}
               testid="kpi-revenue"
             />
@@ -100,7 +100,7 @@ export default function Dashboard() {
             value={kpis.active_projects || 0}
             sub={`${kpis.total_projects || 0} total`}
             Icon={Briefcase}
-            accent="#9C4A28"
+            accent="#8B7F6A"
             onClick={() => navigate("/projects")}
             testid="kpi-active-projects"
           />
@@ -109,7 +109,7 @@ export default function Dashboard() {
             value={kpis.overdue_tasks || 0}
             sub={kpis.overdue_tasks > 0 ? "Action needed" : "All clear"}
             Icon={Warning}
-            accent={kpis.overdue_tasks ? "#B3261E" : "#4A4741"}
+            accent={kpis.overdue_tasks ? "#B22B22" : "#5C5C5C"}
             trend={kpis.overdue_tasks > 0 ? "HOT" : "OK"}
             onClick={() => navigate("/tasks")}
             testid="kpi-overdue"
@@ -120,7 +120,7 @@ export default function Dashboard() {
               value={compactMoney(kpis.collection_due)}
               sub={fmtMoney(kpis.collection_due)}
               Icon={Clock}
-              accent="#9C4A28"
+              accent="#8B7F6A"
               trend={kpis.collection_due > 0 ? "FOLLOW UP" : "—"}
               onClick={() => navigate("/invoices")}
               testid="kpi-collection"
@@ -154,7 +154,7 @@ export default function Dashboard() {
                     className="h-full transition-all duration-700 ease-out flex items-center px-3"
                     style={{
                       width: `${(s.count / maxFunnel) * 100}%`,
-                      background: s.stage === "Won" ? "#1E6A45" : s.stage === "Lost" ? "#B3261E" : "#9C4A28",
+                      background: s.stage === "Won" ? "#1D633E" : s.stage === "Lost" ? "#B22B22" : "#8B7F6A",
                       animation: "width-in 700ms cubic-bezier(0.16, 1, 0.3, 1)",
                     }}
                   >
@@ -190,7 +190,7 @@ export default function Dashboard() {
                 <div
                   key={i}
                   className="border-l-2 pl-3 py-2 hover:bg-[var(--surface-2)] transition"
-                  style={{ borderColor: a.level === "high" ? "#B3261E" : "#9C4A28" }}
+                  style={{ borderColor: a.level === "high" ? "#B22B22" : "#8B7F6A" }}
                 >
                   <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--ink-2)]">{a.level}</div>
                   <div className="text-sm font-medium">{a.message}</div>
@@ -299,16 +299,16 @@ function Kpi({ label, value, sub, Icon, accent, trend, sparkData, testid, onClic
       data-testid={testid}
     >
       {/* hover left bar */}
-      <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: accent || "#18181B" }} />
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: accent || "#0A0A0A" }} />
 
       <div className="flex items-start justify-between mb-8">
         <div className="overline">{label}</div>
-        <Icon size={18} style={{ color: accent || "#4A4741" }} weight="duotone" />
+        <Icon size={18} style={{ color: accent || "#5C5C5C" }} weight="duotone" />
       </div>
 
       <div
         className="font-display font-bold tracking-tighter text-4xl lg:text-5xl"
-        style={{ color: accent || "#18181B" }}
+        style={{ color: accent || "#0A0A0A" }}
       >
         {value}
       </div>
@@ -316,7 +316,7 @@ function Kpi({ label, value, sub, Icon, accent, trend, sparkData, testid, onClic
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="text-xs text-[var(--ink-2)] truncate flex-1">{sub}</div>
         {trend && (
-          <div className="font-mono text-[10px] font-semibold tracking-widest" style={{ color: accent || "#4A4741" }}>
+          <div className="font-mono text-[10px] font-semibold tracking-widest" style={{ color: accent || "#5C5C5C" }}>
             {trend}
           </div>
         )}
@@ -331,7 +331,7 @@ function Kpi({ label, value, sub, Icon, accent, trend, sparkData, testid, onClic
               className="flex-1 transition-all"
               style={{
                 height: `${(v / max) * 100}%`,
-                background: i === sparkData.length - 1 ? (accent || "#18181B") : "#E3E0D8",
+                background: i === sparkData.length - 1 ? (accent || "#0A0A0A") : "#E5E5E5",
                 minHeight: 2,
               }}
             />
