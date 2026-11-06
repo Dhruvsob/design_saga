@@ -10,6 +10,7 @@ import {
   CheckSquare, Square,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const LANES = [
   { id: "todo", label: "To do", color: "#5C5C5C" },
@@ -110,7 +111,7 @@ export default function TasksBoard() {
   };
 
   const del = async (id) => {
-    if (!window.confirm("Delete this task?")) return;
+    if (!await confirmAction("Delete this task?")) return;
     await api.delete(`/tasks/${id}`);
     loadAll();
   };

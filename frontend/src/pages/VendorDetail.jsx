@@ -14,6 +14,7 @@ import {
   Archive,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const INR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
@@ -109,7 +110,7 @@ export default function VendorDetail() {
   };
   const deleteBill = async (bill) => {
     const action = bill.status === "draft" ? "delete" : "cancel and reverse";
-    if (!window.confirm(`${action[0].toUpperCase()}${action.slice(1)} ${bill.bill_number}?\n\nPosted accounting remains in the audit log and is corrected with a balanced reversal.`)) return;
+    if (!await confirmAction(`${action[0].toUpperCase()}${action.slice(1)} ${bill.bill_number}?\n\nPosted accounting remains in the audit log and is corrected with a balanced reversal.`)) return;
     setBusy(true);
     try {
       await api.delete(`/vendor-bills/${bill.id}`);
@@ -120,7 +121,7 @@ export default function VendorDetail() {
     } finally { setBusy(false); }
   };
   const reversePayment = async (payment) => {
-    if (!window.confirm(`Reverse this ${INR_D(payment.amount)} vendor payment?\n\nThe linked bills and accounting balances will be restored automatically.`)) return;
+    if (!await confirmAction(`Reverse this ${INR_D(payment.amount)} vendor payment?\n\nThe linked bills and accounting balances will be restored automatically.`)) return;
     setBusy(true);
     try {
       await api.delete(`/vendor-payments/${payment.id}`);
@@ -139,7 +140,7 @@ export default function VendorDetail() {
     } finally { setBusy(false); }
   };
   const reverseCommissionReceipt = async (receipt) => {
-    if (!window.confirm(`Delete this ${INR_D(receipt.amount)} commission receipt?\n\nA balanced reversal will preserve the audit trail and correct all commission totals.`)) return;
+    if (!await confirmAction(`Delete this ${INR_D(receipt.amount)} commission receipt?\n\nA balanced reversal will preserve the audit trail and correct all commission totals.`)) return;
     setBusy(true);
     try {
       await api.delete(`/commission-settlements/${receipt.id}`);
@@ -158,7 +159,7 @@ export default function VendorDetail() {
     } finally { setBusy(false); }
   };
   const cancelExpectedCommission = async (row) => {
-    if (!window.confirm("Cancel this expected commission? No posted accounting will be deleted.")) return;
+    if (!await confirmAction("Cancel this expected commission? No posted accounting will be deleted.")) return;
     setBusy(true);
     try {
       await api.delete(`/vendors/${id}/commissions/${row.id}`);
@@ -217,7 +218,7 @@ export default function VendorDetail() {
     finally { setBusy(false); }
   };
   const archiveVendor = async () => {
-    if (!window.confirm(`Archive ${v.name}? Existing bills, payments and accounting history will be preserved.`)) return;
+    if (!await confirmAction(`Archive ${v.name}? Existing bills, payments and accounting history will be preserved.`)) return;
     setBusy(true);
     try {
       await api.delete(`/vendors/${id}`);
@@ -269,7 +270,7 @@ export default function VendorDetail() {
     finally { setBusy(false); }
   };
   const delDoc = async (docId) => {
-    if (!window.confirm("Remove this document?")) return;
+    if (!await confirmAction("Remove this document?")) return;
     await api.delete(`/vendors/${id}/documents/${docId}`); await load();
   };
   const editDoc = async (doc) => {

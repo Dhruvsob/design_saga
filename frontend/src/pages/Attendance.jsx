@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate, formatDateTime } from "../lib/format";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
   present: "#1D633E", late: "#B87500", absent: "#B4001C", half_day: "#F0A93A",
@@ -552,15 +553,7 @@ export default function Attendance() {
               )}
             </div>
 
-            <div className="card-flat">
-              <div className="overline mb-3">LEAVE BALANCE (est.)</div>
-              {meta && Object.entries(meta.default_allowance).map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
-                  <span className="capitalize">{k}</span>
-                  <span className="font-mono">{v}</span>
-                </div>
-              ))}
-            </div>
+            <MyLeaveBalance employeeId={mySalary?.employee?.id} year={ym.y} />
           </div>
         </div>
       )}
@@ -584,6 +577,11 @@ export default function Attendance() {
               <input type="date" required className="input-flat" value={leaveForm.to_date} onChange={(e) => setLeaveForm({ ...leaveForm, to_date: e.target.value })} data-testid="leave-to" />
               <input className="input-flat" placeholder="Reason" value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
               <button className="btn-primary md:col-span-4" data-testid="leave-submit"><PaperPlaneRight size={14} /> Submit</button>
+              {meta && !meta.can_manage && (
+                <p className="md:col-span-4 text-xs text-[#6E6A63]">
+                  Need maternity or paternity leave? Tell HR and they will record it for you privately.
+                </p>
+              )}
             </form>
           )}
           {showCorrForm && (
@@ -1630,7 +1628,7 @@ function GeoPolicyTab({ projects }) {
   };
 
   const deleteLocation = async (id) => {
-    if (!window.confirm("Remove this geofence location?")) return;
+    if (!await confirmAction("Remove this geofence location?")) return;
     await api.delete(`/attendance/locations/${id}`);
     load();
   };
@@ -1846,4 +1844,35 @@ function MonthPicker({ ym, setYm }) {
 function LeaveStatus({ s }) {
   const col = { pending: "#F0A93A", approved: "#1D633E", rejected: "#B4001C", cancelled: "#5C5C5C" }[s] || "#5C5C5C";
   return <span className="status-chip" style={{ background: `${col}15`, color: col }}>{s}</span>;
+}
+
+
+function MyLeaveBalance({ employeeId, year }) {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    if (!employeeId) { setRows([]); return; }
+    let alive = true;
+    api.get(`/leaves/balance/${employeeId}`, { params: { year } })
+      .then(({ data }) => alive && setRows(Object.entries(data.balance || {})))
+      .catch(() => alive && setRows([]));
+    return () => { alive = false; };
+  }, [employeeId, year]);
+  return (
+    <div className="card-flat" data-testid="my-leave-balance">
+      <div className="overline mb-3">MY LEAVE · {year}</div>
+      {rows === null ? (
+        <p className="text-sm text-[#6E6A63]">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-[#6E6A63]">No leave balance to show yet.</p>
+      ) : rows.map(([type, b]) => (
+        <div key={type} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
+          <span className="capitalize">{type.replace("_", " ")}</span>
+          <span className="font-mono text-xs">
+            <span className="text-[#1A1A1A] font-semibold">{b.remaining}</span>
+            <span className="text-[#6E6A63]"> left · {b.used} used</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }

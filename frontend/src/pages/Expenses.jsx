@@ -8,6 +8,7 @@ import {
   Receipt, Plus, Warning, Check, X, ArrowsClockwise, CurrencyInr, ThumbsUp, ThumbsDown, Wallet,
   PencilSimple, Trash,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 function fmtErr(d, fb = "Failed") {
@@ -244,7 +245,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
     const message = posted
       ? "Delete this reimbursed expense? A balanced accounting reversal will be retained in the audit trail."
       : "Delete this expense claim? It will remain in the audit trail as cancelled.";
-    if (!window.confirm(message)) return;
+    if (!await confirmAction(message)) return;
     setBusy("delete"); setErr("");
     try {
       await api.delete(`/expenses/${expId}`);

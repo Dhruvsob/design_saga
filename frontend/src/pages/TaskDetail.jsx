@@ -9,6 +9,7 @@ import {
   ArrowLeft, Trash, Bell, Clock, Plus, PaperclipHorizontal, LinkSimple,
   ClockCounterClockwise, Users, Buildings, Warning, ChatCircleText,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
   "Pending": "#5C5C5C", "Selection Required": "#8A6DFF",
@@ -46,7 +47,7 @@ export default function TaskDetail() {
   };
 
   const del = async () => {
-    if (!window.confirm("Delete this task permanently?")) return;
+    if (!await confirmAction("Delete this task permanently?")) return;
     await api.delete(`/tasks/${id}`);
     navigate("/tasks");
   };
@@ -255,7 +256,7 @@ function FollowUps({ task, reload }) {
   };
 
   const del = async (fid) => {
-    if (!window.confirm("Delete follow-up?")) return;
+    if (!await confirmAction("Delete follow-up?")) return;
     await api.delete(`/tasks/${task.id}/follow-ups/${fid}`);
     reload();
   };

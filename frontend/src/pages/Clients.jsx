@@ -8,6 +8,7 @@ import { formatDate } from "../lib/format";
 import {
   Plus, MagnifyingGlass, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const EMPTY = { name: "", email: "", phone: "", company: "", address: "", client_type: "", notes: "" };
 
@@ -75,7 +76,7 @@ export default function Clients() {
 
   const archive = async (c, e) => {
     e.stopPropagation();
-    if (!window.confirm(`Archive “${c.name}”? The client will be hidden but history is preserved.`)) return;
+    if (!await confirmAction(`Archive “${c.name}”? The client will be hidden but history is preserved.`)) return;
     await api.post(`/clients/${c.id}/archive`);
     load();
   };

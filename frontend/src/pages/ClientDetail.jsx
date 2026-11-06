@@ -9,6 +9,7 @@ import { formatDate } from "../lib/format";
 import {
   ArrowLeft, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X, Warning,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const TABS = ["Projects", "Invoices", "Ledger", "Activity"];
 const inr = (n) => `\u20b9${(n || 0).toLocaleString("en-IN")}`;
@@ -71,7 +72,7 @@ export default function ClientDetail() {
     if (c.archived) {
       await api.post(`/clients/${id}/restore`);
     } else {
-      if (!window.confirm(`Archive “${c.name}”?`)) return;
+      if (!await confirmAction(`Archive “${c.name}”?`)) return;
       await api.post(`/clients/${id}/archive`);
     }
     load();

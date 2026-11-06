@@ -7,6 +7,7 @@ import {
   DownloadSimple, ClockClockwise, CaretDown, CaretRight,
 } from "@phosphor-icons/react";
 import SearchSelect from "./SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const FREQ = [
@@ -68,7 +69,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
   };
 
   const doDelete = async (id) => {
-    if (!window.confirm("Delete this recurring rule? Already-posted entries are kept.")) return;
+    if (!await confirmAction("Delete this recurring rule? Already-posted entries are kept.")) return;
     try {
       await api.delete(`/recurring-expenses/${id}`);
       toast.success("Deleted");
@@ -324,7 +325,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
   };
 
   const deleteBatch = async (batch, force = false) => {
-    if (!force && !window.confirm(`Delete this import "${batch.filename}"? Its ${batch.rows_saved} statement row(s) will be removed. Posted journal entries are kept.`)) return;
+    if (!force && !await confirmAction(`Delete this import "${batch.filename}"? Its ${batch.rows_saved} statement row(s) will be removed. Posted journal entries are kept.`)) return;
     try {
       const qs = force ? "?force=true" : "";
       await api.delete(`/bank-reconciliation/batches/${batch.id}${qs}`);
@@ -333,7 +334,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
       load();
     } catch (e) {
       if (e?.response?.status === 409) {
-        if (window.confirm(`${e.response.data.detail}\n\nDelete anyway? Journal entries stay on the books.`)) {
+        if (await confirmAction(`${e.response.data.detail}\n\nDelete anyway? Journal entries stay on the books.`)) {
           return deleteBatch(batch, true);
         }
         return;

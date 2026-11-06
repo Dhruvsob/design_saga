@@ -490,6 +490,17 @@ def _can_manage_attendance(user: dict) -> bool:
     return has_any_permission(user, "employees.update", "attendance.update", "attendance.approve")
 
 
+# Leave privacy (EMP-PRIV): general staff only see and apply for general leave
+# types. Sensitive categories (maternity/paternity) and the company's
+# entitlement table are HR data; HR records those leaves for the employee, so
+# the statutory right is preserved without exposing the categories to staff.
+SENSITIVE_LEAVE_TYPES = {"maternity", "paternity"}
+
+
+def _self_service_leave_types() -> list:
+    return [t for t in LEAVE_TYPES if t not in SENSITIVE_LEAVE_TYPES]
+
+
 def _can_edit_punches(user: dict) -> bool:
     return has_any_permission(user, "employees.update", "attendance.update")
 
@@ -1061,6 +1072,9 @@ async def create_leave(payload: LeaveRequestIn, request: Request,
     user = await require_user(request, session_token, authorization)
     if payload.leave_type not in LEAVE_TYPES:
         raise HTTPException(status_code=400, detail="Invalid leave_type")
+    if payload.leave_type in SENSITIVE_LEAVE_TYPES and not _can_manage_attendance(user):
+        raise HTTPException(status_code=403, detail=(
+            "This leave type is recorded by HR. Please contact HR and they will add it for you."))
     emp_id = await _resolve_employee_id(user, payload.employee_id)
 
     # Compute days between (inclusive)
@@ -1245,10 +1259,12 @@ async def leave_balance(employee_id: str, year: Optional[int] = None,
     async for lv in cur:
         used[lv["leave_type"]] = used.get(lv["leave_type"], 0) + lv["days"]
 
+    visible = LEAVE_TYPES if _can_manage_attendance(user) else [
+        t for t in _self_service_leave_types() if allowances.get(t, 0) or used.get(t, 0)]
     balance = {t: {"allowance": allowances.get(t, 0),
                    "used": used.get(t, 0),
                    "remaining": max(0, allowances.get(t, 0) - used.get(t, 0))}
-               for t in LEAVE_TYPES}
+               for t in visible}
     return {"employee_id": employee_id, "year": y, "balance": balance}
 
 
@@ -1259,12 +1275,15 @@ async def leave_balance(employee_id: str, year: Optional[int] = None,
 async def attendance_meta(request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
-    await require_user(request, session_token, authorization)
+    user = await require_user(request, session_token, authorization)
+    manager = _can_manage_attendance(user)
     return {
         "statuses": ATTENDANCE_STATUSES,
-        "leave_types": LEAVE_TYPES,
+        "leave_types": LEAVE_TYPES if manager else _self_service_leave_types(),
         "leave_statuses": LEAVE_STATUSES,
-        "default_allowance": DEFAULT_LEAVE_ALLOWANCE,
+        # the company entitlement table is HR policy, not shown to staff
+        "default_allowance": DEFAULT_LEAVE_ALLOWANCE if manager else {},
+        "can_manage": manager,
         "attendance_types": ["office", "site_visit"],
     }
 

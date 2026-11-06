@@ -9,6 +9,7 @@ import {
   Trash, ShieldCheck, PauseCircle, PlayCircle, Warning, Check,
   Sparkle, ArrowRight, Key, PencilSimpleLine, ChartLineUp, UserCirclePlus,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
@@ -71,7 +72,7 @@ export default function SuperAdminPanel() {
   useEffect(() => { load(); }, []);
 
   const changeStatus = async (org, action) => {
-    if (!window.confirm(`${action.toUpperCase()} "${org.name}"? Users will be logged out immediately.`)) return;
+    if (!await confirmAction(`${action.toUpperCase()} "${org.name}"? Users will be logged out immediately.`)) return;
     try {
       await api.post(`/platform/orgs/${org.org_id}/status`, { action });
       await load();

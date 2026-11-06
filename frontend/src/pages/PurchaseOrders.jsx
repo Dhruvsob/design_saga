@@ -8,6 +8,7 @@ import {
   PencilSimple, Trash,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 function fmtErr(d, fb = "Failed") {
@@ -197,12 +198,12 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
     catch (e) { setErr(fmtErr(e?.response?.data?.detail)); }
   };
   const cancelPO = async () => {
-    if (!window.confirm("Cancel this PO?")) return;
+    if (!await confirmAction("Cancel this PO?")) return;
     try { await api.post(`/purchase-orders/${poId}/cancel`); await load(); onChange && onChange(); }
     catch (e) { setErr(fmtErr(e?.response?.data?.detail)); }
   };
   const reverseGRN = async (grn) => {
-    if (!window.confirm(`Reverse ${grn.grn_number}?\n\nReceived quantities and the linked accounting journal will be corrected with a balanced reversal.`)) return;
+    if (!await confirmAction(`Reverse ${grn.grn_number}?\n\nReceived quantities and the linked accounting journal will be corrected with a balanced reversal.`)) return;
     setErr("");
     try { await api.delete(`/grns/${grn.id}`); await load(); onChange && onChange(); }
     catch (e) { setErr(fmtErr(e?.response?.data?.detail, "Could not reverse GRN")); }

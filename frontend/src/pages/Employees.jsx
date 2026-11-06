@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { dateForInput, formatDate } from "../lib/format";
 import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const STATUS_CHIP = {
   active: "chip-paid",
@@ -62,7 +63,7 @@ export default function Employees() {
 
   const remove = async (id, e) => {
     e.stopPropagation();
-    if (!window.confirm("Terminate this employee? Their login will be disabled, while attendance, payroll, and accounting history will be retained.")) return;
+    if (!await confirmAction("Terminate this employee? Their login will be disabled, while attendance, payroll, and accounting history will be retained.")) return;
     await api.delete(`/employees/${id}`);
     load();
   };

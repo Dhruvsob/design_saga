@@ -13,6 +13,7 @@ import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
   X, Warning, Trash, UsersThree, CaretRight,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
 const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Invoices", "Activity"];
@@ -68,7 +69,7 @@ export default function ProjectDetail() {
   };
 
   const rotateShare = async () => {
-    if (!window.confirm("Reset this client portal link? The previous link will stop working immediately.")) return;
+    if (!await confirmAction("Reset this client portal link? The previous link will stop working immediately.")) return;
     try {
       const { data } = await api.post(`/projects/${id}/share-token/rotate`);
       setP((current) => ({ ...current, share_token: data.share_token }));
@@ -102,7 +103,7 @@ export default function ProjectDetail() {
   };
 
   const deleteFile = async (fid) => {
-    if (!window.confirm("Remove this file link?")) return;
+    if (!await confirmAction("Remove this file link?")) return;
     try { await api.delete(`/files/${fid}`); load(); }
     catch (ex) { toast.error(ex?.response?.data?.detail || "Delete failed"); }
   };
@@ -173,7 +174,7 @@ export default function ProjectDetail() {
       await api.post(`/projects/${id}/restore`);
       load();
     } else {
-      if (!window.confirm(`Archive “${p.name}”? It will be hidden from active lists but all history is preserved.`)) return;
+      if (!await confirmAction(`Archive “${p.name}”? It will be hidden from active lists but all history is preserved.`)) return;
       await api.post(`/projects/${id}/archive`);
       navigate("/projects");
     }

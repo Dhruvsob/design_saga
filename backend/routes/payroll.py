@@ -157,6 +157,31 @@ async def _apply_attendance_deductions(emp: dict, breakdown: dict,
     breakdown["short_leave_hours"] = s["short_leave_hours"]
     breakdown["short_leave_deduction"] = s["short_leave_deduction"]
     breakdown["attendance_deductions"] = att_ded
+    # Transparency: the formula inputs and a reason for every deducted day.
+    breakdown["per_day_rate"] = s.get("per_day_rate")
+    breakdown["hourly_rate"] = s.get("hourly_rate")
+    breakdown["basis_days"] = int(emp.get("payroll_basis_days") or 26)
+    breakdown["monthly_salary_used"] = flat
+    breakdown["attendance_summary"] = s.get("summary") or {}
+    lines = []
+    per_day = float(s.get("per_day_rate") or 0)
+    for d in s.get("daily") or []:
+        status = d.get("status")
+        if status in ("absent", "unpaid_leave"):
+            lines.append({"date": d.get("date"), "reason": "Absent" if status == "absent" else "Unpaid leave",
+                          "kind": "lop", "days": 1, "amount": round(per_day, 2)})
+        elif status == "half_day":
+            lines.append({"date": d.get("date"), "reason": "Half day", "kind": "lop", "days": 0.5,
+                          "amount": round(per_day / 2, 2)})
+        fine = float(d.get("late_fine_amount") or 0)
+        if fine > 0 and not d.get("late_fine_waived"):
+            lines.append({"date": d.get("date"), "kind": "late",
+                          "reason": f"Late by {d.get('late_minutes') or 0} min", "amount": round(fine, 2)})
+        if float(d.get("short_leave_hours") or 0) > 0:
+            lines.append({"date": d.get("date"), "kind": "short_leave",
+                          "reason": f"Short leave {d['short_leave_hours']:g} h",
+                          "amount": round(float(s.get("hourly_rate") or 0) * float(d["short_leave_hours"]), 2)})
+    breakdown["deduction_lines"] = lines[:93]
     breakdown["deductions_total"] = round(breakdown["deductions_total"] + att_ded, 2)
     breakdown["net"] = round(breakdown["gross"] - breakdown["deductions_total"], 2)
     return breakdown

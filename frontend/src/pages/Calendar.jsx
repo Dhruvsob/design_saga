@@ -11,6 +11,7 @@ import {
   GoogleLogo, ArrowsClockwise, CheckCircle,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 /* ---------- constants ---------- */
 const KIND_META = {
@@ -132,7 +133,7 @@ export default function CalendarPage() {
     } finally { setGoogleBusy(false); }
   };
   const disconnectGoogle = async () => {
-    if (!window.confirm("Disconnect Google Calendar? Existing Google events will remain.")) return;
+    if (!await confirmAction("Disconnect Google Calendar? Existing Google events will remain.")) return;
     setGoogleBusy(true);
     try {
       await api.delete("/calendar/google/connection");

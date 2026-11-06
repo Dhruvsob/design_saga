@@ -17,6 +17,7 @@ import {
   HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -907,7 +908,8 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
     income_account_id: "", reference: "", reminder_date: "", notes: "",
   };
   const [data, setData] = useState(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("active");
+  const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
   const [collecting, setCollecting] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1007,7 +1009,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
   };
 
   const cancelPlan = async (row) => {
-    if (!window.confirm("Cancel this expected collection? No accounting entry will be deleted.")) return;
+    if (!await confirmAction("Cancel this expected collection? No accounting entry will be deleted.")) return;
     try {
       const path = row.source_type === "vendor_commission"
         ? `/vendors/${row.vendor_id}/commissions/${row.id}`
@@ -1020,21 +1022,37 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 
   if (!data) return <div className="overline">LOADING COLLECTIONS…</div>;
   const term = query.trim().toLowerCase();
+  // Active queue = anything with money still to collect. Fully received items
+  // move to Received history instead of lingering in the queue at Rs. 0.
+  const CATEGORY_OF = { invoice: "client", milestone: "client", vendor_commission: "vendor_commission",
+                        other_receivable: "other_receivable" };
+  const inCategory = (row) => category === "all" || CATEGORY_OF[row.source_type] === category;
+  const matchesFilter = (row, id) => {
+    if (id === "active") return row.status !== "received" && row.outstanding > 0;
+    if (id === "history") return row.received_amount > 0;
+    return row.bucket === id && row.status !== "received";
+  };
+  const isHistory = filter === "history";
   const rows = (data.rows || []).filter((row) => {
-    if (filter !== "all" && row.bucket !== filter) return false;
+    if (!matchesFilter(row, filter) || !inCategory(row)) return false;
     if (!term) return true;
     return `${row.project_name || ""} ${row.client_name || ""} ${row.vendor_name || ""} ${row.name || ""} ${row.reference || ""} ${row.source_type || ""}`
       .toLowerCase().includes(term);
   });
+  const countFor = (id) => (data.rows || []).filter((row) => matchesFilter(row, id) && inCategory(row)).length;
   const filters = [
-    ["all", "All"],
+    ["active", "Active"],
     ["overdue", "Overdue"],
     ["due_today", "Due today"],
     ["upcoming", "Upcoming"],
     ["partially_received", "Partially received"],
-    ["received", "Received"],
     ["later", "Later"],
     ["no_due_date", "No due date"],
+    ["history", "Received history"],
+  ];
+  const categories = [
+    ["all", "All money in"], ["client", "Client payments"],
+    ["vendor_commission", "Vendor commission"], ["other_receivable", "Other receivables"],
   ];
 
   return (
@@ -1091,14 +1109,28 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
         <KPI label="Received" value={CURRENCY(data.totals?.received)} Icon={ChartLine} tint="#1D633E" />
       </div>
 
-      <div className="flex gap-1.5 flex-wrap" data-testid="collections-filters">
-        {filters.map(([id, label]) => (
-          <button key={id} onClick={() => setFilter(id)}
-            className={`px-3 py-1.5 text-xs border ${filter === id ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "bg-white text-[#5C5C5C] border-[#E5E5E5]"}`}
-            data-testid={`collections-filter-${id}`}>
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Collection status" data-testid="collections-filters">
+          {filters.map(([id, label]) => {
+            const n = countFor(id);
+            return (
+              <button key={id} type="button" role="tab" aria-selected={filter === id} onClick={() => setFilter(id)}
+                className={`px-3 py-1.5 text-xs border rounded-full transition ${filter === id ? "bg-[#1A1A1A] text-white border-[#1A1A1A]" : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#76705E]"} ${id === "history" ? "sm:ml-auto" : ""}`}
+                data-testid={`collections-filter-${id}`}>
+                {label}{n > 0 && <span className={`ml-1.5 ${filter === id ? "text-white/70" : "text-[#6E6A63]"}`}>{n}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-1.5 flex-wrap" aria-label="Collection category" data-testid="collections-categories">
+          {categories.map(([id, label]) => (
+            <button key={id} type="button" aria-pressed={category === id} onClick={() => setCategory(id)}
+              className={`px-2.5 py-1 text-[11px] rounded ${category === id ? "bg-[#EFEDE6] text-[#1A1A1A] font-semibold" : "text-[#5C5C5C] hover:bg-[#F5F4F0]"}`}
+              data-testid={`collections-category-${id}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="border border-[#E5E5E5] overflow-x-auto">
@@ -1110,7 +1142,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
               <th className="p-3 text-left">Party / project</th>
               <th className="p-3 text-left">Collection</th>
               <th className="p-3 text-left">Status</th>
-              <th className="p-3 text-right">To collect</th>
+              <th className="p-3 text-right">{isHistory ? "Received" : "To collect"}</th>
               <th className="p-3" />
             </tr>
           </thead>
@@ -1124,8 +1156,20 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
                 <td className="p-3"><span className="status-chip chip-medium">{(row.source_type || "").replaceAll("_", " ")}</span></td>
                 <td className="p-3"><div className="font-semibold">{row.vendor_name || row.client_name || "—"}</div><div className="text-xs text-[#5C5C5C]">{row.project_name || "No project"}</div></td>
                 <td className="p-3"><div>{row.name || "Collection"}</div>{row.recognition === "planned" && <div className="text-[10px] text-[#7A4E1A]">Expected only - not yet earned</div>}</td>
-                <td className="p-3"><span className={`status-chip chip-${row.status}`}>{row.status}</span></td>
-                <td className="p-3 text-right font-mono font-semibold">{CURRENCY(row.outstanding)}</td>
+                <td className="p-3"><span className={`status-chip chip-${row.status}`}>{(row.status || "").replaceAll("_", " ")}</span></td>
+                <td className="p-3 text-right font-mono font-semibold">
+                  {isHistory ? (
+                    <>
+                      <div className="text-[#1D633E]">{CURRENCY(row.received_amount)}</div>
+                      {row.outstanding > 0 && <div className="text-[10px] font-normal text-[#7A4E1A]">{CURRENCY(row.outstanding)} still due</div>}
+                    </>
+                  ) : (
+                    <>
+                      <div>{CURRENCY(row.outstanding)}</div>
+                      {row.received_amount > 0 && <div className="text-[10px] font-normal text-[#6E6A63]">of {CURRENCY(row.amount)}</div>}
+                    </>
+                  )}
+                </td>
                 <td className="p-3 text-right whitespace-nowrap">
                   {row.outstanding > 0 && <button type="button" className="btn-primary text-xs mr-2"
                     onClick={() => openReceipt(row)} disabled={!banks.length || !incomeAccounts.length}>
@@ -1142,7 +1186,11 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-[#6E6A63]">No collections match this view.</td></tr>
+              <tr><td colSpan={7} className="p-10 text-center text-[#6E6A63]">
+                {isHistory ? "Nothing received yet in this view." : filter === "active" && !term
+                  ? "Nothing left to collect. Every expected payment has been received."
+                  : "No collections match this view."}
+              </td></tr>
             )}
           </tbody>
         </table>
@@ -1406,7 +1454,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
   };
   const toggleActive = async (account, event) => {
     event.stopPropagation();
-    if (account.active !== false && !window.confirm(`Deactivate “${account.name}”? Its history will remain available.`)) return;
+    if (account.active !== false && !await confirmAction(`Deactivate “${account.name}”? Its history will remain available.`)) return;
     try {
       if (account.active === false) {
         await api.patch(`/accounts/${account.id}`, {

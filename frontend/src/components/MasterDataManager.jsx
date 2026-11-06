@@ -4,6 +4,7 @@ import { invalidateMasterData } from "../hooks/useMasterData";
 import {
   Plus, PencilSimple, Trash, Eye, EyeSlash, CaretUp, CaretDown, Check, X, Warning,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
@@ -76,7 +77,7 @@ export default function MasterDataManager() {
   };
 
   const remove = async (item) => {
-    if (!window.confirm(`Delete “${item.label}”? If it's referenced by records it will be deactivated instead.`)) return;
+    if (!await confirmAction(`Delete “${item.label}”? If it's referenced by records it will be deactivated instead.`)) return;
     setBusy(true);
     try {
       const { data: res } = await api.delete(`/master-data/items/${item.id}`);

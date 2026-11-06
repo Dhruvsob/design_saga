@@ -8,6 +8,7 @@ import {
   CheckCircle, X, Clock,
 } from "@phosphor-icons/react";
 import { ProposalDetails, ProposalFees } from "../components/ConsultancyProposal";
+import { confirmAction } from "../lib/confirm";
 
 const TABS = ["Overview", "BOQ Builder", "Rooms", "Materials", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
 const CONSULT_TABS = ["Overview", "Fee Schedule", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
@@ -86,7 +87,7 @@ export default function QuotationBuilder() {
   };
 
   const convert = async () => {
-    if (!window.confirm("Convert this quotation into a project? Tasks will be auto-created.")) return;
+    if (!await confirmAction("Convert this quotation into a project? Tasks will be auto-created.")) return;
     try {
       const { data } = await api.post(`/quotations-adv/${id}/convert-to-project`);
       toast.success("Project created from this quotation");
@@ -116,9 +117,9 @@ export default function QuotationBuilder() {
   const allowedTypes = (tpl.allowed_types || Object.keys(SELECTABLE_TYPE_LABELS)).filter((t) => SELECTABLE_TYPE_LABELS[t]);
   const canSwitchType = canUpdate && (q.status || "draft") === "draft" && allowedTypes.length > 1;
 
-  const swapType = (newType) => {
+  const swapType = async (newType) => {
     if (newType === q.type) return;
-    if (!window.confirm(`Switch this draft to a ${TYPE_LABELS[newType]} quotation? Type-specific sections will reset to their defaults.`)) return;
+    if (!await confirmAction(`Switch this draft to a ${TYPE_LABELS[newType]} quotation? Type-specific sections will reset to their defaults.`)) return;
     const patch = { type: newType };
     if (newType === "consultancy") {
       patch.proposal = q.proposal || {
@@ -399,8 +400,8 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
     update({ boq });
   };
 
-  const removeCat = (ci) => {
-    if (!window.confirm("Remove this category?")) return;
+  const removeCat = async (ci) => {
+    if (!await confirmAction("Remove this category?")) return;
     const boq = JSON.parse(JSON.stringify(q.boq));
     boq.splice(ci, 1);
     update({ boq });
@@ -656,8 +657,8 @@ function PaymentPlan({ q, update, tpl }) {
   const removeRow = (i) => {
     const arr = JSON.parse(JSON.stringify(q.payment_plan || [])); arr.splice(i, 1); update({ payment_plan: arr });
   };
-  const loadPreset = () => {
-    if (!window.confirm("Load default plan for this type? Current plan will be replaced.")) return;
+  const loadPreset = async () => {
+    if (!await confirmAction("Load default plan for this type? Current plan will be replaced.")) return;
     update({ payment_plan: tpl.payment_plans[q.type].map((p) => ({ ...p })) });
   };
 
@@ -722,8 +723,8 @@ function Timeline({ q, update, tpl }) {
   const removeRow = (i) => {
     const arr = JSON.parse(JSON.stringify(q.timeline || [])); arr.splice(i, 1); update({ timeline: arr });
   };
-  const loadPreset = () => {
-    if (!window.confirm("Load default timeline for this type?")) return;
+  const loadPreset = async () => {
+    if (!await confirmAction("Load default timeline for this type?")) return;
     update({ timeline: tpl.timelines[q.type].map((p) => ({ ...p })) });
   };
 
@@ -765,8 +766,8 @@ function Terms({ q, update, tpl }) {
   const removeRow = (i) => {
     const arr = JSON.parse(JSON.stringify(q.terms || [])); arr.splice(i, 1); update({ terms: arr });
   };
-  const loadPreset = () => {
-    if (!window.confirm("Reset to default terms?")) return;
+  const loadPreset = async () => {
+    if (!await confirmAction("Reset to default terms?")) return;
     const preset = q.type !== "consultancy" ? tpl.default_terms
       : q.proposal ? [{ section: "Validity", content: "This proposal is valid for 30 days from the date of issue." }]
         : tpl.consultancy_terms;

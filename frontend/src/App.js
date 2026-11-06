@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
 import Layout from "./components/Layout";
 import { MandatoryPinSetupOverlay, PinLockOverlay } from "./components/AppPinLock";
+import { ConfirmHost } from "./lib/confirm";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Leads = lazy(() => import("./pages/Leads"));
@@ -167,6 +168,7 @@ function App() {
           <PinLockOverlay />
         </BrowserRouter>
       </AuthProvider>
+      <ConfirmHost />
       <Toaster
         position="bottom-right"
         toastOptions={{

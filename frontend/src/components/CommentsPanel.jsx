@@ -3,6 +3,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { formatDate } from "../lib/format";
 import { ChatCircleText, PaperPlaneRight, Trash } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const relativeTime = (iso) => {
   if (!iso) return "";
@@ -44,7 +45,7 @@ export default function CommentsPanel({ entityType, entityId }) {
   };
 
   const remove = async (id) => {
-    if (!window.confirm("Delete this comment?")) return;
+    if (!await confirmAction("Delete this comment?")) return;
     await api.delete(`/comments/${id}`);
     load();
   };

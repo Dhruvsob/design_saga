@@ -11,6 +11,23 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-088: Collections Due - active queue vs Received history (mandate 11, T08)
+
+- Bug: the default "All" view kept fully received items in the queue at Rs. 0.
+- Fix: default Active view = items with money still to collect; Received history view shows amounts received (and any balance still due); status chips show counts; category chips: Client payments, Vendor commission, Other receivables. Partial receipts show "of total".
+- Verified: `e2e/ux.spec.mjs` (Rs. 5,000 expected -> receive 2,000 -> active 3,000 partial -> receive 3,000 -> gone from Active, 5,000 in history) desktop + mobile.
+
+### DS-089: Leave privacy for staff (mandate 05, T03)
+
+- Staff no longer receive the company leave entitlement table or the maternity/paternity categories (meta, balance, apply). Maternity/paternity leave is recorded by HR on the employee's behalf (403 with a clear message if staff try directly), so the statutory right is preserved. Staff see their own real balance (remaining/used) instead of the policy table. HR/managers unchanged.
+- Verified: `tests/test_leave_privacy.py` (4) and `e2e/ux.spec.mjs`.
+
+### DS-090: Transparent salary working + styled confirmations (mandate 07, 14)
+
+- Pay Salary shows "How this is calculated": per-day rate formula (monthly / basis days), paid and LOP days, attendance counts, every deduction with its date and reason (absent, unpaid leave, half day, late by N min, short leave), additions and net.
+- All 47 native browser confirm() popups replaced by one accessible styled dialog (`lib/confirm.jsx`): clear title/body, red action for destructive verbs, Cancel/Go back, queued safely.
+- Verified: backend gate 366 passed; e2e ux/forms/money 14 passed.
+
 ### DS-087: Consultancy design proposal (quotation modes, owner's reference format)
 
 - Source: owner's reference "Design Proposal_Krunal Soni_28.05.26.pdf" and the Production Finishing mandate (section 04, T02).

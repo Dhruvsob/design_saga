@@ -8,6 +8,7 @@ import {
   ChartLineUp, TrendUp, PencilSimple, Archive,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
@@ -268,7 +269,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
     } catch (e) { setErr(fmtErr(e?.response?.data?.detail, "Update failed")); }
   };
   const archiveLoan = async () => {
-    if (!window.confirm("Archive this loan? The disbursement will be reversed safely. Loans with posted EMI or prepayment entries must be corrected from Accounting first.")) return;
+    if (!await confirmAction("Archive this loan? The disbursement will be reversed safely. Loans with posted EMI or prepayment entries must be corrected from Accounting first.")) return;
     setErr("");
     try { await api.delete(`/loans/${loanId}`); onArchived && onArchived(); }
     catch (e) { setErr(fmtErr(e?.response?.data?.detail, "Archive failed")); }

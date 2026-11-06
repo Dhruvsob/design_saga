@@ -78,6 +78,7 @@ jobs:
           tests/test_project_phases.py
           tests/test_logo_normalize.py
           tests/test_consultancy_proposal.py
+          tests/test_leave_privacy.py
 
   frontend:
     runs-on: ubuntu-latest

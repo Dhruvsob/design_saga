@@ -7,6 +7,7 @@ import {
   Plus, MagnifyingGlass, Star, Buildings, Phone, Envelope, CurrencyInr,
   CaretRight, X, HardHat, PencilSimple, Archive,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const AGENCY_LABELS = {
   vendor: "Vendor", agency: "Agency", contractor: "Contractor",
@@ -73,7 +74,7 @@ export default function Vendors() {
 
   const archiveVendor = async (vendor, event) => {
     event.stopPropagation();
-    if (!window.confirm(`Archive ${vendor.name}? Existing bills, payments and accounting history will be preserved.`)) return;
+    if (!await confirmAction(`Archive ${vendor.name}? Existing bills, payments and accounting history will be preserved.`)) return;
     try {
       await api.delete(`/vendors/${vendor.id}`);
       toast.success("Vendor archived");

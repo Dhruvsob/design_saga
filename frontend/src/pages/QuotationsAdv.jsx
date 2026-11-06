@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const TYPE_LABELS = {
   turnkey: "Turnkey",
@@ -71,7 +72,7 @@ export default function QuotationsAdv() {
   };
 
   const del = async (id) => {
-    if (!window.confirm("Delete quotation?")) return;
+    if (!await confirmAction("Delete quotation?")) return;
     await api.delete(`/quotations-adv/${id}`);
     load();
   };

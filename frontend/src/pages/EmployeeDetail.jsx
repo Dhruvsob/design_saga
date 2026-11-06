@@ -12,6 +12,7 @@ import {
   TrendUp, ClockCounterClockwise, Key, Receipt,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 const TABS = ["Overview", "Employment", "Salary & Bank", "Documents", "Performance", "ERP Access"];
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -100,7 +101,7 @@ export default function EmployeeDetail() {
   };
 
   const remove = async () => {
-    if (!window.confirm("Terminate this employee? Their login will be disabled, while attendance, payroll, and accounting history will be retained.")) return;
+    if (!await confirmAction("Terminate this employee? Their login will be disabled, while attendance, payroll, and accounting history will be retained.")) return;
     await api.delete(`/employees/${id}`);
     navigate("/employees");
   };
@@ -131,7 +132,7 @@ export default function EmployeeDetail() {
   };
 
   const deleteWarning = async (warning) => {
-    if (!window.confirm("Delete this warning? The action will remain in the audit log.")) return;
+    if (!await confirmAction("Delete this warning? The action will remain in the audit log.")) return;
     await api.delete(`/employees/${id}/warnings/${warning.id}`);
     await load();
   };
@@ -146,7 +147,7 @@ export default function EmployeeDetail() {
   };
 
   const deleteReward = async (reward) => {
-    if (!window.confirm("Delete this reward? The action will remain in the audit log.")) return;
+    if (!await confirmAction("Delete this reward? The action will remain in the audit log.")) return;
     await api.delete(`/employees/${id}/rewards/${reward.id}`);
     await load();
   };
@@ -161,7 +162,7 @@ export default function EmployeeDetail() {
   };
 
   const removeDocument = async (docId) => {
-    if (!window.confirm("Remove this document?")) return;
+    if (!await confirmAction("Remove this document?")) return;
     await api.delete(`/employees/${id}/documents/${docId}`);
     load();
   };
@@ -695,6 +696,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
           <StatBox label="Net payable" value={fmt(b.net)} tint="#8B7F6A" big />
         </div>
       )}
+      {b && <SalaryWorking b={b} />}
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs flex-1 min-w-[220px]">
@@ -1147,7 +1149,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
   useEffect(() => load(), [load]);
 
   const reverse = async (run) => {
-    if (!window.confirm(`Reverse the salary payment for ${MONTHS[(run.month || 1) - 1]} ${run.year}? A balancing journal will be posted.`)) return;
+    if (!await confirmAction(`Reverse the salary payment for ${MONTHS[(run.month || 1) - 1]} ${run.year}? A balancing journal will be posted.`)) return;
     try {
       await api.post(`/payroll/runs/${run.id}/reverse`);
       load();
@@ -1205,6 +1207,88 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+
+
+/** "How this is calculated": formula inputs and a reason for every deduction. */
+function SalaryWorking({ b }) {
+  const sum = b.attendance_summary || {};
+  const lines = b.deduction_lines || [];
+  const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const counts = [
+    ["Present", sum.present], ["Late", sum.late], ["Half day", sum.half_day], ["Paid leave", sum.paid_leave],
+    ["Unpaid leave", sum.unpaid_leave], ["Absent", sum.absent], ["Weekly off", sum.week_off], ["Holiday", sum.holidays],
+  ].filter(([, v]) => Number(v) > 0);
+  return (
+    <details className="mb-4 border border-[#E8E6E1] rounded-lg bg-[#FAF9F6]" data-testid="salary-working">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3">
+        <span>How this is calculated</span>
+        <span className="text-xs font-normal text-[#5C5C5C]">
+          {b.per_day_rate ? `${money(b.per_day_rate)} per day · ${b.basis_days}-day basis` : "Salary structure"}
+        </span>
+      </summary>
+      <div className="px-4 pb-4 space-y-4 text-sm">
+        {b.per_day_rate > 0 && (
+          <p className="text-[#5C5C5C]">
+            Per-day rate = monthly salary {money(b.monthly_salary_used || b.basic)} ÷ {b.basis_days} days
+            = <strong className="text-[#1A1A1A]">{money(b.per_day_rate)}</strong>.
+            Paid days this month: <strong className="text-[#1A1A1A]">{b.payable_days}</strong>
+            {Number(b.lop_days) > 0 && <> · loss-of-pay days: <strong className="text-[#B4001C]">{b.lop_days}</strong></>}.
+            {Number(b.monthly_paid_leave_allowance) > 0 && <> {b.paid_leave_allowance_used || 0} of {b.monthly_paid_leave_allowance} paid leave(s) used.</>}
+          </p>
+        )}
+        {counts.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {counts.map(([k, v]) => (
+              <span key={k} className="text-xs px-2 py-1 rounded bg-white border border-[#E8E6E1]">{k}: <strong>{v}</strong></span>
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
+          <Item label="Gross earnings" value={money(b.gross)} />
+          {Number(b.additions) > 0 && <Item label="Additions (bonus, incentives, overtime)" value={`+ ${money(b.additions)}`} good />}
+          {Number(b.lop_deduction) > 0 && <Item label={`Loss of pay (${b.lop_days} day${b.lop_days === 1 ? "" : "s"})`} value={`− ${money(b.lop_deduction)}`} bad />}
+          {Number(b.late_fine) > 0 && <Item label="Late fines" value={`− ${money(b.late_fine)}`} bad />}
+          {Number(b.short_leave_deduction) > 0 && <Item label={`Short leave (${b.short_leave_hours} h)`} value={`− ${money(b.short_leave_deduction)}`} bad />}
+          {Number(b.advances_recovered) > 0 && <Item label="Advance recovered" value={`− ${money(b.advances_recovered)}`} bad />}
+          {Number(b.other_deductions) > 0 && <Item label="Other deductions" value={`− ${money(b.other_deductions)}`} bad />}
+          <Item label="Net payable" value={money(b.net)} strong />
+        </div>
+        {lines.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-left text-[#5C5C5C] border-b border-[#E8E6E1]">
+                <th className="py-1.5 pr-3 font-semibold">Date</th><th className="py-1.5 pr-3 font-semibold">Reason</th>
+                <th className="py-1.5 text-right font-semibold">Deducted</th>
+              </tr></thead>
+              <tbody>
+                {lines.map((l, i) => (
+                  <tr key={`${l.date}-${l.kind}-${i}`} className="border-b border-[#F0EEE9]">
+                    <td className="py-1.5 pr-3 font-mono whitespace-nowrap">{formatDate(l.date)}</td>
+                    <td className="py-1.5 pr-3">{l.reason}</td>
+                    <td className="py-1.5 text-right font-mono text-[#B4001C]">− {money(l.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-[#6E6A63] mt-2">Day-wise reasons come from attendance. Fix a wrong day in Attendance and the amount updates here.</p>
+          </div>
+        ) : (
+          <p className="text-xs text-[#1D633E]">No attendance deductions this month.</p>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function Item({ label, value, good, bad, strong }) {
+  return (
+    <div className={`flex justify-between gap-3 py-1 ${strong ? "border-t border-[#E8E6E1] mt-1 pt-2 font-semibold" : ""}`}>
+      <span className="text-[#5C5C5C]">{label}</span>
+      <span className={`font-mono ${good ? "text-[#1D633E]" : bad ? "text-[#B4001C]" : "text-[#1A1A1A]"}`}>{value}</span>
     </div>
   );
 }

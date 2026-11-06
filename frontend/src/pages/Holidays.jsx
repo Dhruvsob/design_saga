@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput } from "../lib/format";
 import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const KINDS = [
   { id: "national", label: "National", color: "#B22B22" },
@@ -68,7 +69,7 @@ export default function Holidays() {
   };
 
   const del = async (id) => {
-    if (!window.confirm("Delete this holiday?")) return;
+    if (!await confirmAction("Delete this holiday?")) return;
     await api.delete(`/holidays/${id}`);
     toast.success("Deleted");
     load();

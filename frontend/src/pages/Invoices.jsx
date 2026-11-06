@@ -6,6 +6,7 @@ import { dateForInput, formatDate, roundPaise } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import SearchSelect from "../components/SearchSelect";
+import { confirmAction } from "../lib/confirm";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -140,7 +141,7 @@ export default function Invoices({ docType = "invoice" }) {
 
   const reverseLatestPayment = async (row) => {
     if (!row.journal_id) return toast.error("No linked payment journal was found");
-    if (!window.confirm(`Delete the latest payment for ${row.number}?\n\nA balanced reversal will preserve the audit history and restore the invoice balance.`)) return;
+    if (!await confirmAction(`Delete the latest payment for ${row.number}?\n\nA balanced reversal will preserve the audit history and restore the invoice balance.`)) return;
     try {
       await api.delete(`/journal-entries/${row.journal_id}`);
       toast.success("Latest invoice payment reversed"); await load();
@@ -152,7 +153,7 @@ export default function Invoices({ docType = "invoice" }) {
       ? "Paid invoices cannot be deleted. Change the status to Sent first so Accounting records a reversal."
       : "Delete this invoice?";
     if (isPaid) { toast.error(msg); return; }
-    if (!window.confirm(msg)) return;
+    if (!await confirmAction(msg)) return;
     try {
       await api.delete(`/invoices/${id}`);
       toast.success("Invoice deleted");

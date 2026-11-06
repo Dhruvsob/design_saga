@@ -7,6 +7,7 @@ import useMasterData from "../hooks/useMasterData";
 import { Plus, ArrowRight, Trash, DotsSixVertical, PencilSimple, Eye, X, Check, ClockCounterClockwise, NotePencil } from "@phosphor-icons/react";
 import PageHero from "../components/PageHero";
 import { formatDateTime } from "../lib/format";
+import { confirmAction } from "../lib/confirm";
 
 const FALLBACK_STAGES = ["New", "Qualified", "Proposal", "Negotiation", "Won", "Lost"];
 const FALLBACK_SOURCES = ["Website", "Instagram", "Referral", "Marketplace", "Walk-in"];
@@ -69,7 +70,7 @@ export default function Leads() {
   };
 
   const del = async (id) => {
-    if (!window.confirm("Remove this lead from the active pipeline? Its history will be preserved.")) return;
+    if (!await confirmAction("Remove this lead from the active pipeline? Its history will be preserved.")) return;
     try {
       await api.delete(`/leads/${id}`);
       toast.success("Lead removed from the active pipeline");
@@ -135,7 +136,7 @@ export default function Leads() {
   };
 
   const deleteNote = async (noteId) => {
-    if (!editing || !window.confirm("Delete this note? It stays in history but is hidden from the thread.")) return;
+    if (!editing || !await confirmAction("Delete this note? It stays in history but is hidden from the thread.")) return;
     try {
       await api.delete(`/leads/${editing.id}/notes/${noteId}`);
       await loadNotes(editing.id);
