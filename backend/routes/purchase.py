@@ -72,19 +72,18 @@ async def _next_grn_number() -> str:
 
 
 def _po_totals(lines: List[dict]) -> dict:
-    subtotal = 0.0
-    tax_total = 0.0
+    """Decimal half-up per line (amount and tax) so the PO always foots."""
+    from core.money import percent_of, round_paise, to_decimal
+    subtotal = round_paise(0)
+    tax_total = round_paise(0)
     for l in lines:
-        qty = float(l.get("quantity", 0))
-        up = float(l.get("unit_price", 0))
-        rate = float(l.get("tax_rate", 0))
-        line_total = qty * up
+        line_total = round_paise(to_decimal(l.get("quantity", 0)) * to_decimal(l.get("unit_price", 0)))
         subtotal += line_total
-        tax_total += line_total * rate / 100.0
+        tax_total += percent_of(line_total, l.get("tax_rate", 0) or 0)
     return {
-        "subtotal": round(subtotal, 2),
-        "tax_total": round(tax_total, 2),
-        "grand_total": round(subtotal + tax_total, 2),
+        "subtotal": float(subtotal),
+        "tax_total": float(tax_total),
+        "grand_total": float(subtotal + tax_total),
     }
 
 

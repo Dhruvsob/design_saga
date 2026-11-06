@@ -107,20 +107,21 @@ async def _vendor_task_query(vendor: dict) -> dict:
 
 def _bill_total(bill: dict) -> float:
     """Compute a bill's grand total from items + tax + tds."""
+    from core.money import percent_of, round_paise, to_decimal
     items = bill.get("items") or []
-    subtotal = 0.0
+    subtotal = round_paise(0)
     for it in items:
-        amt = float(it.get("quantity") or 0) * float(it.get("rate") or 0)
-        it["amount"] = round(amt, 2)
+        amt = round_paise(to_decimal(it.get("quantity") or 0) * to_decimal(it.get("rate") or 0))
+        it["amount"] = float(amt)
         subtotal += amt
-    tax = round(subtotal * float(bill.get("tax_rate") or 0) / 100.0, 2)
-    tds = round(subtotal * float(bill.get("tds_rate") or 0) / 100.0, 2)
-    grand = round(subtotal + tax - tds, 2)
-    bill["subtotal"] = round(subtotal, 2)
-    bill["tax_amount"] = tax
-    bill["tds_amount"] = tds
-    bill["total"] = grand
-    return grand
+    tax = percent_of(subtotal, bill.get("tax_rate") or 0)
+    tds = percent_of(subtotal, bill.get("tds_rate") or 0)
+    grand = subtotal + tax - tds
+    bill["subtotal"] = float(subtotal)
+    bill["tax_amount"] = float(tax)
+    bill["tds_amount"] = float(tds)
+    bill["total"] = float(grand)
+    return float(grand)
 
 
 async def _post_vendor_bill(user: dict, bill: dict) -> dict:
@@ -1473,18 +1474,19 @@ def _calc_commission_amount(cfg: dict, base: float) -> float:
     min_p = float(cfg.get("min_purchase") or 0)
     if base < min_p:
         return 0.0
+    from core.money import money_float, percent_of
     t = (cfg.get("type") or "").lower()
     if t == "fixed":
-        return round(float(cfg.get("fixed_amount") or 0), 2)
+        return money_float(cfg.get("fixed_amount") or 0)
     if t == "percentage":
-        return round(base * float(cfg.get("percentage") or 0) / 100.0, 2)
+        return float(percent_of(base, cfg.get("percentage") or 0))
     if t == "slab":
         for s in (cfg.get("slabs") or []):
             lo = float(s.get("min_purchase") or 0)
             hi = s.get("max_purchase")
             hi = float(hi) if hi is not None else float("inf")
             if lo <= base < hi or (hi == float("inf") and base >= lo):
-                return round(base * float(s.get("percentage") or 0) / 100.0, 2)
+                return float(percent_of(base, s.get("percentage") or 0))
     return 0.0
 
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
-import { dateForInput, formatDate } from "../lib/format";
+import { dateForInput, formatDate, roundPaise } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -540,8 +540,9 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
   const expenseAccounts = accounts.filter((a) => a.type === "expense" && a.active !== false);
   const [f, setF] = useState({ bill_date: today(), due_date: "", items: [emptyItem()], tax_rate: 18, tds_rate: 0, notes: "", project_id: "", po_id: "", expense_account_id: "" });
   const total = useMemo(() => {
-    const sub = f.items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.rate || 0), 0);
-    return sub + sub * f.tax_rate / 100 - sub * f.tds_rate / 100;
+    // Mirrors backend _bill_total: round lines, tax and TDS to the paisa.
+    const sub = roundPaise(f.items.reduce((s, it) => s + roundPaise(Number(it.quantity || 0) * Number(it.rate || 0)), 0));
+    return roundPaise(sub + roundPaise(sub * Number(f.tax_rate || 0) / 100) - roundPaise(sub * Number(f.tds_rate || 0) / 100));
   }, [f]);
 
   return (

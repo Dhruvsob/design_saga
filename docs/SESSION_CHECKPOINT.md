@@ -22,9 +22,8 @@ Last updated: 05/11/2026 (Asia/Kolkata).
 
 ## Next executable tasks (in order)
 
-1. ACC-04: adopt `core/money.py` in PO, vendor bill, commission, payroll, loans.
-2. PRJ-01: per-tenant architecture phase templates (smallest slice).
-3. A11Y-01: modal focus traps, detail-page/tablet visual QA, contrast audit.
+1. PRJ-01: per-tenant architecture phase templates (smallest slice).
+2. A11Y-01: modal focus traps, detail-page/tablet visual QA, contrast audit.
 
 ## Waiting on the owner
 

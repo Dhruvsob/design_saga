@@ -3096,23 +3096,22 @@ DEFAULT_MATERIALS = [
 # ---------- helpers ----------
 def _q_compute_costs(q: dict) -> dict:
     """Recompute subtotal, discount, tax, contingency, grand total + room totals + category totals from BOQ."""
+    from decimal import Decimal
+    from core.money import percent_of, round_paise, to_decimal
     boq = q.get("boq", []) or []
-    subtotal = 0.0
+    subtotal = round_paise(0)
     cat_totals = {}
     room_totals = {}
     for cat in boq:
-        cat_total = 0.0
+        cat_total = round_paise(0)
         for it in cat.get("items", []):
-            qty = float(it.get("quantity", 0) or 0)
-            rate = float(it.get("rate", 0) or 0)
-            margin = float(it.get("margin_pct", 0) or 0)
-            base = qty * rate
-            with_margin = round(base * (1 + margin / 100.0), 2)
-            it["amount"] = with_margin
+            base = round_paise(to_decimal(it.get("quantity", 0) or 0) * to_decimal(it.get("rate", 0) or 0))
+            with_margin = base + percent_of(base, it.get("margin_pct", 0) or 0)
+            it["amount"] = float(with_margin)
             cat_total += with_margin
             room = it.get("room") or "Unassigned"
-            room_totals[room] = room_totals.get(room, 0) + with_margin
-        cat["category_total"] = round(cat_total, 2)
+            room_totals[room] = room_totals.get(room, round_paise(0)) + with_margin
+        cat["category_total"] = float(cat_total)
         cat_totals[cat.get("category", "Misc")] = cat["category_total"]
         subtotal += cat_total
 
@@ -3121,31 +3120,36 @@ def _q_compute_costs(q: dict) -> dict:
     tax_pct = float(cost.get("tax_pct", 18) or 0)
     contingency_pct = float(cost.get("contingency_pct", 0) or 0)
 
-    discount_amt = round(subtotal * discount_pct / 100.0, 2)
+    # Each step rounds half-up to the paisa so the printed cost sheet foots.
+    discount_amt = percent_of(subtotal, discount_pct)
     after_discount = subtotal - discount_amt
-    contingency_amt = round(after_discount * contingency_pct / 100.0, 2)
+    contingency_amt = percent_of(after_discount, contingency_pct)
     taxable = after_discount + contingency_amt
-    tax_amt = round(taxable * tax_pct / 100.0, 2)
-    grand_total = round(taxable + tax_amt, 2)
+    tax_amt = percent_of(taxable, tax_pct)
+    grand_total = taxable + tax_amt
 
     q["cost"] = {
-        "subtotal": round(subtotal, 2),
+        "subtotal": float(subtotal),
         "discount_pct": discount_pct,
-        "discount_amt": discount_amt,
+        "discount_amt": float(discount_amt),
         "contingency_pct": contingency_pct,
-        "contingency_amt": contingency_amt,
+        "contingency_amt": float(contingency_amt),
         "tax_pct": tax_pct,
-        "tax_amt": tax_amt,
-        "grand_total": grand_total,
+        "tax_amt": float(tax_amt),
+        "grand_total": float(grand_total),
     }
     q["category_totals"] = [{"category": k, "total": v} for k, v in cat_totals.items()]
-    q["room_totals"] = [{"room": k, "total": round(v, 2)} for k, v in room_totals.items()]
+    q["room_totals"] = [{"room": k, "total": float(v)} for k, v in room_totals.items()]
 
-    # payment plan amount derivation
+    # Payment plan: when milestones cover exactly 100%, the last one takes the
+    # remainder so the plan always adds up to the grand total.
     plan = q.get("payment_plan", []) or []
-    for p in plan:
-        pct = float(p.get("percentage", 0) or 0)
-        p["amount"] = round(grand_total * pct / 100.0, 2)
+    amounts = [percent_of(grand_total, p.get("percentage", 0) or 0) for p in plan]
+    pct_sum = sum((to_decimal(p.get("percentage", 0) or 0) for p in plan), Decimal(0))
+    if plan and abs(pct_sum - Decimal(100)) <= Decimal("0.001"):
+        amounts[-1] = grand_total - sum(amounts[:-1], round_paise(0))
+    for p, amount in zip(plan, amounts):
+        p["amount"] = float(amount)
     q["payment_plan"] = plan
 
     # timeline total

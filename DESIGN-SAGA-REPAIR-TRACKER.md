@@ -54,7 +54,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 | ACC-02 | P1 | GST is one tax amount; no CGST/SGST vs IGST split, place of supply, tenant GSTIN/state (BR-016) | Decision Needed | Needs tenant state + client state fields and accountant sign-off on rounding |
 | ACC-03 | P1 | Run DS-072 `/api/accounting/integrity/source-links` on production and reconcile record by record | Externally Blocked (VPS) | Report only; no automatic repair |
 | ACC-09 | P1 | Historical payroll/vendor-payment rows booked to Cash with a non-cash method (DS-076 root cause) are not yet listed for correction | Tested (DS-080) | Add a method/account mismatch section to the DS-072 read-only report; correct record by record via reversal |
-| ACC-04 | P1 | Decimal/minor-unit policy across PO, bill, commission, payroll, loans (floats with `round(x, 2)` throughout) | Audit Needed | Shared money helper adopted module by module after ACC-01 proves the pattern |
+| ACC-04 | P1 | Decimal/minor-unit policy across PO, bill, commission, payroll, loans (floats with `round(x, 2)` throughout) | Tested (DS-082) | Shared money helper adopted module by module after ACC-01 proves the pattern |
 | ACC-05 | P2 | TDS, commission tax treatment, period close, credit notes | Decision Needed | Accountant policy first |
 | ACC-06 | P2 | Tally export (BR-017), invoice email sending (BR-014), payment link/UPI (BR-015) | Confirmed gaps | Product scope decision; not correctness defects |
 | ACC-07 | P3 | Plain-language Money In / Money Out / Collections Due / Banking / Daybook / Reports framing with advanced tools for finance roles | Audit Needed | After IA batch |
@@ -145,6 +145,13 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 2. Batch B (UX-01..03, SEC-04): grouped permission-aware navigation.
 3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
    PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
+
+### DS-082: Every money document foots to the paisa (ACC-04)
+
+- Root causes: purchase orders, vendor bills, vendor commission and the quotation cost sheet repeated the invoice defect fixed in DS-073: unrounded line amounts were summed while rounded amounts were displayed, tax was computed on unrounded subtotals, and binary-float `round()` turned 2.675 into 2.67. The quotation payment plan rounded each milestone separately, so a 33.33/33.33/33.34 plan did not add up to the grand total. The PO and bill forms previewed totals with unrounded float arithmetic.
+- Fix: PO (`_po_totals`), bill (`_bill_total`), commission (`_calc_commission_amount`, fixed/percentage/slab) and quotation (`_q_compute_costs`: lines with margin, category/room totals, discount, contingency, GST, grand total) use `core/money.py` Decimal half-up per displayed figure; when milestone percentages total 100%, the last milestone takes the exact remainder. PO and bill previews use `roundPaise`. Loans and payroll already reconcile (tests added, code unchanged).
+- Data effect: none; stored documents are not recomputed. Only new or edited drafts use the rule (differences are at most a paisa per figure).
+- Verification: 6 new tests in `tests/test_money_footing.py` (4 failed before the fix); mandatory backend gate 330 passed; ESLint and production build pass. Not deployed.
 
 ### DS-081: Searchable selectors and phone-width layout fixes (UX-04)
 

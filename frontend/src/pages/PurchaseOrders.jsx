@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
-import { formatDate } from "../lib/format";
+import { formatDate, roundPaise } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import {
   Package, Plus, Warning, CheckSquare, PaperPlaneTilt, X, ArrowsClockwise, Truck, ClipboardText,
@@ -109,8 +109,10 @@ function CreatePO({ vendors, onClose, onCreated }) {
   const addLine = () => setF((s) => ({ ...s, lines: [...s.lines, { item_name: "", quantity: 1, unit: "nos", unit_price: "", tax_rate: 18 }] }));
   const upLine = (i, patch) => setF((s) => ({ ...s, lines: s.lines.map((l, j) => j === i ? { ...l, ...patch } : l) }));
   const delLine = (i) => setF((s) => ({ ...s, lines: s.lines.filter((_, j) => j !== i) }));
-  const subtotal = f.lines.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0), 0);
-  const tax = f.lines.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0) * Number(l.tax_rate || 0) / 100, 0);
+  // Mirrors backend _po_totals: round each line and its tax to the paisa.
+  const lineAmount = (l) => roundPaise(Number(l.quantity || 0) * Number(l.unit_price || 0));
+  const subtotal = roundPaise(f.lines.reduce((s, l) => s + lineAmount(l), 0));
+  const tax = roundPaise(f.lines.reduce((s, l) => s + roundPaise(lineAmount(l) * Number(l.tax_rate || 0) / 100), 0));
 
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
