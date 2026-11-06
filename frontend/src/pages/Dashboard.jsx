@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import GettingStarted from "../components/GettingStarted";
 import { formatDate } from "../lib/format";
 import {
   ArrowUpRight, TrendUp, Warning, Clock, Money, Briefcase, Sparkle,
@@ -79,6 +80,8 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      <GettingStarted />
 
       {/* ============== KPI ROW ============== */}
       <div className="fade-up">

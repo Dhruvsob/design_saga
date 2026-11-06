@@ -46,3 +46,17 @@ test("client picker searches a long list and the invoice saves that client", asy
   }, { message: "invoice saved with the searched client" }).toBe(true);
   await ctx.dispose();
 });
+
+test("double-clicking Save creates one record, not two", async ({ page }) => {
+  const ctx = await api("admin");
+  const name = `Double Click ${uid()}`;
+  await page.goto("/clients");
+  await page.getByRole("button", { name: /new client/i }).click();
+  await page.getByTestId("client-name").fill(name);
+  const save = page.getByTestId("client-submit");
+  await save.dblclick();
+  await page.waitForTimeout(1500);
+  const rows = (await json(ctx.get("/api/clients"))).filter((c) => c.name === name);
+  expect(rows, "exactly one client saved").toHaveLength(1);
+  await ctx.dispose();
+});

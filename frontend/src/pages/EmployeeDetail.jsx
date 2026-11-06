@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
@@ -822,7 +823,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
       await api.patch(`/rbac/users/${acct.user.user_id}/role`, { role });
       await load();
     } catch (ex) {
-      alert(ex?.response?.data?.detail || "Role change failed");
+      toast.error(ex?.response?.data?.detail || "Role change failed");
     }
   };
 
@@ -831,7 +832,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
       await api.post(`/employees/${employeeId}/account/status`, { active: !(acct?.user?.is_active ?? true) });
       await load();
     } catch (ex) {
-      alert(ex?.response?.data?.detail || "Status change failed");
+      toast.error(ex?.response?.data?.detail || "Status change failed");
     }
   };
 
@@ -1151,7 +1152,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
       await api.post(`/payroll/runs/${run.id}/reverse`);
       load();
     } catch (error) {
-      window.alert(error?.response?.data?.detail || "Could not reverse salary payment");
+      toast.error(error?.response?.data?.detail || "Could not reverse salary payment");
     }
   };
 

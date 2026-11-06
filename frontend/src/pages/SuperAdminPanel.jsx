@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
@@ -42,7 +43,7 @@ export default function SuperAdminPanel() {
       const r = await api.get("/platform/isolation-check");
       setIsoResult(r.data);
     } catch (e) {
-      alert(fmtErr(e?.response?.data?.detail, "Isolation check failed"));
+      toast.error(fmtErr(e?.response?.data?.detail, "Isolation check failed"));
     } finally {
       setIsoBusy(false);
     }
@@ -75,7 +76,7 @@ export default function SuperAdminPanel() {
       await api.post(`/platform/orgs/${org.org_id}/status`, { action });
       await load();
     } catch (e) {
-      alert(fmtErr(e?.response?.data?.detail, "Status change failed"));
+      toast.error(fmtErr(e?.response?.data?.detail, "Status change failed"));
     }
   };
 
@@ -85,7 +86,7 @@ export default function SuperAdminPanel() {
       setConfirmDelete(null);
       await load();
     } catch (e) {
-      alert(fmtErr(e?.response?.data?.detail, "Delete failed"));
+      toast.error(fmtErr(e?.response?.data?.detail, "Delete failed"));
     }
   };
 

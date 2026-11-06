@@ -103,7 +103,7 @@ export default function ProjectDetail() {
   const deleteFile = async (fid) => {
     if (!window.confirm("Remove this file link?")) return;
     try { await api.delete(`/files/${fid}`); load(); }
-    catch (ex) { alert(ex?.response?.data?.detail || "Delete failed"); }
+    catch (ex) { toast.error(ex?.response?.data?.detail || "Delete failed"); }
   };
 
   const setFileClientVisibility = async (fid, clientVisible) => {

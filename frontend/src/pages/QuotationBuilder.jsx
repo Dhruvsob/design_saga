@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -81,10 +82,10 @@ export default function QuotationBuilder() {
     if (!window.confirm("Convert this quotation into a project? Tasks will be auto-created.")) return;
     try {
       const { data } = await api.post(`/quotations-adv/${id}/convert-to-project`);
-      alert(`Project created. ID: ${data.project_id}`);
+      toast.success("Project created from this quotation");
       navigate(`/projects/${data.project_id}`);
     } catch (e) {
-      alert(e?.response?.data?.detail || "Failed to convert");
+      toast.error(e?.response?.data?.detail || "Failed to convert");
     }
   };
 

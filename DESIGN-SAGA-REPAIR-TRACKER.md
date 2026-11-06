@@ -104,7 +104,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 | UX-02 | P2 | Breadcrumb shows only Brand › Page; no group context | Tested (DS-074) | Brand › Group › Page |
 | UX-03 | P2 | Mobile drawer has no close button (only backdrop tap); `X` icon imported but unused | Tested (DS-074) | Accessible close button |
 | UX-04 | P2 | Large flat dropdowns for project/client/vendor/employee/account (BR-029) | Tested (DS-081) | Searchable combobox for high-volume selectors |
-| UX-05 | P2 | Form safety: double-submit, unsaved-change warning, field-level server errors (risk register "Audit") | Audit Needed | Shared form hooks, module by module |
+| UX-05 | P2 | Form safety: double-submit, unsaved-change warning, field-level server errors (risk register "Audit") | Tested (DS-084) | Shared form hooks, module by module |
 | UX-06 | P3 | Role-specific home (principal, PM, supervisor, accountant, HR, employee) | Confirmed gap | After IA batch |
 
 ### 9. Accessibility, responsive behaviour and browsers
@@ -136,7 +136,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| PROD-01 | P3 | Onboarding checklist for a new tenant (company, roles, employees, first project) and useful empty states | Confirmed gap | After IA batch |
+| PROD-01 | P3 | Onboarding checklist for a new tenant (company, roles, employees, first project) and useful empty states | Tested (DS-084) | After IA batch |
 | PROD-02 | P3 | In-app help/glossary for accounting terms (BR-035) | Confirmed gap | Inline help with ACC-07 |
 
 ### Execution order
@@ -145,6 +145,14 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 2. Batch B (UX-01..03, SEC-04): grouped permission-aware navigation.
 3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
    PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
+
+### DS-084: Form safety, non-blocking errors and new-firm setup checklist (UX-05, PROD-01)
+
+- Double submit (reproduced): double-clicking Save on the Clients form created two identical clients 11 ms apart; about 15 forms (Clients, Projects, Invoices, Quotations, Tasks, Project detail and others) had no busy guard. Fix: `src/lib/submitGuard.js`, installed once in `index.js`, swallows a repeat submit of the same form while its write requests are in flight (tracked by new counters in `lib/api.js`), disables and marks busy only the buttons it disabled, releases on completion (0.4 s grace when the handler sends no request; 30 s safety release); `data-allow-resubmit` opts out. Covers every current and future form.
+- Blocking pop-ups: 31 `alert()` calls (Attendance, Employee, Invoices, Project, Quotation, Super Admin) became non-blocking toasts consistent with the rest of the app; two vague "Failed" messages now say what failed; quotation conversion no longer shows an internal project ID.
+- New tenants landed on an empty dashboard. An admin-only "Getting started" checklist (logo, address/contact/GSTIN, bank details, first employee, client, project, vendor) is derived from real data, links to each screen, ticks itself off, hides when complete and can be dismissed.
+- Tests: E2E double-click test (failed with 2 records before the fix), checklist tests (admin links and dismiss; employee never sees it). Navigation tests now unlock the 5-minute App PIN before each test so long runs stay reliable. E2E navigation 16 passed; forms/money/pdf/smoke/a11y passed in the full run. Not deployed.
+- Deferred (P3): 47 native "Are you sure?" confirmations still work and are accessible; replacing them with one styled dialog is a consistency follow-up.
 
 ### DS-083: WCAG 2.1 A/AA accessibility pass across all primary pages (A11Y-01)
 

@@ -1,7 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
+import { api } from "./helpers.mjs";
 
 const auth = (role) => fileURLToPath(new URL(`./.auth/${role}.json`, import.meta.url));
+
+// Long runs can exceed the 5-minute App PIN inactivity lock; unlock the
+// stored sessions before each test so pages render instead of the PIN screen.
+test.beforeEach(async () => {
+  for (const role of ["admin", "employee"]) await (await api(role)).dispose();
+});
 
 async function openSidebar(page) {
   const menu = page.getByTestId("mobile-menu-btn");
@@ -54,5 +61,25 @@ test.describe("employee navigation", () => {
     for (const link of ["nav-accounting", "nav-invoices", "nav-loans", "nav-employees", "nav-quotations"]) {
       await expect(sidebar.getByTestId(link)).toHaveCount(0);
     }
+  });
+});
+
+test.describe("getting started checklist", () => {
+  test("admin sees setup steps that link to the right screens and can hide them", async ({ browser }) => {
+    const page = await (await browser.newContext({ storageState: auth("admin") })).newPage();
+    await page.goto("/dashboard");
+    const card = page.getByTestId("getting-started");
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId("setup-step-logo")).toHaveAttribute("href", "/settings/company");
+    await expect(card.getByTestId("setup-step-project")).toHaveAttribute("href", "/projects");
+    await card.getByTestId("getting-started-dismiss").click();
+    await expect(page.getByTestId("getting-started")).toHaveCount(0);
+  });
+
+  test("employees never see the admin setup checklist", async ({ browser }) => {
+    const page = await (await browser.newContext({ storageState: auth("employee") })).newPage();
+    await page.goto("/dashboard");
+    await page.locator("main").waitFor();
+    await expect(page.getByTestId("getting-started")).toHaveCount(0);
   });
 });

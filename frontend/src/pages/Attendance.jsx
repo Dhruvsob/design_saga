@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import GeoFenceMap from "../components/GeoFenceMap";
@@ -146,7 +147,7 @@ export default function Attendance() {
 
   const doCheckIn = async (opts = {}) => {
     if (attType === "site_visit" && projects.length > 0 && !siteForm.project_id) {
-      alert("Please select the project for this site visit.");
+      toast.error("Please select the project for this site visit.");
       return;
     }
     setCheckInBusy(true);
@@ -158,7 +159,7 @@ export default function Attendance() {
         try { gps = await _getGPS(); }
         catch (ge) {
           setCheckInBusy(false);
-          alert(ge.message || "GPS required for check-in");
+          toast.error(ge.message || "GPS required for check-in");
           return;
         }
       } else {
@@ -193,7 +194,7 @@ export default function Attendance() {
       } else {
         const msg = typeof detail === "string" ? detail
           : (detail?.message || e?.message || "Check-in failed");
-        alert(msg);
+        toast.error(msg);
       }
     } finally { setCheckInBusy(false); }
   };
@@ -201,7 +202,7 @@ export default function Attendance() {
   const checkIn = () => doCheckIn();
   const requestApproval = () => doCheckIn({ force: true });
   const submitLateReason = () => {
-    if (!lateReason.trim() && !lateCategory) { alert("Please pick a category or share a brief reason"); return; }
+    if (!lateReason.trim() && !lateCategory) { toast.error("Please pick a category or share a brief reason"); return; }
     doCheckIn({ lateReason: lateReason.trim(), lateCategory, retryLate: true });
   };
   const checkOut = async () => {
@@ -218,7 +219,7 @@ export default function Attendance() {
   };
   const submitCorrection = async (e) => {
     e.preventDefault();
-    if (!corrForm.date || !corrForm.reason.trim()) { alert("Date and reason are required"); return; }
+    if (!corrForm.date || !corrForm.reason.trim()) { toast.error("Date and reason are required"); return; }
     const payload = { date: corrForm.date, reason: corrForm.reason };
     if (corrForm.in_time) payload.requested_check_in = `${corrForm.date}T${corrForm.in_time}:00+05:30`;
     if (corrForm.out_time) payload.requested_check_out = `${corrForm.date}T${corrForm.out_time}:00+05:30`;
@@ -953,7 +954,7 @@ function PayrollTab() {
       const { data: d } = await api.get(`/payroll/preview?year=${ym.y}&month=${ym.m}`);
       setData(d);
     } catch (e) {
-      alert(e?.response?.data?.detail || "Failed to load payroll preview");
+      toast.error(e?.response?.data?.detail || "Failed to load payroll preview");
     } finally { setLoading(false); }
   }, [ym]);
   useEffect(() => { load(); }, [load]);
@@ -1265,7 +1266,7 @@ function EmployeeSetupCard() {
   });
 
   const save = async () => {
-    if (!sel) { alert("Select an employee"); return; }
+    if (!sel) { toast.error("Select an employee"); return; }
     setBusy(true);
     try {
       const payload = {
@@ -1281,7 +1282,7 @@ function EmployeeSetupCard() {
       setSavedAt(Date.now());
       setTimeout(() => setSavedAt(null), 2500);
     } catch (e) {
-      alert(e?.response?.data?.detail || "Failed to save");
+      toast.error(e?.response?.data?.detail || "Failed to save");
     } finally { setBusy(false); }
   };
 
@@ -1346,16 +1347,16 @@ function ShortLeaveCard() {
   const [ok, setOk] = useState(false);
   useEffect(() => { api.get("/employees").then((r) => setEmps(r.data)).catch(() => {}); }, []);
   const save = async () => {
-    if (!form.employee_id) { alert("Select an employee"); return; }
-    if (!form.date) { alert("Pick a date"); return; }
-    if (!form.hours || form.hours <= 0) { alert("Hours must be > 0"); return; }
+    if (!form.employee_id) { toast.error("Select an employee"); return; }
+    if (!form.date) { toast.error("Pick a date"); return; }
+    if (!form.hours || form.hours <= 0) { toast.error("Hours must be > 0"); return; }
     setBusy(true);
     try {
       await api.post("/attendance/short-leave", { ...form, hours: Number(form.hours) });
       setOk(true); setTimeout(() => setOk(false), 2500);
       setForm((f) => ({ ...f, reason: "", hours: 1 }));
     } catch (e) {
-      alert(e?.response?.data?.detail || "Failed");
+      toast.error(e?.response?.data?.detail || "Could not record the short leave");
     } finally { setBusy(false); }
   };
   const empLabel = (e) => `${e.first_name || ""} ${e.last_name || ""}`.trim() || e.employee_id || e.id;
@@ -1412,7 +1413,7 @@ function LateConfigCard({ policy, onSaved }) {
       setSavedAt(Date.now()); setTimeout(() => setSavedAt(null), 2500);
       onSaved && onSaved();
     } catch (e) {
-      alert(e?.response?.data?.detail || "Failed to save");
+      toast.error(e?.response?.data?.detail || "Failed to save");
     } finally { setBusy(false); }
   };
   return (
@@ -1484,7 +1485,7 @@ function ManualAttendanceCard() {
     api.get("/attendance/meta").then((r) => setMeta(r.data)).catch(() => {});
   }, []);
   const save = async () => {
-    if (!form.employee_id || !form.date) { alert("Employee and date are required"); return; }
+    if (!form.employee_id || !form.date) { toast.error("Employee and date are required"); return; }
     setBusy(true);
     try {
       const payload = {
@@ -1496,7 +1497,7 @@ function ManualAttendanceCard() {
       await api.post("/attendance/manual", payload);
       setOk(true); setTimeout(() => setOk(false), 2500);
     } catch (e) {
-      alert(e?.response?.data?.detail || "Failed");
+      toast.error(e?.response?.data?.detail || "Could not save the attendance entry");
     } finally { setBusy(false); }
   };
   const empLabel = (e) => `${e.first_name || ""} ${e.last_name || ""}`.trim() || e.employee_id || e.id;
@@ -1587,12 +1588,12 @@ function GeoPolicyTab({ projects }) {
       setSavedAt(Date.now());
       setTimeout(() => setSavedAt(null), 2500);
     } catch (e) {
-      alert(e?.response?.data?.detail || "Failed to save policy");
+      toast.error(e?.response?.data?.detail || "Failed to save policy");
     } finally { setSaving(false); }
   };
 
   const captureMyLocation = (target) => {
-    if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
+    if (!navigator.geolocation) { toast.error("Geolocation not supported"); return; }
     setGpsBusy(true);
     navigator.geolocation.getCurrentPosition(
       (p) => {
@@ -1602,7 +1603,7 @@ function GeoPolicyTab({ projects }) {
         else setLocForm((f) => ({ ...f, lat, lng }));
         setGpsBusy(false);
       },
-      (err) => { alert(err.message || "Could not fetch GPS"); setGpsBusy(false); },
+      (err) => { toast.error(err.message || "Could not fetch GPS"); setGpsBusy(false); },
       { enableHighAccuracy: true, timeout: 8000 },
     );
   };
@@ -1610,7 +1611,7 @@ function GeoPolicyTab({ projects }) {
   const addLocation = async (e) => {
     e.preventDefault();
     if (!locForm.name.trim() || locForm.lat === "" || locForm.lng === "") {
-      alert("Name, latitude and longitude are required"); return;
+      toast.error("Name, latitude and longitude are required"); return;
     }
     setLocBusy(true);
     try {
@@ -1624,7 +1625,7 @@ function GeoPolicyTab({ projects }) {
       setLocForm({ name: "", kind: "office", lat: "", lng: "", radius_m: 150, project_id: "", address: "" });
       load();
     } catch (e2) {
-      alert(e2?.response?.data?.detail || "Failed to add location");
+      toast.error(e2?.response?.data?.detail || "Failed to add location");
     } finally { setLocBusy(false); }
   };
 

@@ -107,7 +107,7 @@ export default function Invoices({ docType = "invoice" }) {
     try {
       await api.patch(`/invoices/${id}/status`, { status });
     } catch (e) {
-      alert(e?.response?.data?.detail || "Could not update status");
+      toast.error(e?.response?.data?.detail || "Could not update status");
     }
     load();
   };
@@ -151,7 +151,7 @@ export default function Invoices({ docType = "invoice" }) {
     const msg = isPaid
       ? "Paid invoices cannot be deleted. Change the status to Sent first so Accounting records a reversal."
       : "Delete this invoice?";
-    if (isPaid) { window.alert(msg); return; }
+    if (isPaid) { toast.error(msg); return; }
     if (!window.confirm(msg)) return;
     try {
       await api.delete(`/invoices/${id}`);

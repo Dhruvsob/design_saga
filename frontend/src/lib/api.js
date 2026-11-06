@@ -39,7 +39,30 @@ export function getSessionToken() {
   }
 }
 
+// In-flight write requests, used by the global double-submit guard.
+const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
+let pendingWriteCount = 0;
+const idleListeners = new Set();
+export const pendingWrites = () => pendingWriteCount;
+export function onWritesIdle(listener) {
+  if (pendingWriteCount === 0) listener();
+  else idleListeners.add(listener);
+}
+const writeFinished = (config) => {
+  if (!config?.__countedWrite) return;
+  pendingWriteCount = Math.max(0, pendingWriteCount - 1);
+  if (pendingWriteCount === 0) {
+    const listeners = [...idleListeners];
+    idleListeners.clear();
+    listeners.forEach((fn) => fn());
+  }
+};
+
 api.interceptors.request.use((config) => {
+  if (WRITE_METHODS.has(String(config.method || "get").toLowerCase())) {
+    config.__countedWrite = true;
+    pendingWriteCount += 1;
+  }
   const token = getSessionToken();
   if (token && !config.headers?.Authorization) {
     config.headers = config.headers || {};
@@ -49,8 +72,9 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => { writeFinished(response.config); return response; },
   (error) => {
+    writeFinished(error?.config);
     if (typeof window !== "undefined") {
       if (error?.response?.status === 423) {
         window.dispatchEvent(new CustomEvent("app-pin-locked"));
