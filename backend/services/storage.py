@@ -70,6 +70,54 @@ def validate_logo_bytes(raw: bytes, declared_mime: str) -> str:
     return real
 
 
+LOGO_MAX_SIDE = 1200        # px; plenty for a 25 mm print logo at 300 dpi
+LOGO_MAX_PIXELS = 60_000_000  # refuse decompression bombs before decoding
+
+
+def normalize_logo(raw: bytes) -> Tuple[bytes, str]:
+    """Trim empty margins and cap the size of an uploaded logo.
+
+    Logos are often exported on a large square canvas with wide plain
+    borders (e.g. 6250x6250 with the artwork in the middle), which makes them
+    render tiny in the app and PDFs. The border colour is taken from the four
+    corners (transparent or a near-uniform solid); everything matching it at
+    the edges is cropped, a small even margin is kept, and the result is
+    stored as PNG no larger than LOGO_MAX_SIDE. Colours and the artwork
+    itself are never altered.
+    """
+    import io
+    from PIL import Image, ImageChops
+
+    with Image.open(io.BytesIO(raw)) as probe:
+        if probe.width * probe.height > LOGO_MAX_PIXELS:
+            raise ValueError("Logo image dimensions are too large")
+    with Image.open(io.BytesIO(raw)) as img:
+        img.load()
+        rgba = img.convert("RGBA")
+    w, h = rgba.size
+    corners = [rgba.getpixel(p) for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
+    bbox = None
+    if all(c[3] < 16 for c in corners):
+        bbox = rgba.getchannel("A").point(lambda v: 255 if v >= 16 else 0).getbbox()
+    else:
+        base = corners[0]
+        if all(max(abs(c[i] - base[i]) for i in range(4)) <= 24 for c in corners):
+            bg = Image.new("RGBA", rgba.size, base)
+            diff = ImageChops.difference(rgba, bg).convert("L").point(lambda v: 255 if v > 24 else 0)
+            bbox = diff.getbbox()
+    if bbox:
+        x0, y0, x1, y1 = bbox
+        pad = max(2, round(max(x1 - x0, y1 - y0) * 0.04))
+        rgba = rgba.crop((max(0, x0 - pad), max(0, y0 - pad), min(w, x1 + pad), min(h, y1 + pad)))
+    if max(rgba.size) > LOGO_MAX_SIDE:
+        scale = LOGO_MAX_SIDE / max(rgba.size)
+        rgba = rgba.resize((max(1, round(rgba.width * scale)), max(1, round(rgba.height * scale))),
+                           Image.LANCZOS)
+    out = io.BytesIO()
+    rgba.save(out, "PNG", optimize=True)
+    return out.getvalue(), "image/png"
+
+
 def init_storage(force: bool = False) -> Optional[str]:
     """Fetch (or return cached) session storage key.
 
@@ -197,6 +245,12 @@ def upload_data_url(data_url: str, folder: str, owner_id: str,
         raise ValueError(f"File too large: {len(raw)}B > {max_bytes}B")
     if allowed_mimes is ALLOWED_LOGO_MIME:
         mime = validate_logo_bytes(raw, mime)
+        try:
+            raw, mime = normalize_logo(raw)
+        except ValueError:
+            raise
+        except Exception as e:  # noqa: BLE001 - undecodable image
+            raise ValueError("The logo image could not be read") from e
 
     ext = MIME_TO_EXT.get(mime, "bin")
     path = f"{APP_NAME}/{folder}/{owner_id}/{uuid.uuid4().hex}.{ext}"

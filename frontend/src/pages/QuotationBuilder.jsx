@@ -7,9 +7,12 @@ import {
   ArrowLeft, FloppyDisk, FilePdf, Sparkle, Plus, Trash, ArrowRight,
   CheckCircle, X, Clock,
 } from "@phosphor-icons/react";
+import { ProposalDetails, ProposalFees } from "../components/ConsultancyProposal";
 
 const TABS = ["Overview", "BOQ Builder", "Rooms", "Materials", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
 const CONSULT_TABS = ["Overview", "Fee Schedule", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
+// Consultancy proposals (letter-style, the firm's own format)
+const PROPOSAL_TABS = ["Proposal", "Fees & schedule", "Terms", "Versions", "Preview"];
 const TYPE_LABELS = { turnkey: "Turnkey", consultancy: "Consultancy", execution: "Execution Only", hybrid: "Hybrid" };
 const SELECTABLE_TYPE_LABELS = { turnkey: TYPE_LABELS.turnkey, consultancy: TYPE_LABELS.consultancy };
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -58,10 +61,14 @@ export default function QuotationBuilder() {
         highlights: q.highlights, design_scope: q.design_scope, execution_scope: q.execution_scope,
         exclusions: q.exclusions, deliverables: q.deliverables, boq: q.boq, materials: q.materials,
         cost: q.cost, payment_plan: q.payment_plan, timeline: q.timeline, terms: q.terms,
+        ...(q.proposal ? { proposal: q.proposal } : {}),
       };
       const { data } = await api.put(`/quotations-adv/${id}`, payload);
       setQ(data);
       setDirty(false);
+      toast.success("Quotation saved");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save the quotation. Try again.");
     } finally {
       setSaving(false);
     }
@@ -102,9 +109,34 @@ export default function QuotationBuilder() {
   if (!q || !tpl) return <div className="overline">LOADING…</div>;
 
   const isConsult = q.type === "consultancy";
-  const visibleTabs = isConsult ? CONSULT_TABS : TABS;
-  // If the current tab was hidden by a type switch, snap back to Overview
-  const activeTab = visibleTabs.includes(tab) ? tab : "Overview";
+  const isProposal = isConsult && !!q.proposal;
+  const visibleTabs = isProposal ? PROPOSAL_TABS : isConsult ? CONSULT_TABS : TABS;
+  // If the current tab was hidden by a type switch, snap back to the first tab
+  const activeTab = visibleTabs.includes(tab) ? tab : visibleTabs[0];
+  const allowedTypes = (tpl.allowed_types || Object.keys(SELECTABLE_TYPE_LABELS)).filter((t) => SELECTABLE_TYPE_LABELS[t]);
+  const canSwitchType = canUpdate && (q.status || "draft") === "draft" && allowedTypes.length > 1;
+
+  const swapType = (newType) => {
+    if (newType === q.type) return;
+    if (!window.confirm(`Switch this draft to a ${TYPE_LABELS[newType]} quotation? Type-specific sections will reset to their defaults.`)) return;
+    const patch = { type: newType };
+    if (newType === "consultancy") {
+      patch.proposal = q.proposal || {
+        ...JSON.parse(JSON.stringify(tpl.proposal_default || {})),
+        greeting_name: q.client_name || "",
+      };
+      patch.cost = { ...(q.cost || {}), tax_pct: 0, discount_pct: 0, contingency_pct: 0 };
+      if (!(q.design_scope || []).length) patch.design_scope = [...(tpl.proposal_scope || [])];
+    } else {
+      patch.payment_plan = tpl.payment_plans[newType].map((p) => ({ ...p }));
+      patch.timeline = tpl.timelines[newType].map((p) => ({ ...p }));
+      patch.deliverables = { ...tpl.deliverables[newType] };
+      patch.terms = tpl.default_terms.map((t) => ({ ...t }));
+      patch.cost = { ...(q.cost || {}), tax_pct: 18 };
+    }
+    update(patch);
+    setTab(newType === "consultancy" ? "Proposal" : "Overview");
+  };
 
   return (
     <div className="space-y-6 pb-32" data-testid="quotation-builder">
@@ -122,19 +154,24 @@ export default function QuotationBuilder() {
           <input
             value={q.project_title || ""}
             onChange={(e) => update({ project_title: e.target.value })}
-            className="font-display font-bold tracking-tight text-3xl w-full bg-transparent outline-none border-b border-transparent focus:border-[#8B7F6A]"
+            aria-label="Quotation title"
+            className="font-display font-bold tracking-tight text-2xl sm:text-3xl w-full bg-transparent outline-none border-b border-transparent focus:border-[#8B7F6A]"
             data-testid="builder-title"
           />
-          <div className="mt-3 flex items-center gap-4 text-sm text-[#5C5C5C]">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#5C5C5C]">
             <div><span className="overline">CLIENT</span> <span className="ml-1 text-[#0A0A0A]">{q.client_name || "—"}</span></div>
             <div><span className="overline">LOCATION</span> <span className="ml-1 text-[#0A0A0A]">{q.project_location || "—"}</span></div>
-            <div><span className="overline">AREA</span> <span className="ml-1 text-[#0A0A0A]">{q.area_sqft || 0} sq.ft</span></div>
+            {Number(q.area_sqft) > 0 && <div><span className="overline">AREA</span> <span className="ml-1 text-[#0A0A0A]">{q.area_sqft} sq.ft</span></div>}
           </div>
         </div>
         <div className="text-right">
-          <div className="overline">GRAND TOTAL</div>
-          <div className="font-display font-bold text-4xl tracking-tight accent-blue">{fmt(q.cost?.grand_total)}</div>
-          <div className="overline mt-1">incl GST · {q.total_duration_weeks || 0} weeks</div>
+          <div className="overline">{isProposal ? "DESIGN FEE" : "GRAND TOTAL"}</div>
+          <div className="font-display font-bold text-4xl tracking-tight accent-blue" data-testid="builder-total">{fmt(q.cost?.grand_total)}</div>
+          <div className="overline mt-1">
+            {isProposal
+              ? (Number(q.cost?.tax_pct) > 0 ? "incl GST" : "professional fee")
+              : `incl GST · ${q.total_duration_weeks || 0} weeks`}
+          </div>
         </div>
       </div>
 
@@ -146,6 +183,15 @@ export default function QuotationBuilder() {
         <a href={`${API}/quotations-adv/${id}/pdf`} target="_blank" rel="noreferrer" className="btn-ghost" data-testid="pdf-btn">
           <FilePdf size={14} /> Download PDF
         </a>
+        {canSwitchType && (
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-[#5C5C5C]">Type</span>
+            <select aria-label="Quotation type" className="input-flat !w-auto" value={q.type}
+                    onChange={(e) => swapType(e.target.value)} data-testid="builder-type">
+              {allowedTypes.map((t) => <option key={t} value={t}>{SELECTABLE_TYPE_LABELS[t]}</option>)}
+            </select>
+          </label>
+        )}
         {canVersion && <button onClick={newVersion} className="btn-ghost">
           New version
         </button>}
@@ -179,7 +225,9 @@ export default function QuotationBuilder() {
 
       {/* Tab content */}
       <div>
-        {activeTab === "Overview" && <Overview q={q} update={update} tpl={tpl} isConsult={isConsult} />}
+        {activeTab === "Proposal" && <ProposalDetails q={q} update={update} tpl={tpl} readOnly={!canUpdate} />}
+        {activeTab === "Fees & schedule" && <ProposalFees q={q} update={update} readOnly={!canUpdate} />}
+        {activeTab === "Overview" && <Overview q={q} update={update} isConsult={isConsult} />}
         {(activeTab === "BOQ Builder" || activeTab === "Fee Schedule") && <BoqBuilder q={q} update={update} tpl={tpl} isConsult={isConsult} />}
         {activeTab === "Rooms" && !isConsult && <Rooms q={q} />}
         {activeTab === "Materials" && !isConsult && <Materials q={q} update={update} tpl={tpl} />}
@@ -218,25 +266,9 @@ export default function QuotationBuilder() {
 }
 
 /* ========= Overview ========= */
-function Overview({ q, update, tpl, isConsult }) {
+function Overview({ q, update, isConsult }) {
   const setHL = (k, v) => update({ highlights: { ...(q.highlights || {}), [k]: v } });
   const setDel = (k, v) => update({ deliverables: { ...(q.deliverables || {}), [k]: Number(v) || 0 } });
-
-  const swapType = (newType) => {
-    if (!window.confirm(`Switch type to ${TYPE_LABELS[newType]}? Default payment plan, timeline, terms and deliverables will reset.`)) return;
-    const patch = {
-      type: newType,
-      payment_plan: tpl.payment_plans[newType].map((p) => ({ ...p })),
-      timeline: tpl.timelines[newType].map((p) => ({ ...p })),
-      deliverables: { ...tpl.deliverables[newType] },
-    };
-    if (newType === "consultancy" && tpl.consultancy_terms) {
-      patch.terms = tpl.consultancy_terms.map((t) => ({ ...t }));
-    } else if (q.type === "consultancy" && tpl.default_terms) {
-      patch.terms = tpl.default_terms.map((t) => ({ ...t }));
-    }
-    update(patch);
-  };
 
   const editList = (key) => {
     const current = (q[key] || []).join("\n");
@@ -306,21 +338,6 @@ function Overview({ q, update, tpl, isConsult }) {
       </div>
 
       <div className="space-y-6">
-        <Card title="QUOTATION TYPE">
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(SELECTABLE_TYPE_LABELS).map(([v, l]) => (
-              <button
-                key={v}
-                onClick={() => swapType(v)}
-                className={`p-3 border text-left transition ${q.type === v ? "bg-[#8B7F6A] border-[#8B7F6A] text-white" : "bg-white border-[#E5E5E5] hover:border-[#0A0A0A]"}`}
-              >
-                <div className="overline" style={{ color: q.type === v ? "rgba(255,255,255,0.7)" : undefined }}>{v.toUpperCase()}</div>
-                <div className="font-semibold text-sm mt-1">{l}</div>
-              </button>
-            ))}
-          </div>
-        </Card>
-
         <Card title="META">
           <Field label="Client name">
             <input className="input-flat" value={q.client_name || ""} onChange={(e) => update({ client_name: e.target.value })} />
@@ -750,7 +767,10 @@ function Terms({ q, update, tpl }) {
   };
   const loadPreset = () => {
     if (!window.confirm("Reset to default terms?")) return;
-    update({ terms: tpl.default_terms.map((t) => ({ ...t })) });
+    const preset = q.type !== "consultancy" ? tpl.default_terms
+      : q.proposal ? [{ section: "Validity", content: "This proposal is valid for 30 days from the date of issue." }]
+        : tpl.consultancy_terms;
+    update({ terms: preset.map((t) => ({ ...t })) });
   };
 
   return (

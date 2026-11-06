@@ -168,7 +168,7 @@ class BrandedPDF(FPDF):
         x = LEFT
         if self.brand.logo:
             try:
-                w = min(8 * self.brand.logo_ratio, 24)
+                w = min(9 * self.brand.logo_ratio, 26)
                 self.image(io.BytesIO(self.brand.logo), x=LEFT, y=y, w=w, h=w / self.brand.logo_ratio)
                 x = LEFT + w + 4
             except Exception:  # noqa: BLE001
@@ -223,10 +223,10 @@ def draw_letterhead(pdf: BrandedPDF, title: str,
     meta_x = 140.0
     text_x = LEFT
     if b.logo:
-        logo_h = 18.0
+        logo_h = 22.0
         logo_w = logo_h * b.logo_ratio
-        if logo_w > 36:
-            logo_w, logo_h = 36.0, 36.0 / b.logo_ratio
+        if logo_w > 42:
+            logo_w, logo_h = 42.0, 42.0 / b.logo_ratio
         try:
             pdf.image(io.BytesIO(b.logo), x=LEFT, y=top, w=logo_w, h=logo_h)
             text_x = LEFT + logo_w + 4

@@ -76,6 +76,8 @@ jobs:
           tests/test_pdf_branding.py
           tests/test_cash_bank_consistency.py
           tests/test_project_phases.py
+          tests/test_logo_normalize.py
+          tests/test_consultancy_proposal.py
 
   frontend:
     runs-on: ubuntu-latest

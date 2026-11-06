@@ -67,8 +67,20 @@ test.describe("employee navigation", () => {
 test.describe("getting started checklist", () => {
   test("admin sees setup steps that link to the right screens and can hide them", async ({ browser }) => {
     const page = await (await browser.newContext({ storageState: auth("admin") })).newPage();
+    // Other suites fill in the QA company profile; once every step is done the
+    // checklist correctly hides itself, so start from a known-incomplete step.
+    const ctx = await api("admin");
+    const org = await (await ctx.get("/api/org/current")).json();
+    const complete = Boolean(org.branding?.logo_url && org.address?.line1 && org.gstin
+      && (org.bank_details?.account || org.bank_details?.upi));
+    await ctx.dispose();
     await page.goto("/dashboard");
     const card = page.getByTestId("getting-started");
+    if (complete) {
+      await page.locator("main").waitFor();
+      await expect(card).toHaveCount(0);
+      return;
+    }
     await expect(card).toBeVisible();
     await expect(card.getByTestId("setup-step-logo")).toHaveAttribute("href", "/settings/company");
     await expect(card.getByTestId("setup-step-project")).toHaveAttribute("href", "/projects");

@@ -154,8 +154,8 @@ export default function Layout({ children }) {
           data-testid="sidebar-logo-btn"
         >
           {brandLogo ? (
-            <img src={brandLogo} alt={brandName}
-                 className="w-10 h-10 object-contain rounded-xl ring-1 ring-[#E8E6E1] bg-white transition-transform group-hover:scale-105" />
+            <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
+                 className="h-12 w-auto max-w-[72px] shrink-0 object-contain transition-transform group-hover:scale-[1.03]" />
           ) : (
             <div className="relative w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm"
                  style={{ background: "linear-gradient(135deg, #8B7F6A, #8a6f24)" }}>

@@ -11,6 +11,23 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-087: Consultancy design proposal (quotation modes, owner's reference format)
+
+- Source: owner's reference "Design Proposal_Krunal Soni_28.05.26.pdf" and the Production Finishing mandate (section 04, T02).
+- Built: new consultancy quotations are a letter-style proposal with the reference's sections in order: greeting, project details (project, location, area, scope, designer), scope of work, design process & approvals (revision/render counts substituted into editable clauses), design fees & payment schedule (fixed fee, advance on confirmation, instalment every N months, extra-work note, optional GST), material procurement, communication + office number, optional site-coordination support (monthly fee, duties, role-limit note), terms, closing, signatory and a client acceptance line. Empty optional sections are omitted; the document flows across pages (sample = 2 pages, like the reference).
+- Money: `core/consultancy_proposal.py` fee schedule is exact to the paisa; the last instalment takes the remainder; the fee drives the quotation grand total (and GST only when set).
+- Modes: Consultancy-only workspaces can only create consultancy quotations, Turnkey-only only turnkey, Hybrid chooses at creation (two cards). Type can change only on a draft and only within the mode; saved/sent quotations keep their type and PDF. Turnkey builder and PDF unchanged; legacy consultancy quotations (no proposal block) keep their old template.
+- Input safety: proposal payload whitelisted, trimmed, list/length capped, money validated (advance/instalment cannot exceed fee) -> 400 with a clear message.
+- UI: Proposal and Fees & schedule tabs (list editors with reorder/remove, live schedule table and fee summary), Save now reports errors; type switch only for Hybrid drafts.
+- Verification: `tests/test_consultancy_proposal.py` (15) incl. 2-page sample, no blank page, mode enforcement; backend gate 361 passed; `e2e/proposal.spec.mjs` desktop+mobile (UI create -> fee -> save -> 2-page PDF, invalid fee 400, sent type locked 409, axe clean).
+
+### DS-086: Logo rebuilt from the owner's original file; logo uploads normalised
+
+- The original "Design saga Logo Final 17-04 (01)-01.jpg.jpeg" (6250 px, construction grid) was rebuilt without the grid: the D outline is redrawn exactly from the construction lines (outer arc, counter circle, corner circle), the S, accent and wordmark are traced from the original. Files: Downloads "Design Saga - logo (final, transparent).png" and "... logo mark only (final).png".
+- Uploads: `services/storage.normalize_logo` trims plain/transparent borders, keeps a 4% margin, caps at 1200 px and stores PNG (both upload endpoints); refuses decompression bombs. A 6250 px JPG with wide white margins no longer renders tiny.
+- Display: sidebar shows the logo at its natural shape (48 px high, no white box); PDF letterhead logo 22 mm high; Company Settings preview larger, hint corrected (no SVG), Uploading/Replace states.
+- Verification: `tests/test_logo_normalize.py` (6).
+
 ### DEPLOY-2026-11-06b: Release `bfb70cf` (phase templates) deployed
 
 - Owner approved in chat. Bundle `fbe0311..bfb70cf` (SHA-256 `5bc69ba6...394c`, matched both ends) fast-forwarded in a transient unit; pre-deploy backup `/opt/design-saga-backups/20261106T080953Z`; backend and web healthy; `/healthz` ok; `/api/project-phase-templates` 401 (present, login required); 0 exceptions, 0 5xx.

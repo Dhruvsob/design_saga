@@ -129,7 +129,7 @@ export default function CompanySettings() {
               <div className="overline mb-4"><ImageSquare size={11} className="inline mr-1"/> LOGO</div>
               <div className="flex items-center gap-4">
                 {branding.logo_url ? (
-                  <img src={branding.logo_url} alt="Logo" className="w-20 h-20 object-contain ring-1 ring-[#E5E5E5] bg-white p-2" />
+                  <img src={branding.logo_url} alt="Current logo" className="w-28 h-28 object-contain ring-1 ring-[#E5E5E5] bg-white p-2 rounded-lg" data-testid="logo-preview" />
                 ) : (
                   <div className="w-20 h-20 flex items-center justify-center text-white font-display font-bold text-lg ring-1 ring-[#E5E5E5]"
                        style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
@@ -137,11 +137,13 @@ export default function CompanySettings() {
                   </div>
                 )}
                 <div>
-                  <button onClick={() => fileRef.current?.click()} className="btn-primary" data-testid="upload-logo-btn">
-                    <Upload size={12} /> Upload logo
+                  <button onClick={() => fileRef.current?.click()} className="btn-primary" disabled={saving}
+                          data-testid="upload-logo-btn">
+                    <Upload size={12} /> {saving ? "Uploading…" : branding.logo_url ? "Replace logo" : "Upload logo"}
                   </button>
-                  <div className="text-xs text-[#5C5C5C] mt-2">
-                    PNG, JPG or SVG · Max 2MB · Square works best.
+                  <div className="text-xs text-[#5C5C5C] mt-2 max-w-xs">
+                    PNG, JPG or WebP, up to 2 MB. A transparent PNG looks best. Empty borders are trimmed
+                    automatically; the logo is used in the sidebar and on every PDF.
                   </div>
                   {branding.logo_url && (
                     <button onClick={() => setBranding({ logo_url: null })}
@@ -150,7 +152,8 @@ export default function CompanySettings() {
                     </button>
                   )}
                 </div>
-                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onLogoPick} />
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                       onChange={(e) => { onLogoPick(e); e.target.value = ""; }} aria-label="Logo file" />
               </div>
             </div>
 
@@ -184,7 +187,7 @@ export default function CompanySettings() {
               {/* Sidebar preview */}
               <div className="border border-[#E5E5E5] p-4 flex items-center gap-3 mb-4">
                 {branding.logo_url ? (
-                  <img src={branding.logo_url} alt="" className="w-9 h-9 object-contain ring-1 ring-[#E5E5E5]" />
+                  <img src={branding.logo_url} alt="" className="h-10 w-auto max-w-[64px] object-contain" />
                 ) : (
                   <div className="w-9 h-9 flex items-center justify-center text-white font-display font-bold text-sm"
                        style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>

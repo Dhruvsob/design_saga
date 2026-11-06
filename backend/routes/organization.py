@@ -257,11 +257,15 @@ async def upload_logo_multipart(request: Request,
         _storage.validate_logo_bytes(data, file.content_type)
     except ValueError as e:
         raise HTTPException(415, str(e))
+    try:
+        data, mime = _storage.normalize_logo(data)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(415, "The logo image could not be read") from e
     import uuid as _uuid
-    ext = _storage.MIME_TO_EXT.get(file.content_type, "bin")
+    ext = _storage.MIME_TO_EXT.get(mime, "bin")
     path = f"{_storage.APP_NAME}/org-logos/{oid}/{_uuid.uuid4().hex}.{ext}"
     try:
-        result = _storage.put_object(path, data, file.content_type)
+        result = _storage.put_object(path, data, mime)
     except Exception as e:  # noqa: BLE001
         _log.warning("Object-storage logo upload failed: %s", type(e).__name__)
         raise HTTPException(
@@ -272,7 +276,7 @@ async def upload_logo_multipart(request: Request,
         {"org_id": oid},
         {"$set": {"branding.logo_url": logo_url,
                   "branding.logo_storage": {
-                      "path": stored_path, "mime": file.content_type,
+                      "path": stored_path, "mime": mime,
                       "size": result.get("size", len(data)),
                       "uploaded_at": iso_now(),
                   },
@@ -281,7 +285,7 @@ async def upload_logo_multipart(request: Request,
         upsert=True,
     )
     return {"ok": True, "logo_url": logo_url,
-            "storage": {"path": stored_path, "mime": file.content_type,
+            "storage": {"path": stored_path, "mime": mime,
                         "size": result.get("size", len(data))}}
 
 

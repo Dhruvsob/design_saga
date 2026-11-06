@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
@@ -16,6 +17,10 @@ const NEW_TYPE_LABELS = {
   turnkey: TYPE_LABELS.turnkey,
   consultancy: TYPE_LABELS.consultancy,
 };
+const TYPE_HELP = {
+  consultancy: "Letter-style design proposal: scope, design process, fixed fee with advance and instalments, optional site coordinator.",
+  turnkey: "Design-and-build quotation: BOQ line items, rooms, materials, GST, payment milestones and timeline.",
+};
 const STATUS_COLORS = {
   draft: "chip-draft", sent: "chip-sent", under_review: "chip-medium",
   approved: "chip-paid", rejected: "chip-overdue", converted: "chip-paid",
@@ -27,25 +32,42 @@ export default function QuotationsAdv() {
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ type: "turnkey", project_title: "", client_id: "", project_id: "", project_location: "", area_sqft: "" });
+  const [allowedTypes, setAllowedTypes] = useState(["turnkey", "consultancy"]);
+  const [form, setForm] = useState({ type: "", project_title: "", client_id: "", project_id: "", project_location: "", area_sqft: "" });
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
 
   const load = async () => {
-    const [r, c, p] = await Promise.all([
+    const [r, c, p, t] = await Promise.all([
       api.get("/quotations-adv"),
       api.get("/clients"),
       api.get("/projects"),
+      api.get("/quotations-adv/templates").catch(() => ({ data: {} })),
     ]);
     setRows(r.data);
     setClients(c.data);
     setProjects(p.data);
+    const allowed = (t.data.allowed_types || ["turnkey", "consultancy"]).filter((x) => NEW_TYPE_LABELS[x]);
+    setAllowedTypes(allowed);
+    if (allowed.length === 1) setForm((f) => ({ ...f, type: allowed[0] }));
   };
   useEffect(() => { load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
-    const { data } = await api.post("/quotations-adv", { ...form, area_sqft: Number(form.area_sqft || 0) });
-    navigate(`/quotations/${data.id}`);
+    if (!form.type) {
+      toast.error("Choose Consultancy or Turnkey first");
+      return;
+    }
+    setCreating(true);
+    try {
+      const { data } = await api.post("/quotations-adv", { ...form, area_sqft: Number(form.area_sqft || 0) });
+      navigate(`/quotations/${data.id}`);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not create the quotation");
+    } finally {
+      setCreating(false);
+    }
   };
 
   const del = async (id) => {
@@ -59,8 +81,8 @@ export default function QuotationsAdv() {
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <div className="overline mb-1">FINANCE / QUOTATIONS</div>
-          <h1 className="font-display font-bold tracking-tight text-4xl">Enterprise quotation engine.</h1>
-          <p className="text-[#5C5C5C] mt-2 max-w-xl">BOQ, room-wise costing, materials, payment plans, timeline, terms, versions and approval — all in one professional document.</p>
+          <h1 className="font-display font-bold tracking-tight text-3xl sm:text-4xl">Quotations</h1>
+          <p className="text-[#5C5C5C] mt-2 max-w-xl">Design consultancy proposals and turnkey quotations, with versions, approval and a branded PDF.</p>
         </div>
         <div className="flex items-center gap-3">
           {hasPerm("quotations.create") && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-quotation-btn">
@@ -71,10 +93,32 @@ export default function QuotationsAdv() {
 
       {showForm && (
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="new-quotation-form">
-          <select aria-label="Quotation type" className="input-flat" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} data-testid="q-type">
-            {Object.entries(NEW_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <input required className="input-flat md:col-span-2" placeholder="Project title" value={form.project_title} onChange={(e) => setForm({ ...form, project_title: e.target.value })} data-testid="q-title" />
+          {allowedTypes.length > 1 ? (
+            <fieldset className="md:col-span-3">
+              <legend className="text-xs font-semibold text-[#5C5C5C] mb-2">What are you quoting for?</legend>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup">
+                {allowedTypes.map((v) => (
+                  <label key={v} data-testid={`q-type-${v}`}
+                         className={`block p-4 rounded-lg border cursor-pointer transition ${form.type === v
+                           ? "border-[#76705E] bg-[#FAF9F6] ring-1 ring-[#76705E]" : "border-[#E8E6E1] bg-white hover:border-[#76705E]"}`}>
+                    <span className="flex items-center gap-2">
+                      <input type="radio" name="q-type" value={v} checked={form.type === v}
+                             onChange={() => setForm({ ...form, type: v })} />
+                      <span className="font-semibold">{NEW_TYPE_LABELS[v]}</span>
+                    </span>
+                    <span className="block text-xs text-[#6E6A63] mt-1">{TYPE_HELP[v]}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : (
+            <p className="md:col-span-3 text-sm text-[#5C5C5C]" data-testid="q-type-fixed">
+              <strong>{NEW_TYPE_LABELS[allowedTypes[0]]}</strong> · {TYPE_HELP[allowedTypes[0]]}
+            </p>
+          )}
+          <input required className="input-flat md:col-span-2" aria-label="Project title"
+                 placeholder={form.type === "consultancy" ? "Project, e.g. 4 BHK Apartment" : "Project title"}
+                 value={form.project_title} onChange={(e) => setForm({ ...form, project_title: e.target.value })} data-testid="q-title" />
           <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => {
             const c = clients.find(x => x.id === e.target.value);
             setForm({ ...form, client_id: e.target.value, client_name: c?.name });
@@ -88,7 +132,9 @@ export default function QuotationsAdv() {
           </SearchSelect>
           <input className="input-flat" type="number" placeholder="Enter area (sq ft)" value={form.area_sqft} onChange={(e) => setForm({ ...form, area_sqft: e.target.value })} />
           <input className="input-flat md:col-span-2" placeholder="Project location" value={form.project_location} onChange={(e) => setForm({ ...form, project_location: e.target.value })} />
-          <button className="btn-primary md:col-span-3" data-testid="q-submit">Create quotation</button>
+          <button className="btn-primary md:col-span-3" disabled={creating} data-testid="q-submit">
+            {creating ? "Creating…" : "Create quotation"}
+          </button>
         </form>
       )}
 
