@@ -69,7 +69,7 @@ function NavItem({ to, label, Icon }) {
       {({ isActive }) => (
         <>
           {isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#8B7F6A]" />}
-          <Icon size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#76705E]" : "text-[#9B9B9B] group-hover:text-[#6B6B6B]"} />
+          <Icon size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#76705E]" : "text-[#6E6A63] group-hover:text-[#6B6B6B]"} />
           <span className="flex-1">{label}</span>
           {isActive && <CaretRight size={12} weight="bold" aria-hidden="true" className="text-[#76705E]" />}
         </>
@@ -167,7 +167,7 @@ export default function Layout({ children }) {
             <div className="font-display font-bold tracking-tight text-base text-[#1A1A1A] truncate" data-testid="sidebar-brand-name">
               {brandName}<span className="text-[#76705E]">.</span>
             </div>
-            <div className="eyebrow text-[9px] text-[#9B9B9B] truncate mt-0.5">{brandTagline}</div>
+            <div className="eyebrow text-[9px] text-[#6E6A63] truncate mt-0.5">{brandTagline}</div>
           </div>
         </button>
 
@@ -207,7 +207,7 @@ export default function Layout({ children }) {
           {groups.map((g) => (
             <div key={g.id} className={g.label ? "mt-4" : ""} role="group" aria-labelledby={g.label ? `nav-group-${g.id}` : undefined}>
               {g.label && (
-                <div id={`nav-group-${g.id}`} className="overline px-3 pb-1.5 text-[#A8A296]" data-testid={`nav-group-${g.id}`}>
+                <div id={`nav-group-${g.id}`} className="overline px-3 pb-1.5 text-[#6E6A63]" data-testid={`nav-group-${g.id}`}>
                   {g.label}
                 </div>
               )}
@@ -229,7 +229,7 @@ export default function Layout({ children }) {
             )}
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-[#1A1A1A] truncate" data-testid="sidebar-user-name">{user?.name}</div>
-              <div className="text-[10px] font-mono tracking-wider uppercase text-[#9B9B9B] flex items-center gap-1.5">
+              <div className="text-[10px] font-mono tracking-wider uppercase text-[#6E6A63] flex items-center gap-1.5">
                 <span className="live-dot" />
                 {user?.role || "employee"}
               </div>
@@ -274,11 +274,11 @@ export default function Layout({ children }) {
             <span className="overline">{(brandName || "").toUpperCase()}</span>
             {currentGroup?.label && (
               <>
-                <CaretRight size={10} className="text-[#9B9B9B]" aria-hidden="true" />
+                <CaretRight size={10} className="text-[#6E6A63]" aria-hidden="true" />
                 <span>{currentGroup.label}</span>
               </>
             )}
-            <CaretRight size={10} className="text-[#9B9B9B]" aria-hidden="true" />
+            <CaretRight size={10} className="text-[#6E6A63]" aria-hidden="true" />
             <span className="text-[#2C2C2C] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
           </nav>
 
@@ -289,7 +289,7 @@ export default function Layout({ children }) {
             data-testid="top-search"
           >
             <MagnifyingGlass size={15} className="text-[#6B6B6B]" />
-            <span className="flex-1 text-sm text-[#9B9B9B]">Search projects, clients, invoices…</span>
+            <span className="flex-1 text-sm text-[#6E6A63]">Search projects, clients, invoices…</span>
             <kbd className="hidden md:inline-block px-1.5 py-0.5 rounded bg-[#F5F4F0] border border-[#E8E6E1] font-mono text-[10px] text-[#6B6B6B]">⌘K</kbd>
           </button>
 

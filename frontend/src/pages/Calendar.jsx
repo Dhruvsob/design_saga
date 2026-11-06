@@ -14,14 +14,14 @@ import SearchSelect from "../components/SearchSelect";
 
 /* ---------- constants ---------- */
 const KIND_META = {
-  task:             { label: "Tasks",       color: "#8B7F6A" },
+  task:             { label: "Tasks",       color: "#625C4D" },
   meeting:          { label: "Meetings",    color: "#1D633E" },
-  reminder:         { label: "Reminders",   color: "#B87500" },
-  milestone:        { label: "Milestones",  color: "#8A6DFF" },
+  reminder:         { label: "Reminders",   color: "#8F5B00" },
+  milestone:        { label: "Milestones",  color: "#6046D9" },
   project_deadline: { label: "Deadlines",   color: "#0A0A0A" },
   invoice_due:      { label: "Invoices",    color: "#B4001C" },
-  holiday:          { label: "Holidays",    color: "#3B82F6" },
-  leave:            { label: "Leaves",      color: "#F0A93A" },
+  holiday:          { label: "Holidays",    color: "#1F63D6" },
+  leave:            { label: "Leaves",      color: "#7F4F00" },
   deadline:         { label: "Deadlines",   color: "#0A0A0A" },
   other:            { label: "Other",       color: "#5C5C5C" },
 };
@@ -242,16 +242,16 @@ export default function CalendarPage() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-center gap-2">
-          <button onClick={() => go(-1)} className="btn-ghost px-2" data-testid="cal-prev"><CaretLeft size={16} /></button>
+          <button onClick={() => go(-1)} className="btn-ghost px-2" aria-label="Previous" data-testid="cal-prev"><CaretLeft size={16} /></button>
           <button onClick={goToday} className="btn-ghost text-xs font-mono uppercase" data-testid="cal-today">Today</button>
-          <button onClick={() => go(1)} className="btn-ghost px-2" data-testid="cal-next"><CaretRight size={16} /></button>
+          <button onClick={() => go(1)} className="btn-ghost px-2" aria-label="Next" data-testid="cal-next"><CaretRight size={16} /></button>
           <div className="font-display font-bold text-lg ml-2" data-testid="cal-header-label">{headerLabel}</div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggleSound} className="btn-ghost px-2"
                   title={soundOn ? "Reminder sound on — click to mute" : "Reminder sound muted — click to enable"}
                   data-testid="cal-sound-toggle">
-            {soundOn ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} className="text-[#9A9A9A]" />}
+            {soundOn ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} className="text-[#6E6A63]" />}
           </button>
           <div className="flex items-center gap-1 border border-[#E5E5E5]">
             {["month", "week", "agenda"].map((v) => (
@@ -270,7 +270,7 @@ export default function CalendarPage() {
           return (
             <button key={k}
               onClick={() => setHiddenKinds((h) => ({ ...h, [k]: !h[k] }))}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition ${off ? "border-[#E5E5E5] text-[#9A9A9A] line-through" : "border-transparent"}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition ${off ? "border-[#E5E5E5] text-[#6E6A63] line-through" : "border-transparent"}`}
               style={off ? {} : { background: `${meta.color}14`, color: meta.color }}
               data-testid={`filter-${k}`}>
               <span className="w-2 h-2 rounded-full" style={{ background: off ? "#C9C9C9" : meta.color }} />
@@ -299,7 +299,7 @@ export default function CalendarPage() {
                 <button key={ds} onClick={() => setSelectedDay(selectedDay === ds ? null : ds)}
                   className={`min-h-[92px] border-r border-b border-[#E5E5E5] p-1 text-left align-top transition hover:bg-[#F7F8FA] ${inMonth ? "bg-white" : "bg-[#FCFCFC]"} ${selectedDay === ds ? "ring-2 ring-inset ring-[#8B7F6A]" : ""}`}
                   data-testid={`day-${ds}`}>
-                  <div className={`text-[11px] font-mono mb-1 w-6 h-6 flex items-center justify-center ${isToday ? "bg-[#8B7F6A] text-white rounded-full" : inMonth ? "text-[#0A0A0A]" : "text-[#C9C9C9]"}`}>
+                  <div className={`text-[11px] font-mono mb-1 w-6 h-6 flex items-center justify-center ${isToday ? "bg-[#8B7F6A] text-white rounded-full" : inMonth ? "text-[#0A0A0A]" : "text-[#77736B]"}`}>
                     {d.getDate()}
                   </div>
                   <div className="space-y-0.5">
@@ -330,7 +330,7 @@ export default function CalendarPage() {
                 </div>
               </div>
               {(byDate[selectedDay] || []).length === 0 && (
-                <div className="text-sm text-[#9A9A9A] py-4 text-center">Nothing scheduled on this day.</div>
+                <div className="text-sm text-[#6E6A63] py-4 text-center">Nothing scheduled on this day.</div>
               )}
               <div className="space-y-1.5">
                 {(byDate[selectedDay] || []).map((it) => <AgendaRow key={it.id} it={it} onOpen={openItem} />)}
@@ -352,7 +352,7 @@ export default function CalendarPage() {
               <div key={ds} className="border-r border-b border-[#E5E5E5] bg-white min-h-[160px]">
                 <div className={`p-2 border-b border-[#F0F0F0] flex items-center justify-between ${isToday ? "bg-[#F5F4F0]" : "bg-[#FAFAFA]"}`}>
                   <span className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">{WEEKDAYS[i]}</span>
-                  <span className={`text-xs font-mono ${isToday ? "text-[#8B7F6A] font-bold" : ""}`}>{d.getDate()}</span>
+                  <span className={`text-xs font-mono ${isToday ? "text-[#76705E] font-bold" : ""}`}>{d.getDate()}</span>
                 </div>
                 <div className="p-1.5 space-y-1">
                   {dayItems.map((it) => (
@@ -376,7 +376,7 @@ export default function CalendarPage() {
         <div className="space-y-4" data-testid="agenda-list">
           {Object.keys(byDate).sort().map((ds) => (
             <div key={ds}>
-              <div className={`overline mb-1.5 ${ds === todayStr ? "text-[#8B7F6A]" : ""}`}>
+              <div className={`overline mb-1.5 ${ds === todayStr ? "text-[#76705E]" : ""}`}>
                 {fmtNice(ds).toUpperCase()}{ds === todayStr ? " · TODAY" : ""}
               </div>
               <div className="space-y-1.5">
@@ -385,7 +385,7 @@ export default function CalendarPage() {
             </div>
           ))}
           {visible.length === 0 && (
-            <div className="card-flat text-center py-14 text-[#9A9A9A]" data-testid="agenda-empty">
+            <div className="card-flat text-center py-14 text-[#6E6A63]" data-testid="agenda-empty">
               Nothing scheduled in the next 30 days.
               <div className="mt-3">
                 <button className="btn-primary" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: todayStr } })}>
@@ -564,7 +564,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
           <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1.5">
             <Bell size={12} /> Reminder
           </label>
-          <select
+          <select aria-label="Null"
             className="input-flat w-full"
             value={f.reminder_minutes === null || f.reminder_minutes === undefined ? "none" : String(f.reminder_minutes)}
             onChange={(e) => setF({ ...f, reminder_minutes: e.target.value === "none" ? null : Number(e.target.value) })}
@@ -573,7 +573,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
             {REMINDER_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
           {f.reminder_minutes !== null && !f.start_time && (
-            <p className="text-[10px] text-[#B87500] mt-1">Set a start time so the reminder can fire.</p>
+            <p className="text-[10px] text-[#8F5B00] mt-1">Set a start time so the reminder can fire.</p>
           )}
         </div>
 
@@ -592,7 +592,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
               <Globe size={13} /> Shared with team
             </button>
           </div>
-          <p className="text-[10px] text-[#9A9A9A] mt-1">
+          <p className="text-[10px] text-[#6E6A63] mt-1">
             {f.visibility === "private"
               ? "Only you and the people you tag can see this event."
               : "Everyone in your team can see this event."}
@@ -611,7 +611,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
                        value={empQuery} onChange={(e) => setEmpQuery(e.target.value)}
                        data-testid="event-emp-search" />
                 <div className="max-h-32 overflow-y-auto border border-[#F0F0F0] divide-y divide-[#F5F5F5]" data-testid="event-emp-list">
-                  {filteredEmps.length === 0 && <div className="text-[11px] text-[#9A9A9A] px-2 py-2">No matches.</div>}
+                  {filteredEmps.length === 0 && <div className="text-[11px] text-[#6E6A63] px-2 py-2">No matches.</div>}
                   {filteredEmps.map((emp) => {
                     const on = f.employee_ids.includes(emp.id);
                     return (
@@ -622,7 +622,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
                           {on && <X size={9} className="text-white" weight="bold" />}
                         </span>
                         <span className="truncate">{empName(emp)}</span>
-                        {emp.department && <span className="ml-auto text-[10px] text-[#9A9A9A] shrink-0">{emp.department}</span>}
+                        {emp.department && <span className="ml-auto text-[10px] text-[#6E6A63] shrink-0">{emp.department}</span>}
                       </button>
                     );
                   })}

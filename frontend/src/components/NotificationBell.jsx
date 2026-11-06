@@ -13,7 +13,7 @@ const PREFERENCE_LABELS = [
 ];
 
 const KIND_COLOR = {
-  task_assigned: "bg-[#EEF2FF] text-[#8B7F6A]",
+  task_assigned: "bg-[#EEF2FF] text-[#76705E]",
   task_due: "bg-[#FFF4E5] text-[#7A4E1A]",
   task_overdue: "bg-[#FCEEEC] text-[#B22B22]",
   vendor_bill_due: "bg-[#FFF4E5] text-[#7A4E1A]",
@@ -227,7 +227,7 @@ export default function NotificationBell() {
           ) : <div className="overflow-y-auto flex-1">
             {sorted.length === 0 && (
               <div className="p-10 text-center">
-                <Bell size={24} className="mx-auto text-[#9A9A9A] mb-2" />
+                <Bell size={24} className="mx-auto text-[#6E6A63] mb-2" />
                 <div className="overline mb-1">EMPTY</div>
                 <div className="text-xs text-[#5C5C5C]">No notifications yet.</div>
               </div>
@@ -248,11 +248,11 @@ export default function NotificationBell() {
                     <div className={`text-sm ${!n.read ? "font-semibold" : ""}`}>
                       {n.link ? (
                         <Link to={n.link} onClick={() => { markRead(n.id); setOpen(false); }}
-                          className="hover:text-[#8B7F6A]">{n.title}</Link>
+                          className="hover:text-[#76705E]">{n.title}</Link>
                       ) : n.title}
                     </div>
                     {n.body && <div className="text-xs text-[#5C5C5C] mt-0.5">{n.body}</div>}
-                    <div className="text-[10px] text-[#9A9A9A] font-mono uppercase tracking-wider mt-1">
+                    <div className="text-[10px] text-[#6E6A63] font-mono uppercase tracking-wider mt-1">
                       {relativeTime(n.created_at)}
                     </div>
                   </div>

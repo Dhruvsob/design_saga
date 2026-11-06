@@ -139,9 +139,9 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-[#E5E5E5]">
           <div>
-            <div className="overline text-[#8B7F6A]">ACCOUNT LEDGER</div>
+            <div className="overline text-[#76705E]">ACCOUNT LEDGER</div>
             <div className="font-display font-bold text-2xl flex items-center gap-2" data-testid="ledger-account-name">
-              {account.is_bank && <Bank size={18} className="text-[#8B7F6A]" />}
+              {account.is_bank && <Bank size={18} className="text-[#76705E]" />}
               {account.name}
             </div>
             <div className="text-xs text-[#5C5C5C] uppercase tracking-wide mt-0.5">
@@ -198,12 +198,12 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
                   onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })} data-testid="ledger-add-amount" />
                 <input type="date" className="input-flat" value={addForm.date}
                   onChange={(e) => setAddForm({ ...addForm, date: e.target.value })} data-testid="ledger-add-date" />
-                <select className="input-flat" value={addForm.bank_id}
+                <select aria-label="Bank" className="input-flat" value={addForm.bank_id}
                   onChange={(e) => setAddForm({ ...addForm, bank_id: e.target.value })} data-testid="ledger-add-bank">
                   <option value="" disabled>Cash / Bank</option>
                   {banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
-                <select className="input-flat" value={addForm.payment_method}
+                <select aria-label="Payment method" className="input-flat" value={addForm.payment_method}
                   onChange={(e) => setAddForm({ ...addForm, payment_method: e.target.value })}>
                   {["cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"].map((m) => <option key={m}>{m}</option>)}
                 </select>
@@ -234,12 +234,12 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           {preset === "custom" && (
             <div className="flex items-center gap-2 text-xs">
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input-flat" data-testid="ledger-from" />
-              <span className="text-[#9A9A9A]">→</span>
+              <span className="text-[#6E6A63]">→</span>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input-flat" data-testid="ledger-to" />
             </div>
           )}
           <div className="relative">
-            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9A9A]" />
+            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -271,7 +271,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
                   <td className="p-3 font-mono text-xs whitespace-nowrap">{formatDate(r.date)}</td>
                   <td className="p-3">
                     <div>{r.narration || "—"}</div>
-                    {r.reference && <div className="text-[10px] text-[#9A9A9A] font-mono">Ref: {r.reference}</div>}
+                    {r.reference && <div className="text-[10px] text-[#6E6A63] font-mono">Ref: {r.reference}</div>}
                   </td>
                   <td className="p-3 text-right font-mono text-[#1D633E]">{r.debit ? CURRENCY(r.debit) : "—"}</td>
                   <td className="p-3 text-right font-mono text-[#B4001C]">{r.credit ? CURRENCY(r.credit) : "—"}</td>
@@ -280,7 +280,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-[#9A9A9A]">
+                  <td colSpan={5} className="p-10 text-center text-[#6E6A63]">
                     {txnCount === 0 ? "No transactions in this period." : "No matches for your search."}
                   </td>
                 </tr>
@@ -292,7 +292,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           </table>
         </div>
 
-        <div className="p-3 border-t border-[#E5E5E5] text-[10px] text-[#9A9A9A] flex items-center gap-1">
+        <div className="p-3 border-t border-[#E5E5E5] text-[10px] text-[#6E6A63] flex items-center gap-1">
           <ArrowSquareOut size={12} /> Opening balance {CURRENCY(data?.opening_balance)} · click any row to view, edit or reverse it
         </div>
       </div>
@@ -312,7 +312,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
 
 const SummaryCell = ({ label, value, tint, strong, testid }) => (
   <div className="bg-white p-3" data-testid={testid}>
-    <div className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">{label}</div>
+    <div className="text-[10px] uppercase tracking-wider text-[#6E6A63]">{label}</div>
     <div className={`font-mono ${strong ? "font-bold text-lg" : "text-sm font-semibold"}`} style={tint ? { color: tint } : undefined}>
       {value}
     </div>

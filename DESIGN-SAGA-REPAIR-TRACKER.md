@@ -111,7 +111,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| A11Y-01 | P2 | Keyboard/focus/contrast/table semantics audit; supported-width visual QA; Chrome/Edge/Safari/mobile smoke | Audit Needed | Needs running app (OPS-06) |
+| A11Y-01 | P2 | Keyboard/focus/contrast/table semantics audit; supported-width visual QA; Chrome/Edge/Safari/mobile smoke | Tested (DS-083, axe A/AA; manual screen-reader and tablet QA remain) | Needs running app (OPS-06) |
 
 ### 10. Database, performance and scalability
 
@@ -145,6 +145,18 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 2. Batch B (UX-01..03, SEC-04): grouped permission-aware navigation.
 3. Then OPS-06 harness, UX-04 searchable selectors, ACC-04 shared money helper,
    PRJ-01 phase templates; decisions SEC-02/ACC-02 as the owner answers.
+
+### DS-083: WCAG 2.1 A/AA accessibility pass across all primary pages (A11Y-01)
+
+- Method: new `e2e/a11y.spec.mjs` runs axe-core (WCAG 2/2.1 A and AA rules) on all 19 primary pages and each page's main create form as an Admin. Baseline: 437 violations across 4 rules.
+- Root causes and fixes:
+  - Colour contrast (418): the caption/label grey `#9B9B9B`/`#9A9A9A` reached only 2.5-2.8:1. The `--ink-3` token and 193 inline uses now use warm grey `#6E6A63` (4.9:1 on cream, 5.4:1 on white); brand-brown text uses `#76705E` (95 uses); primary buttons use `--stone-600` (white text 5:1, was 3.9:1) with a darker hover; calendar type colours, the Outstanding KPI, audit-log timestamps, out-of-month calendar days and the locked-role badge were darkened to pass.
+  - Unnamed dropdowns (11 flagged; 98 found by scan): each unlabelled `<select>` gets an `aria-label` naming the field it controls, except where a visible `<label>` already wraps it; poor derived names were hand-corrected; the shared task-table `InlineSelect` takes a `label` per column.
+  - Unlabelled fields (6): Holidays year/date/name and the Company Settings colour picker/hex inputs.
+  - Icon-only buttons (2): Calendar previous/next.
+- Result: 0 violations; all rules including colour contrast are enforced as a CI gate. Visual review confirmed the same brand palette, only darker greys/chips.
+- Also: Playwright discovery was silently skipping spec files that OneDrive had converted to cloud-file placeholders (reparse points) in this checkout; recreated them locally. Recommendation: keep the Git checkout outside OneDrive.
+- Verification: E2E 21 passed (incl. the accessibility gate); ESLint, build, `npm audit --omit=dev` 0 vulnerabilities. Not deployed.
 
 ### DS-082: Every money document foots to the paisa (ACC-04)
 

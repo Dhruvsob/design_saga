@@ -97,7 +97,7 @@ export default function ClientDetail() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <div className="overline mb-2">
-            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#9A9A9A]">ARCHIVED</span>}
+            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#6E6A63]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{c.name}</h1>
           <div className="mt-2 text-sm text-[#5C5C5C] space-x-3">
@@ -135,7 +135,7 @@ export default function ClientDetail() {
         {TABS.filter((t) => t !== "Ledger" || hasPerm("finance.read")).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
-              tab === t ? "border-[#8B7F6A] text-[#8B7F6A]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
             }`}
             data-testid={`client-tab-${t}`}>
             {t}
@@ -244,7 +244,7 @@ export default function ClientDetail() {
             <input required className="input-flat w-full" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="edit-client-name" />
             <div className="grid grid-cols-2 gap-3">
               <input className="input-flat" placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
-              <select className="input-flat" value={form.client_type} onChange={(e) => setForm({ ...form, client_type: e.target.value })}>
+              <select aria-label="Client type" className="input-flat" value={form.client_type} onChange={(e) => setForm({ ...form, client_type: e.target.value })}>
                 <option value="">Client type…</option>
                 {clientTypes.map((t) => <option key={t}>{t}</option>)}
               </select>

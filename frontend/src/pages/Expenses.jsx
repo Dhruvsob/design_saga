@@ -22,7 +22,7 @@ const STATUS_TONE = {
   pending_l1: "bg-[#FFF4E5] text-[#7A4E1A]",
   pending_l2: "bg-[#FFF4E5] text-[#7A4E1A]",
   receipt_required: "bg-[#FFF4E5] text-[#B87500]",
-  approved: "bg-[#F5F4F0] text-[#8B7F6A]",
+  approved: "bg-[#F5F4F0] text-[#76705E]",
   rejected: "bg-[#FCEEEC] text-[#B22B22]",
   reimbursed: "bg-[#EFF7EF] text-[#1D633E]",
   cancelled: "bg-[#F0F0F0] text-[#5C5C5C]",
@@ -94,7 +94,7 @@ export default function Expenses() {
       <div className="flex items-center gap-1 border-b border-[#E5E5E5]">
         {[["all","All"],["mine","My Expenses"],["approvals","Awaiting My Approval"]].map(([k,l]) => (
           <button key={k} onClick={() => setTab(k)}
-            className={`px-4 py-2 text-sm border-b-2 ${tab === k ? "border-[#8B7F6A] text-[#8B7F6A] font-semibold" : "border-transparent text-[#5C5C5C]"}`}
+            className={`px-4 py-2 text-sm border-b-2 ${tab === k ? "border-[#8B7F6A] text-[#76705E] font-semibold" : "border-transparent text-[#5C5C5C]"}`}
             data-testid={`tab-${k}`}>
             {l}
           </button>
@@ -177,7 +177,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
       <form onSubmit={submit} className="space-y-4" data-testid="exp-create-form">
         <F label="Title *"><input required data-testid="exp-title" className="input-flat w-full" value={f.title} onChange={(e) => setF({...f, title: e.target.value})} /></F>
         <F label="Payment mode">
-          <select className="input-flat w-full" value={f.payment_mode} onChange={(e) => setF({...f, payment_mode: e.target.value})}>
+          <select aria-label="Payment mode" className="input-flat w-full" value={f.payment_mode} onChange={(e) => setF({...f, payment_mode: e.target.value})}>
             <option value="personal">Paid personally (reimburse me)</option>
             <option value="cash">Company cash</option>
             <option value="corporate_card">Corporate card</option>
@@ -188,7 +188,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
         <div className="overline">LINE ITEMS</div>
         {f.lines.map((l, i) => (
           <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`exp-line-${i}`}>
-            <select className="input-flat col-span-2" value={l.category} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, category: e.target.value} : x)}))}>
+            <select aria-label="Category" className="input-flat col-span-2" value={l.category} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, category: e.target.value} : x)}))}>
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <input placeholder="Description" className="input-flat col-span-4" value={l.description} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, description: e.target.value} : x)}))} />
@@ -292,7 +292,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
                 <Td className="text-xs uppercase font-mono">{l.category}</Td>
                 <Td>{l.description || "—"}</Td>
                 <Td className="font-mono">{fmtMoney(l.amount)}</Td>
-                <Td>{safeExternalUrl(l.receipt_url) ? <a href={safeExternalUrl(l.receipt_url)} target="_blank" rel="noreferrer" className="accent-blue text-xs">View</a> : <span className="text-[#9A9A9A]">—</span>}</Td>
+                <Td>{safeExternalUrl(l.receipt_url) ? <a href={safeExternalUrl(l.receipt_url)} target="_blank" rel="noreferrer" className="accent-blue text-xs">View</a> : <span className="text-[#6E6A63]">—</span>}</Td>
               </tr>
             ))}
           </tbody>
@@ -328,7 +328,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
         <div className="border border-[#E5E5E5] p-3 bg-[#F5F4F0]">
           <div className="overline mb-2">REIMBURSE</div>
           <div className="flex flex-wrap gap-2 items-center">
-            <select className="input-flat" value={payFrom} onChange={(e) => setPayFrom(e.target.value)} data-testid="pay-from">
+            <select aria-label="Pay from" className="input-flat" value={payFrom} onChange={(e) => setPayFrom(e.target.value)} data-testid="pay-from">
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <button disabled={busy === "reimburse" || !payFrom} onClick={reimburse} className="btn-primary text-xs" data-testid="reimburse-btn">

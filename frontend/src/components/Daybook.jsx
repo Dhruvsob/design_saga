@@ -217,14 +217,14 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
           >
             <FunnelSimple size={12} /> Filters
             {activeFilterCount > 0 && (
-              <span className="ml-1 bg-white text-[#8B7F6A] rounded-full px-1.5 text-[10px] font-bold">{activeFilterCount}</span>
+              <span className="ml-1 bg-white text-[#76705E] rounded-full px-1.5 text-[10px] font-bold">{activeFilterCount}</span>
             )}
           </button>
         </div>
         {preset === "custom" && (
           <div className="flex items-center gap-2 text-xs">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input-flat" data-testid="daybook-from" />
-            <span className="text-[#9A9A9A]">→</span>
+            <span className="text-[#6E6A63]">→</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input-flat" data-testid="daybook-to" />
           </div>
         )}
@@ -257,7 +257,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
         )}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">
-            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9A9A]" />
+            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -315,7 +315,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
                 <td className="p-3"><DirBadge dir={e._dir} /></td>
                 <td className="p-3 max-w-[280px]">
                   <div className="truncate">{e.narration || "—"}</div>
-                  {e.reference && <div className="text-[10px] text-[#9A9A9A] font-mono">Ref: {e.reference}</div>}
+                  {e.reference && <div className="text-[10px] text-[#6E6A63] font-mono">Ref: {e.reference}</div>}
                 </td>
                 <td className="p-3 text-xs text-[#5C5C5C] max-w-[180px] truncate">{e._accounts || "—"}</td>
                 <td className="p-3 text-xs text-[#5C5C5C] max-w-[180px] truncate">{e._party || "—"}</td>
@@ -327,7 +327,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
             ))}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-10 text-center text-[#9A9A9A]">
+                <td colSpan={7} className="p-10 text-center text-[#6E6A63]">
                   {entries.length === 0 ? "No transactions in this period." : "No matches — try a different search or period."}
                 </td>
               </tr>
@@ -374,5 +374,5 @@ const DirBadge = ({ dir }) => {
     return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1D633E]"><ArrowDown size={12} /> IN</span>;
   if (dir === "out")
     return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#B4001C]"><ArrowUp size={12} /> OUT</span>;
-  return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#8B7F6A]"><ArrowsLeftRight size={12} /> JE</span>;
+  return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#76705E]"><ArrowsLeftRight size={12} /> JE</span>;
 };

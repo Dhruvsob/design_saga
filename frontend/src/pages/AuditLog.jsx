@@ -96,7 +96,7 @@ export default function AuditLog() {
       )}
 
       <div className="relative mb-4 max-w-lg">
-        <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C8C8C]" />
+        <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
         <input className="input-field pl-9 w-full" value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder="Search action, actor or record" data-testid="audit-search" />
       </div>
@@ -117,8 +117,8 @@ export default function AuditLog() {
               <tr key={row.id} className="hover:bg-[#FAFAF8]" data-testid={`audit-row-${row.id}`}>
                 <td className="px-4 py-3 whitespace-nowrap font-mono text-xs">{formatDateTime(row.at)}</td>
                 <td className="px-4 py-3 text-sm font-semibold">{humanize(row.action)}</td>
-                <td className="px-4 py-3"><div className="text-sm">{row.actor_email || "System"}</div><div className="text-[10px] font-mono uppercase text-[#8C8C8C]">{row.actor_role || "service"}</div></td>
-                <td className="px-4 py-3"><div className="text-sm">{row.target || "-"}</div><div className="text-[10px] font-mono uppercase text-[#8C8C8C]">{row.target_type || "record"}</div></td>
+                <td className="px-4 py-3"><div className="text-sm">{row.actor_email || "System"}</div><div className="text-[10px] font-mono uppercase text-[#6E6A63]">{row.actor_role || "service"}</div></td>
+                <td className="px-4 py-3"><div className="text-sm">{row.target || "-"}</div><div className="text-[10px] font-mono uppercase text-[#6E6A63]">{row.target_type || "record"}</div></td>
                 <td className="px-4 py-3 font-mono text-xs">{row.seq ?? "legacy"}</td>
               </tr>
             ))}

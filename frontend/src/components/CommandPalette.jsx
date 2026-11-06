@@ -126,7 +126,7 @@ export default function CommandPalette({ open, setOpen }) {
         {/* results */}
         <div className="max-h-[420px] overflow-y-auto">
           {loading && (
-            <div className="px-4 py-3 text-xs font-mono uppercase tracking-wider text-[#9A9A9A]">Searching…</div>
+            <div className="px-4 py-3 text-xs font-mono uppercase tracking-wider text-[#6E6A63]">Searching…</div>
           )}
           {!loading && q.trim().length >= 2 && results.length === 0 && (
             <div className="px-4 py-4 text-sm text-[#5C5C5C]" data-testid="palette-no-results">
@@ -158,7 +158,7 @@ export default function CommandPalette({ open, setOpen }) {
                     <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-[#F5F5F5] text-[#5C5C5C]">
                       {meta.label}
                     </span>
-                    {active === idx && <ArrowRight size={12} className="text-[#8B7F6A]" />}
+                    {active === idx && <ArrowRight size={12} className="text-[#76705E]" />}
                   </button>
                 );
               })}
@@ -180,12 +180,12 @@ export default function CommandPalette({ open, setOpen }) {
                     }`}
                     data-testid={`palette-action-${a.id}`}
                   >
-                    <Plus size={14} className="text-[#8B7F6A] shrink-0" />
+                    <Plus size={14} className="text-[#76705E] shrink-0" />
                     <div className="flex-1">
                       <span className="text-sm font-semibold">{a.label}</span>
-                      <span className="text-xs text-[#9A9A9A] ml-2">{a.hint}</span>
+                      <span className="text-xs text-[#6E6A63] ml-2">{a.hint}</span>
                     </div>
-                    {active === idx && <ArrowRight size={12} className="text-[#8B7F6A]" />}
+                    {active === idx && <ArrowRight size={12} className="text-[#76705E]" />}
                   </button>
                 );
               })}
@@ -193,7 +193,7 @@ export default function CommandPalette({ open, setOpen }) {
           )}
         </div>
 
-        <div className="px-4 py-2 border-t border-[#E5E5E5] flex items-center gap-4 text-[10px] font-mono uppercase tracking-wider text-[#9A9A9A]">
+        <div className="px-4 py-2 border-t border-[#E5E5E5] flex items-center gap-4 text-[10px] font-mono uppercase tracking-wider text-[#6E6A63]">
           <span>↑↓ Navigate</span><span>↵ Open</span><span>ESC Close</span>
         </div>
       </div>

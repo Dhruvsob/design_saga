@@ -220,14 +220,14 @@ export default function ProjectDetail() {
         <div>
           <div className="overline mb-2">
             {p.project_type} · {p.client_id ? (
-              <Link to={`/clients/${p.client_id}`} className="hover:text-[#8B7F6A] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
+              <Link to={`/clients/${p.client_id}`} className="hover:text-[#76705E] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
             ) : (p.client_name || "—")}
             {p.engagement_type && (
               <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                p.engagement_type === "consultancy" ? "bg-[#F5F4F0] text-[#8B7F6A]" : "bg-[#FFF4E5] text-[#7A4E1A]"
+                p.engagement_type === "consultancy" ? "bg-[#F5F4F0] text-[#76705E]" : "bg-[#FFF4E5] text-[#7A4E1A]"
               }`}>{p.engagement_type}</span>
             )}
-            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#9A9A9A]">ARCHIVED</span>}
+            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#6E6A63]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{p.name}</h1>
           {p.description && <p className="mt-2 text-[#5C5C5C] max-w-2xl">{p.description}</p>}
@@ -289,16 +289,16 @@ export default function ProjectDetail() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition whitespace-nowrap ${
-              tab === t ? "border-[#8B7F6A] text-[#8B7F6A]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
             }`}
             data-testid={`tab-${t}`}
           >
             {t}
-            {t === "Tasks" && (p.tasks || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#9A9A9A]">{p.tasks.length}</span>}
-            {t === "Milestones" && (p.milestones || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#9A9A9A]">{p.milestones.length}</span>}
-            {t === "Vendors" && ((p.purchase_orders || []).length + (p.vendor_bills || []).length) > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#9A9A9A]">{(p.purchase_orders || []).length + (p.vendor_bills || []).length}</span>}
-            {t === "Files" && (p.files || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#9A9A9A]">{p.files.length}</span>}
-            {t === "Invoices" && (p.invoices || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#9A9A9A]">{p.invoices.length}</span>}
+            {t === "Tasks" && (p.tasks || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.tasks.length}</span>}
+            {t === "Milestones" && (p.milestones || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.milestones.length}</span>}
+            {t === "Vendors" && ((p.purchase_orders || []).length + (p.vendor_bills || []).length) > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{(p.purchase_orders || []).length + (p.vendor_bills || []).length}</span>}
+            {t === "Files" && (p.files || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.files.length}</span>}
+            {t === "Invoices" && (p.invoices || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.invoices.length}</span>}
           </button>
         ))}
       </div>
@@ -338,20 +338,20 @@ export default function ProjectDetail() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-[#5C5C5C]">Project Manager</span>
                   {p.project_manager ? (
-                    <Link to={`/employees/${p.project_manager.id}`} className="font-semibold hover:text-[#8B7F6A]">
+                    <Link to={`/employees/${p.project_manager.id}`} className="font-semibold hover:text-[#76705E]">
                       {p.project_manager.name}
-                      <span className="text-xs text-[#9A9A9A] ml-1.5">{p.project_manager.designation}</span>
+                      <span className="text-xs text-[#6E6A63] ml-1.5">{p.project_manager.designation}</span>
                     </Link>
-                  ) : <span className="text-[#9A9A9A]">Unassigned</span>}
+                  ) : <span className="text-[#6E6A63]">Unassigned</span>}
                 </div>
                 <div className="border-t border-[#F0F0F0] pt-2">
                   <div className="text-xs text-[#5C5C5C] mb-1.5">Members</div>
-                  {(p.team || []).length === 0 && <div className="text-sm text-[#9A9A9A]">No members assigned.</div>}
+                  {(p.team || []).length === 0 && <div className="text-sm text-[#6E6A63]">No members assigned.</div>}
                   <div className="flex flex-wrap gap-1.5">
                     {(p.team || []).map((m) => (
                       <Link key={m.id} to={`/employees/${m.id}`}
                         className="text-xs border border-[#E5E5E5] px-2 py-1 hover:border-[#0A0A0A] transition">
-                        {m.name} {m.designation && <span className="text-[#9A9A9A]">· {m.designation}</span>}
+                        {m.name} {m.designation && <span className="text-[#6E6A63]">· {m.designation}</span>}
                       </Link>
                     ))}
                   </div>
@@ -392,7 +392,7 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#5C5C5C]">{t.status_detail || t.status}</span>
                 <span className={`status-chip chip-${t.priority}`}>{t.priority}</span>
-                <CaretRight size={12} className="text-[#9A9A9A]" />
+                <CaretRight size={12} className="text-[#6E6A63]" />
               </div>
             </button>
           ))}
@@ -509,7 +509,7 @@ export default function ProjectDetail() {
                     Client portal
                   </label>
                 )}
-                {safeFileUrl(f.url) ? <a href={safeFileUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[#9A9A9A]">UNAVAILABLE</span>}
+                {safeFileUrl(f.url) ? <a href={safeFileUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[#6E6A63]">UNAVAILABLE</span>}
                 <button onClick={() => deleteFile(f.id)} className="btn-ghost p-1 text-[#B22B22] opacity-0 group-hover:opacity-100 transition" title="Remove" data-testid={`file-delete-${f.id}`}>
                   <Trash size={12} />
                 </button>
@@ -555,7 +555,7 @@ export default function ProjectDetail() {
             </div>
             <input required className="input-flat w-full" placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="edit-project-name" />
             <div className="grid grid-cols-2 gap-3">
-              <select className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
+              <select aria-label="Project type" className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
                 {TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
               <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="edit-project-budget" />
@@ -586,7 +586,7 @@ export default function ProjectDetail() {
             </div>
             <label className="block">
               <div className="overline text-[10px] mb-1">PROJECT MANAGER</div>
-              <select className="input-flat w-full" value={teamForm.project_manager_id}
+              <select aria-label="Project manager" className="input-flat w-full" value={teamForm.project_manager_id}
                 onChange={(e) => setTeamForm({ ...teamForm, project_manager_id: e.target.value })}
                 data-testid="team-pm-select">
                 <option value="">Unassigned</option>
@@ -597,7 +597,7 @@ export default function ProjectDetail() {
             </label>
             <div>
               <div className="overline text-[10px] mb-2">TEAM MEMBERS</div>
-              {employees.length === 0 && <div className="text-sm text-[#9A9A9A]">No employees found. Add them in the Employees module.</div>}
+              {employees.length === 0 && <div className="text-sm text-[#6E6A63]">No employees found. Add them in the Employees module.</div>}
               <div className="max-h-56 overflow-y-auto border border-[#E5E5E5] divide-y divide-[#F0F0F0]">
                 {employees.map((emp) => (
                   <label key={emp.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-[#FAFAFA]">
@@ -610,7 +610,7 @@ export default function ProjectDetail() {
                           : f.team_ids.filter((x) => x !== emp.id),
                       }))} />
                     <span className="font-semibold">{empName(emp)}</span>
-                    <span className="text-xs text-[#9A9A9A]">{emp.designation || emp.department || ""}</span>
+                    <span className="text-xs text-[#6E6A63]">{emp.designation || emp.department || ""}</span>
                   </label>
                 ))}
               </div>

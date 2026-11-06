@@ -92,10 +92,10 @@ export default function Projects() {
             <option value="">Select client (optional)</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </SearchSelect>
-          <select className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
+          <select aria-label="Project type" className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
             {TYPES.map((s) => <option key={s}>{s}</option>)}
           </select>
-          <select className="input-flat" value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
+          <select aria-label="Stage" className="input-flat" value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
             {STAGES.map((s) => <option key={s}>{s}</option>)}
           </select>
           {isHybrid && (
@@ -126,7 +126,7 @@ export default function Projects() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-[11px] text-[#5C5C5C] mb-1 block">Project Manager</span>
-                <select className="input-flat w-full" value={form.project_manager_id}
+                <select aria-label="Project manager" className="input-flat w-full" value={form.project_manager_id}
                   onChange={(e) => setForm({ ...form, project_manager_id: e.target.value })}
                   data-testid="project-pm-select">
                   <option value="">— Select PM (optional) —</option>
@@ -140,13 +140,13 @@ export default function Projects() {
               <div className="block">
                 <span className="text-[11px] text-[#5C5C5C] mb-1 block">Team members (can see project tasks)</span>
                 <div className="border border-[#E5E5E5] rounded-md max-h-32 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="project-team-picker">
-                  {employees.length === 0 && <span className="text-xs text-[#9A9A9A]">No employees yet.</span>}
+                  {employees.length === 0 && <span className="text-xs text-[#6E6A63]">No employees yet.</span>}
                   {employees.map((emp) => {
                     const on = form.team_ids.includes(emp.id);
                     return (
                       <button type="button" key={emp.id} onClick={() => toggleTeam(emp.id)}
                         className={`px-2.5 py-1 text-xs rounded-full border transition ${on
-                          ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#8B7F6A] font-semibold"
+                          ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#76705E] font-semibold"
                           : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#8B7F6A]"}`}
                         data-testid={`team-opt-${emp.id}`}>
                         {empName(emp)}
@@ -174,7 +174,7 @@ export default function Projects() {
               data-testid={`project-card-${p.id}`}
             >
               {/* index number */}
-              <div className="absolute top-4 right-4 font-mono text-[10px] text-[#9A9A9A] tracking-widest">
+              <div className="absolute top-4 right-4 font-mono text-[10px] text-[#6E6A63] tracking-widest">
                 #{String(i + 1).padStart(3, "0")}
               </div>
 
@@ -182,7 +182,7 @@ export default function Projects() {
                 {p.project_type}
                 {p.engagement_type && (
                   <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                    p.engagement_type === "consultancy" ? "bg-[#F5F4F0] text-[#8B7F6A]" : "bg-[#FFF4E5] text-[#7A4E1A]"
+                    p.engagement_type === "consultancy" ? "bg-[#F5F4F0] text-[#76705E]" : "bg-[#FFF4E5] text-[#7A4E1A]"
                   }`}>{p.engagement_type}</span>
                 )}
               </div>
@@ -204,7 +204,7 @@ export default function Projects() {
 
               <div className="mt-5 flex items-center justify-between">
                 <div className="font-mono text-sm font-semibold tabular-nums">{formatINR(p.budget)}</div>
-                <div className="overline flex items-center gap-1 group-hover:text-[#8B7F6A] transition-colors">
+                <div className="overline flex items-center gap-1 group-hover:text-[#76705E] transition-colors">
                   OPEN <CaretRight size={10} weight="bold" className="transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>

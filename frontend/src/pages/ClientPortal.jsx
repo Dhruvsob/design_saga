@@ -160,7 +160,7 @@ export default function ClientPortal() {
               <div className="flex items-center gap-4">
                 <div className="font-mono font-semibold">₹{(i.total || 0).toLocaleString("en-IN")}</div>
                 <span className={`status-chip chip-${i.status}`}>{i.status}</span>
-                <a href={`${API}/invoices/${i.id}/pdf?token=${token}`} target="_blank" rel="noreferrer" className="text-xs text-[#8B7F6A] underline">PDF</a>
+                <a href={`${API}/invoices/${i.id}/pdf?token=${token}`} target="_blank" rel="noreferrer" className="text-xs text-[#76705E] underline">PDF</a>
               </div>
             </div>
           ))}

@@ -383,7 +383,7 @@ export default function Attendance() {
                   </div>
                   <div className="text-xs text-[#5C5C5C] mb-2">{lateReasonNeeded.message}</div>
                   <div className="flex flex-col sm:flex-row gap-2 mb-2">
-                    <select className="input-flat sm:w-56" value={lateCategory}
+                    <select aria-label="Late category" className="input-flat sm:w-56" value={lateCategory}
                       onChange={(e) => setLateCategory(e.target.value)} data-testid="late-category-select">
                       <option value="">Category…</option>
                       {((lateReasonNeeded.categories?.length ? lateReasonNeeded.categories : policy?.late_reason_categories) || [])
@@ -524,7 +524,7 @@ export default function Attendance() {
             <div className="card-flat" data-testid="my-salary-card">
               <div className="overline mb-3">MY SALARY · {mySalary?.month_label?.toUpperCase() || ""}</div>
               {!mySalary?.has_employee ? (
-                <div className="text-sm text-[#9A9A9A]">
+                <div className="text-sm text-[#6E6A63]">
                   Your login isn't linked to an employee record yet — ask your admin
                   to link it to see your live salary impact.
                 </div>
@@ -576,7 +576,7 @@ export default function Attendance() {
           </div>
           {showLeaveForm && (
             <form onSubmit={submitLeave} className="card-flat grid grid-cols-1 md:grid-cols-4 gap-3" data-testid="leave-form">
-              <select className="input-flat" value={leaveForm.leave_type} onChange={(e) => setLeaveForm({ ...leaveForm, leave_type: e.target.value })}>
+              <select aria-label="Leave type" className="input-flat" value={leaveForm.leave_type} onChange={(e) => setLeaveForm({ ...leaveForm, leave_type: e.target.value })}>
                 {(meta?.leave_types || []).map((t) => <option key={t}>{t}</option>)}
               </select>
               <input type="date" required className="input-flat" value={leaveForm.from_date} onChange={(e) => setLeaveForm({ ...leaveForm, from_date: e.target.value })} data-testid="leave-from" />
@@ -611,7 +611,7 @@ export default function Attendance() {
                     <td className="p-2"><LeaveStatus s={l.status} /></td>
                   </tr>
                 ))}
-                {leaves.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-[#9A9A9A] text-sm">No leaves yet.</td></tr>}
+                {leaves.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-[#6E6A63] text-sm">No leaves yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -698,7 +698,7 @@ export default function Attendance() {
 function SalRow({ k, v, sub, red }) {
   return (
     <div className="flex items-center justify-between border-b border-[#F0F0F0] py-1.5">
-      <span className="text-[#5C5C5C] text-xs">{k}{sub ? <span className="text-[#9A9A9A]"> · {sub}</span> : null}</span>
+      <span className="text-[#5C5C5C] text-xs">{k}{sub ? <span className="text-[#6E6A63]"> · {sub}</span> : null}</span>
       <span className={`font-mono text-xs ${red ? "text-[#B4001C]" : ""}`}>{v}</span>
     </div>
   );
@@ -751,7 +751,7 @@ function MonthlyGrid({ monthly, ym }) {
                 <tr key={r.employee.id} className="border-t border-[#F0F0F0]" data-testid={`monthly-grid-${r.employee.id}`}>
                   <td className="sticky left-0 z-10 bg-white p-2 border-r border-[#E5E5E5]">
                     <div className="font-semibold truncate max-w-[170px]">{r.employee.name}</div>
-                    <div className="text-[10px] text-[#9A9A9A] font-mono">
+                    <div className="text-[10px] text-[#6E6A63] font-mono">
                       {r.employee.designation || "—"} · shift {r.employee.shift_start || "09:00"}
                     </div>
                   </td>
@@ -839,7 +839,7 @@ function TeamDashboardTab() {
           </button>
         </div>
         {recs.length === 0 ? (
-          <div className="text-sm text-[#9A9A9A] py-6 text-center">No employee has marked attendance today yet.</div>
+          <div className="text-sm text-[#6E6A63] py-6 text-center">No employee has marked attendance today yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -922,17 +922,17 @@ function LiveBoardTab() {
                 </div>
                 <div className="min-w-0">
                   <div className="font-semibold text-sm truncate">{p.name}</div>
-                  <div className="text-[11px] text-[#9A9A9A] truncate">{p.department || "Staff"}{p.shift_start ? ` · ${p.shift_start}` : ""}</div>
+                  <div className="text-[11px] text-[#6E6A63] truncate">{p.department || "Staff"}{p.shift_start ? ` · ${p.shift_start}` : ""}</div>
                 </div>
               </div>
               <div className="text-right shrink-0 ml-2">
                 <span className="status-chip" style={{ background: `${col}15`, color: col }}>{label}</span>
-                {p.check_in && <div className="text-[10px] font-mono text-[#9A9A9A] mt-0.5">in {p.check_in}{p.check_out ? ` · out ${p.check_out}` : ""}</div>}
+                {p.check_in && <div className="text-[10px] font-mono text-[#6E6A63] mt-0.5">in {p.check_in}{p.check_out ? ` · out ${p.check_out}` : ""}</div>}
               </div>
             </div>
           );
         })}
-        {data.people.length === 0 && <div className="col-span-full text-center text-[#9A9A9A] py-10">No employees yet.</div>}
+        {data.people.length === 0 && <div className="col-span-full text-center text-[#6E6A63] py-10">No employees yet.</div>}
       </div>
     </div>
   );
@@ -999,7 +999,7 @@ function PayrollTab() {
                 <tr key={r.employee_id} className="border-t border-[#F0F0F0]" data-testid={`payroll-row-${r.employee_id}`}>
                   <td className="p-2">
                     <div className="font-semibold">{r.employee_name}</div>
-                    <div className="text-[11px] text-[#9A9A9A]">{r.department || "Staff"}{r.already_paid ? " · PAID" : ""}</div>
+                    <div className="text-[11px] text-[#6E6A63]">{r.department || "Staff"}{r.already_paid ? " · PAID" : ""}</div>
                   </td>
                   <td className="p-2 text-right font-mono text-xs">
                     {r.salary_configured ? inr(r.monthly_salary)
@@ -1027,13 +1027,13 @@ function PayrollTab() {
                 </tr>
               ))}
               {(!data || data.employees.length === 0) && !loading && (
-                <tr><td colSpan={10} className="p-8 text-center text-[#9A9A9A]">No employees.</td></tr>
+                <tr><td colSpan={10} className="p-8 text-center text-[#6E6A63]">No employees.</td></tr>
               )}
             </tbody>
           </table>
         )}
       </div>
-      <div className="text-[11px] text-[#9A9A9A] font-mono">
+      <div className="text-[11px] text-[#6E6A63] font-mono">
         Net = monthly salary − (LOP deduction + late fines + short-leave hours). Actual payment posts a journal entry to Accounting from the employee profile.
       </div>
     </div>
@@ -1082,7 +1082,7 @@ function RequestsTab({ canWrite }) {
       {/* Late arrival approvals */}
       <div className="card-flat" data-testid="late-approvals-card">
         <div className="overline mb-3">LATE ARRIVAL APPROVALS · {lates.length} PENDING</div>
-        {lates.length === 0 && <div className="text-sm text-[#9A9A9A] py-4 text-center">No late arrivals awaiting approval.</div>}
+        {lates.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">No late arrivals awaiting approval.</div>}
         <div className="space-y-2">
           {lates.map((l) => (
             <div key={l.id} className="flex flex-wrap items-center gap-3 border border-[#F0F0F0] p-3" data-testid={`late-row-${l.id}`}>
@@ -1116,7 +1116,7 @@ function RequestsTab({ canWrite }) {
         {/* Leave permissions — employee name MUST be prominent */}
         <div className="card-flat" data-testid="pending-leaves-card">
           <div className="overline mb-3">LEAVE PERMISSIONS · {pendingLeaves.length} PENDING</div>
-          {pendingLeaves.length === 0 && <div className="text-sm text-[#9A9A9A] py-4 text-center">Nothing to review.</div>}
+          {pendingLeaves.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">Nothing to review.</div>}
           <div className="space-y-2">
             {pendingLeaves.map((l) => (
               <div key={l.id} className="border border-[#F0F0F0] p-3" data-testid={`pending-${l.id}`}>
@@ -1150,7 +1150,7 @@ function RequestsTab({ canWrite }) {
         {/* Corrections */}
         <div className="card-flat" data-testid="corrections-card">
           <div className="overline mb-3">ATTENDANCE CORRECTIONS · {corrections.length} PENDING</div>
-          {corrections.length === 0 && <div className="text-sm text-[#9A9A9A] py-4 text-center">No correction requests.</div>}
+          {corrections.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">No correction requests.</div>}
           <div className="space-y-2">
             {corrections.map((c) => (
               <div key={c.id} className="border border-[#F0F0F0] p-3" data-testid={`corr-${c.id}`}>
@@ -1179,7 +1179,7 @@ function RequestsTab({ canWrite }) {
       {/* Site visit approvals (existing flow, preserved) */}
       <div className="card-flat" data-testid="site-approvals-card">
         <div className="overline mb-3">SITE VISIT / OUT-OF-FENCE APPROVALS · {pendingSite.length} PENDING</div>
-        {pendingSite.length === 0 && <div className="text-sm text-[#9A9A9A] py-4 text-center">All clear.</div>}
+        {pendingSite.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">All clear.</div>}
         <div className="space-y-2">
           {pendingSite.map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-3 border border-[#F0F0F0] p-3" data-testid={`site-req-${r.id}`}>
@@ -1293,7 +1293,7 @@ function EmployeeSetupCard() {
         <div className="overline">EMPLOYEE SHIFT, WEEKLY-OFF{canPayroll ? " & SALARY" : ""}</div>
         {savedAt && <span className="text-xs text-[#1D633E] font-mono">SAVED</span>}
       </div>
-      <select className="input-flat w-full" value={sel} onChange={(e) => setSel(e.target.value)} data-testid="setup-employee-select">
+      <select aria-label="Sel" className="input-flat w-full" value={sel} onChange={(e) => setSel(e.target.value)} data-testid="setup-employee-select">
         <option value="">Select employee…</option>
         {emps.map((e) => <option key={e.id} value={e.id}>{empLabel(e)} — {e.department || "Staff"}</option>)}
       </select>
@@ -1309,13 +1309,13 @@ function EmployeeSetupCard() {
               <div className="input-flat w-full bg-[#FAFAFA] font-mono text-sm">{inr(cfg.net_monthly_structure > 0 ? cfg.net_monthly_structure : cfg.monthly_salary)}</div>
             </Field>}
           </div>
-          {canPayroll && <div className="text-[11px] text-[#9A9A9A]">
+          {canPayroll && <div className="text-[11px] text-[#6E6A63]">
             If a detailed salary structure exists on the employee profile, its net monthly is used;
             otherwise the flat monthly salary above applies.
           </div>}
           <div>
             <div className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">
-              Weekly offs <span className="text-[#9A9A9A] normal-case">(per-employee override · blank = org policy)</span>
+              Weekly offs <span className="text-[#6E6A63] normal-case">(per-employee override · blank = org policy)</span>
             </div>
             <div className="flex gap-1.5 flex-wrap" data-testid="setup-weekly-offs">
               {WEEKDAYS.map((d) => (
@@ -1325,7 +1325,7 @@ function EmployeeSetupCard() {
                   data-testid={`weekly-off-${d.v}`}>{d.l}</button>
               ))}
               <button type="button" onClick={() => setCfg({ ...cfg, weekly_offs: null })}
-                className="px-3 py-1.5 text-xs font-mono border border-[#E5E5E5] text-[#9A9A9A]">
+                className="px-3 py-1.5 text-xs font-mono border border-[#E5E5E5] text-[#6E6A63]">
                 Use policy
               </button>
             </div>
@@ -1365,7 +1365,7 @@ function ShortLeaveCard() {
         <div className="overline">SHORT / HOURLY LEAVE</div>
         {ok && <span className="text-xs text-[#1D633E] font-mono">RECORDED</span>}
       </div>
-      <div className="text-[11px] text-[#9A9A9A]">
+      <div className="text-[11px] text-[#6E6A63]">
         Record a few hours off on a day. Salary deducts <b>hourly-rate × hours</b> (hourly rate = per-day ÷ full-day hours).
       </div>
       <SearchSelect className="input-flat w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="sl-employee">
@@ -1443,10 +1443,10 @@ function LateConfigCard({ policy, onSaved }) {
         <div className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Late reason categories</div>
         <div className="flex flex-wrap gap-1.5 mb-2" data-testid="late-cats">
           {cats.map((c) => (
-            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[#F5F4F0] text-[#8B7F6A] font-mono">
+            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[#F5F4F0] text-[#76705E] font-mono">
               {capWords(c)}
               <button onClick={() => setP({ ...p, late_reason_categories: cats.filter((x) => x !== c) })}
-                className="text-[#9A9A9A] hover:text-[#B4001C]"><X size={11} /></button>
+                className="text-[#6E6A63] hover:text-[#B4001C]"><X size={11} /></button>
             </span>
           ))}
         </div>
@@ -1459,7 +1459,7 @@ function LateConfigCard({ policy, onSaved }) {
         </div>
       </div>
       <Field label="If fine system is OFF and a late arrival is REJECTED, deduct">
-        <select className="input-flat w-full" value={p.late_rejection_penalty || "half_day"}
+        <select aria-label="Late rejection penalty" className="input-flat w-full" value={p.late_rejection_penalty || "half_day"}
           onChange={(e) => setP({ ...p, late_rejection_penalty: e.target.value })} data-testid="late-penalty-select">
           <option value="half_day">Half day (0.5 day)</option>
           <option value="full_day">Full day (1 day)</option>
@@ -1513,7 +1513,7 @@ function ManualAttendanceCard() {
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date"><input type="date" className="input-flat w-full" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="manual-date" /></Field>
         <Field label="Status">
-          <select className="input-flat w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} data-testid="manual-status">
+          <select aria-label="Status" className="input-flat w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} data-testid="manual-status">
             {(meta?.statuses || ["present", "absent", "half_day", "leave"]).map((s) => <option key={s} value={s}>{capWords(s)}</option>)}
           </select>
         </Field>
@@ -1657,7 +1657,7 @@ function GeoPolicyTab({ projects }) {
           onPick={(la, ln) => setP({ default_office_lat: la, default_office_lng: ln })}
           height={340}
         />
-        <p className="text-[11px] text-[#9B9B9B] mt-2 leading-relaxed">
+        <p className="text-[11px] text-[#6E6A63] mt-2 leading-relaxed">
           Click anywhere on the map or drag the pin to set the <b>default office fence</b>.
           The solid circle is the office radius; dashed gold circles are saved geofence
           locations. Use <b>current location</b> to drop the pin where you are standing.
@@ -1699,7 +1699,7 @@ function GeoPolicyTab({ projects }) {
                    value={policy.monthly_paid_leave_allowance ?? 1}
                    onChange={(e) => setP({ monthly_paid_leave_allowance: e.target.value })}
                    data-testid="policy-paid-leave-allowance" />
-            <p className="text-[10px] text-[#9A9A9A] mt-1">Approved ordinary leave above this allowance is deducted from salary.</p>
+            <p className="text-[10px] text-[#6E6A63] mt-1">Approved ordinary leave above this allowance is deducted from salary.</p>
           </div>
           <div>
             <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Max GPS accuracy (m)</label>
@@ -1753,7 +1753,7 @@ function GeoPolicyTab({ projects }) {
           <div className="grid grid-cols-2 gap-2">
             <input className="input-flat" placeholder="Name — e.g. Head Office" value={locForm.name}
                    onChange={(e) => setLocForm({ ...locForm, name: e.target.value })} data-testid="loc-name" />
-            <select className="input-flat" value={locForm.kind}
+            <select aria-label="Location type" className="input-flat" value={locForm.kind}
                     onChange={(e) => setLocForm({ ...locForm, kind: e.target.value })} data-testid="loc-kind">
               {Object.entries(KIND_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
@@ -1787,7 +1787,7 @@ function GeoPolicyTab({ projects }) {
         <div className="card-flat" data-testid="locations-list">
           <div className="overline mb-3">GEOFENCED LOCATIONS · {locations.length}</div>
           {locations.length === 0 && (
-            <div className="text-sm text-[#9A9A9A] py-6 text-center">
+            <div className="text-sm text-[#6E6A63] py-6 text-center">
               No geofences yet. While geo-fencing is enabled, out-of-fence check-ins
               go for approval — add a location here or set the default office fence,
               or disable geo-fencing in the policy.
@@ -1796,7 +1796,7 @@ function GeoPolicyTab({ projects }) {
           <div className="space-y-2">
             {locations.map((l) => (
               <div key={l.id} className="flex items-center gap-3 border border-[#F0F0F0] p-2.5" data-testid={`loc-${l.id}`}>
-                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 bg-[#F5F4F0] text-[#8B7F6A]">
+                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">
                   {KIND_LABELS[l.kind] || l.kind}
                 </span>
                 <div className="flex-1 min-w-0">
@@ -1823,7 +1823,7 @@ function TabBtn({ id, tab, setTab, label }) {
   return (
     <button onClick={() => setTab(id)} data-testid={`tab-${id}`}
       className={`px-4 py-2.5 text-sm border-b-2 -mb-px transition whitespace-nowrap ${tab === id
-        ? "border-[#8B7F6A] text-[#8B7F6A] font-semibold"
+        ? "border-[#8B7F6A] text-[#76705E] font-semibold"
         : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}>
       {label}
     </button>
@@ -1834,7 +1834,7 @@ function MonthPicker({ ym, setYm }) {
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return (
     <div className="flex items-center gap-2">
-      <select className="input-flat" value={ym.m} onChange={(e) => setYm({ ...ym, m: Number(e.target.value) })}>
+      <select aria-label="M" className="input-flat" value={ym.m} onChange={(e) => setYm({ ...ym, m: Number(e.target.value) })}>
         {months.map((mn, i) => <option key={mn} value={i+1}>{mn}</option>)}
       </select>
       <input type="number" className="input-flat w-24" value={ym.y} onChange={(e) => setYm({ ...ym, y: Number(e.target.value) })} />

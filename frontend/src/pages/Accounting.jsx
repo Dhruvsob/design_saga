@@ -225,7 +225,7 @@ export default function Accounting() {
       {["income", "expense", "reports", "balance", "cashflow", "ledgers", "validation"].includes(tab) && (
         <div className="flex items-center gap-3 flex-wrap text-xs" data-testid="fy-bar">
           <span className="overline">FINANCIAL PERIOD</span>
-          <select
+          <select aria-label="Fy"
             value={fy}
             onChange={(e) => { setFy(e.target.value); setFromDate(""); setToDate(""); }}
             className="border border-[#E5E5E5] px-2 py-1 text-xs bg-white"
@@ -236,14 +236,14 @@ export default function Accounting() {
               <option key={o.label} value={o.label}>{`FY ${o.label}${o.is_current ? " (current)" : ""}`}</option>
             ))}
           </select>
-          <span className="text-[#9A9A9A]">or</span>
+          <span className="text-[#6E6A63]">or</span>
           <input
             type="date" value={fromDate}
             onChange={(e) => { setFromDate(e.target.value); setFy(""); }}
             className="border border-[#E5E5E5] px-2 py-1 text-xs"
             data-testid="from-date"
           />
-          <span className="text-[#9A9A9A]">→</span>
+          <span className="text-[#6E6A63]">→</span>
           <input
             type="date" value={toDate}
             onChange={(e) => { setToDate(e.target.value); setFy(""); }}
@@ -512,7 +512,7 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <label className="block"><span className="text-xs text-[#5C5C5C]">Transaction</span>
-          <select className="input-flat w-full mt-1" value={form.kind}
+          <select aria-label="Transaction type" className="input-flat w-full mt-1" value={form.kind}
             onChange={(event) => setForm({ ...form, kind: event.target.value })} data-testid="transfer-kind">
             {TRANSFER_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
@@ -577,7 +577,7 @@ function CommissionsDashboard({ data, onDownload }) {
         <div className="overline mb-3">BY VENDOR · EARNED / RECEIVED / PENDING</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
+            <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
               <tr>
                 <th className="p-2 text-left">Vendor</th>
                 <th className="p-2 text-right">Earned</th>
@@ -591,7 +591,7 @@ function CommissionsDashboard({ data, onDownload }) {
                 return (
                   <tr key={v.vendor_id} className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7]">
                     <td className="p-2">
-                      <a href={`/vendors/${v.vendor_id}`} className="font-semibold hover:text-[#8B7F6A]">{v.vendor_name}</a>
+                      <a href={`/vendors/${v.vendor_id}`} className="font-semibold hover:text-[#76705E]">{v.vendor_name}</a>
                     </td>
                     <td className="p-2 text-right font-mono">{CURRENCY(v.earned)}</td>
                     <td className="p-2 text-right font-mono text-[#1D633E]">{CURRENCY(v.received)}</td>
@@ -600,7 +600,7 @@ function CommissionsDashboard({ data, onDownload }) {
                 );
               })}
               {(data.top_vendors || []).length === 0 && (
-                <tr><td colSpan={4} className="p-6 text-center text-[#9A9A9A]">No commission data yet.</td></tr>
+                <tr><td colSpan={4} className="p-6 text-center text-[#6E6A63]">No commission data yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -609,10 +609,10 @@ function CommissionsDashboard({ data, onDownload }) {
 
       <div className="card-flat">
         <div className="overline mb-3">BY PROJECT</div>
-        {(data.by_project || []).length === 0 && <div className="text-sm text-[#9A9A9A]">No project-linked commission yet.</div>}
+        {(data.by_project || []).length === 0 && <div className="text-sm text-[#6E6A63]">No project-linked commission yet.</div>}
         {(data.by_project || []).slice(0, 10).map((p) => (
           <div key={p.project_id} className="flex justify-between items-center border-b border-[#F5F5F5] py-2 text-sm">
-            <a href={`/projects/${p.project_id}`} className="font-semibold hover:text-[#8B7F6A]">{p.project_name}</a>
+            <a href={`/projects/${p.project_id}`} className="font-semibold hover:text-[#76705E]">{p.project_name}</a>
             <div className="flex gap-4 font-mono">
               <span className="text-[#5C5C5C]">Received: {CURRENCY(p.received)}</span>
               <span className="font-bold">Earned: {CURRENCY(p.earned)}</span>
@@ -632,7 +632,7 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
       <div className="overline mb-3">{title}</div>
       <div className="overflow-x-auto"><table className="w-full text-sm">
         <tbody>
-          {rows.length === 0 && <tr><td className="text-[#9A9A9A] py-2">No entries.</td></tr>}
+          {rows.length === 0 && <tr><td className="text-[#6E6A63] py-2">No entries.</td></tr>}
           {rows.map((r) => (
             <tr key={r.account_id} className="border-b border-[#F5F5F5]">
               <td className="py-1.5">{r.name}</td>
@@ -780,7 +780,7 @@ function CashFlowView({ cf, onDownload, periodQs }) {
                   </tr>
                 )) : [
                   <tr key={`${activity}-empty`} className="border-b border-[#F0F0F0]">
-                    <td className="p-3 font-semibold capitalize">{activity}</td><td className="p-3 text-[#9A9A9A]">No movement</td><td className="p-3" colSpan="3" />
+                    <td className="p-3 font-semibold capitalize">{activity}</td><td className="p-3 text-[#6E6A63]">No movement</td><td className="p-3" colSpan="3" />
                   </tr>,
                 ]
               ))}
@@ -817,7 +817,7 @@ function Dashboard({ d, onRefresh }) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <KPI label="Cash & Bank" value={CURRENCY(k.cash_bank)} Icon={Wallet} tint="#8B7F6A" testid="kpi-cash" />
         <KPI label="This month P&L" value={CURRENCY(k.profit_month)} Icon={ChartLine} tint={k.profit_month >= 0 ? "#1D633E" : "#B4001C"} testid="kpi-profit" />
-        <KPI label="Outstanding" value={CURRENCY(k.outstanding)} Icon={TrendDown} tint="#F0A93A" testid="kpi-outstanding" />
+        <KPI label="Outstanding" value={CURRENCY(k.outstanding)} Icon={TrendDown} tint="#A86400" testid="kpi-outstanding" />
         <KPI label="Overdue" value={CURRENCY(k.overdue)} Icon={TrendDown} tint="#B4001C" testid="kpi-overdue" />
       </div>
 
@@ -835,7 +835,7 @@ function Dashboard({ d, onRefresh }) {
           </div>
           {k.cash_bank_by_account.map((b, i) => (
             <div key={b.account_id ?? i} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm" data-testid={`bank-${b.account_id}`}>
-              <div className="flex items-center gap-2"><Bank size={14} className="text-[#8B7F6A]" />{b.name}</div>
+              <div className="flex items-center gap-2"><Bank size={14} className="text-[#76705E]" />{b.name}</div>
               <span className="font-mono font-semibold">{CURRENCY(b.balance)}</span>
             </div>
           ))}
@@ -843,7 +843,7 @@ function Dashboard({ d, onRefresh }) {
 
         <div className="card-flat">
           <div className="overline mb-3">UPCOMING PAYMENTS · next 30d</div>
-          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[#9A9A9A]">All clear.</div>}
+          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[#6E6A63]">All clear.</div>}
           {d.upcoming_payments.slice(0, 8).map((m, i) => (
             <div key={m.id ?? i} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
               <div>
@@ -871,7 +871,7 @@ function Dashboard({ d, onRefresh }) {
                 <td className="p-2 text-right font-mono font-semibold">{CURRENCY(t.total)}</td>
               </tr>
             ))}
-            {d.recent_transactions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[#9A9A9A]">No transactions yet.</td></tr>}
+            {d.recent_transactions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[#6E6A63]">No transactions yet.</td></tr>}
           </tbody>
         </table></div>
       </div>
@@ -1142,7 +1142,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-[#9A9A9A]">No collections match this view.</td></tr>
+              <tr><td colSpan={7} className="p-10 text-center text-[#6E6A63]">No collections match this view.</td></tr>
             )}
           </tbody>
         </table>
@@ -1288,7 +1288,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
             </>
           )}
 
-          <select className="input-flat" value={form.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(banks, method); setForm({ ...form, payment_method: method, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: compatible?.id || (kind === "income" ? form.bank_account_id : form.paid_from_account_id) }); }}>
+          <select aria-label="Payment method" className="input-flat" value={form.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(banks, method); setForm({ ...form, payment_method: method, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: compatible?.id || (kind === "income" ? form.bank_account_id : form.paid_from_account_id) }); }}>
             {["cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"].map((m) => <option key={m}>{m}</option>)}
           </select>
           <input className="input-flat" placeholder="Reference no." value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
@@ -1313,7 +1313,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
                   <td className="p-2">
                     {j.narration}
                     {j.source?.endsWith("_reversal") && (
-                      <span className="ml-2 text-[10px] text-[#8B7F6A]">{j.undone ? "REVERSAL UNDONE" : "REVERSAL"}</span>
+                      <span className="ml-2 text-[10px] text-[#76705E]">{j.undone ? "REVERSAL UNDONE" : "REVERSAL"}</span>
                     )}
                     {j.source?.endsWith("_reinstatement") && (
                       <span className="ml-2 text-[10px] text-[#1D633E]">REINSTATED</span>
@@ -1327,7 +1327,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
                 </tr>
               );
             })}
-            {journal.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-[#9A9A9A]">No {kind} entries yet.</td></tr>}
+            {journal.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-[#6E6A63]">No {kind} entries yet.</td></tr>}
           </tbody>
         </table></div>
       </div>
@@ -1461,7 +1461,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-5 gap-3" data-testid="account-form">
           <input required className="input-flat md:col-span-2" placeholder="Account name" value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="account-name" />
-          <select className="input-flat" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+          <select aria-label="Account type" className="input-flat" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
             {(meta?.account_types || []).map((t) => <option key={t}>{t}</option>)}
           </select>
           <input className="input-flat" placeholder="Code (auto if blank)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
@@ -1478,7 +1478,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
         <div key={type} className="card-flat" data-testid={`coa-group-${type}`}>
           <div className="overline mb-2">{type.toUpperCase()} · {list.length}</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
+            <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
               <tr><th className="p-2" /><th className="p-2 text-left">Code</th><th className="p-2 text-left">Account</th><th className="p-2 text-right">Current balance</th><th className="p-2 text-right">Actions</th></tr>
             </thead>
             <tbody>
@@ -1491,21 +1491,21 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
                     data-testid={`account-${a.id}`}>
                     <td className="p-2 w-8">
                       <button onClick={(e) => toggleFav(a, e)}
-                        className={`transition-colors ${isFav ? "text-[#C9A84C]" : "text-[#C5C5C5] hover:text-[#8B7F6A]"}`}
+                        className={`transition-colors ${isFav ? "text-[#C9A84C]" : "text-[#C5C5C5] hover:text-[#76705E]"}`}
                         title={isFav ? "Unpin from Favourites" : "Pin to Favourites"}
                         data-testid={`fav-toggle-${a.id}`}>
                         <Star size={14} weight={isFav ? "fill" : "regular"} />
                       </button>
                     </td>
                     <td className="p-2 font-mono text-xs w-20">{a.code || "—"}</td>
-                    <td className="p-2 font-semibold group-hover:text-[#8B7F6A]">
+                    <td className="p-2 font-semibold group-hover:text-[#76705E]">
                       {a.name}
-                      {a.active === false && <span className="ml-2 text-[10px] text-[#B87500]">INACTIVE</span>}
+                      {a.active === false && <span className="ml-2 text-[10px] text-[#8F5B00]">INACTIVE</span>}
                     </td>
                     <td className="p-2 text-right font-mono text-xs text-[#5C5C5C]">{CURRENCY(a.current_balance ?? a.opening_balance)}</td>
                     <td className="p-2 text-right w-32">
                       <span className="inline-flex items-center justify-end gap-1">
-                        {a.is_bank && <Bank size={12} className="text-[#8B7F6A] mr-1" />}
+                        {a.is_bank && <Bank size={12} className="text-[#76705E] mr-1" />}
                         <button type="button" className="btn-ghost p-1.5" title="Edit account"
                           onClick={(event) => startEdit(a, event)} data-testid={`account-edit-${a.id}`}>
                           <PencilSimple size={12} />
@@ -1515,7 +1515,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
                           onClick={(event) => toggleActive(a, event)} data-testid={`account-active-${a.id}`}>
                           {a.active === false ? <ArrowCounterClockwise size={12} /> : <Archive size={12} />}
                         </button>
-                        <CaretRight size={12} className="text-[#9A9A9A]" />
+                        <CaretRight size={12} className="text-[#6E6A63]" />
                       </span>
                     </td>
                   </tr>
@@ -1601,7 +1601,7 @@ function ReportBlock({ title, rows, total, tint, testid }) {
   return (
     <div data-testid={testid}>
       <div className="overline mb-2" style={{ color: tint }}>{title}</div>
-      {rows.length === 0 && <div className="text-xs text-[#9A9A9A]">No entries.</div>}
+      {rows.length === 0 && <div className="text-xs text-[#6E6A63]">No entries.</div>}
       {rows.map((r, i) => (
         <div key={i} className="flex items-center justify-between text-sm border-b border-[#F0F0F0] py-1.5">
           <span>{r.name}</span>
@@ -1672,7 +1672,7 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
             >{e.label}</button>
           ))}
         </div>
-        <select
+        <select aria-label="Entity id"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
           className="border border-[#E5E5E5] px-3 py-1.5 text-sm bg-white min-w-[280px]"
@@ -1684,7 +1684,7 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
       </div>
 
       {loading && <div className="overline">LOADING LEDGER…</div>}
-      {!loading && !ledger && entityId && <div className="text-sm text-[#9A9A9A]">No data.</div>}
+      {!loading && !ledger && entityId && <div className="text-sm text-[#6E6A63]">No data.</div>}
       {!loading && ledger && (
         <div className="space-y-4" data-testid="ledger-body">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
@@ -1724,7 +1724,7 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
               </thead>
               <tbody>
                 {(ledger.entries || []).length === 0 && (
-                  <tr><td colSpan="6" className="text-[#9A9A9A] py-3 italic">No transactions in period.</td></tr>
+                  <tr><td colSpan="6" className="text-[#6E6A63] py-3 italic">No transactions in period.</td></tr>
                 )}
                 {(ledger.entries || []).map((e) => (
                   <tr key={e.id} className="border-b border-[#F5F5F5]" data-testid="ledger-row">

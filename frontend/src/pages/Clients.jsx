@@ -117,7 +117,7 @@ export default function Clients() {
           <input className="input-flat" placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
           <input className="input-flat" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <input className="input-flat" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <select className="input-flat" value={form.client_type} onChange={(e) => setForm({ ...form, client_type: e.target.value })} data-testid="client-type-select">
+          <select aria-label="Client type" className="input-flat" value={form.client_type} onChange={(e) => setForm({ ...form, client_type: e.target.value })} data-testid="client-type-select">
             <option value="">Client type…</option>
             {clientTypes.map((t) => <option key={t}>{t}</option>)}
           </select>
@@ -135,7 +135,7 @@ export default function Clients() {
           <input className="flex-1 outline-none text-sm bg-transparent" placeholder="Search name, company, email, phone…"
             value={query} onChange={(e) => setQuery(e.target.value)} data-testid="clients-search" />
         </div>
-        <select className="input-flat w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} data-testid="clients-type-filter">
+        <select aria-label="Type filter" className="input-flat w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} data-testid="clients-type-filter">
           <option value="">All types</option>
           {clientTypes.map((t) => <option key={t}>{t}</option>)}
         </select>
@@ -154,7 +154,7 @@ export default function Clients() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan="7" className="p-6 text-center text-sm text-[#9A9A9A] font-mono uppercase tracking-wider">Loading…</td></tr>
+              <tr><td colSpan="7" className="p-6 text-center text-sm text-[#6E6A63] font-mono uppercase tracking-wider">Loading…</td></tr>
             )}
             {!loading && filtered.map((c) => (
               <tr key={c.id}
@@ -164,8 +164,8 @@ export default function Clients() {
                 <Td className="font-semibold">
                   <span className="inline-flex items-center gap-2">
                     {c.name}
-                    {c.archived && <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#9A9A9A]">Archived</span>}
-                    <CaretRight size={10} className="text-[#9A9A9A]" />
+                    {c.archived && <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#6E6A63]">Archived</span>}
+                    <CaretRight size={10} className="text-[#6E6A63]" />
                   </span>
                 </Td>
                 <Td>{c.client_type || "—"}</Td>

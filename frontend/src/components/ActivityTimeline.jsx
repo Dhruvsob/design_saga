@@ -42,12 +42,12 @@ export default function ActivityTimeline({ entityType, entityId }) {
       <div className="p-4 border-b border-[#E5E5E5] bg-[#FAFAFA] flex items-center gap-2">
         <ClockCounterClockwise size={14} />
         <span className="overline">ACTIVITY</span>
-        <span className="font-mono text-xs text-[#9A9A9A] ml-auto">{rows.length}</span>
+        <span className="font-mono text-xs text-[#6E6A63] ml-auto">{rows.length}</span>
       </div>
       <div className="max-h-96 overflow-y-auto">
-        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[#9A9A9A]">Loading…</div>}
+        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[#6E6A63]">Loading…</div>}
         {!loading && rows.length === 0 && (
-          <div className="p-6 text-center text-sm text-[#9A9A9A]">
+          <div className="p-6 text-center text-sm text-[#6E6A63]">
             No recorded activity yet. Edits, stage changes and archive actions will appear here.
           </div>
         )}
@@ -65,14 +65,14 @@ export default function ActivityTimeline({ entityType, entityId }) {
                   <div className="text-sm">
                     <span className="font-semibold">{r.actor_email?.split("@")[0] || "someone"}</span>{" "}
                     <span className="text-[#5C5C5C]">{ACTION_LABELS[r.action] || r.action}</span>
-                    {r.meta?.stage && <span className="ml-1 font-mono text-xs text-[#8B7F6A]">→ {r.meta.stage}</span>}
+                    {r.meta?.stage && <span className="ml-1 font-mono text-xs text-[#76705E]">→ {r.meta.stage}</span>}
                   </div>
                   {r.meta?.fields && (
-                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#9A9A9A] mt-0.5">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63] mt-0.5">
                       {r.meta.fields.join(" · ")}
                     </div>
                   )}
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-[#9A9A9A] mt-0.5">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63] mt-0.5">
                     {fmtWhen(r.at)}
                   </div>
                 </div>

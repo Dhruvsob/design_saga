@@ -34,7 +34,7 @@ export function MandatoryPinSetupOverlay() {
         <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[#0A0A0A] text-white">
           <ShieldCheck size={23} weight="fill" />
         </div>
-        <div className="overline text-center text-[#8B7F6A]">PERSONAL SECURITY</div>
+        <div className="overline text-center text-[#76705E]">PERSONAL SECURITY</div>
         <h1 className="font-display font-bold text-3xl text-center mt-2">Create your App PIN</h1>
         <p className="text-sm text-[#5C5C5C] text-center mt-2 mb-6">
           Choose a personal 4- or 6-digit PIN. It protects only your account and is required after five minutes without activity.
@@ -107,7 +107,7 @@ export function PinLockOverlay() {
         <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[#0A0A0A] text-white">
           <LockKey size={23} weight="fill" />
         </div>
-        <div className="overline text-center text-[#8B7F6A]">APP LOCKED</div>
+        <div className="overline text-center text-[#76705E]">APP LOCKED</div>
         <h1 className="font-display font-bold text-3xl text-center mt-2">Welcome back, {user.name?.split(" ")[0] || "there"}.</h1>
         <p className="text-sm text-[#5C5C5C] text-center mt-2 mb-6">
           Enter your personal 4- or 6-digit PIN. The ERP locks after five minutes without activity.
@@ -180,7 +180,7 @@ export function PinSecurityDialog({ onClose }) {
       <div className="relative w-full max-w-md bg-white border border-[#E5E5E5] shadow-2xl p-6" onClick={(event) => event.stopPropagation()} data-testid="pin-security-dialog">
         <div className="flex items-start justify-between gap-3 mb-5">
           <div>
-            <div className="overline text-[#8B7F6A]">PERSONAL SECURITY</div>
+            <div className="overline text-[#76705E]">PERSONAL SECURITY</div>
             <h2 className="font-display font-bold text-2xl mt-1">App Lock</h2>
           </div>
           <button className="btn-icon" onClick={onClose} aria-label="Close App Lock settings"><X size={16} /></button>

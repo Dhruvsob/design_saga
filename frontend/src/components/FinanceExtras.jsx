@@ -157,7 +157,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
               );
             })}
             {!loading && rules.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-[#9A9A9A]">
+              <tr><td colSpan={7} className="p-10 text-center text-[#6E6A63]">
                 No recurring rules yet. Add one for Rent, Internet, or Salaries so they post themselves.
               </td></tr>
             )}
@@ -220,7 +220,7 @@ const RuleForm = ({ initial, expenseAccs, banks, vendors, projects, clients, onC
           onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="rec-name" />
         <input required type="number" step="0.01" className="input-flat" placeholder="Amount"
           value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="rec-amount" />
-        <select className="input-flat" value={form.frequency}
+        <select aria-label="Frequency" className="input-flat" value={form.frequency}
           onChange={(e) => setForm({ ...form, frequency: e.target.value })} data-testid="rec-frequency">
           {FREQ.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
         </select>
@@ -229,7 +229,7 @@ const RuleForm = ({ initial, expenseAccs, banks, vendors, projects, clients, onC
             value={form.day_of_month} onChange={(e) => setForm({ ...form, day_of_month: e.target.value })} data-testid="rec-dom" />
         )}
         {form.frequency === "weekly" && (
-          <select className="input-flat" value={form.day_of_week}
+          <select aria-label="Day of week" className="input-flat" value={form.day_of_week}
             onChange={(e) => setForm({ ...form, day_of_week: e.target.value })}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => <option key={i} value={i}>{d}</option>)}
           </select>
@@ -390,10 +390,10 @@ export const BankReconciliation = ({ accounts = [] }) => {
 
       <div className="card-flat space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <select className="input-flat max-w-xs" value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)} data-testid="bank-rec-account">
+          <select aria-label="Bank account" className="input-flat max-w-xs" value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)} data-testid="bank-rec-account">
             {banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
-          <select className="input-flat max-w-xs" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} data-testid="bank-rec-status-filter">
+          <select aria-label="Status filter" className="input-flat max-w-xs" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} data-testid="bank-rec-status-filter">
             <option value="">All statuses</option>
             <option value="unmatched">Unmatched</option>
             <option value="auto_matched">Auto-matched</option>
@@ -421,7 +421,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
             </div>
           ))}
         </div>
-        <div className="text-[11px] text-[#9A9A9A]">
+        <div className="text-[11px] text-[#6E6A63]">
           Expected CSV columns (case-insensitive): <code>Date, Description, Debit, Credit</code> (or a single signed <code>Amount</code>), and optional <code>Reference</code>.
         </div>
       </div>
@@ -436,13 +436,13 @@ export const BankReconciliation = ({ accounts = [] }) => {
         >
           <div className="flex items-center gap-2">
             {showLog ? <CaretDown size={12} /> : <CaretRight size={12} />}
-            <ClockClockwise size={13} className="text-[#8B7F6A]" />
+            <ClockClockwise size={13} className="text-[#76705E]" />
             <span className="overline">IMPORT LOG</span>
-            <span className="text-[11px] text-[#9A9A9A]">
+            <span className="text-[11px] text-[#6E6A63]">
               {batches.length} upload{batches.length === 1 ? "" : "s"}
             </span>
           </div>
-          <span className="text-[11px] text-[#9A9A9A]">Re-download or delete a bad import</span>
+          <span className="text-[11px] text-[#6E6A63]">Re-download or delete a bad import</span>
         </button>
 
         {showLog && (
@@ -466,7 +466,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
                     <tr key={b.id} className="border-t border-[#F0F0F0]" data-testid={`import-batch-${b.id}`}>
                       <td className="p-3 text-xs">
                         <div className="font-mono">{formatDateTime(b.created_at)}</div>
-                        <div className="text-[10px] text-[#9A9A9A]">{b.created_by_name || "—"}</div>
+                        <div className="text-[10px] text-[#6E6A63]">{b.created_by_name || "—"}</div>
                       </td>
                       <td className="p-3 text-xs max-w-[220px] truncate" title={b.filename}>{b.filename || "—"}</td>
                       <td className="p-3 text-right font-mono text-xs">{b.rows_saved ?? 0}</td>
@@ -487,7 +487,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
                   );
                 })}
                 {batches.length === 0 && (
-                  <tr><td colSpan={7} className="p-8 text-center text-[#9A9A9A]">
+                  <tr><td colSpan={7} className="p-8 text-center text-[#6E6A63]">
                     No statement imports yet for this account.
                   </td></tr>
                 )}
@@ -540,7 +540,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
               </tr>
             ))}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={6} className="p-10 text-center text-[#9A9A9A]">
+              <tr><td colSpan={6} className="p-10 text-center text-[#6E6A63]">
                 No rows. Upload your bank statement CSV to get started.
               </td></tr>
             )}
@@ -609,7 +609,7 @@ const LinkJEDialog = ({ row, accountId, onClose, onLinked }) => {
       <div onClick={(e) => e.stopPropagation()} className="relative z-[301] w-full max-w-2xl bg-white shadow-2xl max-h-[85vh] overflow-hidden flex flex-col rounded-lg" data-testid="link-je-dialog">
         <div className="p-4 border-b border-[#E5E5E5] flex items-start justify-between">
           <div>
-            <div className="overline text-[#8B7F6A]">LINK BANK ROW TO JOURNAL ENTRY</div>
+            <div className="overline text-[#76705E]">LINK BANK ROW TO JOURNAL ENTRY</div>
             <div className="font-semibold mt-1">{row.description}</div>
             <div className="text-xs text-[#5C5C5C] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)}</div>
           </div>
@@ -617,7 +617,7 @@ const LinkJEDialog = ({ row, accountId, onClose, onLinked }) => {
         </div>
         <div className="flex-1 overflow-auto">
           {loading && <div className="p-8 text-center overline">LOADING…</div>}
-          {!loading && candidates.length === 0 && <div className="p-8 text-center text-[#9A9A9A]">No candidate journal entries in this bank account ±5 days.</div>}
+          {!loading && candidates.length === 0 && <div className="p-8 text-center text-[#6E6A63]">No candidate journal entries in this bank account ±5 days.</div>}
           {candidates.map((je) => (
             <button key={je.id} onClick={() => link(je)}
               className="w-full text-left p-3 border-t border-[#F0F0F0] hover:bg-[#FAFAF7] block">
@@ -661,7 +661,7 @@ const CreateJEDialog = ({ row, accounts, onClose, onCreated }) => {
       <div onClick={(e) => e.stopPropagation()} className="relative z-[301] w-full max-w-lg bg-white shadow-2xl rounded-lg" data-testid="create-je-dialog">
         <div className="p-4 border-b border-[#E5E5E5] flex items-start justify-between">
           <div>
-            <div className="overline text-[#8B7F6A]">CREATE JOURNAL ENTRY</div>
+            <div className="overline text-[#76705E]">CREATE JOURNAL ENTRY</div>
             <div className="font-semibold mt-1">{row.description}</div>
             <div className="text-xs text-[#5C5C5C] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)} · {wantType.toUpperCase()}</div>
           </div>
@@ -669,13 +669,13 @@ const CreateJEDialog = ({ row, accounts, onClose, onCreated }) => {
         </div>
         <div className="p-4 space-y-3">
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Counterpart {wantType} account</label>
-            <select className="input-flat w-full" value={counterId} onChange={(e) => setCounterId(e.target.value)}>
+            <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Counterpart {wantType} account</label>
+            <select aria-label="Counterpart account" className="input-flat w-full" value={counterId} onChange={(e) => setCounterId(e.target.value)}>
               {options.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Narration</label>
+            <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Narration</label>
             <input className="input-flat w-full" value={narration} onChange={(e) => setNarration(e.target.value)} />
           </div>
         </div>
@@ -701,7 +701,7 @@ export const FavoriteAccountsStrip = ({ onOpen }) => {
       <div className="flex flex-wrap gap-1.5">
         {rows.map((a) => (
           <button key={a.id} onClick={() => onOpen && onOpen(a)}
-            className="px-3 py-1 text-xs rounded-full border border-[#E5E5E5] bg-white hover:border-[#8B7F6A] hover:text-[#8B7F6A] transition"
+            className="px-3 py-1 text-xs rounded-full border border-[#E5E5E5] bg-white hover:border-[#8B7F6A] hover:text-[#76705E] transition"
             data-testid={`fav-open-${a.id}`}>
             {a.name}
           </button>

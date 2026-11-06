@@ -71,7 +71,7 @@ export default function QuotationsAdv() {
 
       {showForm && (
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="new-quotation-form">
-          <select className="input-flat" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} data-testid="q-type">
+          <select aria-label="Quotation type" className="input-flat" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} data-testid="q-type">
             {Object.entries(NEW_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <input required className="input-flat md:col-span-2" placeholder="Project title" value={form.project_title} onChange={(e) => setForm({ ...form, project_title: e.target.value })} data-testid="q-title" />
@@ -116,7 +116,7 @@ export default function QuotationsAdv() {
                 <Td onClick={() => navigate(`/quotations/${r.id}`)}><span className={`status-chip ${STATUS_COLORS[r.status] || "chip-draft"}`}>{r.status}</span></Td>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => navigate(`/quotations/${r.id}`)} className="text-[#8B7F6A]" title="Open"><ArrowRight size={16} /></button>
+                    <button onClick={() => navigate(`/quotations/${r.id}`)} className="text-[#76705E]" title="Open"><ArrowRight size={16} /></button>
                     {hasPerm("quotations.delete") && r.status !== "converted" && <button onClick={() => del(r.id)} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>}
                   </div>
                 </Td>

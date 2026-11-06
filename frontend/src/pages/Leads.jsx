@@ -183,10 +183,10 @@ export default function Leads() {
           <input className="input-flat" placeholder="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="lead-name" />
           <input className="input-flat" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <input className="input-flat" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <select className="input-flat" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
+          <select aria-label="Source" className="input-flat" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
             {SOURCES.map((s) => <option key={s}>{s}</option>)}
           </select>
-          <select className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
+          <select aria-label="Project type" className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
             {TYPES.map((s) => <option key={s}>{s}</option>)}
           </select>
           <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
@@ -254,7 +254,7 @@ export default function Leads() {
                       <span className="overline text-[10px] truncate min-w-0 flex-1">{l.source}</span>
                       <div className="flex items-center gap-2 shrink-0">
                         {canConvert && l.stage !== "Won" && l.stage !== "Lost" && (
-                          <button onClick={() => convert(l.id)} className="text-[#8B7F6A] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
+                          <button onClick={() => convert(l.id)} className="text-[#76705E] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
                             <ArrowRight size={12} weight="bold" /> Convert
                           </button>
                         )}
@@ -269,7 +269,7 @@ export default function Leads() {
                   </div>
                 ))}
                 {items.length === 0 && (
-                  <div className="text-center py-8 text-xs text-[#9A9A9A]">
+                  <div className="text-center py-8 text-xs text-[#6E6A63]">
                     <div className="dotted-bg mx-auto mb-2" style={{ width: 32, height: 32 }} />
                     —
                   </div>
@@ -297,10 +297,10 @@ export default function Leads() {
             <div className="grid grid-cols-2 gap-3">
               <input className="input-flat" placeholder="Email" value={editing.email || ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
               <input className="input-flat" placeholder="Phone" value={editing.phone || ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
-              <select className="input-flat" value={editing.source || ""} onChange={(e) => setEditing({ ...editing, source: e.target.value })}>
+              <select aria-label="Source" className="input-flat" value={editing.source || ""} onChange={(e) => setEditing({ ...editing, source: e.target.value })}>
                 {SOURCES.map((s) => <option key={s}>{s}</option>)}
               </select>
-              <select className="input-flat" value={editing.project_type || ""} onChange={(e) => setEditing({ ...editing, project_type: e.target.value })}>
+              <select aria-label="Project type" className="input-flat" value={editing.project_type || ""} onChange={(e) => setEditing({ ...editing, project_type: e.target.value })}>
                 {TYPES.map((s) => <option key={s}>{s}</option>)}
               </select>
               <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={editing.budget ?? ""} onChange={(e) => setEditing({ ...editing, budget: e.target.value })} data-testid="edit-lead-budget" />
@@ -338,7 +338,7 @@ export default function Leads() {
 
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1" data-testid="lead-notes-list">
                 {notes.length === 0 && (
-                  <div className="text-xs text-[#9A9A9A] py-3 text-center border border-dashed border-[#E5E5E5]">
+                  <div className="text-xs text-[#6E6A63] py-3 text-center border border-dashed border-[#E5E5E5]">
                     No notes yet — every note you add is timestamped and kept in history.
                   </div>
                 )}
@@ -370,7 +370,7 @@ export default function Leads() {
                             <span className="font-semibold">{n.author_name}</span>
                             <span className="mx-1">·</span>
                             <span className="font-mono">{formatDateTime(n.created_at)}</span>
-                            {n.edited_at && <span className="ml-1 italic text-[#9A9A9A]">(edited)</span>}
+                            {n.edited_at && <span className="ml-1 italic text-[#6E6A63]">(edited)</span>}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {n.history && n.history.length > 0 && (
@@ -390,11 +390,11 @@ export default function Leads() {
                         </div>
                         {showHistory[n.id] && n.history && n.history.length > 0 && (
                           <div className="mt-2 pt-2 border-t border-dashed border-[#E5E5E5] space-y-1.5" data-testid={`lead-note-history-${n.id}`}>
-                            <div className="overline text-[10px] text-[#9A9A9A]">Previous versions</div>
+                            <div className="overline text-[10px] text-[#6E6A63]">Previous versions</div>
                             {n.history.slice().reverse().map((h, i) => (
                               <div key={i} className="text-[11px] text-[#5C5C5C]">
                                 <div className="whitespace-pre-wrap line-through decoration-[#CCCCCC]">{h.text}</div>
-                                <div className="font-mono text-[10px] text-[#9A9A9A]">{h.edited_by} · {formatDateTime(h.edited_at)}</div>
+                                <div className="font-mono text-[10px] text-[#6E6A63]">{h.edited_by} · {formatDateTime(h.edited_at)}</div>
                               </div>
                             ))}
                           </div>

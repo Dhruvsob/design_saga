@@ -89,7 +89,7 @@ export default function Holidays() {
         <div className="flex items-center gap-2">
           <label className="overline">YEAR</label>
           <input
-            type="number" value={year}
+            type="number" value={year} aria-label="Year"
             data-testid="holiday-year-input"
             onChange={(e) => setYear(Number(e.target.value) || currentYear)}
             className="border border-[#E5E5E5] w-24 text-sm px-2 py-1"
@@ -104,19 +104,19 @@ export default function Holidays() {
         <div className="overline mb-2">ADD HOLIDAY</div>
         <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
           <input
-            type="date" value={form.date}
+            type="date" value={form.date} aria-label="Holiday date"
             onChange={(e) => setForm({ ...form, date: e.target.value })}
             className="input-flat md:col-span-1"
             data-testid="holiday-date-input"
           />
           <input
-            type="text" placeholder="Holiday name (e.g., Republic Day)"
+            type="text" placeholder="Holiday name (e.g., Republic Day)" aria-label="Holiday name"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             className="input-flat md:col-span-2"
             data-testid="holiday-name-input"
           />
-          <select
+          <select aria-label="Holiday type"
             value={form.kind}
             onChange={(e) => setForm({ ...form, kind: e.target.value })}
             className="input-flat"
@@ -180,7 +180,7 @@ export default function Holidays() {
           </div>
         ))}
         {rows.length === 0 && !loading && (
-          <div className="col-span-full text-sm text-[#9A9A9A] italic">
+          <div className="col-span-full text-sm text-[#6E6A63] italic">
             No holidays configured for {year}. Add company + festival days above.
           </div>
         )}

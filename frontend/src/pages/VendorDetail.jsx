@@ -295,7 +295,7 @@ export default function VendorDetail() {
     <div className="space-y-6" data-testid="vendor-detail-page">
       {/* HEADER */}
       <div>
-        <Link to="/vendors" className="text-xs text-[#5C5C5C] hover:text-[#8B7F6A] flex items-center gap-1">
+        <Link to="/vendors" className="text-xs text-[#5C5C5C] hover:text-[#76705E] flex items-center gap-1">
           <ArrowLeft size={12} /> All vendors
         </Link>
         <div className="mt-3 flex items-start justify-between gap-6 flex-wrap">
@@ -314,7 +314,7 @@ export default function VendorDetail() {
               <div className="flex items-center gap-1">
                 <Star size={14} weight="fill" className="text-[#F5B800]" />
                 <span className="font-display font-bold text-lg">{Number(v.rating || 0).toFixed(1)}</span>
-                <span className="text-xs text-[#9A9A9A]">/ 5 · {v.rating_count || 0} ratings</span>
+                <span className="text-xs text-[#6E6A63]">/ 5 · {v.rating_count || 0} ratings</span>
               </div>
             </div>
             <div className="px-3 py-2 border border-[#E5E5E5]">
@@ -345,7 +345,7 @@ export default function VendorDetail() {
             onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition ${
               tab === t
-                ? "text-[#8B7F6A] border-b-2 border-[#8B7F6A] -mb-px"
+                ? "text-[#76705E] border-b-2 border-[#8B7F6A] -mb-px"
                 : "text-[#5C5C5C] hover:text-[#0A0A0A]"
             }`}
           >
@@ -405,7 +405,7 @@ function VendorEditModal({ form, setForm, onSave, onClose, busy }) {
         <div className="flex justify-between items-start"><div><div className="overline">VENDOR MASTER</div><h2 className="font-display font-bold text-3xl">Edit vendor</h2></div><button type="button" className="btn-ghost" onClick={onClose}>×</button></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {field("name", "Vendor name")}{field("company", "Company")}
-          <select className="input-flat" value={form.agency_type || "vendor"} onChange={(e) => setForm({ ...form, agency_type: e.target.value })}>
+          <select aria-label="Agency type" className="input-flat" value={form.agency_type || "vendor"} onChange={(e) => setForm({ ...form, agency_type: e.target.value })}>
             {["vendor", "agency", "contractor", "sub_contractor", "supplier", "consultant", "freelancer", "other"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}
           </select>
           {field("contact_person", "Contact person")}{field("phone", "Phone")}{field("email", "Email", "email")}
@@ -509,7 +509,7 @@ function Ledger({ data }) {
           </thead>
           <tbody>
             {data.entries.length === 0 && (
-              <tr><td colSpan={7} className="p-8 text-center text-[#9A9A9A]">No transactions yet.</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-[#6E6A63]">No transactions yet.</td></tr>
             )}
             {data.entries.map((e, i) => (
               <tr key={i} className="border-b border-[#F0F0F0]" data-testid={`ledger-row-${i}`}>
@@ -580,7 +580,7 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
               onChange={(e) => setF({ ...f, tds_rate: parseFloat(e.target.value) || 0 })} />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <select className="input-flat" value={f.po_id}
+            <select aria-label="Purchase order" className="input-flat" value={f.po_id}
               onChange={(e) => {
                 const po = purchaseOrders.find((row) => row.id === e.target.value);
                 setF({
@@ -633,7 +633,7 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
             value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
           <div className="flex items-center justify-between pt-2 border-t border-[#E5E5E5]">
             <div className="overline">TOTAL</div>
-            <div className="font-display font-bold text-2xl text-[#8B7F6A]">{INR(total)}</div>
+            <div className="font-display font-bold text-2xl text-[#76705E]">{INR(total)}</div>
           </div>
           <button disabled={busy} className="btn-primary" data-testid="save-bill-btn">
             <Receipt size={13} /> {busy ? "Saving…" : "Save bill"}
@@ -667,7 +667,7 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
           </thead>
           <tbody>
             {(v.bills || []).length === 0 && (
-              <tr><td colSpan={8} className="p-8 text-center text-[#9A9A9A]">No bills yet.</td></tr>
+              <tr><td colSpan={8} className="p-8 text-center text-[#6E6A63]">No bills yet.</td></tr>
             )}
             {(v.bills || []).map((b) => (
               <tr key={b.id} className="border-b border-[#F0F0F0]" data-testid={`bill-row-${b.id}`}>
@@ -694,11 +694,11 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
 function BillStatus({ s }) {
   const map = {
     draft: "bg-[#F2F2F2] text-[#5C5C5C]",
-    received: "bg-[#EEF2FF] text-[#8B7F6A]",
+    received: "bg-[#EEF2FF] text-[#76705E]",
     partially_paid: "bg-[#FFF4E5] text-[#7A4E1A]",
     paid: "bg-[#EFF7EF] text-[#1D633E]",
     overdue: "bg-[#FCEEEC] text-[#B22B22]",
-    cancelled: "bg-[#F2F2F2] text-[#9A9A9A]",
+    cancelled: "bg-[#F2F2F2] text-[#6E6A63]",
   };
   return (
     <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 ${map[s] || map.draft}`}>
@@ -737,7 +737,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
             <Plus size={14} /> {open ? "Cancel" : "Record payment"}
           </button>
           {!canBill && (
-            <span className="text-xs text-[#9A9A9A] ml-2">Only finance roles can record payments.</span>
+            <span className="text-xs text-[#6E6A63] ml-2">Only finance roles can record payments.</span>
           )}
         </div>
       )}
@@ -770,7 +770,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
               <option value="">Paid from…</option>
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </SearchSelect>
-            <select className="input-flat" value={f.payment_method}
+            <select aria-label="Payment method" className="input-flat" value={f.payment_method}
               onChange={(e) => {
                 const method = e.target.value;
                 const compatible = compatibleAccount(bankAccounts, method);
@@ -796,7 +796,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
                         : f.bill_ids.filter((x) => x !== b.id) });
                     }} />
                   <span className="font-mono text-xs">{b.bill_number}</span>
-                  <span className="text-[#9A9A9A]">·</span>
+                  <span className="text-[#6E6A63]">·</span>
                   <span>{formatDate(b.bill_date)}</span>
                   <span className="ml-auto font-mono">{INR_D(b.outstanding || b.total)}</span>
                 </label>
@@ -836,7 +836,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
           </thead>
           <tbody>
             {(v.payments || []).length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-[#9A9A9A]">No payments recorded.</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-[#6E6A63]">No payments recorded.</td></tr>
             )}
             {(v.payments || []).map((p) => (
               <tr key={p.id} className="border-b border-[#F0F0F0]" data-testid={`payment-row-${p.id}`}>
@@ -847,7 +847,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
                 <Td className="text-xs font-mono">
                   {(p.bill_ids || []).length ? p.bill_ids.length + " bill(s)" : "on-account"}
                 </Td>
-                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[#9A9A9A]">Reversed</span> : <div className="flex flex-wrap gap-1">
+                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[#6E6A63]">Reversed</span> : <div className="flex flex-wrap gap-1">
                   {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => { setEditing(p); setEditForm({ reference: p.reference || "", notes: p.notes || "" }); }}><PencilSimple size={12} /> Edit</button>}
                   {canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDelete(p)}><ArrowCounterClockwise size={12} /> Reverse</button>}
                 </div>}</Td>
@@ -866,12 +866,12 @@ function ProjectsTasks({ v }) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card title={`Projects (${(v.projects || []).length})`}>
         <div className="space-y-2">
-          {(v.projects || []).length === 0 && <div className="text-sm text-[#9A9A9A]">No projects linked yet.</div>}
+          {(v.projects || []).length === 0 && <div className="text-sm text-[#6E6A63]">No projects linked yet.</div>}
           {(v.projects || []).map((p) => (
-            <Link key={p.id} to={`/projects/${p.id}`} className="flex justify-between items-center border-b border-[#F0F0F0] pb-2 hover:text-[#8B7F6A]">
+            <Link key={p.id} to={`/projects/${p.id}`} className="flex justify-between items-center border-b border-[#F0F0F0] pb-2 hover:text-[#76705E]">
               <div>
                 <div className="text-sm font-semibold">{p.name}</div>
-                <div className="text-xs text-[#9A9A9A]">{p.client_name || "—"}</div>
+                <div className="text-xs text-[#6E6A63]">{p.client_name || "—"}</div>
               </div>
               <span className="text-[10px] font-mono uppercase text-[#5C5C5C]">{p.stage}</span>
             </Link>
@@ -880,12 +880,12 @@ function ProjectsTasks({ v }) {
       </Card>
       <Card title={`Assigned tasks (${(v.tasks || []).length})`}>
         <div className="space-y-2">
-          {(v.tasks || []).length === 0 && <div className="text-sm text-[#9A9A9A]">No tasks assigned.</div>}
+          {(v.tasks || []).length === 0 && <div className="text-sm text-[#6E6A63]">No tasks assigned.</div>}
           {(v.tasks || []).slice(0, 20).map((t) => (
-            <Link key={t.id} to={`/tasks/${t.id}`} className="flex items-start justify-between gap-3 border-b border-[#F0F0F0] pb-2 hover:text-[#8B7F6A]">
+            <Link key={t.id} to={`/tasks/${t.id}`} className="flex items-start justify-between gap-3 border-b border-[#F0F0F0] pb-2 hover:text-[#76705E]">
               <div className="min-w-0">
                 <div className="text-sm font-semibold truncate">{t.title}</div>
-                <div className="text-xs text-[#9A9A9A]">
+                <div className="text-xs text-[#6E6A63]">
                   {t.category || "—"} · due {formatDate(t.due_date)}
                 </div>
               </div>
@@ -920,7 +920,7 @@ function Documents({ v, canEdit, onAdd, onEdit, onDelete, busy }) {
             value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} />
           <input className="input-flat md:col-span-2" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.csv,.txt"
             onChange={(e) => setF({ ...f, file: e.target.files?.[0] || null })} />
-          <select className="input-flat" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
+          <select aria-label="Document type" className="input-flat" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
             {["gst_certificate", "pan", "agreement", "insurance", "cheque_leaf", "other"].map((k) => (
               <option key={k} value={k}>{k.replace("_", " ")}</option>
             ))}
@@ -932,18 +932,18 @@ function Documents({ v, canEdit, onAdd, onEdit, onDelete, busy }) {
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {(v.documents || []).length === 0 && (
-          <div className="text-sm text-[#9A9A9A] col-span-2">No documents on file.</div>
+          <div className="text-sm text-[#6E6A63] col-span-2">No documents on file.</div>
         )}
         {(v.documents || []).map((d) => (
           <div key={d.id} className="border border-[#E5E5E5] p-4 flex items-start gap-3">
-            <FileText size={22} className="text-[#8B7F6A]" />
+            <FileText size={22} className="text-[#76705E]" />
             <div className="flex-1 min-w-0">
               {safeFileUrl(d.url) ? (
-                <a href={safeFileUrl(d.url)} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[#8B7F6A] break-all">
+                <a href={safeFileUrl(d.url)} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[#76705E] break-all">
                   {d.label}
                 </a>
               ) : <span className="font-semibold text-sm">{d.label}</span>}
-              <div className="text-xs text-[#9A9A9A] font-mono">
+              <div className="text-xs text-[#6E6A63] font-mono">
                 {d.kind?.replace("_", " ")} {d.expires_on ? `· expires ${d.expires_on}` : ""}
               </div>
             </div>
@@ -1045,7 +1045,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
 
           <div className={f.applicable ? "" : "opacity-50 pointer-events-none"}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <select data-testid="cm-type" className="input-flat" value={t}
+              <select aria-label="Commission type" data-testid="cm-type" className="input-flat" value={t}
                 onChange={(e) => setF({ ...f, type: e.target.value })}>
                 <option value="percentage">Percentage of purchase</option>
                 <option value="fixed">Fixed amount per bill</option>
@@ -1267,7 +1267,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
               <option value="">Deposited to…</option>
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </SearchSelect>
-            <select className="input-flat" value={f.payment_method}
+            <select aria-label="Payment method" className="input-flat" value={f.payment_method}
               onChange={(e) => {
                 const method = e.target.value;
                 const compatible = compatibleAccount(bankAccounts, method);
@@ -1294,7 +1294,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                         : f.commission_ids.filter((x) => x !== r.id) });
                     }} />
                   <span className="font-mono text-xs">{r.bill_number}</span>
-                  <span className="text-[#9A9A9A]">·</span>
+                  <span className="text-[#6E6A63]">·</span>
                   <span>{formatDate(r.bill_date)}</span>
                   <span className="ml-auto font-mono">{INR_D(r.amount - (r.received_amount || 0))} due</span>
                 </label>
@@ -1318,14 +1318,14 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
           </thead>
           <tbody>
             {(ledger.entries || []).length === 0 && (
-              <tr><td colSpan={8} className="p-8 text-center text-[#9A9A9A]">
+              <tr><td colSpan={8} className="p-8 text-center text-[#6E6A63]">
                 No commissions yet. Post a bill and it'll auto-compute.
               </td></tr>
             )}
             {(ledger.entries || []).map((r) => (
               <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`cm-row-${r.id}`}>
                 <Td className="font-mono text-xs">{formatDate(r.due_date || r.bill_date)}</Td>
-                <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected commission"}</div><div className="text-[10px] text-[#9A9A9A]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
+                <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected commission"}</div><div className="text-[10px] text-[#6E6A63]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
                 <Td className="text-right font-mono">{INR_D(r.purchase_amount)}</Td>
                 <Td>
                   <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[#F2F2F2]">
@@ -1335,7 +1335,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                 <Td className="text-right font-mono">{INR_D(r.amount)}</Td>
                 <Td className="text-right font-mono text-[#1D633E]">{INR_D(r.received_amount || 0)}</Td>
                 <Td><CommissionStatus s={r.status} /></Td>
-                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <div className="flex gap-1">{canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => openPlan(r)}><PencilSimple size={12} /> Edit</button>}{canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button>}</div> : r.bill_id ? <span className="text-[10px] text-[#9A9A9A]">Correct from bill</span> : "—"}</Td>
+                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <div className="flex gap-1">{canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => openPlan(r)}><PencilSimple size={12} /> Edit</button>}{canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button>}</div> : r.bill_id ? <span className="text-[10px] text-[#6E6A63]">Correct from bill</span> : "—"}</Td>
               </tr>
             ))}
           </tbody>
@@ -1346,7 +1346,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
         <div className="border border-[#E5E5E5]" data-testid="commission-receipts">
           <div className="overline px-3 pt-3">RECEIPT HISTORY</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
+            <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
               <tr>
                 <Th>Date</Th><Th>Method / reference</Th>
                 <Th className="text-right">Received</Th><Th className="text-right">Unallocated</Th><Th>Actions</Th>
@@ -1399,10 +1399,10 @@ const COMMISSION_STATUS_LABELS = {
 
 function CommissionStatus({ s }) {
   const map = {
-    pending:   "bg-[#EEF2FF] text-[#8B7F6A]",
+    pending:   "bg-[#EEF2FF] text-[#76705E]",
     invoiced:  "bg-[#FFF4E5] text-[#7A4E1A]",
     received:  "bg-[#EFF7EF] text-[#1D633E]",
-    cancelled: "bg-[#F2F2F2] text-[#9A9A9A]",
+    cancelled: "bg-[#F2F2F2] text-[#6E6A63]",
   };
   return (
     <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 ${map[s] || map.pending}`}
@@ -1426,8 +1426,8 @@ function Field({ icon, label, value, mono }) {
     <div className="flex items-start gap-2 py-1 border-b last:border-b-0 border-[#F5F5F5]">
       <div className="text-[#5C5C5C] mt-0.5">{icon}</div>
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-[#9A9A9A]">{label}</div>
-        <div className={`text-sm ${mono ? "font-mono" : ""} ${!value ? "text-[#9A9A9A]" : ""}`}>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63]">{label}</div>
+        <div className={`text-sm ${mono ? "font-mono" : ""} ${!value ? "text-[#6E6A63]" : ""}`}>
           {value || "—"}
         </div>
       </div>

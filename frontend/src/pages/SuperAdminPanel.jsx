@@ -142,7 +142,7 @@ export default function SuperAdminPanel() {
           <div className="space-y-2">
             {analytics.leaderboard.map((row, i) => (
               <div key={row.org_id} className="flex items-center gap-3 p-2 border border-[#F0F0F0] hover:bg-[#FAFAFA]">
-                <div className="font-mono text-xs w-8 text-[#9A9A9A]">#{i + 1}</div>
+                <div className="font-mono text-xs w-8 text-[#6E6A63]">#{i + 1}</div>
                 <div className="flex-1 font-semibold text-sm">{row.name}</div>
                 <div className="font-mono text-sm accent-blue">{fmtMoney(row.revenue)}</div>
               </div>
@@ -267,23 +267,23 @@ export default function SuperAdminPanel() {
                 </Td>
                 <Td>
                   <div className="text-sm truncate max-w-[160px]">{o.owner || "—"}</div>
-                  {o.owner_email && <div className="text-[10px] text-[#9A9A9A] truncate max-w-[160px]">{o.owner_email}</div>}
+                  {o.owner_email && <div className="text-[10px] text-[#6E6A63] truncate max-w-[160px]">{o.owner_email}</div>}
                 </Td>
                 <Td>
                   {(() => {
-                    const tone = { consultancy: "bg-[#F5F4F0] text-[#8B7F6A]",
+                    const tone = { consultancy: "bg-[#F5F4F0] text-[#76705E]",
                                    turnkey: "bg-[#FFF4E5] text-[#7A4E1A]",
                                    hybrid: "bg-[#EFF7EF] text-[#1D633E]" }[o.business_mode || "hybrid"];
                     return <span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${tone}`}>{o.business_mode || "hybrid"}</span>;
                   })()}
                 </Td>
                 <Td>
-                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#8B7F6A]">{o.plan || "starter"}</span>
+                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">{o.plan || "starter"}</span>
                 </Td>
                 <Td className="font-mono text-xs tabular-nums">
                   {o.billing?.amount_charged != null ? fmtMoney(o.billing.amount_charged) : "—"}
                   {o.billing?.maintenance_charge != null && (
-                    <div className="text-[10px] text-[#9A9A9A]">+{fmtMoney(o.billing.maintenance_charge)} AMC</div>
+                    <div className="text-[10px] text-[#6E6A63]">+{fmtMoney(o.billing.maintenance_charge)} AMC</div>
                   )}
                 </Td>
                 <Td className="font-mono text-xs">{o.billing?.renewal_date ? formatDate(o.billing.renewal_date) : "—"}</Td>
@@ -376,14 +376,14 @@ function ReassignModal({ user, orgs, onClose, onDone }) {
       <div className="space-y-3">
         <label className="block">
           <div className="text-xs text-[#5C5C5C] mb-1">Target workspace</div>
-          <select className="input-flat w-full" value={orgId} onChange={(e) => setOrgId(e.target.value)}
+          <select aria-label="Organisation" className="input-flat w-full" value={orgId} onChange={(e) => setOrgId(e.target.value)}
                   data-testid="reassign-org-select">
             {orgs.map((o) => <option key={o.org_id} value={o.org_id}>{o.name}</option>)}
           </select>
         </label>
         <label className="block">
           <div className="text-xs text-[#5C5C5C] mb-1">Role in workspace</div>
-          <select className="input-flat w-full" value={role} onChange={(e) => setRole(e.target.value)}
+          <select aria-label="Role" className="input-flat w-full" value={role} onChange={(e) => setRole(e.target.value)}
                   data-testid="reassign-role-select">
             {["Employee","Designer","ProjectManager","Accountant","HR","Director","Admin"].map((r) => (
               <option key={r} value={r}>{r}</option>
@@ -414,7 +414,7 @@ function KPI({ icon: Icon, label, value, total, display, tone, testid }) {
       <div className="font-display font-bold tracking-tighter text-3xl tabular-nums">
         {display ?? value}
         {typeof total === "number" && (
-          <span className="text-sm text-[#9A9A9A] font-normal ml-1">/{total}</span>
+          <span className="text-sm text-[#6E6A63] font-normal ml-1">/{total}</span>
         )}
       </div>
     </div>
@@ -442,7 +442,7 @@ function CreateOrgModal({ onClose, onCreated }) {
   return (
     <Modal onClose={onClose} title="Create Workspace" eyebrow="NEW TENANT">
       <form onSubmit={submit} className="space-y-4" data-testid="create-org-form">
-        <div className="overline text-[#8B7F6A]">01 · BUSINESS MODE</div>
+        <div className="overline text-[#76705E]">01 · BUSINESS MODE</div>
         <div className="grid grid-cols-3 gap-3">
           {[
             {k:"consultancy", t:"Consultancy", d:"Design-only studio. CRM, projects, quotations, HR, accounting — without procurement."},
@@ -459,13 +459,13 @@ function CreateOrgModal({ onClose, onCreated }) {
           ))}
         </div>
 
-        <div className="overline text-[#8B7F6A]">02 · WORKSPACE</div>
+        <div className="overline text-[#76705E]">02 · WORKSPACE</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input required data-testid="co-name" className="input-flat" placeholder="Company / Studio name *"
                  value={f.name} onChange={(e) => setF({...f, name: e.target.value})} />
           <input className="input-flat" placeholder="Industry"
                  value={f.industry} onChange={(e) => setF({...f, industry: e.target.value})} />
-          <select className="input-flat" value={f.plan}
+          <select aria-label="Plan" className="input-flat" value={f.plan}
                   onChange={(e) => setF({...f, plan: e.target.value})}>
             <option value="starter">Starter</option>
             <option value="pro">Pro</option>
@@ -474,7 +474,7 @@ function CreateOrgModal({ onClose, onCreated }) {
           <input className="input-flat" placeholder="GSTIN (optional)"
                  value={f.gstin} onChange={(e) => setF({...f, gstin: e.target.value})} />
         </div>
-        <div className="overline text-[#8B7F6A]">03 · FIRST ADMIN</div>
+        <div className="overline text-[#76705E]">03 · FIRST ADMIN</div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input required data-testid="co-admin-name" className="input-flat" placeholder="Admin name *"
                  value={f.admin_name} onChange={(e) => setF({...f, admin_name: e.target.value})} />
@@ -538,7 +538,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
       <form onSubmit={submit} className="space-y-3" data-testid="edit-org-form">
         <label className="block">
           <div className="text-xs text-[#5C5C5C] mb-1">Business mode</div>
-          <select className="input-flat w-full" value={f.business_mode}
+          <select aria-label="Business mode" className="input-flat w-full" value={f.business_mode}
                   onChange={(e) => setF({...f, business_mode: e.target.value})}
                   data-testid="edit-mode">
             <option value="consultancy">Consultancy</option>
@@ -564,7 +564,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
                  value={f.gstin} onChange={(e) => setF({...f, gstin: e.target.value})} />
           <input className="input-flat" placeholder="PAN"
                  value={f.pan} onChange={(e) => setF({...f, pan: e.target.value})} />
-          <select className="input-flat" value={f.plan}
+          <select aria-label="Plan" className="input-flat" value={f.plan}
                   onChange={(e) => setF({...f, plan: e.target.value})}>
             <option value="starter">Starter</option>
             <option value="pro">Pro</option>
@@ -584,7 +584,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
             </label>
             <label className="block">
               <span className="text-[11px] text-[#5C5C5C] mb-1 block">Billing cycle</span>
-              <select className="input-flat w-full" value={billing.billing_cycle}
+              <select aria-label="Billing cycle" className="input-flat w-full" value={billing.billing_cycle}
                       onChange={(e) => setB("billing_cycle", e.target.value)} data-testid="billing-cycle">
                 <option value="monthly">Monthly</option>
                 <option value="quarterly">Quarterly</option>
@@ -698,7 +698,7 @@ function OrgAdminsModal({ org, onClose }) {
             <tr key={u.user_id} className="border-b border-[#F0F0F0]">
               <Td className="font-semibold text-sm">{u.name}</Td>
               <Td className="font-mono text-xs">{u.email}</Td>
-              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#8B7F6A]">{u.role}</span></Td>
+              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">{u.role}</span></Td>
               <Td className="text-right">
                 <button onClick={() => setResetting(u.user_id)} className="btn-ghost text-xs">
                   <Key size={11} /> Reset password
@@ -824,7 +824,7 @@ function OrgHealthModal({ org, onClose, onSaved }) {
 
   const CountCell = ({ label, value }) => (
     <div className="border border-[#F0F0F0] p-2">
-      <div className="text-[10px] font-mono uppercase text-[#9A9A9A]">{label}</div>
+      <div className="text-[10px] font-mono uppercase text-[#6E6A63]">{label}</div>
       <div className="font-mono text-sm tabular-nums">{value ?? "—"}</div>
     </div>
   );
@@ -853,12 +853,12 @@ function OrgHealthModal({ org, onClose, onSaved }) {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="border border-[#E5E5E5] p-3">
-                <div className="text-[10px] font-mono uppercase text-[#9A9A9A]">USERS</div>
-                <div className="font-mono text-lg">{health.usage.users.used}<span className="text-xs text-[#9A9A9A]"> / {health.usage.users.limit ?? "∞"}</span></div>
+                <div className="text-[10px] font-mono uppercase text-[#6E6A63]">USERS</div>
+                <div className="font-mono text-lg">{health.usage.users.used}<span className="text-xs text-[#6E6A63]"> / {health.usage.users.limit ?? "∞"}</span></div>
               </div>
               <div className="border border-[#E5E5E5] p-3">
-                <div className="text-[10px] font-mono uppercase text-[#9A9A9A]">PROJECTS</div>
-                <div className="font-mono text-lg">{health.usage.projects.used}<span className="text-xs text-[#9A9A9A]"> / {health.usage.projects.limit ?? "∞"}</span></div>
+                <div className="text-[10px] font-mono uppercase text-[#6E6A63]">PROJECTS</div>
+                <div className="font-mono text-lg">{health.usage.projects.used}<span className="text-xs text-[#6E6A63]"> / {health.usage.projects.limit ?? "∞"}</span></div>
               </div>
             </div>
             <div>
@@ -877,8 +877,8 @@ function OrgHealthModal({ org, onClose, onSaved }) {
               <div className="overline mb-3">PLAN &amp; LIMITS</div>
               <div className="grid grid-cols-3 gap-3">
                 <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[#9A9A9A]">Plan</span>
-                  <select value={limits.plan} onChange={(e) => setLimits({ ...limits, plan: e.target.value })}
+                  <span className="font-mono uppercase text-[#6E6A63]">Plan</span>
+                  <select aria-label="Plan" value={limits.plan} onChange={(e) => setLimits({ ...limits, plan: e.target.value })}
                           className="input w-full" data-testid="limits-plan">
                     <option value="starter">starter</option>
                     <option value="pro">pro</option>
@@ -886,13 +886,13 @@ function OrgHealthModal({ org, onClose, onSaved }) {
                   </select>
                 </label>
                 <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[#9A9A9A]">Max users</span>
+                  <span className="font-mono uppercase text-[#6E6A63]">Max users</span>
                   <input type="number" min="1" value={limits.max_users}
                          onChange={(e) => setLimits({ ...limits, max_users: e.target.value })}
                          className="input w-full" data-testid="limits-max-users" />
                 </label>
                 <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[#9A9A9A]">Max projects</span>
+                  <span className="font-mono uppercase text-[#6E6A63]">Max projects</span>
                   <input type="number" min="1" value={limits.max_projects}
                          onChange={(e) => setLimits({ ...limits, max_projects: e.target.value })}
                          className="input w-full" data-testid="limits-max-projects" />

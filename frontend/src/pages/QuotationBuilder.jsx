@@ -167,7 +167,7 @@ export default function QuotationBuilder() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
-              activeTab === t ? "border-[#8B7F6A] text-[#8B7F6A]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              activeTab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
             }`}
             data-testid={`tab-${t.replace(/\s/g, "-")}`}
           >
@@ -262,7 +262,7 @@ function Overview({ q, update, tpl, isConsult }) {
               <input className="input-flat" value={q.highlights?.timeline || ""} onChange={(e) => setHL("timeline", e.target.value)} />
             </Field>
             <Field label="Quality level">
-              <select className="input-flat" value={q.highlights?.quality_level || "Premium"} onChange={(e) => setHL("quality_level", e.target.value)}>
+              <select aria-label="Quality level" className="input-flat" value={q.highlights?.quality_level || "Premium"} onChange={(e) => setHL("quality_level", e.target.value)}>
                 <option>Premium</option><option>Mid</option><option>Budget</option>
               </select>
             </Field>
@@ -446,14 +446,14 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
                       <td className="font-mono text-right">{fmt(amt)}</td>
                       {!isConsult && (
                       <td>
-                        <select className="input-flat" style={{ padding: "6px 8px" }} value={it.room || ""} onChange={(e) => updateItem(ci, ii, "room", e.target.value)}>
+                        <select aria-label="Room" className="input-flat" style={{ padding: "6px 8px" }} value={it.room || ""} onChange={(e) => updateItem(ci, ii, "room", e.target.value)}>
                           {tpl.rooms.map((r) => <option key={r}>{r}</option>)}
                         </select>
                       </td>
                       )}
                       {!isConsult && (
                       <td>
-                        <select className="input-flat" style={{ padding: "6px 8px" }} value={it.brand_tier || "Standard"} onChange={(e) => updateItem(ci, ii, "brand_tier", e.target.value)}>
+                        <select aria-label="Brand tier" className="input-flat" style={{ padding: "6px 8px" }} value={it.brand_tier || "Standard"} onChange={(e) => updateItem(ci, ii, "brand_tier", e.target.value)}>
                           {tpl.brand_tiers.map((b) => <option key={b}>{b}</option>)}
                         </select>
                       </td>
@@ -573,7 +573,7 @@ function Materials({ q, update, tpl }) {
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={m.brand_standard || ""} onChange={(e) => setRow(i, "brand_standard", e.target.value)} /></td>
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={m.brand_budget || ""} onChange={(e) => setRow(i, "brand_budget", e.target.value)} /></td>
                 <td>
-                  <select className="input-flat" style={{ padding: "6px 8px" }} value={m.selected_tier || "Standard"} onChange={(e) => setRow(i, "selected_tier", e.target.value)}>
+                  <select aria-label="Selected tier" className="input-flat" style={{ padding: "6px 8px" }} value={m.selected_tier || "Standard"} onChange={(e) => setRow(i, "selected_tier", e.target.value)}>
                     {tpl.brand_tiers.map((b) => <option key={b}>{b}</option>)}
                   </select>
                 </td>
@@ -670,7 +670,7 @@ function PaymentPlan({ q, update, tpl }) {
               <tr key={i} className="border-b border-[#F0F0F0]">
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={p.label || ""} onChange={(e) => setRow(i, "label", e.target.value)} /></td>
                 <td>
-                  <select className="input-flat" style={{ padding: "6px 8px" }} value={p.type || "milestone"} onChange={(e) => setRow(i, "type", e.target.value)}>
+                  <select aria-label="Milestone type" className="input-flat" style={{ padding: "6px 8px" }} value={p.type || "milestone"} onChange={(e) => setRow(i, "type", e.target.value)}>
                     <option value="milestone">milestone</option>
                     <option value="time">time</option>
                     <option value="custom">custom</option>

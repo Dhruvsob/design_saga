@@ -110,12 +110,12 @@ export default function MasterDataManager() {
         {Object.entries(kinds).map(([k, label]) => (
           <button key={k} onClick={() => { setSelected(k); setEditingId(null); }}
             className={`w-full text-left px-3 py-2.5 text-sm border-b border-[#F0F0F0] transition flex items-center justify-between ${
-              selected === k ? "bg-[#F5F4F0] text-[#8B7F6A] font-semibold" : "hover:bg-[#FAFAFA]"
+              selected === k ? "bg-[#F5F4F0] text-[#76705E] font-semibold" : "hover:bg-[#FAFAFA]"
             }`}
             data-testid={`md-kind-${k}`}
           >
             <span>{label}</span>
-            <span className="font-mono text-[10px] text-[#9A9A9A]">{(data[k] || []).length}</span>
+            <span className="font-mono text-[10px] text-[#6E6A63]">{(data[k] || []).length}</span>
           </button>
         ))}
       </div>
@@ -160,7 +160,7 @@ export default function MasterDataManager() {
               {rows.map((item, i) => (
                 <tr key={item.id} className={`border-b border-[#F0F0F0] ${!item.is_active ? "opacity-50" : ""}`}
                     data-testid={`md-row-${item.id}`}>
-                  <td className="px-4 py-2 font-mono text-[10px] text-[#9A9A9A]">{String(i + 1).padStart(2, "0")}</td>
+                  <td className="px-4 py-2 font-mono text-[10px] text-[#6E6A63]">{String(i + 1).padStart(2, "0")}</td>
                   <td className="px-4 py-2 text-sm">
                     {editingId === item.id ? (
                       <div className="flex items-center gap-2">
@@ -177,7 +177,7 @@ export default function MasterDataManager() {
                   </td>
                   <td className="px-4 py-2">
                     <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                      item.is_active ? "bg-[#EFF7EF] text-[#1D633E]" : "bg-[#F5F5F5] text-[#9A9A9A]"
+                      item.is_active ? "bg-[#EFF7EF] text-[#1D633E]" : "bg-[#F5F5F5] text-[#6E6A63]"
                     }`}>{item.is_active ? "Active" : "Inactive"}</span>
                   </td>
                   <td className="px-4 py-2">

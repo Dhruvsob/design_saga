@@ -54,13 +54,13 @@ export default function CommentsPanel({ entityType, entityId }) {
       <div className="p-4 border-b border-[#E5E5E5] bg-[#FAFAFA] flex items-center gap-2">
         <ChatCircleText size={14} />
         <span className="overline">NOTES &amp; COMMENTS</span>
-        <span className="font-mono text-xs text-[#9A9A9A] ml-auto">{comments.length}</span>
+        <span className="font-mono text-xs text-[#6E6A63] ml-auto">{comments.length}</span>
       </div>
 
       <div className="max-h-96 overflow-y-auto divide-y divide-[#F0F0F0]">
-        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[#9A9A9A]">Loading…</div>}
+        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[#6E6A63]">Loading…</div>}
         {!loading && comments.length === 0 && (
-          <div className="p-6 text-center text-sm text-[#9A9A9A]">No comments yet. Start the discussion.</div>
+          <div className="p-6 text-center text-sm text-[#6E6A63]">No comments yet. Start the discussion.</div>
         )}
         {comments.map((c) => (
           <div key={c.id} className="p-4 group" data-testid={`comment-${c.id}`}>
@@ -69,7 +69,7 @@ export default function CommentsPanel({ entityType, entityId }) {
                 {(c.author_name || "?").slice(0, 1).toUpperCase()}
               </div>
               <span className="text-sm font-semibold">{c.author_name}</span>
-              <span className="text-[10px] font-mono uppercase tracking-wider text-[#9A9A9A]">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63]">
                 {c.author_role} · {relativeTime(c.created_at)}
               </span>
               {(c.author_id === user?.user_id || user?.role === "Admin") && (

@@ -128,7 +128,7 @@ export default function Vendors() {
             onKeyDown={(e) => e.key === "Enter" && load()}
           />
         </div>
-        <select
+        <select aria-label="Vendor type"
           data-testid="vendor-filter-type"
           className="input-flat max-w-[220px]"
           value={filterType}
@@ -150,7 +150,7 @@ export default function Vendors() {
               value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input className="input-flat" placeholder="Legal / company name"
               value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
-            <select data-testid="vf-agency-type" className="input-flat" value={form.agency_type}
+            <select aria-label="Agency type" data-testid="vf-agency-type" className="input-flat" value={form.agency_type}
               onChange={(e) => setForm({ ...form, agency_type: e.target.value })}>
               {(meta.agency_types || []).map((t) => (
                 <option key={t} value={t}>{AGENCY_LABELS[t] || t}</option>
@@ -229,7 +229,7 @@ export default function Vendors() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-12 text-center text-[#5C5C5C]">
-                  <HardHat size={26} className="mx-auto text-[#9A9A9A] mb-3" />
+                  <HardHat size={26} className="mx-auto text-[#6E6A63] mb-3" />
                   <div className="overline mb-1">EMPTY</div>
                   No vendors yet. Add your first one.
                 </td>
@@ -243,13 +243,13 @@ export default function Vendors() {
                 data-testid={`vendor-row-${v.id}`}
               >
                 <Td>
-                  <div className="font-semibold group-hover:text-[#8B7F6A]">
+                  <div className="font-semibold group-hover:text-[#76705E]">
                     <div className="flex items-center gap-2">
                       <Buildings size={14} className="text-[#5C5C5C]" />
                       {v.name}
                     </div>
                   </div>
-                  {v.company && <div className="text-xs text-[#9A9A9A]">{v.company}</div>}
+                  {v.company && <div className="text-xs text-[#6E6A63]">{v.company}</div>}
                 </Td>
                 <Td><TypePill type={v.agency_type} /></Td>
                 <Td>
@@ -283,7 +283,7 @@ export default function Vendors() {
                         <Archive size={12} /> Archive
                       </button>
                     )}
-                    <Link to={`/vendors/${v.id}`} className="btn-ghost text-xs text-[#8B7F6A] font-semibold">
+                    <Link to={`/vendors/${v.id}`} className="btn-ghost text-xs text-[#76705E] font-semibold">
                       Open <CaretRight size={11} weight="bold" />
                     </Link>
                   </div>
@@ -301,7 +301,7 @@ function Kpi({ label, value, accent, testid }) {
   return (
     <div className={`card-flat ${accent ? "ring-1 ring-[#8B7F6A]/20" : ""}`} data-testid={testid}>
       <div className="overline">{label}</div>
-      <div className={`font-display font-bold text-2xl mt-1 ${accent ? "text-[#8B7F6A]" : ""}`}>{value}</div>
+      <div className={`font-display font-bold text-2xl mt-1 ${accent ? "text-[#76705E]" : ""}`}>{value}</div>
     </div>
   );
 }
@@ -310,7 +310,7 @@ function TypePill({ type }) {
   const map = {
     contractor: "bg-[#F5F1EB] text-[#7A4E1A]",
     sub_contractor: "bg-[#F5F1EB] text-[#7A4E1A]",
-    supplier: "bg-[#EEF2FF] text-[#8B7F6A]",
+    supplier: "bg-[#EEF2FF] text-[#76705E]",
     agency: "bg-[#EFF7EF] text-[#1D633E]",
     consultant: "bg-[#F5EEF7] text-[#5B2A83]",
     freelancer: "bg-[#F5EEF7] text-[#5B2A83]",

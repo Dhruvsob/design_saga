@@ -268,7 +268,7 @@ export default function Invoices({ docType = "invoice" }) {
                 <Td className="font-mono text-xs">{formatDate(r.due_date)}</Td>
                 <Td className="font-mono font-semibold">₹{(r.total || 0).toLocaleString("en-IN")}</Td>
                 <Td>
-                  {canUpdate && !["paid", "partially_paid"].includes(r.status) ? <select className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
+                  {canUpdate && !["paid", "partially_paid"].includes(r.status) ? <select aria-label="Status" className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
                     <option value="draft">draft</option>
                     <option value="sent">sent</option>
                     <option value="overdue">overdue</option>
@@ -277,8 +277,8 @@ export default function Invoices({ docType = "invoice" }) {
                 </Td>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setPreview(r)} className="text-[#8B7F6A]" title="Preview"><Eye size={16} /></button>
-                    <button onClick={() => download(r.id)} className="text-[#8B7F6A]" title="PDF"><FilePdf size={16} /></button>
+                    <button onClick={() => setPreview(r)} className="text-[#76705E]" title="Preview"><Eye size={16} /></button>
+                    <button onClick={() => download(r.id)} className="text-[#76705E]" title="PDF"><FilePdf size={16} /></button>
                     {canUpdate && (docType === "quotation" ? r.status !== "paid" : r.status === "draft") && (
                       <button onClick={() => startEdit(r)} className="text-[#5C5C5C] hover:text-[#0A0A0A]" title="Edit" data-testid={`${docType}-edit-${r.id}`}><PencilSimple size={16} /></button>
                     )}

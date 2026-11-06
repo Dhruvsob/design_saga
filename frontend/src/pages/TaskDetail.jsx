@@ -59,7 +59,7 @@ export default function TaskDetail() {
 
   return (
     <div className="space-y-6" data-testid="task-detail-page">
-      <button onClick={() => navigate("/tasks")} className="text-xs font-mono text-[#5C5C5C] flex items-center gap-1 hover:text-[#8B7F6A]" data-testid="task-detail-back">
+      <button onClick={() => navigate("/tasks")} className="text-xs font-mono text-[#5C5C5C] flex items-center gap-1 hover:text-[#76705E]" data-testid="task-detail-back">
         <ArrowLeft size={12} /> BACK TO TASKS
       </button>
 
@@ -93,12 +93,12 @@ export default function TaskDetail() {
             key={tid} onClick={() => setTab(tid)}
             data-testid={testid}
             className={`px-4 py-2.5 text-sm border-b-2 -mb-px flex items-center gap-2 transition ${tab === tid
-              ? "border-[#8B7F6A] text-[#8B7F6A] font-semibold"
+              ? "border-[#8B7F6A] text-[#76705E] font-semibold"
               : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
           >
             <Icon size={14} /> {label}
             {tid === "followups" && task.follow_ups?.length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 bg-[#F5F4F0] text-[#8B7F6A]">{task.follow_ups.length}</span>
+              <span className="text-[10px] font-mono px-1.5 bg-[#F5F4F0] text-[#76705E]">{task.follow_ups.length}</span>
             )}
             {tid === "timeline" && task.timeline?.length > 0 && (
               <span className="text-[10px] font-mono px-1.5 bg-[#FAFAFA]">{task.timeline.length}</span>
@@ -181,14 +181,14 @@ function Overview({ task, meta, onSave }) {
         <div className="card-flat space-y-3">
           <div className="overline">Status & Priority</div>
           <div className="space-y-2">
-            <select value={t.status_detail || ""} className="input-flat w-full"
+            <select aria-label="Status" value={t.status_detail || ""} className="input-flat w-full"
               onChange={(e) => { set("status_detail", e.target.value); onSave({ status_detail: e.target.value }); }}
               data-testid="status-select"
               style={{ color: STATUS_COLORS[t.status_detail] || "#000", fontWeight: 600 }}>
               <option value="">—</option>
               {(meta?.status_detail || []).map((s) => <option key={s}>{s}</option>)}
             </select>
-            <select value={t.priority || "medium"} className="input-flat w-full"
+            <select aria-label="Priority" value={t.priority || "medium"} className="input-flat w-full"
               onChange={(e) => { set("priority", e.target.value); onSave({ priority: e.target.value }); }}
               data-testid="priority-select">
               {(meta?.priorities || []).map((p) => <option key={p}>{p}</option>)}
@@ -198,12 +198,12 @@ function Overview({ task, meta, onSave }) {
 
         <div className="card-flat space-y-3">
           <div className="overline">Classification</div>
-          <select value={t.area || ""} className="input-flat w-full"
+          <select aria-label="Area" value={t.area || ""} className="input-flat w-full"
             onChange={(e) => { set("area", e.target.value); onSave({ area: e.target.value }); }}>
             <option value="">Area…</option>
             {(meta?.areas || []).map((a) => <option key={a}>{a}</option>)}
           </select>
-          <select value={t.category || ""} className="input-flat w-full"
+          <select aria-label="Category" value={t.category || ""} className="input-flat w-full"
             onChange={(e) => { set("category", e.target.value); onSave({ category: e.target.value }); }}>
             <option value="">Category…</option>
             {(meta?.categories || []).map((c) => <option key={c}>{c}</option>)}
@@ -308,7 +308,7 @@ function FollowUps({ task, reload }) {
 
       <div className="space-y-3">
         {(task.follow_ups || []).length === 0 && (
-          <div className="text-center py-12 text-sm text-[#9A9A9A]">No follow-ups yet.</div>
+          <div className="text-center py-12 text-sm text-[#6E6A63]">No follow-ups yet.</div>
         )}
         {(task.follow_ups || []).slice().reverse().map((fu) => (
           <div key={fu.id} className={`card-flat ${fu.status === "done" ? "opacity-60" : ""}`}
@@ -352,7 +352,7 @@ function Timeline({ task }) {
   const items = (task.timeline || []).slice().reverse();
   return (
     <div className="space-y-3" data-testid="tab-timeline">
-      {items.length === 0 && <div className="text-center py-12 text-sm text-[#9A9A9A]">No history yet.</div>}
+      {items.length === 0 && <div className="text-center py-12 text-sm text-[#6E6A63]">No history yet.</div>}
       {items.map((ev) => (
         <div key={ev.id} className="flex gap-3 pb-3 border-b border-[#F0F0F0]" data-testid={`tl-${ev.id}`}>
           <div className="w-24 flex-shrink-0 text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
@@ -360,9 +360,9 @@ function Timeline({ task }) {
           </div>
           <div className="w-2 h-2 mt-1.5 rounded-full bg-[#8B7F6A] flex-shrink-0" />
           <div className="min-w-0">
-            <div className="text-xs font-mono uppercase tracking-wider text-[#8B7F6A]">{ev.event.replace(/_/g, " ")}</div>
+            <div className="text-xs font-mono uppercase tracking-wider text-[#76705E]">{ev.event.replace(/_/g, " ")}</div>
             <div className="text-sm">{ev.details}</div>
-            {ev.actor_name && <div className="text-[10px] text-[#9A9A9A] mt-0.5">by {ev.actor_name}</div>}
+            {ev.actor_name && <div className="text-[10px] text-[#6E6A63] mt-0.5">by {ev.actor_name}</div>}
           </div>
         </div>
       ))}
@@ -407,11 +407,11 @@ function References({ task, onSave }) {
         </div>
         {(task.reference_links || []).map((l, i) => (
           <div key={i} className="flex items-center justify-between text-xs border border-[#E5E5E5] p-2" data-testid={`ref-${i}`}>
-            {safeExternalUrl(l) ? <a href={safeExternalUrl(l)} target="_blank" rel="noreferrer" className="truncate flex-1 text-[#8B7F6A] hover:underline">{l}</a> : <span className="truncate flex-1 text-[#9A9A9A]">Invalid link</span>}
+            {safeExternalUrl(l) ? <a href={safeExternalUrl(l)} target="_blank" rel="noreferrer" className="truncate flex-1 text-[#76705E] hover:underline">{l}</a> : <span className="truncate flex-1 text-[#6E6A63]">Invalid link</span>}
             <button onClick={() => delLink(i)} className="text-[#FF2A00] ml-2"><Trash size={12} /></button>
           </div>
         ))}
-        {(task.reference_links || []).length === 0 && <div className="text-xs text-[#9A9A9A] text-center py-6">No references yet.</div>}
+        {(task.reference_links || []).length === 0 && <div className="text-xs text-[#6E6A63] text-center py-6">No references yet.</div>}
       </div>
 
       <div className="card-flat space-y-3">
@@ -419,7 +419,7 @@ function References({ task, onSave }) {
         <div className="grid grid-cols-2 gap-2">
           <input className="input-flat" placeholder="Label" value={att.label}
             onChange={(e) => setAtt({ ...att, label: e.target.value })} />
-          <select className="input-flat" value={att.type} onChange={(e) => setAtt({ ...att, type: e.target.value })}>
+          <select aria-label="Attachment type" className="input-flat" value={att.type} onChange={(e) => setAtt({ ...att, type: e.target.value })}>
             <option value="link">Link</option><option value="image">Image</option>
             <option value="pdf">PDF</option><option value="doc">Doc</option>
           </select>
@@ -432,16 +432,16 @@ function References({ task, onSave }) {
             <div className="flex items-center gap-2 truncate flex-1">
               <PaperclipHorizontal size={12} />
               {safeExternalUrl(a.url) ? (
-                <a href={safeExternalUrl(a.url)} target="_blank" rel="noreferrer" className="truncate text-[#8B7F6A] hover:underline">
+                <a href={safeExternalUrl(a.url)} target="_blank" rel="noreferrer" className="truncate text-[#76705E] hover:underline">
                   {a.label || a.url}
                 </a>
-              ) : <span className="truncate text-[#9A9A9A]">{a.label || "Invalid attachment"}</span>}
-              <span className="text-[10px] font-mono text-[#9A9A9A]">{a.type}</span>
+              ) : <span className="truncate text-[#6E6A63]">{a.label || "Invalid attachment"}</span>}
+              <span className="text-[10px] font-mono text-[#6E6A63]">{a.type}</span>
             </div>
             <button onClick={() => delAtt(i)} className="text-[#FF2A00]"><Trash size={12} /></button>
           </div>
         ))}
-        {(task.attachments || []).length === 0 && <div className="text-xs text-[#9A9A9A] text-center py-6">No attachments yet.</div>}
+        {(task.attachments || []).length === 0 && <div className="text-xs text-[#6E6A63] text-center py-6">No attachments yet.</div>}
       </div>
     </div>
   );

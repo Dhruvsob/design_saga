@@ -19,7 +19,7 @@ function fmtErr(d, fb = "Failed") {
 
 const STATUS_TONE = {
   draft: "bg-[#F0F0F0] text-[#5C5C5C]",
-  sent: "bg-[#F5F4F0] text-[#8B7F6A]",
+  sent: "bg-[#F5F4F0] text-[#76705E]",
   partial: "bg-[#FFF4E5] text-[#7A4E1A]",
   received: "bg-[#EFF7EF] text-[#1D633E]",
   closed: "bg-[#EFF7EF] text-[#1D633E]",
@@ -305,7 +305,7 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
             <div key={g.id} className="border border-[#E5E5E5] p-3 flex items-center gap-3 text-sm">
               <div className="font-mono accent-blue font-semibold">{g.grn_number}</div>
               <div className="text-[#5C5C5C]">{formatDate(g.received_date)}</div>
-              {g.status === "reversed" && <span className="text-[10px] font-mono uppercase text-[#9A9A9A]">Reversed</span>}
+              {g.status === "reversed" && <span className="text-[10px] font-mono uppercase text-[#6E6A63]">Reversed</span>}
               <div className="font-mono ml-auto">{fmtMoney(g.total_value)}</div>
               {canReverseGrn && g.status !== "reversed" && <button type="button" className="btn-ghost text-xs text-[#B22B22]" onClick={() => reverseGRN(g)}><ArrowsClockwise size={12}/> Reverse</button>}
             </div>

@@ -177,7 +177,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-[#E5E5E5]">
           <div className="min-w-0">
-            <div className="overline text-[#8B7F6A]">TRANSACTION DETAIL</div>
+            <div className="overline text-[#76705E]">TRANSACTION DETAIL</div>
             <div className="font-display font-bold text-xl truncate" data-testid="txn-detail-narration">
               {entry.narration || "Journal entry"}
             </div>
@@ -190,7 +190,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
               </span>
             )}
             {isReversal && (
-              <span className="inline-block mt-2 text-[10px] font-semibold text-[#8B7F6A] border border-[#8B7F6A] px-2 py-0.5">
+              <span className="inline-block mt-2 text-[10px] font-semibold text-[#76705E] border border-[#8B7F6A] px-2 py-0.5">
                 {entry.undone ? "REVERSAL UNDONE" : "REVERSAL ENTRY"}
               </span>
             )}
@@ -207,35 +207,35 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
         {mode === "edit" ? (
           <div className="p-5 space-y-3" data-testid="txn-edit-form">
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Date</label>
+              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Date</label>
               <input type="date" className="input-flat w-full" value={form.date}
                 disabled={!canCorrect}
                 onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="txn-edit-date" />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Description</label>
+              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Description</label>
               <input className="input-flat w-full" value={form.narration}
                 disabled={sourceMetadataEdit}
                 onChange={(e) => setForm({ ...form, narration: e.target.value })} data-testid="txn-edit-narration" />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Reference</label>
+              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Reference</label>
               <input className="input-flat w-full" value={form.reference}
                 onChange={(e) => setForm({ ...form, reference: e.target.value })} data-testid="txn-edit-reference" />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#9A9A9A]">Amount</label>
+              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Amount</label>
               <input type="number" step="0.01" className="input-flat w-full" value={form.amount}
                 disabled={!canEditAmount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="txn-edit-amount" />
               {!canCorrect && (
-                <div className="text-[11px] text-[#9A9A9A] mt-1 flex items-start gap-1">
+                <div className="text-[11px] text-[#6E6A63] mt-1 flex items-start gap-1">
                   <Warning size={13} className="mt-0.5 shrink-0" />
                   Linked dates and amounts must be corrected from their original invoice, expense, payroll, vendor, or loan record.
                 </div>
               )}
               {canCorrect && (
-                <div className="text-[11px] text-[#9A9A9A] mt-1 flex items-start gap-1">
+                <div className="text-[11px] text-[#6E6A63] mt-1 flex items-start gap-1">
                   <Warning size={13} className="mt-0.5 shrink-0" />
                   Changing the date or amount creates a balanced correction and keeps the audit history.
                 </div>
@@ -252,15 +252,15 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
           <>
             {/* VIEW MODE — double entry */}
             <div className="p-5">
-              <div className="overline mb-2 text-[#9A9A9A]">ACCOUNTING ENTRY (DEBIT / CREDIT)</div>
+              <div className="overline mb-2 text-[#6E6A63]">ACCOUNTING ENTRY (DEBIT / CREDIT)</div>
               <table className="w-full text-sm">
-                <thead className="text-[10px] font-mono uppercase text-[#9A9A9A]">
+                <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
                   <tr><th className="p-2 text-left">Account</th><th className="p-2 text-right">Debit</th><th className="p-2 text-right">Credit</th></tr>
                 </thead>
                 <tbody>
                   {lines.map((l, i) => (
                     <tr key={i} className="border-t border-[#F0F0F0]">
-                      <td className="p-2">{l.account_name}<span className="text-[10px] text-[#9A9A9A] uppercase ml-1">{l.account_type}</span></td>
+                      <td className="p-2">{l.account_name}<span className="text-[10px] text-[#6E6A63] uppercase ml-1">{l.account_type}</span></td>
                       <td className="p-2 text-right font-mono text-[#1D633E]">{l.debit ? CURRENCY(l.debit) : "—"}</td>
                       <td className="p-2 text-right font-mono text-[#B4001C]">{l.credit ? CURRENCY(l.credit) : "—"}</td>
                     </tr>
@@ -344,7 +344,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
               </div>
             </div>
             {!canModify && (isReversed || isReversal || isReinstatement) && (
-              <div className="px-4 pb-4 text-[11px] text-[#9A9A9A]">
+              <div className="px-4 pb-4 text-[11px] text-[#6E6A63]">
                 {canUndoReversal
                   ? "Undoing creates a documented reinstatement; the reversal remains in the audit trail."
                   : `This is a ${isReversed ? "reversed" : "reversal / system"} entry and is locked to protect your books.`}

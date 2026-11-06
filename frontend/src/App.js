@@ -65,7 +65,7 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
               ? "Your account has been deactivated by an administrator. Please contact your studio owner to restore access."
               : "Your account is awaiting Admin approval. You'll get access as soon as it's granted."}
           </p>
-          <div className="text-xs font-mono uppercase tracking-wider text-[#9A9A9A] mb-6">
+          <div className="text-xs font-mono uppercase tracking-wider text-[#6E6A63] mb-6">
             Signed in as <span className="text-[#0A0A0A]">{user.email}</span>
           </div>
           <button onClick={logout} className="btn-primary" data-testid="pending-signout-btn">
@@ -98,7 +98,7 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
         <div className="max-w-lg mx-auto text-center py-24" data-testid="access-denied">
           <div className="overline mb-3">403 · ACCESS RESTRICTED</div>
           <h1 className="font-display font-bold tracking-tighter text-4xl mb-3">Not for your eyes.</h1>
-          <p className="text-[#5C5C5C]">Your role doesn&apos;t include the <code className="font-mono text-[#8B7F6A]">{requirePerm}</code> permission. Ask an Admin.</p>
+          <p className="text-[#5C5C5C]">Your role doesn&apos;t include the <code className="font-mono text-[#76705E]">{requirePerm}</code> permission. Ask an Admin.</p>
         </div>
       </Layout>
     );

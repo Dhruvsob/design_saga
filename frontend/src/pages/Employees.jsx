@@ -106,13 +106,13 @@ export default function Employees() {
           <input className="input-flat" placeholder="Designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
           <input className="input-flat" type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <input className="input-flat" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <select className="input-flat" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+          <select aria-label="Department" className="input-flat" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
             {meta.departments.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <select className="input-flat" value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value })}>
+          <select aria-label="Employment type" className="input-flat" value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value })}>
             {meta.employment_types.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
           </select>
-          <select className="input-flat" value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })}>
+          <select aria-label="Employment status" className="input-flat" value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })}>
             {meta.employment_statuses.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <input required className="input-flat" type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} />
@@ -134,11 +134,11 @@ export default function Employees() {
             className="bg-transparent flex-1 outline-none text-sm placeholder-[#9A9A9A]"
           />
         </div>
-        <select className="input-flat max-w-[200px]" value={filter.department} onChange={(e) => setFilter({ ...filter, department: e.target.value })}>
+        <select aria-label="Department" className="input-flat max-w-[200px]" value={filter.department} onChange={(e) => setFilter({ ...filter, department: e.target.value })}>
           <option value="">All departments</option>
           {meta.departments.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
-        <select className="input-flat max-w-[200px]" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
+        <select aria-label="Status" className="input-flat max-w-[200px]" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
           <option value="">All statuses</option>
           {meta.employment_statuses.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>

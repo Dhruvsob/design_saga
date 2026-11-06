@@ -22,7 +22,7 @@
   --border: #E8E6E1;
   --ink: #2C2C2C;
   --ink-2: #6B6B6B;
-  --ink-3: #9B9B9B;
+  --ink-3: #6E6A63;  /* WCAG AA: 4.9:1 on cream, 5.4:1 on white */
 
   /* Stone — primary base accent */
   --stone: #8B7F6A;
@@ -192,7 +192,7 @@ code, .font-mono {
   text-transform: uppercase;
   font-weight: 600;
 }
-.accent-blue { color: var(--stone); }
+.accent-blue { color: var(--stone-600); }
 .bg-accent-blue { background-color: var(--stone); }
 .tracking-tight { letter-spacing: -0.02em; }
 .tracking-tighter { letter-spacing: -0.03em; }
@@ -201,7 +201,7 @@ code, .font-mono {
    BUTTONS
 ============================================================ */
 .btn-primary {
-  background-color: var(--stone);
+  background-color: var(--stone-600);   /* white text 5:1 (stone was 3.9:1) */
   color: #FFFFFF;
   padding: 10px 20px;
   font-weight: 600;
@@ -209,7 +209,7 @@ code, .font-mono {
   letter-spacing: 0.01em;
   border-radius: 0.75rem;
   transition: background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-  border: 1px solid var(--stone);
+  border: 1px solid var(--stone-600);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -217,8 +217,8 @@ code, .font-mono {
   overflow: hidden;
 }
 .btn-primary:hover {
-  background-color: var(--stone-600);
-  border-color: var(--stone-600);
+  background-color: #5F5A4B;
+  border-color: #5F5A4B;
   transform: translateY(-1px);
   box-shadow: 0 8px 22px -8px rgba(139, 127, 106, 0.55);
 }

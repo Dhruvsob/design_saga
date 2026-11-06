@@ -266,7 +266,7 @@ export default function EmployeeDetail() {
             onClick={() => setTab(t)}
             data-testid={`emp-tab-${t.replace(/[\s&]/g, "-")}`}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
-              tab === t ? "border-[#8B7F6A] text-[#8B7F6A]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
             }`}
           >
             {t}
@@ -300,7 +300,7 @@ export default function EmployeeDetail() {
                     <input type="date" className="input-flat" value={emp.dob || ""} onChange={(e) => patch(() => ({ dob: e.target.value }))} />
                   </Row>
                   <Row label="Gender">
-                    <select className="input-flat" value={emp.gender || ""} onChange={(e) => patch(() => ({ gender: e.target.value }))}>
+                    <select aria-label="Gender" className="input-flat" value={emp.gender || ""} onChange={(e) => patch(() => ({ gender: e.target.value }))}>
                       <option value="">—</option>
                       <option value="Female">Female</option>
                       <option value="Male">Male</option>
@@ -361,7 +361,7 @@ export default function EmployeeDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="emp-tab-employment">
           <Card title="ROLE & TEAM">
             <Row label="Department">
-              <select disabled={!canEdit} className="input-flat" value={emp.department || ""} onChange={(e) => patch(() => ({ department: e.target.value }))}>
+              <select aria-label="Department" disabled={!canEdit} className="input-flat" value={emp.department || ""} onChange={(e) => patch(() => ({ department: e.target.value }))}>
                 {meta.departments.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </Row>
@@ -369,12 +369,12 @@ export default function EmployeeDetail() {
               <input disabled={!canEdit} className="input-flat" value={emp.designation || ""} onChange={(e) => patch(() => ({ designation: e.target.value }))} />
             </Row>
             <Row label="Employment type">
-              <select disabled={!canEdit} className="input-flat" value={emp.employment_type || ""} onChange={(e) => patch(() => ({ employment_type: e.target.value }))}>
+              <select aria-label="Employment type" disabled={!canEdit} className="input-flat" value={emp.employment_type || ""} onChange={(e) => patch(() => ({ employment_type: e.target.value }))}>
                 {meta.employment_types.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
               </select>
             </Row>
             <Row label="Status">
-              <select disabled={!canEdit} className="input-flat" value={emp.employment_status || ""} onChange={(e) => patch(() => ({ employment_status: e.target.value }))}>
+              <select aria-label="Employment status" disabled={!canEdit} className="input-flat" value={emp.employment_status || ""} onChange={(e) => patch(() => ({ employment_status: e.target.value }))}>
                 {meta.employment_statuses.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Row>
@@ -481,7 +481,7 @@ export default function EmployeeDetail() {
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-sm">{d.label}</div>
                     <div className="text-xs text-[#5C5C5C] font-mono truncate">{d.url}</div>
-                    <div className="text-[10px] text-[#9A9A9A] font-mono tracking-widest uppercase mt-1">
+                    <div className="text-[10px] text-[#6E6A63] font-mono tracking-widest uppercase mt-1">
                       UPLOADED {formatDate(d.uploaded_at)} · {d.uploaded_by || "—"}
                     </div>
                   </div>
@@ -545,7 +545,7 @@ export default function EmployeeDetail() {
                       </div>}
                     </div>
                     {w.note && <p className="text-xs text-[#5C5C5C] mt-1">{w.note}</p>}
-                    <div className="text-[10px] font-mono tracking-widest uppercase text-[#9A9A9A] mt-1">
+                    <div className="text-[10px] font-mono tracking-widest uppercase text-[#6E6A63] mt-1">
                       {formatDate(w.at)} · {w.by || "—"}
                     </div>
                   </div>
@@ -570,7 +570,7 @@ export default function EmployeeDetail() {
                       </div>}
                     </div>
                     {r.note && <p className="text-xs text-[#5C5C5C] mt-1">{r.note}</p>}
-                    <div className="text-[10px] font-mono tracking-widest uppercase text-[#9A9A9A] mt-1">
+                    <div className="text-[10px] font-mono tracking-widest uppercase text-[#6E6A63] mt-1">
                       {formatDate(r.at)} · {r.by || "—"}
                     </div>
                   </div>
@@ -674,7 +674,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
         </label>
         <label className="text-xs">
           <div className="overline mb-1">Month</div>
-          <select className="input-flat w-full" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+          <select aria-label="Month" className="input-flat w-full" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
             {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, i) => <option key={m} value={i+1}>{m}</option>)}
           </select>
         </label>
@@ -714,7 +714,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
         </label>
         <label className="text-xs min-w-[170px]">
           <div className="overline mb-1">Payment method</div>
-          <select className="input-flat w-full" value={paymentMethod}
+          <select aria-label="Payment method" className="input-flat w-full" value={paymentMethod}
             onChange={(e) => {
               const method = e.target.value;
               setPaymentMethod(method);
@@ -743,7 +743,7 @@ function PaySalaryBlock({ employeeId, netMonthly }) {
           {paid ? "Already paid" : busy ? "Processing…" : `Pay ${fmt(b?.net || netMonthly)}`}
         </button>
       </div>
-      {msg && <div className="mt-3 text-sm text-[#8B7F6A]" data-testid="pay-msg">{msg}</div>}
+      {msg && <div className="mt-3 text-sm text-[#76705E]" data-testid="pay-msg">{msg}</div>}
       {paid && (
         <div className="mt-2 flex items-center justify-between gap-3" data-testid="paid-badge">
           <div className="text-xs text-[#5C5C5C] font-mono">
@@ -870,7 +870,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
             {isAdmin && (
               <>
                 <Row label="Role">
-                  <select className="input-flat" value={acct.user.role || "Employee"}
+                  <select aria-label="Role" className="input-flat" value={acct.user.role || "Employee"}
                           onChange={(e) => changeRole(e.target.value)} data-testid="erp-role-select">
                     {roles.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
@@ -889,7 +889,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
                             disabled={!/^(?=.*[A-Za-z])(?=.*\d).{8,128}$/.test(newPass)}
                             className="btn-ghost text-xs disabled:opacity-40" data-testid="erp-reset-password-btn">Set</button>
                   </div>
-                  {pwMsg && <div className="text-[11px] text-[#8B7F6A]" data-testid="erp-reset-password-msg">{pwMsg}</div>}
+                  {pwMsg && <div className="text-[11px] text-[#76705E]" data-testid="erp-reset-password-msg">{pwMsg}</div>}
                 </div>
               </>
             )}
@@ -917,7 +917,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
                      data-testid="erp-create-password" />
             </Row>
             <Row label="Role">
-              <select className="input-flat" value={form.role}
+              <select aria-label="Role" className="input-flat" value={form.role}
                       onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="erp-create-role">
                 {roles.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -1084,7 +1084,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : history.length === 0 ? (
-        <div className="text-xs text-[#9A9A9A] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="salary-history-empty">
+        <div className="text-xs text-[#6E6A63] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="salary-history-empty">
           No revisions recorded yet. Record an increment to start a history — past payslips remain unchanged.
         </div>
       ) : (
@@ -1093,7 +1093,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
             <div key={h.id} className={`flex items-center justify-between border border-[#E5E5E5] px-3 py-2 ${h.superseded_at ? "bg-[#F3F1EC] opacity-70" : "bg-[#FAFAFA]"}`} data-testid={`salary-history-${h.id}`}>
               <div className="min-w-0">
                 <div className="text-sm font-semibold flex items-center gap-2">
-                  <ClockCounterClockwise size={13} className="text-[#8B7F6A]" />
+                  <ClockCounterClockwise size={13} className="text-[#76705E]" />
                   {h.reason || "Salary revision"}
                   {h.superseded_at && <span className="text-[9px] font-mono uppercase border px-1">Superseded</span>}
                 </div>
@@ -1109,7 +1109,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
                   </button>
                 )}
                 <div>
-                <div className="font-mono font-bold">{fmt(h.net_monthly)}<span className="text-[10px] text-[#9A9A9A]"> net</span></div>
+                <div className="font-mono font-bold">{fmt(h.net_monthly)}<span className="text-[10px] text-[#6E6A63]"> net</span></div>
                 {typeof h.delta_net === "number" && (
                   <div className={`text-[11px] font-mono ${h.delta_net >= 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
                     {h.delta_net >= 0 ? "+" : ""}{fmt(h.delta_net)}
@@ -1161,7 +1161,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : runs.length === 0 ? (
-        <div className="text-xs text-[#9A9A9A] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="payment-history-empty">
+        <div className="text-xs text-[#6E6A63] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="payment-history-empty">
           No salary payments recorded yet.
         </div>
       ) : (
@@ -1188,7 +1188,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
                   <td className="py-2 pr-3 text-xs">{r.paid_from_account_name || "—"}{r.reference ? ` · ${r.reference}` : ""}</td>
                   <td className="py-2 pr-3">
                     <a href={`${api.defaults.baseURL}/payroll/runs/${r.id}/slip.pdf`} target="_blank" rel="noreferrer"
-                       className="text-[#8B7F6A] hover:underline text-xs inline-flex items-center gap-1"
+                       className="text-[#76705E] hover:underline text-xs inline-flex items-center gap-1"
                        data-testid={`payment-slip-${r.id}`}>
                       <FileText size={12} /> PDF
                     </a>
@@ -1196,7 +1196,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
                   {canCorrect && <td className="py-2 pr-3">
                     {r.status === "paid" ? <button className="btn-ghost text-xs text-[#B4001C]" onClick={() => reverse(r)}>
                       <ClockCounterClockwise size={12} /> Reverse
-                    </button> : <span className="text-[10px] uppercase text-[#9A9A9A]">{r.status}</span>}
+                    </button> : <span className="text-[10px] uppercase text-[#6E6A63]">{r.status}</span>}
                   </td>}
                 </tr>
               ))}

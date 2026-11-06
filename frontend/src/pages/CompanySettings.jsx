@@ -112,7 +112,7 @@ export default function CompanySettings() {
         ].map(({ key, label, Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-3 text-sm font-semibold border-b-2 transition ${
-              tab === key ? "border-[#8B7F6A] text-[#8B7F6A]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === key ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
             }`}
             data-testid={`tab-${key}`}
           >
@@ -294,7 +294,7 @@ function Field({ label, value, onChange, testid, readOnly, hint }) {
       <input className="input-flat w-full" value={value} readOnly={readOnly}
              onChange={onChange ? (e) => onChange(e.target.value) : undefined}
              data-testid={testid} />
-      {hint && <div className="text-[10px] text-[#9A9A9A] mt-1">{hint}</div>}
+      {hint && <div className="text-[10px] text-[#6E6A63] mt-1">{hint}</div>}
     </div>
   );
 }
@@ -304,9 +304,9 @@ function ColorField({ label, value, onChange, testid }) {
     <div>
       <label className="block text-xs text-[#5C5C5C] mb-1">{label}</label>
       <div className="flex items-center gap-2 border border-[#E5E5E5] p-1 bg-white">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} picker`}
                className="w-10 h-10 border-none cursor-pointer" data-testid={`${testid}-picker`} />
-        <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} hex code`}
                className="flex-1 min-w-0 font-mono text-sm outline-none px-2" data-testid={testid} />
       </div>
     </div>

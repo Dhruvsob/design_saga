@@ -90,7 +90,7 @@ export default function Loans() {
                   <div className="font-semibold text-sm">{l.lender_name}</div>
                   <div className="text-xs text-[#5C5C5C]">{l.account_number || "—"}</div>
                 </Td>
-                <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#8B7F6A]">{l.loan_type}</span></Td>
+                <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">{l.loan_type}</span></Td>
                 <Td className="font-mono text-sm">{fmtMoney(l.principal)}</Td>
                 <Td className="font-mono text-sm">{l.interest_rate_pa}%</Td>
                 <Td className="font-mono text-sm">{l.tenure_months}mo</Td>
@@ -171,7 +171,7 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <F label="Lender name *"><input required data-testid="l-lender" className="input-flat w-full" value={f.lender_name} onChange={(e) => setF({...f, lender_name: e.target.value})} /></F>
           <F label="Loan type">
-            <select className="input-flat w-full" value={f.loan_type} onChange={(e) => setF({...f, loan_type: e.target.value})}>
+            <select aria-label="Loan type" className="input-flat w-full" value={f.loan_type} onChange={(e) => setF({...f, loan_type: e.target.value})}>
               <option value="business">Business</option>
               <option value="term">Term</option>
               <option value="equipment">Equipment</option>
@@ -320,7 +320,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
       {canTransact && <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[#FAFAFA] border border-[#E5E5E5]">
         <div className="flex-1 min-w-[220px]">
           <label className="overline text-[10px] mb-1 block">Pay from</label>
-          <select className="input-flat w-full" value={payFrom} onChange={(e) => setPayFrom(e.target.value)}>
+          <select aria-label="Pay from" className="input-flat w-full" value={payFrom} onChange={(e) => setPayFrom(e.target.value)}>
             {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>

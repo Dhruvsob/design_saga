@@ -22,7 +22,7 @@ export default function PageHero({
           {eyebrow}
           {typeof count === "number" && (
             <>
-              <CaretRight size={9} className="text-[#9A9A9A]" />
+              <CaretRight size={9} className="text-[#6E6A63]" />
               <span className="font-mono">{count} ITEMS</span>
             </>
           )}

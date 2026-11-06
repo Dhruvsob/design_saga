@@ -198,7 +198,7 @@ export default function TasksBoard() {
             onClick={() => setTaskType(t.id)}
             data-testid={`tab-${t.id}`}
             className={`px-4 py-2.5 text-sm border-b-2 -mb-px transition-all ${taskType === t.id
-              ? "border-[#8B7F6A] text-[#8B7F6A] font-semibold"
+              ? "border-[#8B7F6A] text-[#76705E] font-semibold"
               : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
           >
             {t.label}
@@ -219,7 +219,7 @@ export default function TasksBoard() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2" data-testid="task-filters">
         <div className="relative">
-          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9A9A]" />
+          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, item, vendor…"
             className="input-flat pl-9 !w-72" data-testid="task-search" />
         </div>
@@ -227,19 +227,19 @@ export default function TasksBoard() {
           <option value="">All projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </SearchSelect>
-        <select className="input-flat !w-auto min-w-[120px]" value={filters.area} onChange={(e) => setFilters({ ...filters, area: e.target.value })} data-testid="filter-area">
+        <select aria-label="Area" className="input-flat !w-auto min-w-[120px]" value={filters.area} onChange={(e) => setFilters({ ...filters, area: e.target.value })} data-testid="filter-area">
           <option value="">All areas</option>
           {areas.map((a) => <option key={a}>{a}</option>)}
         </select>
-        <select className="input-flat !w-auto min-w-[130px]" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} data-testid="filter-category">
+        <select aria-label="Category" className="input-flat !w-auto min-w-[130px]" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} data-testid="filter-category">
           <option value="">All categories</option>
           {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
-        <select className="input-flat !w-auto min-w-[120px]" value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority">
+        <select aria-label="Priority" className="input-flat !w-auto min-w-[120px]" value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority">
           <option value="">All priorities</option>
           {(meta?.priorities || []).map((p) => <option key={p}>{p}</option>)}
         </select>
-        <select className="input-flat !w-auto min-w-[120px]" value={filters.status_detail} onChange={(e) => setFilters({ ...filters, status_detail: e.target.value })} data-testid="filter-status">
+        <select aria-label="Status" className="input-flat !w-auto min-w-[120px]" value={filters.status_detail} onChange={(e) => setFilters({ ...filters, status_detail: e.target.value })} data-testid="filter-status">
           <option value="">All statuses</option>
           {(meta?.status_detail || []).map((s) => <option key={s}>{s}</option>)}
         </select>
@@ -321,17 +321,17 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <ListChecks size={16} />
         <span className="font-mono text-xs tracking-wider">{count} SELECTED</span>
-        <select value={patch.status_detail} onChange={(e) => setPatch({ ...patch, status_detail: e.target.value })}
+        <select aria-label="Status" value={patch.status_detail} onChange={(e) => setPatch({ ...patch, status_detail: e.target.value })}
           className="bg-transparent border border-white/30 px-2 py-1.5 text-xs" data-testid="bulk-status">
           <option value="" className="text-black">Status — no change</option>
           {(meta?.status_detail || []).map((s) => <option key={s} className="text-black">{s}</option>)}
         </select>
-        <select value={patch.priority} onChange={(e) => setPatch({ ...patch, priority: e.target.value })}
+        <select aria-label="Priority" value={patch.priority} onChange={(e) => setPatch({ ...patch, priority: e.target.value })}
           className="bg-transparent border border-white/30 px-2 py-1.5 text-xs" data-testid="bulk-priority">
           <option value="" className="text-black">Priority — no change</option>
           {(meta?.priorities || []).map((p) => <option key={p} className="text-black">{p}</option>)}
         </select>
-        <select value={patch.assignee_id} onChange={(e) => setPatch({ ...patch, assignee_id: e.target.value })}
+        <select aria-label="Assignee" value={patch.assignee_id} onChange={(e) => setPatch({ ...patch, assignee_id: e.target.value })}
           className="bg-transparent border border-white/30 px-2 py-1.5 text-xs max-w-[200px]" data-testid="bulk-assignee">
           <option value="" className="text-black">Assignee — no change</option>
           {employees.map((e) => (
@@ -401,7 +401,7 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                       <button
                         onClick={(e) => { e.stopPropagation(); onToggleSelect(t.id); }}
                         title={isSel ? "Deselect" : "Select for bulk actions"}
-                        className={`transition ${isSel ? "text-[#8B7F6A]" : "text-[#CCCCCC] hover:text-[#0A0A0A]"}`}
+                        className={`transition ${isSel ? "text-[#76705E]" : "text-[#CCCCCC] hover:text-[#0A0A0A]"}`}
                         data-testid={`select-${t.id}`}
                       >
                         {isSel ? <CheckSquare size={14} weight="fill" /> : <Square size={14} />}
@@ -427,7 +427,7 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                     </div>
                     {t.project_name && <div className="text-xs text-[#5C5C5C] mt-1.5">{t.project_name}</div>}
                     {t.assigned_to_me && t.assigned_by_name && (
-                      <div className="text-[10px] text-[#8B7F6A] mt-1">Assigned by {t.assigned_by_name}</div>
+                      <div className="text-[10px] text-[#76705E] mt-1">Assigned by {t.assigned_by_name}</div>
                     )}
                     {t.status_detail && (
                       <div className="mt-2">
@@ -456,7 +456,7 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                   </div>
                 );
               })}
-              {items.length === 0 && <div className="text-center py-8 text-xs text-[#9A9A9A]">—</div>}
+              {items.length === 0 && <div className="text-center py-8 text-xs text-[#6E6A63]">—</div>}
             </div>
           </div>
         );
@@ -507,15 +507,15 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
                 <td className="p-2">
                   <input type="checkbox" checked={selected.has(t.id)} onChange={(e) => toggleOne(t.id, e.target.checked)} />
                 </td>
-                <td className="p-2 font-mono text-xs text-[#9A9A9A]">{i + 1}</td>
+                <td className="p-2 font-mono text-xs text-[#6E6A63]">{i + 1}</td>
                 <td className="p-2">
-                  <InlineSelect value={t.area || ""} options={areas} onChange={(v) => onInline(t.id, "area", v)} />
+                  <InlineSelect label="Area" value={t.area || ""} options={areas} onChange={(v) => onInline(t.id, "area", v)} />
                 </td>
                 <td className="p-2">
-                  <InlineSelect value={t.category || ""} options={categories} onChange={(v) => onInline(t.id, "category", v)} />
+                  <InlineSelect label="Category" value={t.category || ""} options={categories} onChange={(v) => onInline(t.id, "category", v)} />
                 </td>
                 <td className="p-2">
-                  <button onClick={() => onOpen(t.id)} className="text-left font-semibold hover:text-[#8B7F6A]" data-testid={`open-${t.id}`}>
+                  <button onClick={() => onOpen(t.id)} className="text-left font-semibold hover:text-[#76705E]" data-testid={`open-${t.id}`}>
                     {t.title}
                   </button>
                   {t.item_description && <div className="text-xs text-[#5C5C5C]">{t.item_description}</div>}
@@ -524,12 +524,12 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
                   <InlineNumber value={t.quantity} onChange={(v) => onInline(t.id, "quantity", v)} />
                 </td>
                 <td className="p-2">
-                  <InlineSelect value={t.status_detail || ""} options={meta?.status_detail || []}
+                  <InlineSelect label="Status" value={t.status_detail || ""} options={meta?.status_detail || []}
                     onChange={(v) => onInline(t.id, "status_detail", v)}
                     style={{ color: STATUS_COLORS[t.status_detail] || "#000", fontWeight: 600 }} />
                 </td>
                 <td className="p-2">
-                  <InlineSelect value={t.priority || "medium"} options={meta?.priorities || []}
+                  <InlineSelect label="Priority" value={t.priority || "medium"} options={meta?.priorities || []}
                     onChange={(v) => onInline(t.id, "priority", v)}
                     style={{ color: PRIORITY_COLORS[t.priority] || "#000", fontWeight: 600 }} />
                 </td>
@@ -551,7 +551,7 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
             );
           })}
           {tasks.length === 0 && (
-            <tr><td colSpan={14} className="p-8 text-center text-sm text-[#9A9A9A]">No tasks match your filters.</td></tr>
+            <tr><td colSpan={14} className="p-8 text-center text-sm text-[#6E6A63]">No tasks match your filters.</td></tr>
           )}
         </tbody>
       </table>
@@ -559,9 +559,9 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
   );
 }
 
-function InlineSelect({ value, options, onChange, style }) {
+function InlineSelect({ value, options, onChange, style, label }) {
   return (
-    <select
+    <select aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="bg-transparent border-none outline-none text-xs w-full hover:bg-white focus:bg-white px-1 py-0.5"
@@ -654,11 +654,11 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </SearchSelect>
 
-        <select className="input-flat" value={form.area} onChange={(e) => set("area", e.target.value)}>
+        <select aria-label="Area" className="input-flat" value={form.area} onChange={(e) => set("area", e.target.value)}>
           <option value="">Area</option>
           {areas.map((a) => <option key={a}>{a}</option>)}
         </select>
-        <select className="input-flat" value={form.category} onChange={(e) => set("category", e.target.value)}>
+        <select aria-label="Category" className="input-flat" value={form.category} onChange={(e) => set("category", e.target.value)}>
           <option value="">Category</option>
           {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
@@ -667,11 +667,11 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
 
         <input className="input-flat" placeholder="Quantity" type="number" value={form.quantity}
           onChange={(e) => set("quantity", e.target.value)} />
-        <select className="input-flat" value={form.status_detail}
+        <select aria-label="Status" className="input-flat" value={form.status_detail}
           onChange={(e) => set("status_detail", e.target.value)}>
           {(meta?.status_detail || []).map((s) => <option key={s}>{s}</option>)}
         </select>
-        <select className="input-flat" value={form.priority} onChange={(e) => set("priority", e.target.value)}>
+        <select aria-label="Priority" className="input-flat" value={form.priority} onChange={(e) => set("priority", e.target.value)}>
           {(meta?.priorities || []).map((p) => <option key={p}>{p}</option>)}
         </select>
 
@@ -701,13 +701,13 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
             <div className="md:col-span-2">
               <div className="text-[11px] text-[#5C5C5C] mb-1">Assign to employee(s) — they'll see it as "Assigned to me"</div>
               <div className="border border-[#E5E5E5] rounded-md max-h-28 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="task-assignee-picker">
-                {employees.length === 0 && <span className="text-xs text-[#9A9A9A]">No employees yet — type a name below.</span>}
+                {employees.length === 0 && <span className="text-xs text-[#6E6A63]">No employees yet — type a name below.</span>}
                 {employees.map((emp) => {
                   const on = (form.assignees || []).includes(emp.id);
                   return (
                     <button type="button" key={emp.id} onClick={() => toggleAssignee(emp.id)}
                       className={`px-2.5 py-1 text-xs rounded-full border transition ${on
-                        ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#8B7F6A] font-semibold"
+                        ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#76705E] font-semibold"
                         : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#8B7F6A]"}`}
                       data-testid={`assignee-opt-${emp.id}`}>
                       {empName(emp)}

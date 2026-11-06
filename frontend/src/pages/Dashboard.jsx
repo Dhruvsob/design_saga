@@ -137,7 +137,7 @@ export default function Dashboard() {
               <div className="font-display font-bold text-2xl tracking-tighter">Leads by stage</div>
             </div>
             <div className="flex items-center gap-2 overline">
-              <ChartBar size={14} className="text-[#8B7F6A]" />
+              <ChartBar size={14} className="text-[#76705E]" />
               {totalLeads} TOTAL · {wonRate}% WIN
             </div>
           </div>
@@ -145,7 +145,7 @@ export default function Dashboard() {
             {pipeline.map((s, i) => (
               <div key={s.stage} className="flex items-center gap-4 group">
                 <div className="w-28 flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-[#9A9A9A]">0{i + 1}</span>
+                  <span className="font-mono text-[10px] text-[#6E6A63]">0{i + 1}</span>
                   <span className="text-xs font-mono tracking-wider uppercase text-[#5C5C5C] group-hover:text-[#0A0A0A] transition">{s.stage}</span>
                 </div>
                 <div className="flex-1 h-9 bg-[#F5F4F0] relative overflow-hidden rounded-md border border-[#EFEDE7]">
@@ -224,7 +224,7 @@ export default function Dashboard() {
                       </div>
                       <span className="font-mono text-sm tabular-nums">
                         <span className="font-semibold">{u.load}</span>
-                        <span className="text-[#9A9A9A]"> tasks</span>
+                        <span className="text-[#6E6A63]"> tasks</span>
                       </span>
                     </div>
                     <div className="h-2 bg-[#F0F0F0] relative overflow-hidden">
@@ -243,7 +243,7 @@ export default function Dashboard() {
         <div className="card-flat" data-testid="sources">
           <div className="flex items-center justify-between mb-4">
             <div className="overline">LEADS / BY SOURCE</div>
-            <button onClick={() => navigate("/crm")} className="overline hover:text-[#8B7F6A] flex items-center gap-1 transition">
+            <button onClick={() => navigate("/crm")} className="overline hover:text-[#76705E] flex items-center gap-1 transition">
               VIEW PIPELINE <CaretRight size={10} weight="bold" />
             </button>
           </div>

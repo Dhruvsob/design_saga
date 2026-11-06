@@ -191,7 +191,7 @@ export default function RBACAdmin() {
                   <Td className="font-mono text-xs">{u.employee_id || "—"}</Td>
                   <Td className="font-mono text-xs">{u.email}</Td>
                   <Td>
-                    <select
+                    <select aria-label="Role"
                       className="input-flat" style={{ padding: "6px 8px", width: 180 }}
                       value={u.role} disabled={isSaving}
                       onChange={(e) => changeRole(u.user_id, e.target.value)}
@@ -272,7 +272,7 @@ export default function RBACAdmin() {
                       <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EAF1FF] text-[#2B5FB4]">customized</span>
                     )}
                     {!r.editable && (
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#8B7F6A]">locked</span>
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#5F5A4B]">locked</span>
                     )}
                     <span className="font-mono text-xs tabular-nums text-[#5C5C5C]">{r.permissions.length} grants</span>
                     <CaretDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -365,7 +365,7 @@ function RolePermissionEditor({ role, catalog, onSaved }) {
   if (!role.editable) {
     return (
       <div className="text-sm text-[#5C5C5C] flex items-center gap-2">
-        <ShieldCheck size={16} className="text-[#8B7F6A]" />
+        <ShieldCheck size={16} className="text-[#76705E]" />
         This role has full, fixed access and cannot be edited.
       </div>
     );
@@ -445,7 +445,7 @@ function PendingRow({ u, roles, onDecide, savingId }) {
       </Td>
       <Td className="font-mono text-xs">{u.email}</Td>
       <Td>
-        <select className="input-flat" style={{ padding: "6px 8px", width: 180 }}
+        <select aria-label="Role" className="input-flat" style={{ padding: "6px 8px", width: 180 }}
           value={role} onChange={(e) => setRole(e.target.value)}>
           {roles.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
         </select>
@@ -510,7 +510,7 @@ function CreateUserForm({ roles, onDone }) {
           value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
         <input className="input-flat" placeholder="Phone"
           value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
-        <select data-testid="cu-role" className="input-flat" value={f.role}
+        <select aria-label="Role" data-testid="cu-role" className="input-flat" value={f.role}
           onChange={(e) => setF({ ...f, role: e.target.value })}>
           {roles.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
         </select>
@@ -555,7 +555,7 @@ function ResetPasswordModal({ userId, user, onClose }) {
           data-testid="reset-pwd-input" className="input-flat w-full"
           placeholder="New password (letters + digits, min 8)"
           value={pw} onChange={(e) => setPw(e.target.value)} />
-        <p className="text-xs text-[#9A9A9A]">
+        <p className="text-xs text-[#6E6A63]">
           All active sessions will be logged out. An existing app PIN will also be cleared so the user can sign in and set a new one.
         </p>
         {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
