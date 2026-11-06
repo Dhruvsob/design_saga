@@ -271,17 +271,28 @@ def _date_time_fields(day: str, start_time: str | None, end_day: str | None = No
         "dateTime": finish.isoformat(), "timeZone": "Asia/Kolkata"}
 
 
+async def _project_name(org_id: str, project_id: str | None) -> str | None:
+    if not project_id:
+        return None
+    p = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "name": 1})
+    return (p or {}).get("name")
+
+
 async def event_body(org_id: str, source_type: str, doc: dict,
                      owner_user_id: str | None = None) -> dict | None:
+    project_name = doc.get("project_name") or await _project_name(org_id, doc.get("project_id"))
+    scope = "project" if doc.get("project_id") else "studio"
     if source_type == "task":
         day = (doc.get("reminder_date") or doc.get("due_date") or "")[:10]
         if not day or doc.get("status") == "done":
             return None
         start_time = doc.get("reminder_time")
         summary = f"Task: {doc.get('title') or 'Untitled task'}"
+        if project_name:
+            summary = f"[{project_name}] {summary}"
         description = "\n\n".join(filter(None, [
             doc.get("description"),
-            f"Project: {doc.get('project_name')}" if doc.get("project_name") else None,
+            f"Project: {project_name}" if project_name else None,
             f"Open in Design Saga: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}/tasks/{doc['id']}",
         ]))
         reminder = 15 if start_time else 1440
@@ -292,9 +303,12 @@ async def event_body(org_id: str, source_type: str, doc: dict,
             return None
         start_time = doc.get("start_time")
         summary = doc.get("title") or "Design Saga event"
+        summary = f"[{project_name}] {summary}" if project_name else f"Studio: {summary}"
+        link = (f"/projects/{doc['project_id']}" if doc.get("project_id") else "/calendar")
         description = "\n\n".join(filter(None, [
             doc.get("notes"),
-            f"Open in Design Saga: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}/calendar",
+            f"Project: {project_name}" if project_name else "Studio event",
+            f"Open in Design Saga: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}{link}",
         ]))
         reminder = doc.get("reminder_minutes")
         location = doc.get("location")
@@ -319,6 +333,7 @@ async def event_body(org_id: str, source_type: str, doc: dict,
             "designSagaOrgId": org_id,
             "designSagaSource": source_type,
             "designSagaId": doc["id"],
+            "designSagaScope": scope,
         }},
     }
     if location:

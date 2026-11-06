@@ -55,14 +55,16 @@ test("deleting asks in a styled dialog; Cancel keeps the record", async ({ page 
   const q = await json(ctx.post("/api/quotations-adv", { data: { type: "turnkey", project_title: `Confirm ${uid()}` } }));
   await page.goto("/quotations");
   const row = page.getByTestId(`q-row-${q.id}`);
-  await row.getByTitle("Delete").click();
+  await page.getByTestId(`q-actions-${q.id}`).click();
+  await page.getByTestId(`q-delete-${q.id}`).click();
   const dialog = page.getByTestId("confirm-dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Delete quotation?");
   await page.getByTestId("confirm-cancel").click();
   await expect(dialog).toHaveCount(0);
   await expect(row).toBeVisible();
-  await row.getByTitle("Delete").click();
+  await page.getByTestId(`q-actions-${q.id}`).click();
+  await page.getByTestId(`q-delete-${q.id}`).click();
   await page.getByTestId("confirm-ok").click();
   await expect(row).toHaveCount(0);
   await ctx.dispose();
@@ -154,4 +156,49 @@ test("sidebar groups collapse, the rail collapses and both are remembered", asyn
   await expect(page.getByTestId("sidebar-brand-name")).toBeHidden();
   await page.getByTestId("sidebar-collapse-btn").click();
   await expect(page.getByTestId("sidebar-brand-name")).toBeVisible();
+});
+
+
+test("calendar splits Studio and Project items from one feed; events link only to visible projects", async ({ page }) => {
+  const ctx = await api("admin");
+  const proj = await json(ctx.post("/api/projects", { data: { name: `Cal ${uid()}`, engagement_type: "consultancy" } }));
+  const day = new Date().toISOString().slice(0, 10);
+  const studio = `Studio meet ${uid()}`;
+  const site = `Site visit ${uid()}`;
+  await json(ctx.post("/api/calendar/events", { data: { title: studio, date: day, kind: "meeting", visibility: "org" } }));
+  await json(ctx.post("/api/calendar/events", { data: { title: site, date: day, kind: "meeting", project_id: proj.id, visibility: "org" } }));
+  const bad = await ctx.post("/api/calendar/events", { data: { title: "x", date: day, project_id: "proj_not_mine" } });
+  expect(bad.status()).toBe(404);
+  const feed = await json(ctx.get(`/api/calendar/feed?start=${day}&end=${day}`));
+  const projectItem = feed.items.find((i) => i.title === site);
+  expect(projectItem.scope).toBe("project");
+  expect(projectItem.project_name).toBe(proj.name);
+  expect(feed.items.find((i) => i.title === studio).scope).toBe("studio");
+  await ctx.dispose();
+
+  await page.goto("/calendar");
+  await page.getByTestId("view-agenda").click();          // agenda lists every item
+  await page.getByTestId("scope-studio").click();
+  await expect(page.getByText(studio).first()).toBeVisible();
+  await expect(page.getByText(site)).toHaveCount(0);
+  await page.getByTestId("scope-project").click();
+  await expect(page.getByText(site).first()).toBeVisible();
+  await expect(page.getByText(studio)).toHaveCount(0);
+});
+
+test("work board: quick add, group by category, list and calendar show the same task", async ({ page }) => {
+  const title = `Board task ${uid()}`;
+  await page.goto("/tasks");
+  await page.getByTestId("quick-add-todo").click();
+  await page.getByTestId("quick-add-input-todo").fill(title);
+  await page.getByTestId("quick-add-input-todo").press("Enter");
+  await expect(page.getByTestId("col-todo")).toContainText(title);
+
+  await page.getByTestId("board-group-by").selectOption("category");
+  await expect(page.getByTestId("col-")).toContainText(title);       // "No category" lane
+
+  await page.getByTestId("view-table-btn").click();
+  await expect(page.getByText(title).first()).toBeVisible();
+  await page.getByTestId("view-calendar-btn").click();
+  await expect(page.getByTestId("task-unscheduled")).toContainText(title);
 });

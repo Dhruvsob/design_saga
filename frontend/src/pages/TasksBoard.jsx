@@ -7,8 +7,9 @@ import { dateForInput, empName, formatDate } from "../lib/format";
 import {
   Plus, X, Trash, DotsSixVertical, MagnifyingGlass, ListChecks,
   Table as TableIcon, SquaresFour, Warning, Bell, DownloadSimple,
-  CheckSquare, Square,
+  CheckSquare, Square, CalendarBlank,
 } from "@phosphor-icons/react";
+import TaskCalendar from "../components/TaskCalendar";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
@@ -48,11 +49,12 @@ export default function TasksBoard() {
   const [vendors, setVendors] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [meta, setMeta] = useState(null);
-  const [view, setView] = useState("kanban");   // kanban | table
+  const [view, setView] = useState("kanban");   // kanban (Board) | table (List) | calendar
+  const [groupBy, setGroupBy] = useState("status");  // status | category
   const [taskType, setTaskType] = useState("all");  // all | employee | vendor
   const [q, setQ] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
-  const [filters, setFilters] = useState({ project_id: "", area: "", category: "", priority: "", status_detail: "" });
+  const [filters, setFilters] = useState({ project_id: "", area: "", category: "", priority: "", status_detail: "", assignee_id: "" });
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_TASK);
   const [selected, setSelected] = useState(new Set());
@@ -84,6 +86,8 @@ export default function TasksBoard() {
     if (filters.category) rows = rows.filter((t) => t.category === filters.category);
     if (filters.priority) rows = rows.filter((t) => t.priority === filters.priority);
     if (filters.status_detail) rows = rows.filter((t) => t.status_detail === filters.status_detail);
+    if (filters.assignee_id) rows = rows.filter((t) => t.assignee_id === filters.assignee_id
+      || (t.assignees || []).some((a) => (a?.id || a?.employee_id || a) === filters.assignee_id));
     if (q) {
       const s = q.toLowerCase();
       rows = rows.filter((t) =>
@@ -96,9 +100,47 @@ export default function TasksBoard() {
 
   const drop = async (lane) => {
     if (!dragId) return;
-    await api.patch(`/tasks/${dragId}/status`, { status: lane });
+    const id = dragId;
     setDragId(null); setDragOver(null);
+    try {
+      if (groupBy === "category") {
+        if (!lane) { toast.message("Pick a category lane to categorise a task"); return; }
+        await api.put(`/tasks/${id}`, { category: lane });
+      } else {
+        await api.patch(`/tasks/${id}/status`, { status: lane });
+      }
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not move the task");
+    }
     loadAll();
+  };
+
+  const quickAdd = async (lane, title) => {
+    const payload = { title, task_type: "employee", priority: "medium", status_detail: "Pending",
+                      project_id: filters.project_id || undefined };
+    if (groupBy === "category" && lane) payload.category = lane;
+    try {
+      const { data } = await api.post("/tasks", payload);
+      if (groupBy === "status" && lane && lane !== "todo" && data?.id) {
+        await api.patch(`/tasks/${data.id}/status`, { status: lane });
+      }
+      toast.success("Task added");
+      loadAll();
+      return true;
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not add the task");
+      return false;
+    }
+  };
+
+  const reschedule = async (id, day) => {
+    try {
+      await api.put(`/tasks/${id}`, { due_date: day });
+      toast.success(`Due date set to ${formatDate(day)}`);
+      loadAll();
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not change the due date");
+    }
   };
 
   const submit = async (e) => {
@@ -188,7 +230,7 @@ export default function TasksBoard() {
       </PageHero>
 
       {/* Task-type tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--line)]" data-testid="task-type-tabs">
+      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--line)]" data-testid="task-type-tabs">
         {[
           { id: "all", label: "All" },
           { id: "employee", label: "Employee tasks" },
@@ -205,15 +247,24 @@ export default function TasksBoard() {
             {t.label}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-1 pb-2">
-          <button onClick={() => setView("kanban")} data-testid="view-kanban-btn"
-            className={`btn-icon ${view === "kanban" ? "bg-[var(--ink)] text-white" : ""}`} aria-label="Kanban view">
-            <SquaresFour size={16} />
-          </button>
-          <button onClick={() => setView("table")} data-testid="view-table-btn"
-            className={`btn-icon ${view === "table" ? "bg-[var(--ink)] text-white" : ""}`} aria-label="Table view">
-            <TableIcon size={16} />
-          </button>
+        <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center gap-2 pb-2">
+          {view === "kanban" && (
+            <select aria-label="Group board by" className="input-flat !w-auto !h-8 text-xs" value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value)} data-testid="board-group-by">
+              <option value="status">Group by status</option>
+              <option value="category">Group by category</option>
+            </select>
+          )}
+          <div className="flex rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-0.5" role="tablist" aria-label="Work board view">
+            {[["kanban", "Board", SquaresFour], ["table", "List", TableIcon], ["calendar", "Calendar", CalendarBlank]].map(([v, label, Icon]) => (
+              <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)}
+                      data-testid={`view-${v === "kanban" ? "kanban" : v === "table" ? "table" : "calendar"}-btn`}
+                      className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-semibold transition-colors ${view === v
+                        ? "bg-white text-[var(--ink)] shadow-[0_1px_2px_rgba(17,17,17,0.06)]" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}>
+                <Icon size={14} /> {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -239,6 +290,11 @@ export default function TasksBoard() {
         <select aria-label="Priority" className="input-flat !w-auto min-w-[120px]" value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority">
           <option value="">All priorities</option>
           {(meta?.priorities || []).map((p) => <option key={p}>{p}</option>)}
+        </select>
+        <select aria-label="Member" className="input-flat !w-auto min-w-[140px]" value={filters.assignee_id}
+                onChange={(e) => setFilters({ ...filters, assignee_id: e.target.value })} data-testid="filter-member">
+          <option value="">All members</option>
+          {employees.map((e) => <option key={e.id} value={e.id}>{empName(e)}</option>)}
         </select>
         <select aria-label="Status" className="input-flat !w-auto min-w-[120px]" value={filters.status_detail} onChange={(e) => setFilters({ ...filters, status_detail: e.target.value })} data-testid="filter-status">
           <option value="">All statuses</option>
@@ -282,11 +338,19 @@ export default function TasksBoard() {
       {view === "kanban" ? (
         <KanbanView
           tasks={filtered} onDelete={del}
+          lanes={groupBy === "category"
+            ? [...categories.map((c, i) => ({ id: c, label: c, color: ["#8B7F6A", "#2B5299", "#1D633E", "#B87500", "#76705E", "#B22B22"][i % 6] })),
+               { id: "", label: "No category", color: "#C9C9C9" }]
+            : LANES}
+          laneOf={groupBy === "category" ? (t) => (categories.includes(t.category) ? t.category : "") : (t) => t.status}
+          onQuickAdd={quickAdd}
           onDragStart={setDragId} onDrop={drop}
           dragOver={dragOver} setDragOver={setDragOver}
           onOpen={(id) => navigate(`/tasks/${id}`)}
           selected={selected} onToggleSelect={toggleSelect}
         />
+      ) : view === "calendar" ? (
+        <TaskCalendar tasks={filtered} onOpen={(id) => navigate(`/tasks/${id}`)} onReschedule={reschedule} />
       ) : (
         <TableView
           tasks={filtered} meta={meta} areas={areas} categories={categories}
@@ -359,17 +423,18 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
 // ================================================================
 // Kanban view
 // ================================================================
-function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOver, onOpen, selected, onToggleSelect }) {
+function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd, onDelete, onDragStart, onDrop, dragOver, setDragOver, onOpen, selected, onToggleSelect }) {
   const today = dateForInput(new Date());
+  const cols = lanes.length <= 4 ? "md:grid-cols-4" : "md:grid-flow-col md:auto-cols-[minmax(240px,1fr)] md:overflow-x-auto";
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 border-t border-l border-[var(--line)] stagger" data-testid="kanban-board">
-      {LANES.map((c) => {
-        const items = tasks.filter((t) => t.status === c.id);
+    <div className={`grid grid-cols-1 ${cols} border-t border-l border-[var(--line)] stagger`} data-testid="kanban-board">
+      {lanes.map((c) => {
+        const items = tasks.filter((t) => laneOf(t) === c.id);
         const isOver = dragOver === c.id;
         return (
           <div
             key={c.id}
-            className={`fade-up border-r border-b border-[var(--line)] min-h-[500px] flex flex-col transition-all ${isOver ? "bg-[var(--hover)]" : ""}`}
+            className={`fade-up relative border-r border-b border-[var(--line)] min-h-[500px] flex flex-col transition-all ${isOver ? "bg-[var(--hover)]" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setDragOver(c.id); }}
             onDragLeave={() => setDragOver(null)}
             onDrop={() => onDrop(c.id)}
@@ -380,7 +445,10 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                 <div className="w-2 h-2 rounded-full" style={{ background: c.color }} />
                 <div className="overline">{c.label}</div>
               </div>
-              <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)]">{items.length}</div>
+              <div className="flex items-center gap-1">
+                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)]">{items.length}</div>
+                {onQuickAdd && <QuickAdd lane={c.id} label={c.label} onAdd={onQuickAdd} />}
+              </div>
             </div>
             <div className="p-3 flex-1 space-y-3">
               {items.map((t) => {
@@ -729,6 +797,36 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
       <div className="flex items-center justify-end gap-3">
         <button className="btn-primary" data-testid="task-submit">Create task</button>
       </div>
+    </form>
+  );
+}
+
+// Quick task creation from a board lane: "+" opens a one-line input.
+function QuickAdd({ lane, label, onAdd }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setBusy(true);
+    const ok = await onAdd(lane, title.trim());
+    setBusy(false);
+    if (ok) { setTitle(""); setOpen(false); }
+  };
+  if (!open) {
+    return (
+      <button type="button" className="btn-icon !w-6 !h-6" onClick={() => setOpen(true)}
+              aria-label={`Add a task to ${label}`} title={`Add a task to ${label}`} data-testid={`quick-add-${lane || "none"}`}>
+        <Plus size={13} />
+      </button>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="absolute left-2 right-2 top-11 z-10 bg-white border border-[var(--line)] rounded-lg p-2 shadow-[var(--shadow-2)] scale-in">
+      <input autoFocus className="input-flat !h-8 text-sm" placeholder="Task title, then Enter" value={title}
+             onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+             aria-label="New task title" disabled={busy} data-testid={`quick-add-input-${lane || "none"}`} />
     </form>
   );
 }

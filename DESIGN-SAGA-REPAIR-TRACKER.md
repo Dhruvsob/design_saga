@@ -11,6 +11,14 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-097: Calendar Studio/Project scopes, Work board views, Google context, three-dot menus
+
+- Calendar: one feed, two scopes. Every feed item now carries `project_id`, `scope` (project if linked to a project, else studio) and `project_name`; the page has All / Studio / Projects tabs with counts and a project filter. The event form gained the missing Project field (empty = studio event). Server now refuses linking an event to a project the user cannot see (404) — before, any project id was accepted.
+- Google Calendar (existing engine, no second system): project items sync as "[Project] title" with project link in the description; studio events as "Studio: title"; `designSagaScope` extended property; deterministic event ids unchanged (no duplicates), updates/deletes unchanged.
+- Work board: Board / List / Calendar segmented views over the same task records; board Group by status or category (drag between category lanes sets the category); "+" quick add in every lane (respects the project filter); member filter; Calendar view = month grid by due date, drag a task onto a day to set its due date, Unscheduled panel. Toolbar wraps on phones (was overflowing).
+- Three-dot menu: reusable `components/RowActions.jsx` (Radix dropdown, keyboard accessible, hides unauthorised/unsupported actions, financial actions keep reversal semantics). Applied to Invoices (Preview and Record payment stay visible; PDF, Edit, Undo latest payment, Delete in menu), Quotations, Clients, Vendors.
+- Verified: backend gate 377 + `tests/test_calendar_scope.py` (3); e2e ux suite incl. calendar scope + project guard, board quick add/group/list/calendar, quotation delete via menu.
+
 ### DS-096: Sidebar redesign (same brand colours)
 
 - Owner: "sidebar is not looking good". Colours unchanged (cream #F5F4F0, taupe #8B7F6A, warm grey #EDECE8).

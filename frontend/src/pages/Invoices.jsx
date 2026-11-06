@@ -8,6 +8,7 @@ import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import PdfPreviewModal from "../components/PdfPreview";
+import RowActions from "../components/RowActions";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -280,17 +281,19 @@ export default function Invoices({ docType = "invoice" }) {
                 <Td>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setPreview(r)} className="text-[var(--accent-strong)]" title="Preview"><Eye size={16} /></button>
-                    <button onClick={() => download(r.id)} className="text-[var(--accent-strong)]" title="PDF"><FilePdf size={16} /></button>
-                    {canUpdate && (docType === "quotation" ? r.status !== "paid" : r.status === "draft") && (
-                      <button onClick={() => startEdit(r)} className="text-[var(--ink-2)] hover:text-[var(--ink)]" title="Edit" data-testid={`${docType}-edit-${r.id}`}><PencilSimple size={16} /></button>
-                    )}
                     {docType === "invoice" && canRecordPayment && ["sent", "overdue", "partially_paid"].includes(r.status) && accounts.length > 0 && (
                       <button onClick={() => openPayment(r)} className="text-[var(--success)]" title="Record payment" data-testid={`invoice-pay-${r.id}`}><Money size={16} /></button>
                     )}
-                    {docType === "invoice" && canCorrectPayment && ["paid", "partially_paid"].includes(r.status) && r.journal_id && (
-                      <button onClick={() => reverseLatestPayment(r)} className="text-[var(--danger)]" title="Delete latest payment with reversal"><ArrowCounterClockwise size={16} /></button>
-                    )}
-                    {canDelete && <button onClick={() => del(r.id, ["paid", "partially_paid"].includes(r.status))} className="text-[var(--danger)]" title="Delete"><Trash size={16} /></button>}
+                    <RowActions label={`${docType} ${r.number}`} testid={`${docType}-actions-${r.id}`} actions={[
+                      { label: "Download PDF", icon: FilePdf, onSelect: () => download(r.id) },
+                      { label: "Edit", icon: PencilSimple, onSelect: () => startEdit(r), testid: `${docType}-edit-${r.id}`,
+                        hidden: !(canUpdate && (docType === "quotation" ? r.status !== "paid" : r.status === "draft")) },
+                      { divider: true },
+                      { label: "Undo latest payment", icon: ArrowCounterClockwise, danger: true, onSelect: () => reverseLatestPayment(r),
+                        hidden: !(docType === "invoice" && canCorrectPayment && ["paid", "partially_paid"].includes(r.status) && r.journal_id) },
+                      { label: "Delete", icon: Trash, danger: true, onSelect: () => del(r.id, ["paid", "partially_paid"].includes(r.status)),
+                        hidden: !canDelete },
+                    ]} />
                   </div>
                 </Td>
               </tr>

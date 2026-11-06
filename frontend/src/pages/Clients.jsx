@@ -9,6 +9,8 @@ import {
   Plus, MagnifyingGlass, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
+import { ArrowSquareOut } from "@phosphor-icons/react";
 
 const EMPTY = { name: "", email: "", phone: "", company: "", address: "", client_type: "", notes: "" };
 
@@ -175,22 +177,17 @@ export default function Clients() {
                 <Td className="font-mono text-xs">{c.phone || "—"}</Td>
                 <Td className="font-mono text-xs">{formatDate(c.created_at)}</Td>
                 <Td>
-                  <div className="flex items-center justify-end gap-1">
-                    {hasPerm("clients.update") && (
-                      <button onClick={(e) => startEdit(c, e)} className="btn-ghost p-1.5" title="Edit" data-testid={`client-edit-${c.id}`}>
-                        <PencilSimple size={13} />
-                      </button>
-                    )}
-                    {hasPerm("clients.update") && !c.archived && (
-                      <button onClick={(e) => archive(c, e)} className="btn-ghost p-1.5" title="Archive" data-testid={`client-archive-${c.id}`}>
-                        <Archive size={13} />
-                      </button>
-                    )}
-                    {hasPerm("clients.update") && c.archived && (
-                      <button onClick={(e) => restore(c, e)} className="btn-ghost p-1.5 text-[var(--success)]" title="Restore" data-testid={`client-restore-${c.id}`}>
-                        <ArrowCounterClockwise size={13} />
-                      </button>
-                    )}
+                  <div className="flex items-center justify-end">
+                    <RowActions label={c.name} testid={`client-actions-${c.id}`} actions={[
+                      { label: "Open", icon: ArrowSquareOut, onSelect: () => navigate(`/clients/${c.id}`) },
+                      { label: "Edit", icon: PencilSimple, onSelect: () => startEdit(c, { stopPropagation() {} }),
+                        hidden: !hasPerm("clients.update"), testid: `client-edit-${c.id}` },
+                      { divider: true },
+                      { label: "Archive", icon: Archive, onSelect: () => archive(c, { stopPropagation() {} }),
+                        hidden: !hasPerm("clients.update") || c.archived, testid: `client-archive-${c.id}` },
+                      { label: "Restore", icon: ArrowCounterClockwise, onSelect: () => restore(c, { stopPropagation() {} }),
+                        hidden: !hasPerm("clients.update") || !c.archived, testid: `client-restore-${c.id}` },
+                    ]} />
                   </div>
                 </Td>
               </tr>

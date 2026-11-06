@@ -6,6 +6,9 @@ import { useAuth } from "../context/AuthContext";
 import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
+import { FilePdf } from "@phosphor-icons/react";
+import { API } from "../lib/api";
 
 const TYPE_LABELS = {
   turnkey: "Turnkey",
@@ -163,8 +166,13 @@ export default function QuotationsAdv() {
                 <Td onClick={() => navigate(`/quotations/${r.id}`)}><span className={`status-chip ${STATUS_COLORS[r.status] || "chip-draft"}`}>{r.status}</span></Td>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => navigate(`/quotations/${r.id}`)} className="text-[var(--accent-strong)]" title="Open"><ArrowRight size={16} /></button>
-                    {hasPerm("quotations.delete") && r.status !== "converted" && <button onClick={() => del(r.id)} className="text-[var(--danger)]" title="Delete"><Trash size={16} /></button>}
+                    <RowActions label={`Quotation ${r.number}`} testid={`q-actions-${r.id}`} actions={[
+                      { label: "Open", icon: ArrowRight, onSelect: () => navigate(`/quotations/${r.id}`) },
+                      { label: "Download PDF", icon: FilePdf, onSelect: () => window.open(`${API}/quotations-adv/${r.id}/pdf`, "_blank", "noopener") },
+                      { divider: true },
+                      { label: "Delete", icon: Trash, danger: true, onSelect: () => del(r.id), testid: `q-delete-${r.id}`,
+                        hidden: !(hasPerm("quotations.delete") && r.status !== "converted") },
+                    ]} />
                   </div>
                 </Td>
               </tr>

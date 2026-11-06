@@ -185,6 +185,14 @@ async def list_events(request: Request, start: Optional[str] = None, end: Option
     return rows
 
 
+async def _check_event_project(user: dict, project_id: Optional[str]) -> None:
+    """A project event may only be linked to a project the user can see."""
+    if not project_id:
+        return
+    if project_id not in set(await visible_project_ids(user)):
+        raise HTTPException(404, "Project not found")
+
+
 @router.post("/calendar/events")
 async def create_event(payload: EventIn, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
@@ -193,6 +201,7 @@ async def create_event(payload: EventIn, request: Request,
     if not has_permission(user, "calendar.read"):
         raise HTTPException(403, "Missing permission: calendar.read")
     _validate_event_timing(payload.date, payload.end_date, payload.start_time, payload.end_time)
+    await _check_event_project(user, payload.project_id)
     kind = payload.kind if payload.kind in EVENT_KINDS else "other"
     visibility = payload.visibility if payload.visibility in VISIBILITIES else "private"
     reminder = payload.reminder_minutes
@@ -248,6 +257,8 @@ async def update_event(event_id: str, payload: EventUpdate, request: Request,
     merged = {**row, **upd}
     _validate_event_timing(merged.get("date"), merged.get("end_date"),
                            merged.get("start_time"), merged.get("end_time"))
+    if upd.get("project_id"):
+        await _check_event_project(user, upd["project_id"])
     if "kind" in upd and upd["kind"] not in EVENT_KINDS:
         upd["kind"] = "other"
     if "visibility" in upd and upd["visibility"] not in VISIBILITIES:
@@ -321,6 +332,7 @@ async def calendar_feed(start: str, end: str, request: Request,
             "title": t.get("title") or "Task",
             "subtitle": " · ".join(x for x in [proj_names.get(t.get("project_id")), t.get("assignee_name")] if x),
             "link": f"/tasks/{t['id']}",
+            "project_id": t.get("project_id"),
             "meta": {"status": t.get("status"), "priority": t.get("priority")},
         })
 
@@ -347,6 +359,7 @@ async def calendar_feed(start: str, end: str, request: Request,
             "title": m.get("name") or "Milestone",
             "subtitle": proj_names.get(m.get("project_id")) or "",
             "link": f"/projects/{m['project_id']}" if m.get("project_id") else None,
+            "project_id": m.get("project_id"),
             "meta": {"amount": m.get("amount"), "status": m.get("status")},
         })
 
@@ -369,6 +382,7 @@ async def calendar_feed(start: str, end: str, request: Request,
             "title": f"{p.get('name')} — deadline",
             "subtitle": p.get("stage") or "",
             "link": f"/projects/{p['id']}",
+            "project_id": p["id"],
             "meta": {},
         })
 
@@ -461,10 +475,24 @@ async def calendar_feed(start: str, end: str, request: Request,
             "time": e.get("start_time"),
             "title": e.get("title"),
             "subtitle": " · ".join(x for x in [e.get("location"), e.get("created_by_name")] if x),
-            "link": None,
+            "link": f"/projects/{e['project_id']}" if e.get("project_id") else None,
+            "project_id": e.get("project_id"),
             "event": e,          # full doc so UI can edit/delete
             "meta": {"notes": e.get("notes")},
         })
+
+    # One calendar, two scopes: anything linked to a project is "project",
+    # everything else (studio meetings, holidays, leave, office events) is
+    # "studio". Project names come from records the user can already see.
+    linked = {i["project_id"] for i in items if i.get("project_id")}
+    names = {}
+    if linked:
+        async for p in sdb.projects.find({"id": {"$in": list(linked)}}, {"_id": 0, "id": 1, "name": 1}):
+            names[p["id"]] = p.get("name")
+    for i in items:
+        i["scope"] = "project" if i.get("project_id") else "studio"
+        if i.get("project_id"):
+            i["project_name"] = names.get(i["project_id"])
 
     items.sort(key=lambda x: (x.get("date") or "", x.get("time") or "99:99"))
     return {"start": start, "end": end, "count": len(items), "items": items}

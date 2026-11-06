@@ -54,6 +54,8 @@ export default function CalendarPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hiddenKinds, setHiddenKinds] = useState({});   // kind -> true (hidden)
+  const [scope, setScope] = useState("all");             // all | studio | project
+  const [projectFilter, setProjectFilter] = useState("");
   const [selectedDay, setSelectedDay] = useState(null); // YYYY-MM-DD
   const [modal, setModal] = useState(null);             // null | {mode:"create"|"edit", data}
   const [google, setGoogle] = useState(null);
@@ -144,10 +146,26 @@ export default function CalendarPage() {
     } finally { setGoogleBusy(false); }
   };
 
+  const scoped = useMemo(() => items.filter((i) => {
+    const sc = i.scope || (i.project_id ? "project" : "studio");
+    if (scope !== "all" && sc !== scope) return false;
+    if (projectFilter && i.project_id !== projectFilter) return false;
+    return true;
+  }), [items, scope, projectFilter]);
   const visible = useMemo(
-    () => items.filter((i) => !hiddenKinds[i.kind === "deadline" ? "project_deadline" : i.kind]),
-    [items, hiddenKinds],
+    () => scoped.filter((i) => !hiddenKinds[i.kind === "deadline" ? "project_deadline" : i.kind]),
+    [scoped, hiddenKinds],
   );
+  const scopeCounts = useMemo(() => ({
+    all: items.length,
+    studio: items.filter((i) => (i.scope || (i.project_id ? "project" : "studio")) === "studio").length,
+    project: items.filter((i) => (i.scope || (i.project_id ? "project" : "studio")) === "project").length,
+  }), [items]);
+  const projectOptions = useMemo(() => {
+    const m = new Map();
+    items.forEach((i) => { if (i.project_id) m.set(i.project_id, i.project_name || "Project"); });
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [items]);
   const byDate = useMemo(() => {
     const m = {};
     for (const it of visible) {
@@ -195,9 +213,9 @@ export default function CalendarPage() {
       <PageHero
         eyebrow="STUDIO / CALENDAR"
         title="Calendar"
-        kicker="Tasks, meetings, deadlines, invoices, holidays and reminders — one unified studio calendar."
+        kicker="Studio events (meetings, office, holidays) and project work (tasks, deadlines, site visits) in one calendar."
       >
-        <button className="btn-primary" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: selectedDay || todayStr } })}
+        <button className="btn-primary" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: selectedDay || todayStr, project_id: scope !== "studio" ? projectFilter : "" } })}
                 data-testid="new-event-btn">
           <Plus size={14} /> New event
         </button>
@@ -239,6 +257,29 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
+
+      {/* Studio / Project scope */}
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)]" data-testid="calendar-scope">
+        <div className="flex items-end gap-6" role="tablist" aria-label="Calendar scope">
+          {[["all", "All"], ["studio", "Studio"], ["project", "Projects"]].map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={scope === id}
+                    onClick={() => { setScope(id); if (id === "studio") setProjectFilter(""); }}
+                    className={`relative pb-2.5 font-display text-xl transition-colors ${scope === id ? "text-[var(--ink)]" : "text-[var(--ink-3)] hover:text-[var(--ink-2)]"}`}
+                    data-testid={`scope-${id}`}>
+              {label}
+              <span className="ml-1.5 align-middle text-xs font-sans text-[var(--ink-3)] tabular">{scopeCounts[id]}</span>
+              {scope === id && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[var(--accent)] rounded-full" />}
+            </button>
+          ))}
+        </div>
+        {scope !== "studio" && (
+          <select aria-label="Filter by project" className="input-flat !w-auto mb-2 min-w-[200px]" value={projectFilter}
+                  onChange={(e) => setProjectFilter(e.target.value)} data-testid="calendar-project-filter">
+            <option value="">All projects</option>
+            {projectOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        )}
+      </div>
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 justify-between">
@@ -462,8 +503,9 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
     employee_ids: initial?.employee_ids || [],
     vendor_id: initial?.vendor_id || "",
     client_id: initial?.client_id || "",
+    project_id: initial?.project_id || "",
   });
-  const [opts, setOpts] = useState({ employees: [], vendors: [], clients: [] });
+  const [opts, setOpts] = useState({ employees: [], vendors: [], clients: [], projects: [] });
   const [busy, setBusy] = useState(false);
   const [empQuery, setEmpQuery] = useState("");
   const canDelete = isEdit && (initial?.created_by === me?.user_id || me?.role === "Admin" || me?.is_super_admin);
@@ -472,8 +514,8 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
     let alive = true;
     (async () => {
       const grab = async (url) => { try { const { data } = await api.get(url); return Array.isArray(data) ? data : []; } catch { return []; } };
-      const [emps, vends, clis] = await Promise.all([grab("/employees"), grab("/vendors"), grab("/clients")]);
-      if (alive) setOpts({ employees: emps, vendors: vends, clients: clis });
+      const [emps, vends, clis, projs] = await Promise.all([grab("/employees"), grab("/vendors"), grab("/clients"), grab("/projects")]);
+      if (alive) setOpts({ employees: emps, vendors: vends, clients: clis, projects: projs });
     })();
     return () => { alive = false; };
   }, []);
@@ -494,6 +536,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
         ...f,
         vendor_id: f.vendor_id || null,
         client_id: f.client_id || null,
+        project_id: f.project_id || null,
       };
       if (isEdit) {
         await api.patch(`/calendar/events/${initial.id}`, payload);
@@ -558,6 +601,16 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
             <input type="time" className="input-flat w-full" value={f.end_time}
                    onChange={(e) => setF({ ...f, end_time: e.target.value })} />
           </div>
+        </div>
+
+        {/* Studio or project */}
+        <div>
+          <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Project (leave empty for a studio event)</label>
+          <select aria-label="Project" className="input-flat w-full" value={f.project_id}
+                  onChange={(e) => setF({ ...f, project_id: e.target.value })} data-testid="event-project-select">
+            <option value="">Studio event (not linked to a project)</option>
+            {opts.projects.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+          </select>
         </div>
 
         {/* Reminder */}

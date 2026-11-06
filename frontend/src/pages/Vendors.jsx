@@ -8,6 +8,7 @@ import {
   CaretRight, X, HardHat, PencilSimple, Archive,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const AGENCY_LABELS = {
   vendor: "Vendor", agency: "Agency", contractor: "Contractor",
@@ -274,19 +275,16 @@ export default function Vendors() {
                 </Td>
                 <Td className="text-right">
                   <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-                    {canEdit && (
-                      <Link to={`/vendors/${v.id}?edit=1`} className="btn-ghost text-xs" data-testid={`vendor-edit-${v.id}`}>
-                        <PencilSimple size={12} /> Edit
-                      </Link>
-                    )}
-                    {canArchive && (
-                      <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={(event) => archiveVendor(v, event)} data-testid={`vendor-archive-${v.id}`}>
-                        <Archive size={12} /> Archive
-                      </button>
-                    )}
                     <Link to={`/vendors/${v.id}`} className="btn-ghost text-xs text-[var(--accent-strong)] font-semibold">
                       Open <CaretRight size={11} weight="bold" />
                     </Link>
+                    <RowActions label={v.name} testid={`vendor-actions-${v.id}`} actions={[
+                      { label: "Edit", icon: PencilSimple, onSelect: () => navigate(`/vendors/${v.id}?edit=1`),
+                        hidden: !canEdit, testid: `vendor-edit-${v.id}` },
+                      { divider: true },
+                      { label: "Archive", icon: Archive, danger: true, onSelect: () => archiveVendor(v, { stopPropagation() {} }),
+                        hidden: !canArchive, testid: `vendor-archive-${v.id}` },
+                    ]} />
                   </div>
                 </Td>
               </tr>
