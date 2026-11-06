@@ -6,7 +6,11 @@ Last updated: 05/11/2026 (Asia/Kolkata).
 ## Where things stand
 
 - Branch `codex/repair-release`; see `git log -5 --oneline` for the exact head.
-- Production runtime is still `3b15e23`. Nothing after it is deployed.
+- Production runtime is `8d17a12` (deployed 05/11/2026 18:40 UTC via git bundle;
+  the VPS cannot reach github.com). Scheduled backups fixed and verified.
+- Deploy recipe: `git bundle create x.bundle <prod-head>..codex/repair-release`,
+  `scp` to `root@srv2020574.hstgr.cloud` (IPv6), then on the VPS run in a
+  transient unit: `git fetch /root/x.bundle codex/repair-release:refs/remotes/origin/codex/repair-release && git merge --ff-only origin/codex/repair-release`.
 - Last completed: DS-081 (searchable selectors, phone-width fixes), after
   DS-080 (historical Cash/Bank mismatch listing), DS-076 (Cash/Bank mismatch), DS-077 (vendor page crash,
   `no-undef`, page smoke), DS-078 (Attendance without employee profile) and

@@ -11,6 +11,15 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DEPLOY-2026-11-05: Repair release `8d17a12` deployed to production
+
+- Target verified before deploy: hostname `srv2020574`, eth0 `187.52.124.46`, `/opt/design-saga-git` on GitHub remote `Dhruvsob/design_saga`, previous runtime `3b15e23`, only the protected Caddy files modified locally (untouched), 14 GB disk free, all five containers healthy.
+- Access: SSH works via `srv2020574.hstgr.cloud` over IPv6; the IPv4 address still times out on port 22. The VPS cannot reach github.com (GitHub has no IPv6), so the 44 commits were shipped as a git bundle over SSH (SHA-256 `4022e85c...7bb7`, matched on both ends, `git bundle verify` passed) and fast-forwarded with `git merge --ff-only`; the post-merge hook ran `deploy/update-production.sh` inside a transient systemd unit.
+- Result: pre-deploy backup `/opt/design-saga-backups/20261105T184001Z`; backend and web rebuilt and healthy; rollback image tags `rollback-3b15e23`; "Design Saga deployment completed: 8d17a12".
+- Live verification (06/11): `/healthz` ok; `/api/auth/me` 401; new `/api/accounting/integrity/source-links` 401 (exists, requires login); new CSP/COOP headers served; production bundle contains grouped navigation; zero backend errors and zero 5xx since deploy.
+- Backups: the scheduled `design-saga-backup.service` had failed daily since 27/10 (read-only sandbox vs `chmod` in backup.sh). Fixed in `8d17a12`; a manual run of the real sandboxed unit succeeded (`20261106T045038Z`, 64 MB, SHA256SUMS verified).
+- Not yet live-verified (needs a signed-in owner): uploading the real logo and printing each PDF, running Accounting > Validation > Data checks on real data, salary/vendor payment Cash/Bank pairing in the real forms.
+
 ## Canonical Open Backlog (05/11/2026 delta from `f9e1351`)
 
 This is the single deduplicated list of genuinely open work. It supersedes the
@@ -116,7 +125,7 @@ local MongoDB/FerretDB and no browser E2E harness (see OPS-06).
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Externally Blocked: SSH to 187.52.124.46:22 times out from this workstation while 443 answers (05/11) | Owner checks Hostinger firewall / UFW / fail2ban ban for this IP |
+| OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Deployed `8d17a12` on 05/11 via bundle (see DEPLOY-2026-11-05); was Externally Blocked: SSH to 187.52.124.46:22 times out from this workstation while 443 answers (05/11) | Owner checks Hostinger firewall / UFW / fail2ban ban for this IP |
 | OPS-02 | P1 | Encrypted off-server backup replication + alerting | Externally Blocked (destination/credentials) | Owner chooses provider |
 | OPS-03 | P1 | External alert delivery (uptime/5xx/TLS/disk/backup) | Externally Blocked | Owner chooses webhook/email target |
 | OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Confirmed | Add to quality workflow |
