@@ -16,15 +16,15 @@ import { confirmAction } from "../lib/confirm";
 /* ---------- constants ---------- */
 const KIND_META = {
   task:             { label: "Tasks",       color: "#625C4D" },
-  meeting:          { label: "Meetings",    color: "#1D633E" },
+  meeting:          { label: "Meetings",    color: "#1E6A45" },
   reminder:         { label: "Reminders",   color: "#8F5B00" },
-  milestone:        { label: "Milestones",  color: "#6046D9" },
-  project_deadline: { label: "Deadlines",   color: "#0A0A0A" },
-  invoice_due:      { label: "Invoices",    color: "#B4001C" },
-  holiday:          { label: "Holidays",    color: "#1F63D6" },
+  milestone:        { label: "Milestones",  color: "#5A4AB8" },
+  project_deadline: { label: "Deadlines",   color: "#18181B" },
+  invoice_due:      { label: "Invoices",    color: "#B3261E" },
+  holiday:          { label: "Holidays",    color: "#2E5694" },
   leave:            { label: "Leaves",      color: "#7F4F00" },
-  deadline:         { label: "Deadlines",   color: "#0A0A0A" },
-  other:            { label: "Other",       color: "#5C5C5C" },
+  deadline:         { label: "Deadlines",   color: "#18181B" },
+  other:            { label: "Other",       color: "#4A4741" },
 };
 const kindColor = (k) => (KIND_META[k] || KIND_META.other).color;
 
@@ -194,7 +194,7 @@ export default function CalendarPage() {
     <div className="space-y-6" data-testid="calendar-page">
       <PageHero
         eyebrow="STUDIO / CALENDAR"
-        title="Everything, on time."
+        title="Calendar"
         kicker="Tasks, meetings, deadlines, invoices, holidays and reminders — one unified studio calendar."
       >
         <button className="btn-primary" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: selectedDay || todayStr } })}
@@ -204,20 +204,20 @@ export default function CalendarPage() {
       </PageHero>
 
       {google?.can_manage && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-y border-[#E5E5E5] py-3" data-testid="google-calendar-status">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-y border-[var(--line)] py-3" data-testid="google-calendar-status">
           <div className="flex min-w-0 items-center gap-3">
-            <GoogleLogo size={22} weight="bold" className={google.connected ? "text-[#1D633E]" : "text-[#5C5C5C]"} />
+            <GoogleLogo size={22} weight="bold" className={google.connected ? "text-[var(--success)]" : "text-[var(--ink-2)]"} />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-sm font-medium">
                 Google Calendar
-                {google.connected && <CheckCircle size={14} weight="fill" className="text-[#1D633E]" />}
+                {google.connected && <CheckCircle size={14} weight="fill" className="text-[var(--success)]" />}
               </div>
-              <div className="truncate text-xs text-[#5C5C5C]">
+              <div className="truncate text-xs text-[var(--ink-2)]">
                 {google.connected
                   ? `${google.email || "Connected"}${google.pending ? ` · ${google.pending} pending` : ""}`
                   : google.configured ? "Connect your own Google Calendar. Only your shared or assigned items sync." : "OAuth setup is required on the server"}
               </div>
-              {google.last_error && <div className="text-xs text-[#B4001C]">{google.last_error}</div>}
+              {google.last_error && <div className="text-xs text-[var(--danger)]">{google.last_error}</div>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -226,7 +226,7 @@ export default function CalendarPage() {
                 <button type="button" className="btn-ghost text-xs" onClick={syncGoogle} disabled={googleBusy} data-testid="google-calendar-sync">
                   <ArrowsClockwise size={14} className={googleBusy ? "animate-spin" : ""} /> Sync now
                 </button>
-                <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={disconnectGoogle} disabled={googleBusy} data-testid="google-calendar-disconnect">
+                <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={disconnectGoogle} disabled={googleBusy} data-testid="google-calendar-disconnect">
                   Disconnect
                 </button>
               </>
@@ -252,12 +252,12 @@ export default function CalendarPage() {
           <button onClick={toggleSound} className="btn-ghost px-2"
                   title={soundOn ? "Reminder sound on — click to mute" : "Reminder sound muted — click to enable"}
                   data-testid="cal-sound-toggle">
-            {soundOn ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} className="text-[#6E6A63]" />}
+            {soundOn ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} className="text-[var(--ink-3)]" />}
           </button>
-          <div className="flex items-center gap-1 border border-[#E5E5E5]">
+          <div className="flex items-center gap-1 border border-[var(--line)]">
             {["month", "week", "agenda"].map((v) => (
               <button key={v} onClick={() => setView(v)}
-                className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${view === v ? "bg-[#0A0A0A] text-white" : "text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
+                className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${view === v ? "bg-[var(--ink)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
                 data-testid={`view-${v}`}>{v}</button>
             ))}
           </div>
@@ -271,10 +271,10 @@ export default function CalendarPage() {
           return (
             <button key={k}
               onClick={() => setHiddenKinds((h) => ({ ...h, [k]: !h[k] }))}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition ${off ? "border-[#E5E5E5] text-[#6E6A63] line-through" : "border-transparent"}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition ${off ? "border-[var(--line)] text-[var(--ink-3)] line-through" : "border-transparent"}`}
               style={off ? {} : { background: `${meta.color}14`, color: meta.color }}
               data-testid={`filter-${k}`}>
-              <span className="w-2 h-2 rounded-full" style={{ background: off ? "#C9C9C9" : meta.color }} />
+              <span className="w-2 h-2 rounded-full" style={{ background: off ? "#D2CEC4" : meta.color }} />
               {meta.label}
             </button>
           );
@@ -286,9 +286,9 @@ export default function CalendarPage() {
       {/* ============ MONTH ============ */}
       {!loading && view === "month" && (
         <div data-testid="month-grid">
-          <div className="grid grid-cols-7 border-l border-t border-[#E5E5E5]">
+          <div className="grid grid-cols-7 border-l border-t border-[var(--line)]">
             {WEEKDAYS.map((d) => (
-              <div key={d} className="bg-[#FAFAFA] border-r border-b border-[#E5E5E5] p-1.5 text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C] text-center">{d}</div>
+              <div key={d} className="bg-[var(--surface-2)] border-r border-b border-[var(--line)] p-1.5 text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)] text-center">{d}</div>
             ))}
             {Array.from({ length: 42 }).map((_, i) => {
               const d = addDays(range.start, i);
@@ -298,9 +298,9 @@ export default function CalendarPage() {
               const isToday = ds === todayStr;
               return (
                 <button key={ds} onClick={() => setSelectedDay(selectedDay === ds ? null : ds)}
-                  className={`min-h-[92px] border-r border-b border-[#E5E5E5] p-1 text-left align-top transition hover:bg-[#F7F8FA] ${inMonth ? "bg-white" : "bg-[#FCFCFC]"} ${selectedDay === ds ? "ring-2 ring-inset ring-[#8B7F6A]" : ""}`}
+                  className={`min-h-[92px] border-r border-b border-[var(--line)] p-1 text-left align-top transition hover:bg-[#F7F8FA] ${inMonth ? "bg-white" : "bg-[var(--surface-2)]"} ${selectedDay === ds ? "ring-2 ring-inset ring-[var(--accent)]" : ""}`}
                   data-testid={`day-${ds}`}>
-                  <div className={`text-[11px] font-mono mb-1 w-6 h-6 flex items-center justify-center ${isToday ? "bg-[#8B7F6A] text-white rounded-full" : inMonth ? "text-[#0A0A0A]" : "text-[#77736B]"}`}>
+                  <div className={`text-[11px] font-mono mb-1 w-6 h-6 flex items-center justify-center ${isToday ? "bg-[var(--accent)] text-white rounded-full" : inMonth ? "text-[var(--ink)]" : "text-[var(--ink-3)]"}`}>
                     {d.getDate()}
                   </div>
                   <div className="space-y-0.5">
@@ -311,7 +311,7 @@ export default function CalendarPage() {
                       </div>
                     ))}
                     {dayItems.length > 3 && (
-                      <div className="text-[10px] text-[#5C5C5C] px-1">+{dayItems.length - 3} more</div>
+                      <div className="text-[10px] text-[var(--ink-2)] px-1">+{dayItems.length - 3} more</div>
                     )}
                   </div>
                 </button>
@@ -331,7 +331,7 @@ export default function CalendarPage() {
                 </div>
               </div>
               {(byDate[selectedDay] || []).length === 0 && (
-                <div className="text-sm text-[#6E6A63] py-4 text-center">Nothing scheduled on this day.</div>
+                <div className="text-sm text-[var(--ink-3)] py-4 text-center">Nothing scheduled on this day.</div>
               )}
               <div className="space-y-1.5">
                 {(byDate[selectedDay] || []).map((it) => <AgendaRow key={it.id} it={it} onOpen={openItem} />)}
@@ -343,17 +343,17 @@ export default function CalendarPage() {
 
       {/* ============ WEEK ============ */}
       {!loading && view === "week" && (
-        <div className="grid grid-cols-1 md:grid-cols-7 border-l border-t border-[#E5E5E5]" data-testid="week-grid">
+        <div className="grid grid-cols-1 md:grid-cols-7 border-l border-t border-[var(--line)]" data-testid="week-grid">
           {Array.from({ length: 7 }).map((_, i) => {
             const d = addDays(range.start, i);
             const ds = ymd(d);
             const dayItems = byDate[ds] || [];
             const isToday = ds === todayStr;
             return (
-              <div key={ds} className="border-r border-b border-[#E5E5E5] bg-white min-h-[160px]">
-                <div className={`p-2 border-b border-[#F0F0F0] flex items-center justify-between ${isToday ? "bg-[#F5F4F0]" : "bg-[#FAFAFA]"}`}>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">{WEEKDAYS[i]}</span>
-                  <span className={`text-xs font-mono ${isToday ? "text-[#76705E] font-bold" : ""}`}>{d.getDate()}</span>
+              <div key={ds} className="border-r border-b border-[var(--line)] bg-white min-h-[160px]">
+                <div className={`p-2 border-b border-[var(--line-soft)] flex items-center justify-between ${isToday ? "bg-[var(--hover)]" : "bg-[var(--surface-2)]"}`}>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">{WEEKDAYS[i]}</span>
+                  <span className={`text-xs font-mono ${isToday ? "text-[var(--accent-strong)] font-bold" : ""}`}>{d.getDate()}</span>
                 </div>
                 <div className="p-1.5 space-y-1">
                   {dayItems.map((it) => (
@@ -377,7 +377,7 @@ export default function CalendarPage() {
         <div className="space-y-4" data-testid="agenda-list">
           {Object.keys(byDate).sort().map((ds) => (
             <div key={ds}>
-              <div className={`overline mb-1.5 ${ds === todayStr ? "text-[#76705E]" : ""}`}>
+              <div className={`overline mb-1.5 ${ds === todayStr ? "text-[var(--accent-strong)]" : ""}`}>
                 {fmtNice(ds).toUpperCase()}{ds === todayStr ? " · TODAY" : ""}
               </div>
               <div className="space-y-1.5">
@@ -386,7 +386,7 @@ export default function CalendarPage() {
             </div>
           ))}
           {visible.length === 0 && (
-            <div className="card-flat text-center py-14 text-[#6E6A63]" data-testid="agenda-empty">
+            <div className="card-flat text-center py-14 text-[var(--ink-3)]" data-testid="agenda-empty">
               Nothing scheduled in the next 30 days.
               <div className="mt-3">
                 <button className="btn-primary" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: todayStr } })}>
@@ -416,18 +416,18 @@ function AgendaRow({ it, onOpen }) {
   const c = kindColor(it.kind);
   return (
     <button onClick={() => onOpen(it)}
-      className="w-full card-flat !py-2.5 flex items-center gap-3 text-left hover:border-[#0A0A0A] transition"
+      className="w-full card-flat !py-2.5 flex items-center gap-3 text-left hover:border-[var(--ink)] transition"
       data-testid={`agenda-item-${it.id}`}>
       <span className="w-1 self-stretch rounded-full" style={{ background: c }} />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold truncate">{it.title}</div>
         {(it.subtitle || it.meta?.status) && (
-          <div className="text-xs text-[#5C5C5C] truncate">
+          <div className="text-xs text-[var(--ink-2)] truncate">
             {[it.subtitle, it.meta?.status, it.meta?.priority].filter(Boolean).join(" · ")}
           </div>
         )}
       </div>
-      {it.time && <span className="text-xs font-mono text-[#5C5C5C] flex items-center gap-1"><ClockIcon size={12} />{it.time}</span>}
+      {it.time && <span className="text-xs font-mono text-[var(--ink-2)] flex items-center gap-1"><ClockIcon size={12} />{it.time}</span>}
       <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
             style={{ background: `${c}14`, color: c }}>
         {(KIND_META[it.kind] || KIND_META.other).label.replace(/s$/, "")}
@@ -523,7 +523,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <form onSubmit={save} className="relative bg-white border border-[#E5E5E5] w-full max-w-lg p-6 space-y-4 shadow-xl max-h-[92vh] overflow-y-auto"
+      <form onSubmit={save} className="relative bg-white border border-[var(--line)] w-full max-w-lg p-6 space-y-4 shadow-xl max-h-[92vh] overflow-y-auto"
             data-testid="event-modal">
         <div className="flex items-center justify-between">
           <div className="overline">{isEdit ? "EDIT EVENT" : "NEW EVENT"}</div>
@@ -533,7 +533,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
         <div className="flex gap-2">
           {[["meeting", "Meeting"], ["reminder", "Reminder"], ["other", "Other"]].map(([k, l]) => (
             <button type="button" key={k} onClick={() => setF({ ...f, kind: k })}
-              className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider border ${f.kind === k ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C]"}`}
+              className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider border ${f.kind === k ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "border-[var(--line)] text-[var(--ink-2)]"}`}
               data-testid={`event-kind-${k}`}>{l}</button>
           ))}
         </div>
@@ -544,17 +544,17 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
 
         <div className="grid grid-cols-3 gap-2">
           <div className="col-span-1">
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Date</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Date</label>
             <input type="date" required className="input-flat w-full" value={f.date}
                    onChange={(e) => setF({ ...f, date: e.target.value })} data-testid="event-date-input" />
           </div>
           <div>
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Start</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Start</label>
             <input type="time" className="input-flat w-full" value={f.start_time}
                    onChange={(e) => setF({ ...f, start_time: e.target.value })} data-testid="event-start-input" />
           </div>
           <div>
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">End</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">End</label>
             <input type="time" className="input-flat w-full" value={f.end_time}
                    onChange={(e) => setF({ ...f, end_time: e.target.value })} />
           </div>
@@ -562,7 +562,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
 
         {/* Reminder */}
         <div>
-          <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1.5">
+          <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1 flex items-center gap-1.5">
             <Bell size={12} /> Reminder
           </label>
           <select aria-label="Null"
@@ -574,26 +574,26 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
             {REMINDER_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
           {f.reminder_minutes !== null && !f.start_time && (
-            <p className="text-[10px] text-[#8F5B00] mt-1">Set a start time so the reminder can fire.</p>
+            <p className="text-[10px] text-[var(--warning)] mt-1">Set a start time so the reminder can fire.</p>
           )}
         </div>
 
         {/* Visibility / privacy */}
         <div>
-          <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Visibility</label>
+          <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Visibility</label>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setF({ ...f, visibility: "private" })}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border transition ${f.visibility === "private" ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#0A0A0A]"}`}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border transition ${f.visibility === "private" ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--ink)]"}`}
               data-testid="event-visibility-private">
               <Lock size={13} /> Private
             </button>
             <button type="button" onClick={() => setF({ ...f, visibility: "org" })}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border transition ${f.visibility === "org" ? "bg-[#1D633E] text-white border-[#1D633E]" : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#0A0A0A]"}`}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs border transition ${f.visibility === "org" ? "bg-[var(--success)] text-white border-[var(--success)]" : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--ink)]"}`}
               data-testid="event-visibility-org">
               <Globe size={13} /> Shared with team
             </button>
           </div>
-          <p className="text-[10px] text-[#6E6A63] mt-1">
+          <p className="text-[10px] text-[var(--ink-3)] mt-1">
             {f.visibility === "private"
               ? "Only you and the people you tag can see this event."
               : "Everyone in your team can see this event."}
@@ -602,34 +602,34 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
 
         {/* Assignment / tagging */}
         {canAssign && (
-          <div className="border border-[#E5E5E5] p-3 space-y-3" data-testid="event-assign-section">
+          <div className="border border-[var(--line)] p-3 space-y-3" data-testid="event-assign-section">
             <div className="overline flex items-center gap-1.5"><Users size={12} /> Assign / tag</div>
 
             {opts.employees.length > 0 && (
               <div>
-                <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Employees</label>
+                <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Employees</label>
                 <input className="input-flat w-full mb-1.5" placeholder="Search employees…"
                        value={empQuery} onChange={(e) => setEmpQuery(e.target.value)}
                        data-testid="event-emp-search" />
-                <div className="max-h-32 overflow-y-auto border border-[#F0F0F0] divide-y divide-[#F5F5F5]" data-testid="event-emp-list">
-                  {filteredEmps.length === 0 && <div className="text-[11px] text-[#6E6A63] px-2 py-2">No matches.</div>}
+                <div className="max-h-32 overflow-y-auto border border-[var(--line-soft)] divide-y divide-[var(--hover)]" data-testid="event-emp-list">
+                  {filteredEmps.length === 0 && <div className="text-[11px] text-[var(--ink-3)] px-2 py-2">No matches.</div>}
                   {filteredEmps.map((emp) => {
                     const on = f.employee_ids.includes(emp.id);
                     return (
                       <button type="button" key={emp.id} onClick={() => toggleEmp(emp.id)}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition ${on ? "bg-[#F5F4F0]" : "hover:bg-[#FAFAFA]"}`}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs transition ${on ? "bg-[var(--hover)]" : "hover:bg-[var(--surface-2)]"}`}
                         data-testid={`event-emp-${emp.id}`}>
-                        <span className={`w-3.5 h-3.5 border flex items-center justify-center ${on ? "bg-[#8B7F6A] border-[#8B7F6A]" : "border-[#C9C9C9]"}`}>
+                        <span className={`w-3.5 h-3.5 border flex items-center justify-center ${on ? "bg-[var(--accent)] border-[var(--accent)]" : "border-[#C9C9C9]"}`}>
                           {on && <X size={9} className="text-white" weight="bold" />}
                         </span>
                         <span className="truncate">{empName(emp)}</span>
-                        {emp.department && <span className="ml-auto text-[10px] text-[#6E6A63] shrink-0">{emp.department}</span>}
+                        {emp.department && <span className="ml-auto text-[10px] text-[var(--ink-3)] shrink-0">{emp.department}</span>}
                       </button>
                     );
                   })}
                 </div>
                 {f.employee_ids.length > 0 && (
-                  <div className="text-[10px] text-[#5C5C5C] mt-1">{f.employee_ids.length} employee(s) tagged — they'll be notified.</div>
+                  <div className="text-[10px] text-[var(--ink-2)] mt-1">{f.employee_ids.length} employee(s) tagged — they'll be notified.</div>
                 )}
               </div>
             )}
@@ -637,7 +637,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
             <div className="grid grid-cols-2 gap-2">
               {opts.vendors.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1"><HardHat size={11} /> Vendor / Agency</label>
+                  <label className="text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1 flex items-center gap-1"><HardHat size={11} /> Vendor / Agency</label>
                   <SearchSelect className="input-flat w-full" value={f.vendor_id}
                           onChange={(e) => setF({ ...f, vendor_id: e.target.value })} data-testid="event-vendor-select">
                     <option value="">— None —</option>
@@ -647,7 +647,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
               )}
               {opts.clients.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1 flex items-center gap-1"><UserCircle size={11} /> Client</label>
+                  <label className="text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1 flex items-center gap-1"><UserCircle size={11} /> Client</label>
                   <SearchSelect className="input-flat w-full" value={f.client_id}
                           onChange={(e) => setF({ ...f, client_id: e.target.value })} data-testid="event-client-select">
                     <option value="">— None —</option>
@@ -660,7 +660,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
         )}
 
         <div className="flex items-center gap-2">
-          <MapPin size={14} className="text-[#5C5C5C]" />
+          <MapPin size={14} className="text-[var(--ink-2)]" />
           <input className="input-flat flex-1" placeholder="Location (optional)"
                  value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })}
                  data-testid="event-location-input" />
@@ -672,7 +672,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
         <div className="flex items-center justify-between pt-1">
           {canDelete ? (
             <button type="button" onClick={remove} disabled={busy}
-                    className="btn-ghost text-[#B4001C] text-xs" data-testid="event-delete-btn">
+                    className="btn-ghost text-[var(--danger)] text-xs" data-testid="event-delete-btn">
               <Trash size={13} /> Delete
             </button>
           ) : <span />}

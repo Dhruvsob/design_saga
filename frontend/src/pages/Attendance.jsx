@@ -14,10 +14,10 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
-  present: "#1D633E", late: "#B87500", absent: "#B4001C", half_day: "#F0A93A",
-  leave: "#8A6DFF", paid_leave: "#8A6DFF", unpaid_leave: "#B4001C",
-  holiday: "#3B82F6", week_off: "#5C5C5C", pending_approval: "#F0A93A",
-  upcoming: "#C9C9C9", site_visit: "#0E7490",
+  present: "#1E6A45", late: "#85570F", absent: "#B3261E", half_day: "#B45309",
+  leave: "#2E5694", paid_leave: "#2E5694", unpaid_leave: "#B3261E",
+  holiday: "#2E5694", week_off: "#4A4741", pending_approval: "#B45309",
+  upcoming: "#D2CEC4", site_visit: "#0E7490",
 };
 const WEEKDAYS = [
   { v: 0, l: "Mon" }, { v: 1, l: "Tue" }, { v: 2, l: "Wed" }, { v: 3, l: "Thu" },
@@ -251,12 +251,12 @@ export default function Attendance() {
     <div className="space-y-6" data-testid="attendance-page">
       <PageHero
         eyebrow="HR / ATTENDANCE & PAYROLL"
-        title="Every hour, on the record."
+        title="Attendance"
         kicker="Geo-fenced check-ins, leaves, salary impact — feeds straight into payroll."
       />
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[#E5E5E5] overflow-x-auto">
+      <div className="flex items-center gap-1 border-b border-[var(--line)] overflow-x-auto">
         <TabBtn id="me" tab={tab} setTab={setTab} label="My Attendance" />
         <TabBtn id="leaves" tab={tab} setTab={setTab} label="My Leaves" />
         {isHR && <TabBtn id="dashboard" tab={tab} setTab={setTab} label="Team Dashboard" />}
@@ -271,11 +271,11 @@ export default function Attendance() {
       {tab === "me" && noProfile && (
         <div className="card-flat" data-testid="attendance-no-profile">
           <div className="overline mb-2">MY ATTENDANCE</div>
-          <p className="text-sm text-[#2C2C2C]">
+          <p className="text-sm text-[var(--ink)]">
             Your login is not linked to an employee profile, so personal check-in, leave and
             correction requests are not available for this account.
           </p>
-          <p className="text-xs text-[#6B6B6B] mt-2">
+          <p className="text-xs text-[var(--ink-2)] mt-2">
             To track your own attendance, open Employees, edit your employee record and link it to
             this login. Team attendance, approvals and settings remain available in the other tabs.
           </p>
@@ -299,27 +299,27 @@ export default function Attendance() {
                   ].map(([k, l]) => (
                     <button key={k} type="button" onClick={() => { setAttType(k); setSiteVisit(k !== "office"); }}
                       className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider border ${attType === k
-                        ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C]"}`}
+                        ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "border-[var(--line)] text-[var(--ink-2)]"}`}
                       data-testid={`type-${k}`}>{l}</button>
                   ))}
                 </div>
               )}
 
               {!checkedIn && lateInfo && attType === "office" && (
-                <div className={`border p-3 mb-3 ${lateInfo.fineApplies ? "border-[#B87500] bg-[#FFF6E5]" : "border-[#3B82F6] bg-[#F5F4F0]"}`}
+                <div className={`border p-3 mb-3 ${lateInfo.fineApplies ? "border-[var(--warning)] bg-[var(--warning-soft)]" : "border-[var(--info)] bg-[var(--hover)]"}`}
                   data-testid="late-banner">
-                  <div className={`flex items-center gap-2 font-semibold text-sm ${lateInfo.fineApplies ? "text-[#B87500]" : "text-[#76705E]"}`}
+                  <div className={`flex items-center gap-2 font-semibold text-sm ${lateInfo.fineApplies ? "text-[var(--warning)]" : "text-[var(--accent-strong)]"}`}
                     data-testid="late-banner-text">
                     <Warning size={14} /> You are {lateInfo.lateMinutes} minute{lateInfo.lateMinutes === 1 ? "" : "s"} late.
                   </div>
                   {lateInfo.fineApplies ? (
-                    <div className="text-xs text-[#8a5a00] mt-1">
+                    <div className="text-xs text-[var(--warning)] mt-1">
                       Late fine of <b>{inr(policy.late_fine_amount)}</b> per occurrence may apply
                       (grace {lateInfo.grace} min · cap <b>{inr(policy.late_fine_daily_cap)}/day</b>).
                       Late is never auto half-day — your manager can approve to waive the fine.
                     </div>
                   ) : (
-                    <div className="text-xs text-[#76705E] mt-1">
+                    <div className="text-xs text-[var(--accent-strong)] mt-1">
                       {lateInfo.lateMinutes <= lateInfo.grace
                         ? `Within the ${lateInfo.grace}-minute grace period — no penalty.`
                         : "The late fine system is off — a reason may still be required."}
@@ -342,20 +342,20 @@ export default function Attendance() {
                     onChange={(e) => setSiteForm({ ...siteForm, expected_time: e.target.value })} />
                   <input className="input-flat" placeholder="Reason / purpose" value={siteForm.reason}
                     onChange={(e) => setSiteForm({ ...siteForm, reason: e.target.value })} data-testid="site-reason" />
-                  <div className="md:col-span-2 text-[11px] text-[#F0A93A] font-mono flex items-center gap-1">
+                  <div className="md:col-span-2 text-[11px] text-[var(--warning)] font-mono flex items-center gap-1">
                     <Warning size={12} /> Authorized site check-ins count immediately. Out-of-zone visits require HR / Admin approval.
                   </div>
                 </div>
               )}
 
               {outsideBlock && (
-                <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 mb-3" data-testid="outside-fence-banner">
-                  <div className="flex items-center gap-2 text-[#B22B22] font-semibold mb-1">
+                <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 mb-3" data-testid="outside-fence-banner">
+                  <div className="flex items-center gap-2 text-[var(--danger)] font-semibold mb-1">
                     <Warning size={14}/> You are outside the authorized location.
                   </div>
-                  <div className="text-xs text-[#B22B22] mb-2">{outsideBlock.message}</div>
+                  <div className="text-xs text-[var(--danger)] mb-2">{outsideBlock.message}</div>
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={requestApproval} className="btn-primary text-xs bg-[#B87500]" data-testid="request-approval-btn">
+                    <button onClick={requestApproval} className="btn-primary text-xs bg-[var(--warning)]" data-testid="request-approval-btn">
                       Request Approval
                     </button>
                     <button onClick={checkIn} className="btn-ghost text-xs" data-testid="retry-checkin-btn">Retry</button>
@@ -367,11 +367,11 @@ export default function Attendance() {
               )}
 
               {accuracyBlock && (
-                <div className="border border-[#B87500] bg-[#FFF6E5] p-3 mb-3" data-testid="accuracy-block">
-                  <div className="flex items-center gap-2 text-[#B87500] font-semibold mb-1">
+                <div className="border border-[var(--warning)] bg-[var(--warning-soft)] p-3 mb-3" data-testid="accuracy-block">
+                  <div className="flex items-center gap-2 text-[var(--warning)] font-semibold mb-1">
                     <Warning size={14}/> GPS accuracy too low
                   </div>
-                  <div className="text-xs text-[#5C5C5C] mb-2">{accuracyBlock.message}</div>
+                  <div className="text-xs text-[var(--ink-2)] mb-2">{accuracyBlock.message}</div>
                   <button onClick={checkIn} className="btn-ghost text-xs" data-testid="accuracy-retry-btn">
                     Retry with better GPS
                   </button>
@@ -379,11 +379,11 @@ export default function Attendance() {
               )}
 
               {lateReasonNeeded && (
-                <div className="border border-[#B87500] bg-[#FFF6E5] p-3 mb-3" data-testid="late-reason-block">
-                  <div className="flex items-center gap-2 text-[#B87500] font-semibold mb-1">
+                <div className="border border-[var(--warning)] bg-[var(--warning-soft)] p-3 mb-3" data-testid="late-reason-block">
+                  <div className="flex items-center gap-2 text-[var(--warning)] font-semibold mb-1">
                     <Warning size={14}/> Late arrival — pick a category / share a reason
                   </div>
-                  <div className="text-xs text-[#5C5C5C] mb-2">{lateReasonNeeded.message}</div>
+                  <div className="text-xs text-[var(--ink-2)] mb-2">{lateReasonNeeded.message}</div>
                   <div className="flex flex-col sm:flex-row gap-2 mb-2">
                     <select aria-label="Late category" className="input-flat sm:w-56" value={lateCategory}
                       onChange={(e) => setLateCategory(e.target.value)} data-testid="late-category-select">
@@ -411,7 +411,7 @@ export default function Attendance() {
               )}
 
               {retryableRejected && (
-                <div className="border border-[#B4001C] bg-[#FFF1F3] p-3 mb-3 text-sm text-[#7A0013]" data-testid="rejected-retry-notice">
+                <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 mb-3 text-sm text-[#7A0013]" data-testid="rejected-retry-notice">
                   <div className="flex items-center gap-2 font-semibold"><Warning size={14} /> Previous attendance was rejected</div>
                   <div className="text-xs mt-1">You can check in again after reaching an authorized location.</div>
                 </div>
@@ -424,27 +424,27 @@ export default function Attendance() {
                   </button>
                 )}
                 {checkedIn && !checkedOut && (
-                  <button onClick={checkOut} className="btn-primary bg-[#1D633E]" data-testid="check-out-btn">
+                  <button onClick={checkOut} className="btn-primary bg-[var(--success)]" data-testid="check-out-btn">
                     <SignOut size={16} /> Check out
                   </button>
                 )}
                 {checkedOut && (
-                  <div className="flex items-center gap-2 text-[#1D633E]"><CheckCircle size={18} weight="fill" /> Day complete</div>
+                  <div className="flex items-center gap-2 text-[var(--success)]"><CheckCircle size={18} weight="fill" /> Day complete</div>
                 )}
                 {checkedIn && (
-                  <div className="text-xs font-mono text-[#5C5C5C]">
+                  <div className="text-xs font-mono text-[var(--ink-2)]">
                     IN · {fmtT(rec.check_in)}
                     {checkedOut && <> · OUT · {fmtT(rec.check_out)} · {rec.worked_hours}h</>}
                     {rec.status === "late" && (
-                      <> · <span className="text-[#B87500] font-semibold">LATE {rec.late_minutes}m</span>
-                        {rec.late_approval_status === "pending" && <span className="text-[#F0A93A]"> · APPROVAL PENDING</span>}
-                        {rec.late_approval_status === "approved" && <span className="text-[#1D633E]"> · APPROVED (FINE WAIVED)</span>}
-                        {rec.late_approval_status === "rejected" && <span className="text-[#B4001C]"> · REJECTED (FINE {inr(rec.late_fine_amount)})</span>}
+                      <> · <span className="text-[var(--warning)] font-semibold">LATE {rec.late_minutes}m</span>
+                        {rec.late_approval_status === "pending" && <span className="text-[var(--warning)]"> · APPROVAL PENDING</span>}
+                        {rec.late_approval_status === "approved" && <span className="text-[var(--success)]"> · APPROVED (FINE WAIVED)</span>}
+                        {rec.late_approval_status === "rejected" && <span className="text-[var(--danger)]"> · REJECTED (FINE {inr(rec.late_fine_amount)})</span>}
                       </>
                     )}
                     {rec.attendance_type !== "office" && (
                       <> · <span className="text-[#8A6DFF] font-semibold uppercase">{rec.attendance_type?.replace("_"," ")}</span>
-                         {rec.approval_status === "pending" && <span className="text-[#F0A93A]"> · PENDING APPROVAL</span>}
+                         {rec.approval_status === "pending" && <span className="text-[var(--warning)]"> · PENDING APPROVAL</span>}
                       </>
                     )}
                     {rec.geo_location_matched && (
@@ -460,21 +460,21 @@ export default function Attendance() {
               <div className="card-flat" data-testid="daily-grid-card">
                 <div className="flex items-center justify-between mb-3">
                   <div className="overline">DAILY GRID · {mySalary.month_label?.toUpperCase()}</div>
-                  <div className="flex flex-wrap gap-3 text-[11px] font-mono text-[#5C5C5C]">
-                    <span>P <b className="text-[#1D633E]">{mySalary.summary.present}</b></span>
-                    <span>L <b className="text-[#B87500]">{mySalary.summary.late}</b></span>
-                    <span>H <b className="text-[#F0A93A]">{mySalary.summary.half_day}</b></span>
-                    <span>A <b className="text-[#B4001C]">{mySalary.summary.absent}</b></span>
+                  <div className="flex flex-wrap gap-3 text-[11px] font-mono text-[var(--ink-2)]">
+                    <span>P <b className="text-[var(--success)]">{mySalary.summary.present}</b></span>
+                    <span>L <b className="text-[var(--warning)]">{mySalary.summary.late}</b></span>
+                    <span>H <b className="text-[var(--warning)]">{mySalary.summary.half_day}</b></span>
+                    <span>A <b className="text-[var(--danger)]">{mySalary.summary.absent}</b></span>
                     <span>PAYABLE <b>{mySalary.payable_days}</b></span>
                   </div>
                 </div>
                 <div className="grid grid-cols-7 gap-1.5">
                   {mySalary.daily.map((d) => (
-                    <div key={d.date} className="border border-[#F0F0F0] p-1.5 text-center"
+                    <div key={d.date} className="border border-[var(--line-soft)] p-1.5 text-center"
                       style={{ background: `${STATUS_COLORS[d.status] || "#EEE"}12` }}
                       title={`${formatDate(d.date)} · ${d.status}${d.check_in ? ` · in ${d.check_in}` : ""}${d.check_out ? ` · out ${d.check_out}` : ""}`}>
                       <div className="text-[10px] font-mono">{Number(d.date.slice(8, 10))}</div>
-                      <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[d.status] || "#9A9A9A" }}>
+                      <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[d.status] || "#6A665F" }}>
                         {d.status.replace(/_/g, " ")}
                       </div>
                     </div>
@@ -491,7 +491,7 @@ export default function Attendance() {
               {summary && (
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                   {Object.entries(summary.counts).map(([k, v]) => (
-                    <div key={k} className="border border-[#E5E5E5] p-3" data-testid={`count-${k}`}>
+                    <div key={k} className="border border-[var(--line)] p-3" data-testid={`count-${k}`}>
                       <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: STATUS_COLORS[k] }}>{k}</div>
                       <div className="font-display font-bold text-2xl">{v}</div>
                     </div>
@@ -501,12 +501,12 @@ export default function Attendance() {
               {summary?.records?.length > 0 && (
                 <div className="mt-4 max-h-64 overflow-y-auto">
                   <table className="w-full text-xs">
-                    <thead className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+                    <thead className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                       <tr><th className="p-1 text-left">Date</th><th className="p-1 text-left">Status</th><th className="p-1">In</th><th className="p-1">Out</th><th className="p-1">Hrs</th></tr>
                     </thead>
                     <tbody>
                       {summary.records.slice().reverse().map((r) => (
-                        <tr key={r.id} className="border-t border-[#F0F0F0]">
+                        <tr key={r.id} className="border-t border-[var(--line-soft)]">
                           <td className="p-1 font-mono">{formatDate(r.date)}</td>
                           <td className="p-1"><span className="status-chip" style={{ background: `${STATUS_COLORS[r.status]}15`, color: STATUS_COLORS[r.status] }}>{r.status}</span></td>
                           <td className="p-1 text-center font-mono">{fmtT(r.check_in) || "—"}</td>
@@ -526,7 +526,7 @@ export default function Attendance() {
             <div className="card-flat" data-testid="my-salary-card">
               <div className="overline mb-3">MY SALARY · {mySalary?.month_label?.toUpperCase() || ""}</div>
               {!mySalary?.has_employee ? (
-                <div className="text-sm text-[#6E6A63]">
+                <div className="text-sm text-[var(--ink-3)]">
                   Your login isn't linked to an employee record yet — ask your admin
                   to link it to see your live salary impact.
                 </div>
@@ -535,7 +535,7 @@ export default function Attendance() {
                   <div className="font-display font-bold text-3xl mb-1" data-testid="my-net-payable">
                     {inr(mySalary.net_payable)}
                   </div>
-                  <div className="text-[11px] font-mono text-[#5C5C5C] mb-3">
+                  <div className="text-[11px] font-mono text-[var(--ink-2)] mb-3">
                     Estimated net payable {mySalary.salary_configured ? "" : "· salary not configured"}
                   </div>
                   <div className="space-y-1.5 text-sm">
@@ -578,7 +578,7 @@ export default function Attendance() {
               <input className="input-flat" placeholder="Reason" value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
               <button className="btn-primary md:col-span-4" data-testid="leave-submit"><PaperPlaneRight size={14} /> Submit</button>
               {meta && !meta.can_manage && (
-                <p className="md:col-span-4 text-xs text-[#6E6A63]">
+                <p className="md:col-span-4 text-xs text-[var(--ink-3)]">
                   Need maternity or paternity leave? Tell HR and they will record it for you privately.
                 </p>
               )}
@@ -593,24 +593,24 @@ export default function Attendance() {
               <button className="btn-primary md:col-span-4" data-testid="corr-submit"><PaperPlaneRight size={14} /> Submit correction</button>
             </form>
           )}
-          <div className="border border-[#E5E5E5] overflow-x-auto">
+          <div className="border border-[var(--line)] overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+              <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                 <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">Type</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
               </thead>
               <tbody>
                 {leaves.map((l) => (
-                  <tr key={l.id} className="border-t border-[#F0F0F0]" data-testid={`leave-${l.id}`}>
+                  <tr key={l.id} className="border-t border-[var(--line-soft)]" data-testid={`leave-${l.id}`}>
                     <td className="p-2 font-semibold" data-testid={`leave-emp-${l.id}`}>{l.employee_name || "—"}</td>
                     <td className="p-2 capitalize">{l.leave_type}</td>
                     <td className="p-2 font-mono text-xs">{formatDate(l.from_date)}</td>
                     <td className="p-2 font-mono text-xs">{formatDate(l.to_date)}</td>
                     <td className="p-2 font-mono">{l.days}</td>
-                    <td className="p-2 text-xs text-[#5C5C5C] truncate max-w-[300px]">{l.reason}</td>
+                    <td className="p-2 text-xs text-[var(--ink-2)] truncate max-w-[300px]">{l.reason}</td>
                     <td className="p-2"><LeaveStatus s={l.status} /></td>
                   </tr>
                 ))}
-                {leaves.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-[#6E6A63] text-sm">No leaves yet.</td></tr>}
+                {leaves.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-[var(--ink-3)] text-sm">No leaves yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -618,10 +618,10 @@ export default function Attendance() {
             <div className="card-flat" data-testid="my-corrections">
               <div className="overline mb-2">MY CORRECTION REQUESTS</div>
               {myCorrections.map((c) => (
-                <div key={c.id} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
+                <div key={c.id} className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
                   <div>
                     <span className="font-mono text-xs">{formatDate(c.date)}</span>
-                    <span className="text-[#5C5C5C] text-xs ml-2">{c.reason}</span>
+                    <span className="text-[var(--ink-2)] text-xs ml-2">{c.reason}</span>
                   </div>
                   <LeaveStatus s={c.status} />
                 </div>
@@ -639,23 +639,23 @@ export default function Attendance() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <MonthPicker ym={ym} setYm={setYm} />
             <div className="flex items-center gap-3">
-              <div className="flex items-center border border-[#E5E5E5]" data-testid="monthly-view-toggle">
+              <div className="flex items-center border border-[var(--line)]" data-testid="monthly-view-toggle">
                 {[["grid", "Day-by-day"], ["summary", "Summary"]].map(([v, l]) => (
                   <button key={v} onClick={() => setMonthlyView(v)}
-                    className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${monthlyView === v ? "bg-[#0A0A0A] text-white" : "text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
+                    className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${monthlyView === v ? "bg-[var(--ink)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
                     data-testid={`monthly-view-${v}`}>{l}</button>
                 ))}
               </div>
-              <div className="text-xs font-mono text-[#5C5C5C]">Ready for payroll</div>
+              <div className="text-xs font-mono text-[var(--ink-2)]">Ready for payroll</div>
             </div>
           </div>
 
           {monthlyView === "grid" ? (
             <MonthlyGrid monthly={monthly} ym={ym} />
           ) : (
-            <div className="border border-[#E5E5E5] overflow-x-auto">
+            <div className="border border-[var(--line)] overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+                <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                   <tr>
                     <th className="p-2 text-left">Employee</th>
                     <th className="p-2 text-left">Designation</th>
@@ -666,16 +666,16 @@ export default function Attendance() {
                 </thead>
                 <tbody>
                   {monthly.rows.map((r) => (
-                    <tr key={r.employee.id} className="border-t border-[#F0F0F0]" data-testid={`monthly-${r.employee.id}`}>
+                    <tr key={r.employee.id} className="border-t border-[var(--line-soft)]" data-testid={`monthly-${r.employee.id}`}>
                       <td className="p-2 font-semibold">{r.employee.name}</td>
-                      <td className="p-2 text-xs text-[#5C5C5C]">{r.employee.designation || "—"}</td>
-                      <td className="p-2 text-center font-mono text-[#1D633E]">{r.counts.present}</td>
-                      <td className="p-2 text-center font-mono text-[#B87500]">{r.counts.late || 0}</td>
-                      <td className="p-2 text-center font-mono text-[#B4001C]">{r.counts.absent}</td>
-                      <td className="p-2 text-center font-mono text-[#F0A93A]">{r.counts.half_day}</td>
+                      <td className="p-2 text-xs text-[var(--ink-2)]">{r.employee.designation || "—"}</td>
+                      <td className="p-2 text-center font-mono text-[var(--success)]">{r.counts.present}</td>
+                      <td className="p-2 text-center font-mono text-[var(--warning)]">{r.counts.late || 0}</td>
+                      <td className="p-2 text-center font-mono text-[var(--danger)]">{r.counts.absent}</td>
+                      <td className="p-2 text-center font-mono text-[var(--warning)]">{r.counts.half_day}</td>
                       <td className="p-2 text-center font-mono text-[#8A6DFF]">{r.counts.leave}</td>
-                      <td className="p-2 text-center font-mono text-[#3B82F6]">{r.counts.holiday || 0}</td>
-                      <td className="p-2 text-center font-mono text-[#5C5C5C]">{r.counts.week_off}</td>
+                      <td className="p-2 text-center font-mono text-[var(--info)]">{r.counts.holiday || 0}</td>
+                      <td className="p-2 text-center font-mono text-[var(--ink-2)]">{r.counts.week_off}</td>
                       <td className="p-2 text-center font-mono">{r.worked_hours}</td>
                     </tr>
                   ))}
@@ -696,9 +696,9 @@ export default function Attendance() {
 
 function SalRow({ k, v, sub, red }) {
   return (
-    <div className="flex items-center justify-between border-b border-[#F0F0F0] py-1.5">
-      <span className="text-[#5C5C5C] text-xs">{k}{sub ? <span className="text-[#6E6A63]"> · {sub}</span> : null}</span>
-      <span className={`font-mono text-xs ${red ? "text-[#B4001C]" : ""}`}>{v}</span>
+    <div className="flex items-center justify-between border-b border-[var(--line-soft)] py-1.5">
+      <span className="text-[var(--ink-2)] text-xs">{k}{sub ? <span className="text-[var(--ink-3)]"> · {sub}</span> : null}</span>
+      <span className={`font-mono text-xs ${red ? "text-[var(--danger)]" : ""}`}>{v}</span>
     </div>
   );
 }
@@ -725,21 +725,21 @@ function MonthlyGrid({ monthly, ym }) {
           </span>
         ))}
       </div>
-      <div className="border border-[#E5E5E5] overflow-x-auto" data-testid="monthly-grid">
+      <div className="border border-[var(--line)] overflow-x-auto" data-testid="monthly-grid">
         <table className="text-xs border-collapse">
           <thead>
-            <tr className="bg-[#FAFAFA]">
-              <th className="sticky left-0 z-10 bg-[#FAFAFA] p-2 text-left min-w-[180px] border-r border-[#E5E5E5]">Employee</th>
+            <tr className="bg-[var(--surface-2)]">
+              <th className="sticky left-0 z-10 bg-[var(--surface-2)] p-2 text-left min-w-[180px] border-r border-[var(--line)]">Employee</th>
               {days.map((d) => {
                 const wd = dow(d);
                 const weekend = wd === 0 || wd === 6;
                 return (
-                  <th key={d} className={`p-1 text-center font-mono text-[10px] ${weekend ? "text-[#B4001C]" : "text-[#5C5C5C]"}`} style={{ minWidth: 24 }}>
+                  <th key={d} className={`p-1 text-center font-mono text-[10px] ${weekend ? "text-[var(--danger)]" : "text-[var(--ink-2)]"}`} style={{ minWidth: 24 }}>
                     {pad(d)}
                   </th>
                 );
               })}
-              <th className="p-2 text-center border-l border-[#E5E5E5]">Tot</th>
+              <th className="p-2 text-center border-l border-[var(--line)]">Tot</th>
             </tr>
           </thead>
           <tbody>
@@ -747,10 +747,10 @@ function MonthlyGrid({ monthly, ym }) {
               const byDate = {};
               (r.records || []).forEach((rec) => { byDate[(rec.date || "").slice(0, 10)] = rec; });
               return (
-                <tr key={r.employee.id} className="border-t border-[#F0F0F0]" data-testid={`monthly-grid-${r.employee.id}`}>
-                  <td className="sticky left-0 z-10 bg-white p-2 border-r border-[#E5E5E5]">
+                <tr key={r.employee.id} className="border-t border-[var(--line-soft)]" data-testid={`monthly-grid-${r.employee.id}`}>
+                  <td className="sticky left-0 z-10 bg-white p-2 border-r border-[var(--line)]">
                     <div className="font-semibold truncate max-w-[170px]">{r.employee.name}</div>
-                    <div className="text-[10px] text-[#6E6A63] font-mono">
+                    <div className="text-[10px] text-[var(--ink-3)] font-mono">
                       {r.employee.designation || "—"} · shift {r.employee.shift_start || "09:00"}
                     </div>
                   </td>
@@ -776,10 +776,10 @@ function MonthlyGrid({ monthly, ym }) {
                       </td>
                     );
                   })}
-                  <td className="p-2 text-center font-mono border-l border-[#E5E5E5] whitespace-nowrap">
-                    <span className="text-[#1D633E]">{r.counts.present}P</span>
-                    {(r.counts.late || 0) > 0 && <span className="text-[#B87500]"> {r.counts.late}L</span>}
-                    {(r.counts.absent || 0) > 0 && <span className="text-[#B4001C]"> {r.counts.absent}A</span>}
+                  <td className="p-2 text-center font-mono border-l border-[var(--line)] whitespace-nowrap">
+                    <span className="text-[var(--success)]">{r.counts.present}P</span>
+                    {(r.counts.late || 0) > 0 && <span className="text-[var(--warning)]"> {r.counts.late}L</span>}
+                    {(r.counts.absent || 0) > 0 && <span className="text-[var(--danger)]"> {r.counts.absent}A</span>}
                   </td>
                 </tr>
               );
@@ -810,13 +810,13 @@ function TeamDashboardTab() {
 
   if (!dash) return <div className="skeleton h-64 w-full" />;
   const cards = [
-    ["Present Today", dash.present_today, "#1D633E"],
-    ["Late Today", dash.late_today, "#B87500"],
-    ["Absent Today", dash.absent_today, "#B4001C"],
-    ["On Leave", dash.on_leave, "#8A6DFF"],
-    ["Checked In Now", dash.currently_checked_in, "#8B7F6A"],
-    ["Checked Out", dash.checked_out, "#5C5C5C"],
-    ["Pending Late Approvals", dash.pending_late_approvals, "#F0A93A"],
+    ["Present Today", dash.present_today, "#1E6A45"],
+    ["Late Today", dash.late_today, "#85570F"],
+    ["Absent Today", dash.absent_today, "#B3261E"],
+    ["On Leave", dash.on_leave, "#2E5694"],
+    ["Checked In Now", dash.currently_checked_in, "#9C4A28"],
+    ["Checked Out", dash.checked_out, "#4A4741"],
+    ["Pending Late Approvals", dash.pending_late_approvals, "#B45309"],
     ["Pending Leaves", dash.pending_leaves, "#0E7490"],
   ];
   return (
@@ -824,7 +824,7 @@ function TeamDashboardTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {cards.map(([l, v, c]) => (
           <div key={l} className="card-flat" data-testid={`dash-${l.toLowerCase().replace(/ /g, "-")}`}>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">{l}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">{l}</div>
             <div className="font-display font-bold text-3xl mt-1" style={{ color: c }}>{v}</div>
           </div>
         ))}
@@ -838,16 +838,16 @@ function TeamDashboardTab() {
           </button>
         </div>
         {recs.length === 0 ? (
-          <div className="text-sm text-[#6E6A63] py-6 text-center">No employee has marked attendance today yet.</div>
+          <div className="text-sm text-[var(--ink-3)] py-6 text-center">No employee has marked attendance today yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+              <thead className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                 <tr><th className="p-2 text-left">Employee</th><th className="p-2">In</th><th className="p-2">Out</th><th className="p-2">Status</th><th className="p-2">Fence</th></tr>
               </thead>
               <tbody>
                 {recs.map((r) => (
-                  <tr key={r.id} className="border-t border-[#F0F0F0]" data-testid={`punch-${r.employee_id}`}>
+                  <tr key={r.id} className="border-t border-[var(--line-soft)]" data-testid={`punch-${r.employee_id}`}>
                     <td className="p-2 font-semibold">{r.employee_name}</td>
                     <td className="p-2 text-center font-mono text-xs">{fmtT(r.check_in) || "—"}</td>
                     <td className="p-2 text-center font-mono text-xs">{fmtT(r.check_out) || "—"}</td>
@@ -859,8 +859,8 @@ function TeamDashboardTab() {
                     <td className="p-2 text-center text-xs">
                       {r.check_in == null ? "—"
                         : r.geo_inside === false
-                          ? <span className="text-[#B87500] font-semibold"><MapPin size={11} className="inline" /> Outside</span>
-                          : <span className="text-[#1D633E] font-semibold"><MapPin size={11} className="inline" /> In fence</span>}
+                          ? <span className="text-[var(--warning)] font-semibold"><MapPin size={11} className="inline" /> Outside</span>
+                          : <span className="text-[var(--success)] font-semibold"><MapPin size={11} className="inline" /> In fence</span>}
                     </td>
                   </tr>
                 ))}
@@ -877,10 +877,10 @@ function TeamDashboardTab() {
    Live Board — auto-refreshing who's in / out
    ================================================== */
 const LIVE_LABEL = {
-  checked_in: ["Checked In", "#1D633E"], late: ["Late", "#B87500"],
-  checked_out: ["Checked Out", "#5C5C5C"], absent: ["Absent", "#B4001C"],
-  on_leave: ["On Leave", "#8A6DFF"], weekly_off: ["Weekly Off", "#9A9A9A"],
-  holiday: ["Holiday", "#3B82F6"],
+  checked_in: ["Checked In", "#1E6A45"], late: ["Late", "#85570F"],
+  checked_out: ["Checked Out", "#4A4741"], absent: ["Absent", "#B3261E"],
+  on_leave: ["On Leave", "#2E5694"], weekly_off: ["Weekly Off", "#6A665F"],
+  holiday: ["Holiday", "#2E5694"],
 };
 function LiveBoardTab() {
   const [data, setData] = useState(null);
@@ -889,16 +889,16 @@ function LiveBoardTab() {
   if (!data) return <div className="skeleton h-64 w-full" />;
   const c = data.counts;
   const chips = [
-    ["Checked In", c.checked_in, "#1D633E"], ["Late", c.late, "#B87500"],
-    ["Absent", c.absent, "#B4001C"], ["On Leave", c.on_leave, "#8A6DFF"],
-    ["Checked Out", c.checked_out, "#5C5C5C"], ["Off / Holiday", c.off, "#3B82F6"],
+    ["Checked In", c.checked_in, "#1E6A45"], ["Late", c.late, "#85570F"],
+    ["Absent", c.absent, "#B3261E"], ["On Leave", c.on_leave, "#2E5694"],
+    ["Checked Out", c.checked_out, "#4A4741"], ["Off / Holiday", c.off, "#2E5694"],
   ];
   return (
     <div className="space-y-5" data-testid="live-board">
-      <div className="flex items-center gap-2 text-xs font-mono text-[#5C5C5C]">
+      <div className="flex items-center gap-2 text-xs font-mono text-[var(--ink-2)]">
         <span className="relative flex h-2.5 w-2.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1D633E] opacity-50" />
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1D633E]" />
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--success)] opacity-50" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--success)]" />
         </span>
         LIVE · updated {formatDateTime(data.generated_at)} IST · auto-refresh 15s
       </div>
@@ -906,7 +906,7 @@ function LiveBoardTab() {
         {chips.map(([l, v, col]) => (
           <div key={l} className="card-flat text-center">
             <div className="font-display font-bold text-2xl" style={{ color: col }}>{v}</div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C] mt-1">{l}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)] mt-1">{l}</div>
           </div>
         ))}
       </div>
@@ -916,22 +916,22 @@ function LiveBoardTab() {
           return (
             <div key={p.employee_id} className="card-flat flex items-center justify-between" data-testid={`live-${p.employee_id}`}>
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-full border border-[#E5E5E5] flex items-center justify-center font-display font-bold text-sm shrink-0">
+                <div className="w-9 h-9 rounded-full border border-[var(--line)] flex items-center justify-center font-display font-bold text-sm shrink-0">
                   {(p.name || "?").charAt(0)}
                 </div>
                 <div className="min-w-0">
                   <div className="font-semibold text-sm truncate">{p.name}</div>
-                  <div className="text-[11px] text-[#6E6A63] truncate">{p.department || "Staff"}{p.shift_start ? ` · ${p.shift_start}` : ""}</div>
+                  <div className="text-[11px] text-[var(--ink-3)] truncate">{p.department || "Staff"}{p.shift_start ? ` · ${p.shift_start}` : ""}</div>
                 </div>
               </div>
               <div className="text-right shrink-0 ml-2">
                 <span className="status-chip" style={{ background: `${col}15`, color: col }}>{label}</span>
-                {p.check_in && <div className="text-[10px] font-mono text-[#6E6A63] mt-0.5">in {p.check_in}{p.check_out ? ` · out ${p.check_out}` : ""}</div>}
+                {p.check_in && <div className="text-[10px] font-mono text-[var(--ink-3)] mt-0.5">in {p.check_in}{p.check_out ? ` · out ${p.check_out}` : ""}</div>}
               </div>
             </div>
           );
         })}
-        {data.people.length === 0 && <div className="col-span-full text-center text-[#6E6A63] py-10">No employees yet.</div>}
+        {data.people.length === 0 && <div className="col-span-full text-center text-[var(--ink-3)] py-10">No employees yet.</div>}
       </div>
     </div>
   );
@@ -962,25 +962,25 @@ function PayrollTab() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <MonthPicker ym={ym} setYm={setYm} />
         {data && (
-          <div className="text-sm text-[#5C5C5C]">
+          <div className="text-sm text-[var(--ink-2)]">
             Total net payable:{" "}
-            <span className="font-display font-bold text-xl text-[#0A0A0A]" data-testid="payroll-total-net">
+            <span className="font-display font-bold text-xl text-[var(--ink)]" data-testid="payroll-total-net">
               {inr(data.total_net_payable)}
             </span>
           </div>
         )}
       </div>
       {data?.unconfigured_salary_count > 0 && (
-        <div className="border border-[#B87500] bg-[#FFF6E5] p-3 text-xs text-[#8a5a00] flex items-start gap-2" data-testid="payroll-unconfigured-warning">
+        <div className="border border-[var(--warning)] bg-[var(--warning-soft)] p-3 text-xs text-[var(--warning)] flex items-start gap-2" data-testid="payroll-unconfigured-warning">
           <Warning size={14} className="shrink-0 mt-0.5" />
           <span><b>{data.unconfigured_salary_count}</b> employee(s) have no salary configured — their net shows ₹0.
           Set the salary structure on the employee profile or a flat monthly salary in <b>Shift & Salary Setup</b>.</span>
         </div>
       )}
-      <div className="border border-[#E5E5E5] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto">
         {loading ? <div className="skeleton h-40 w-full" /> : (
           <table className="w-full text-sm">
-            <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+            <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
               <tr>
                 <th className="p-2 text-left">Employee</th>
                 <th className="p-2 text-right">Salary</th>
@@ -995,26 +995,26 @@ function PayrollTab() {
             </thead>
             <tbody>
               {(data?.employees || []).map((r) => (
-                <tr key={r.employee_id} className="border-t border-[#F0F0F0]" data-testid={`payroll-row-${r.employee_id}`}>
+                <tr key={r.employee_id} className="border-t border-[var(--line-soft)]" data-testid={`payroll-row-${r.employee_id}`}>
                   <td className="p-2">
                     <div className="font-semibold">{r.employee_name}</div>
-                    <div className="text-[11px] text-[#6E6A63]">{r.department || "Staff"}{r.already_paid ? " · PAID" : ""}</div>
+                    <div className="text-[11px] text-[var(--ink-3)]">{r.department || "Staff"}{r.already_paid ? " · PAID" : ""}</div>
                   </td>
                   <td className="p-2 text-right font-mono text-xs">
                     {r.salary_configured ? inr(r.monthly_salary)
-                      : <span className="text-[#B87500] font-semibold" data-testid={`salary-not-set-${r.employee_id}`}>Not set</span>}
+                      : <span className="text-[var(--warning)] font-semibold" data-testid={`salary-not-set-${r.employee_id}`}>Not set</span>}
                   </td>
                   <td className="p-2 text-center font-mono font-semibold">{r.payable_days}</td>
-                  <td className="p-2 text-center font-mono text-[#1D633E]">{r.present + r.late}</td>
-                  <td className="p-2 text-center font-mono text-[#B4001C]">{r.absent}</td>
-                  <td className="p-2 text-center font-mono text-[#F0A93A]">{r.lop_days}</td>
-                  <td className="p-2 text-right font-mono text-xs text-[#B87500]">
+                  <td className="p-2 text-center font-mono text-[var(--success)]">{r.present + r.late}</td>
+                  <td className="p-2 text-center font-mono text-[var(--danger)]">{r.absent}</td>
+                  <td className="p-2 text-center font-mono text-[var(--warning)]">{r.lop_days}</td>
+                  <td className="p-2 text-right font-mono text-xs text-[var(--warning)]">
                     {(r.late_fine || r.short_leave_deduction)
                       ? inr((r.late_fine || 0) + (r.short_leave_deduction || 0))
                       : "—"}
                     {r.short_leave_hours ? <div className="text-[10px] text-[#0E7490]">{r.short_leave_hours}h</div> : null}
                   </td>
-                  <td className="p-2 text-right font-mono text-xs text-[#B4001C]">{inr(r.deduction)}</td>
+                  <td className="p-2 text-right font-mono text-xs text-[var(--danger)]">{inr(r.deduction)}</td>
                   <td className="p-2 text-right font-mono font-bold" data-testid={`net-${r.employee_id}`}>{inr(r.net_payable)}</td>
                   <td className="p-2 text-center">
                     <button onClick={() => downloadPayslip(r.employee_id, ym.y, ym.m)}
@@ -1026,13 +1026,13 @@ function PayrollTab() {
                 </tr>
               ))}
               {(!data || data.employees.length === 0) && !loading && (
-                <tr><td colSpan={10} className="p-8 text-center text-[#6E6A63]">No employees.</td></tr>
+                <tr><td colSpan={10} className="p-8 text-center text-[var(--ink-3)]">No employees.</td></tr>
               )}
             </tbody>
           </table>
         )}
       </div>
-      <div className="text-[11px] text-[#6E6A63] font-mono">
+      <div className="text-[11px] text-[var(--ink-3)] font-mono">
         Net = monthly salary − (LOP deduction + late fines + short-leave hours). Actual payment posts a journal entry to Accounting from the employee profile.
       </div>
     </div>
@@ -1081,27 +1081,27 @@ function RequestsTab({ canWrite }) {
       {/* Late arrival approvals */}
       <div className="card-flat" data-testid="late-approvals-card">
         <div className="overline mb-3">LATE ARRIVAL APPROVALS · {lates.length} PENDING</div>
-        {lates.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">No late arrivals awaiting approval.</div>}
+        {lates.length === 0 && <div className="text-sm text-[var(--ink-3)] py-4 text-center">No late arrivals awaiting approval.</div>}
         <div className="space-y-2">
           {lates.map((l) => (
-            <div key={l.id} className="flex flex-wrap items-center gap-3 border border-[#F0F0F0] p-3" data-testid={`late-row-${l.id}`}>
+            <div key={l.id} className="flex flex-wrap items-center gap-3 border border-[var(--line-soft)] p-3" data-testid={`late-row-${l.id}`}>
               <div className="flex-1 min-w-[220px]">
                 <div className="font-semibold" data-testid={`late-emp-${l.id}`}>{l.employee_name}</div>
-                <div className="text-xs font-mono text-[#5C5C5C]">
+                <div className="text-xs font-mono text-[var(--ink-2)]">
                   {formatDate(l.date)} · {l.late_minutes}m late
-                  {l.late_fine_amount > 0 && <span className="text-[#B87500]"> · Fine {inr(l.late_fine_amount)} — approve to waive</span>}
+                  {l.late_fine_amount > 0 && <span className="text-[var(--warning)]"> · Fine {inr(l.late_fine_amount)} — approve to waive</span>}
                 </div>
-                <div className="text-xs text-[#5C5C5C] mt-0.5">
+                <div className="text-xs text-[var(--ink-2)] mt-0.5">
                   {l.late_category ? capWords(l.late_category) : "No category"}
                   {l.late_reason ? ` — “${l.late_reason}”` : ""}
                 </div>
               </div>
               {canWrite && (
                 <>
-                  <button onClick={() => reviewLate(l.id, "approved")} className="btn-primary bg-[#1D633E] text-xs" data-testid={`late-approve-${l.id}`}>
+                  <button onClick={() => reviewLate(l.id, "approved")} className="btn-primary bg-[var(--success)] text-xs" data-testid={`late-approve-${l.id}`}>
                     <CheckCircle size={13} /> Approve (waive fine)
                   </button>
-                  <button onClick={() => reviewLate(l.id, "rejected")} className="btn-ghost text-[#B4001C] text-xs" data-testid={`late-reject-${l.id}`}>
+                  <button onClick={() => reviewLate(l.id, "rejected")} className="btn-ghost text-[var(--danger)] text-xs" data-testid={`late-reject-${l.id}`}>
                     <X size={13} /> Reject (keep fine)
                   </button>
                 </>
@@ -1115,28 +1115,28 @@ function RequestsTab({ canWrite }) {
         {/* Leave permissions — employee name MUST be prominent */}
         <div className="card-flat" data-testid="pending-leaves-card">
           <div className="overline mb-3">LEAVE PERMISSIONS · {pendingLeaves.length} PENDING</div>
-          {pendingLeaves.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">Nothing to review.</div>}
+          {pendingLeaves.length === 0 && <div className="text-sm text-[var(--ink-3)] py-4 text-center">Nothing to review.</div>}
           <div className="space-y-2">
             {pendingLeaves.map((l) => (
-              <div key={l.id} className="border border-[#F0F0F0] p-3" data-testid={`pending-${l.id}`}>
+              <div key={l.id} className="border border-[var(--line-soft)] p-3" data-testid={`pending-${l.id}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-display font-bold text-base" data-testid={`leave-employee-name-${l.id}`}>
                       {l.employee_name || "Unknown employee"}
                     </div>
-                    <div className="text-xs font-mono text-[#5C5C5C] mt-0.5">
+                    <div className="text-xs font-mono text-[var(--ink-2)] mt-0.5">
                       <span className="capitalize text-[#8A6DFF] font-semibold">{l.leave_type}</span>
                       {" · "}{formatDate(l.from_date)} → {formatDate(l.to_date)} · {l.days} day{l.days !== 1 ? "s" : ""}
                     </div>
-                    {l.reason && <div className="text-xs text-[#5C5C5C] mt-1">“{l.reason}”</div>}
+                    {l.reason && <div className="text-xs text-[var(--ink-2)] mt-1">“{l.reason}”</div>}
                   </div>
                 </div>
                 {canWrite && (
                   <div className="flex gap-2 mt-2">
-                    <button onClick={() => actLeave(l.id, "approve")} className="btn-primary bg-[#1D633E] text-xs" data-testid={`approve-${l.id}`}>
+                    <button onClick={() => actLeave(l.id, "approve")} className="btn-primary bg-[var(--success)] text-xs" data-testid={`approve-${l.id}`}>
                       <CheckCircle size={13} /> Approve
                     </button>
-                    <button onClick={() => actLeave(l.id, "reject")} className="btn-ghost text-[#B4001C] text-xs" data-testid={`reject-${l.id}`}>
+                    <button onClick={() => actLeave(l.id, "reject")} className="btn-ghost text-[var(--danger)] text-xs" data-testid={`reject-${l.id}`}>
                       <X size={13} /> Reject
                     </button>
                   </div>
@@ -1149,22 +1149,22 @@ function RequestsTab({ canWrite }) {
         {/* Corrections */}
         <div className="card-flat" data-testid="corrections-card">
           <div className="overline mb-3">ATTENDANCE CORRECTIONS · {corrections.length} PENDING</div>
-          {corrections.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">No correction requests.</div>}
+          {corrections.length === 0 && <div className="text-sm text-[var(--ink-3)] py-4 text-center">No correction requests.</div>}
           <div className="space-y-2">
             {corrections.map((c) => (
-              <div key={c.id} className="border border-[#F0F0F0] p-3" data-testid={`corr-${c.id}`}>
+              <div key={c.id} className="border border-[var(--line-soft)] p-3" data-testid={`corr-${c.id}`}>
                 <div className="font-semibold">{c.employee_name}</div>
-                <div className="text-xs font-mono text-[#5C5C5C]">{formatDate(c.date)}
+                <div className="text-xs font-mono text-[var(--ink-2)]">{formatDate(c.date)}
                   {c.requested_check_in ? ` · in ${fmtT(c.requested_check_in)}` : ""}
                   {c.requested_check_out ? ` · out ${fmtT(c.requested_check_out)}` : ""}
                 </div>
-                <div className="text-xs text-[#5C5C5C] mt-1">“{c.reason}”</div>
+                <div className="text-xs text-[var(--ink-2)] mt-1">“{c.reason}”</div>
                 {canWrite && (
                   <div className="flex gap-2 mt-2">
-                    <button onClick={() => reviewCorr(c.id, "approved")} className="btn-primary bg-[#1D633E] text-xs" data-testid={`corr-approve-${c.id}`}>
+                    <button onClick={() => reviewCorr(c.id, "approved")} className="btn-primary bg-[var(--success)] text-xs" data-testid={`corr-approve-${c.id}`}>
                       <CheckCircle size={13} /> Approve
                     </button>
-                    <button onClick={() => reviewCorr(c.id, "rejected")} className="btn-ghost text-[#B4001C] text-xs" data-testid={`corr-reject-${c.id}`}>
+                    <button onClick={() => reviewCorr(c.id, "rejected")} className="btn-ghost text-[var(--danger)] text-xs" data-testid={`corr-reject-${c.id}`}>
                       <X size={13} /> Reject
                     </button>
                   </div>
@@ -1178,27 +1178,27 @@ function RequestsTab({ canWrite }) {
       {/* Site visit approvals (existing flow, preserved) */}
       <div className="card-flat" data-testid="site-approvals-card">
         <div className="overline mb-3">SITE VISIT / OUT-OF-FENCE APPROVALS · {pendingSite.length} PENDING</div>
-        {pendingSite.length === 0 && <div className="text-sm text-[#6E6A63] py-4 text-center">All clear.</div>}
+        {pendingSite.length === 0 && <div className="text-sm text-[var(--ink-3)] py-4 text-center">All clear.</div>}
         <div className="space-y-2">
           {pendingSite.map((r) => (
-            <div key={r.id} className="flex flex-wrap items-center gap-3 border border-[#F0F0F0] p-3" data-testid={`site-req-${r.id}`}>
+            <div key={r.id} className="flex flex-wrap items-center gap-3 border border-[var(--line-soft)] p-3" data-testid={`site-req-${r.id}`}>
               <div className="flex-1 min-w-[240px]">
                 <div className="font-semibold">{r.employee_name}</div>
-                <div className="text-xs font-mono text-[#5C5C5C]">
+                <div className="text-xs font-mono text-[var(--ink-2)]">
                   {formatDate(r.date)} · {fmtT(r.check_in)}
                   {r.geo_distance_m && r.geo_inside === false ? ` · ${Math.round(r.geo_distance_m)}m outside fence` : ""}
                 </div>
-                <div className="text-xs text-[#5C5C5C] mt-1">
+                <div className="text-xs text-[var(--ink-2)] mt-1">
                   {r.site_location && <>📍 {r.site_location} · </>}
                   {r.site_reason && <>“{r.site_reason}”</>}
                 </div>
               </div>
               {canWrite && (
                 <>
-                  <button onClick={() => actSite(r.id, "approve")} className="btn-primary bg-[#1D633E] text-xs" data-testid={`site-approve-${r.id}`}>
+                  <button onClick={() => actSite(r.id, "approve")} className="btn-primary bg-[var(--success)] text-xs" data-testid={`site-approve-${r.id}`}>
                     <CheckCircle size={13} /> Approve
                   </button>
-                  <button onClick={() => actSite(r.id, "reject")} className="btn-ghost text-[#B4001C] text-xs" data-testid={`site-reject-${r.id}`}>
+                  <button onClick={() => actSite(r.id, "reject")} className="btn-ghost text-[var(--danger)] text-xs" data-testid={`site-reject-${r.id}`}>
                     <X size={13} /> Reject
                   </button>
                 </>
@@ -1290,7 +1290,7 @@ function EmployeeSetupCard() {
     <div className="card-flat space-y-3" data-testid="employee-setup-card">
       <div className="flex items-center justify-between">
         <div className="overline">EMPLOYEE SHIFT, WEEKLY-OFF{canPayroll ? " & SALARY" : ""}</div>
-        {savedAt && <span className="text-xs text-[#1D633E] font-mono">SAVED</span>}
+        {savedAt && <span className="text-xs text-[var(--success)] font-mono">SAVED</span>}
       </div>
       <select aria-label="Sel" className="input-flat w-full" value={sel} onChange={(e) => setSel(e.target.value)} data-testid="setup-employee-select">
         <option value="">Select employee…</option>
@@ -1305,26 +1305,26 @@ function EmployeeSetupCard() {
             {canPayroll && <Field label="Payroll basis days"><input type="number" className="input-flat w-full" value={cfg.payroll_basis_days} onChange={(e) => setCfg({ ...cfg, payroll_basis_days: e.target.value })} data-testid="setup-basis" /></Field>}
             {canPayroll && <Field label="Flat monthly salary (₹)"><input type="number" className="input-flat w-full" value={cfg.monthly_salary} onChange={(e) => setCfg({ ...cfg, monthly_salary: e.target.value })} data-testid="setup-monthly-salary" /></Field>}
             {canPayroll && <Field label="Effective salary used">
-              <div className="input-flat w-full bg-[#FAFAFA] font-mono text-sm">{inr(cfg.net_monthly_structure > 0 ? cfg.net_monthly_structure : cfg.monthly_salary)}</div>
+              <div className="input-flat w-full bg-[var(--surface-2)] font-mono text-sm">{inr(cfg.net_monthly_structure > 0 ? cfg.net_monthly_structure : cfg.monthly_salary)}</div>
             </Field>}
           </div>
-          {canPayroll && <div className="text-[11px] text-[#6E6A63]">
+          {canPayroll && <div className="text-[11px] text-[var(--ink-3)]">
             If a detailed salary structure exists on the employee profile, its net monthly is used;
             otherwise the flat monthly salary above applies.
           </div>}
           <div>
-            <div className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">
-              Weekly offs <span className="text-[#6E6A63] normal-case">(per-employee override · blank = org policy)</span>
+            <div className="text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">
+              Weekly offs <span className="text-[var(--ink-3)] normal-case">(per-employee override · blank = org policy)</span>
             </div>
             <div className="flex gap-1.5 flex-wrap" data-testid="setup-weekly-offs">
               {WEEKDAYS.map((d) => (
                 <button key={d.v} type="button" onClick={() => toggleOff(d.v)}
                   className={`px-3 py-1.5 text-xs font-mono border ${cfg.weekly_offs != null && cfg.weekly_offs.includes(d.v)
-                    ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C]"}`}
+                    ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "border-[var(--line)] text-[var(--ink-2)]"}`}
                   data-testid={`weekly-off-${d.v}`}>{d.l}</button>
               ))}
               <button type="button" onClick={() => setCfg({ ...cfg, weekly_offs: null })}
-                className="px-3 py-1.5 text-xs font-mono border border-[#E5E5E5] text-[#6E6A63]">
+                className="px-3 py-1.5 text-xs font-mono border border-[var(--line)] text-[var(--ink-3)]">
                 Use policy
               </button>
             </div>
@@ -1362,9 +1362,9 @@ function ShortLeaveCard() {
     <div className="card-flat space-y-3" data-testid="short-leave-card">
       <div className="flex items-center justify-between">
         <div className="overline">SHORT / HOURLY LEAVE</div>
-        {ok && <span className="text-xs text-[#1D633E] font-mono">RECORDED</span>}
+        {ok && <span className="text-xs text-[var(--success)] font-mono">RECORDED</span>}
       </div>
-      <div className="text-[11px] text-[#6E6A63]">
+      <div className="text-[11px] text-[var(--ink-3)]">
         Record a few hours off on a day. Salary deducts <b>hourly-rate × hours</b> (hourly rate = per-day ÷ full-day hours).
       </div>
       <SearchSelect className="input-flat w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="sl-employee">
@@ -1418,16 +1418,16 @@ function LateConfigCard({ policy, onSaved }) {
     <div className="card-flat space-y-3" data-testid="late-config-card">
       <div className="flex items-center justify-between">
         <div className="overline">LATE FINE, GRACE & CATEGORIES</div>
-        {savedAt && <span className="text-xs text-[#1D633E] font-mono">SAVED</span>}
+        {savedAt && <span className="text-xs text-[var(--success)] font-mono">SAVED</span>}
       </div>
-      <div className="border border-[#F0A93A] bg-[#FFF9EE] p-3 space-y-3">
+      <div className="border border-[var(--warning)] bg-[var(--warning-soft)] p-3 space-y-3">
         <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
           <input type="checkbox" checked={!!p.late_fine_enabled}
             onChange={(e) => setP({ ...p, late_fine_enabled: e.target.checked })}
-            className="accent-[#8B7F6A] w-4 h-4" data-testid="late-fine-toggle" />
+            className="accent-[var(--accent)] w-4 h-4" data-testid="late-fine-toggle" />
           <span className="font-semibold">Enable ₹ late fine per occurrence</span>
         </label>
-        <div className="text-[11px] text-[#8a5a00]">
+        <div className="text-[11px] text-[var(--warning)]">
           A late arrival is <b>never</b> auto-converted to half-day. Approving a late arrival waives its fine; rejecting keeps it.
         </div>
         {p.late_fine_enabled && (
@@ -1439,13 +1439,13 @@ function LateConfigCard({ policy, onSaved }) {
         )}
       </div>
       <div>
-        <div className="text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Late reason categories</div>
+        <div className="text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Late reason categories</div>
         <div className="flex flex-wrap gap-1.5 mb-2" data-testid="late-cats">
           {cats.map((c) => (
-            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[#F5F4F0] text-[#76705E] font-mono">
+            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[var(--hover)] text-[var(--accent-strong)] font-mono">
               {capWords(c)}
               <button onClick={() => setP({ ...p, late_reason_categories: cats.filter((x) => x !== c) })}
-                className="text-[#6E6A63] hover:text-[#B4001C]"><X size={11} /></button>
+                className="text-[var(--ink-3)] hover:text-[var(--danger)]"><X size={11} /></button>
             </span>
           ))}
         </div>
@@ -1503,7 +1503,7 @@ function ManualAttendanceCard() {
     <div className="card-flat space-y-3" data-testid="manual-attendance-card">
       <div className="flex items-center justify-between">
         <div className="overline">MANUAL ATTENDANCE ENTRY</div>
-        {ok && <span className="text-xs text-[#1D633E] font-mono">SAVED</span>}
+        {ok && <span className="text-xs text-[var(--success)] font-mono">SAVED</span>}
       </div>
       <SearchSelect className="input-flat w-full" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} data-testid="manual-employee">
         <option value="">Select employee…</option>
@@ -1530,7 +1530,7 @@ function ManualAttendanceCard() {
 function Field({ label, children }) {
   return (
     <div>
-      <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">{label}</label>
+      <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">{label}</label>
       {children}
     </div>
   );
@@ -1656,7 +1656,7 @@ function GeoPolicyTab({ projects }) {
           onPick={(la, ln) => setP({ default_office_lat: la, default_office_lng: ln })}
           height={340}
         />
-        <p className="text-[11px] text-[#6E6A63] mt-2 leading-relaxed">
+        <p className="text-[11px] text-[var(--ink-3)] mt-2 leading-relaxed">
           Click anywhere on the map or drag the pin to set the <b>default office fence</b>.
           The solid circle is the office radius; dashed gold circles are saved geofence
           locations. Use <b>current location</b> to drop the pin where you are standing.
@@ -1669,7 +1669,7 @@ function GeoPolicyTab({ projects }) {
         <div className="flex items-center justify-between">
           <div className="overline">ATTENDANCE POLICY</div>
           <div className="flex items-center gap-2">
-            {savedAt && <span className="text-xs text-[#1D633E] font-mono">SAVED</span>}
+            {savedAt && <span className="text-xs text-[var(--success)] font-mono">SAVED</span>}
             <button onClick={savePolicy} disabled={saving} className="btn-primary text-xs" data-testid="save-policy-btn">
               {saving ? "Saving…" : "Save policy"}
             </button>
@@ -1678,30 +1678,30 @@ function GeoPolicyTab({ projects }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Office start</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Office start</label>
             <input type="time" className="input-flat w-full" value={policy.office_start || "10:00"}
                    onChange={(e) => setP({ office_start: e.target.value })} data-testid="policy-office-start" />
           </div>
           <div>
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Office end</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Office end</label>
             <input type="time" className="input-flat w-full" value={policy.office_end || "19:00"}
                    onChange={(e) => setP({ office_end: e.target.value })} />
           </div>
           <div>
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Grace (minutes)</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Grace (minutes)</label>
             <input type="number" className="input-flat w-full" value={policy.grace_minutes ?? 15}
                    onChange={(e) => setP({ grace_minutes: e.target.value })} data-testid="policy-grace" />
           </div>
           <div>
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Paid leave / month</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Paid leave / month</label>
             <input type="number" min="0" max="31" step="1" className="input-flat w-full"
                    value={policy.monthly_paid_leave_allowance ?? 1}
                    onChange={(e) => setP({ monthly_paid_leave_allowance: e.target.value })}
                    data-testid="policy-paid-leave-allowance" />
-            <p className="text-[10px] text-[#6E6A63] mt-1">Approved ordinary leave above this allowance is deducted from salary.</p>
+            <p className="text-[10px] text-[var(--ink-3)] mt-1">Approved ordinary leave above this allowance is deducted from salary.</p>
           </div>
           <div>
-            <label className="block text-[10px] font-mono uppercase text-[#5C5C5C] mb-1">Max GPS accuracy (m)</label>
+            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Max GPS accuracy (m)</label>
             <input type="number" className="input-flat w-full" value={policy.max_gps_accuracy_m ?? 100}
                    onChange={(e) => setP({ max_gps_accuracy_m: e.target.value })} data-testid="policy-accuracy" />
           </div>
@@ -1717,13 +1717,13 @@ function GeoPolicyTab({ projects }) {
             <label key={key} className="flex items-center gap-2 text-sm cursor-pointer select-none">
               <input type="checkbox" checked={!!policy[key]}
                      onChange={(e) => setP({ [key]: e.target.checked })}
-                     data-testid={`policy-${key}`} className="accent-[#8B7F6A] w-4 h-4" />
+                     data-testid={`policy-${key}`} className="accent-[var(--accent)] w-4 h-4" />
               {label}
             </label>
           ))}
         </div>
 
-        <div className="border-t border-[#F0F0F0] pt-3">
+        <div className="border-t border-[var(--line-soft)] pt-3">
           <div className="overline mb-2">DEFAULT OFFICE FENCE (fallback)</div>
           <div className="grid grid-cols-3 gap-2">
             <input type="number" step="any" className="input-flat" placeholder="Latitude"
@@ -1786,7 +1786,7 @@ function GeoPolicyTab({ projects }) {
         <div className="card-flat" data-testid="locations-list">
           <div className="overline mb-3">GEOFENCED LOCATIONS · {locations.length}</div>
           {locations.length === 0 && (
-            <div className="text-sm text-[#6E6A63] py-6 text-center">
+            <div className="text-sm text-[var(--ink-3)] py-6 text-center">
               No geofences yet. While geo-fencing is enabled, out-of-fence check-ins
               go for approval — add a location here or set the default office fence,
               or disable geo-fencing in the policy.
@@ -1794,17 +1794,17 @@ function GeoPolicyTab({ projects }) {
           )}
           <div className="space-y-2">
             {locations.map((l) => (
-              <div key={l.id} className="flex items-center gap-3 border border-[#F0F0F0] p-2.5" data-testid={`loc-${l.id}`}>
-                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">
+              <div key={l.id} className="flex items-center gap-3 border border-[var(--line-soft)] p-2.5" data-testid={`loc-${l.id}`}>
+                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">
                   {KIND_LABELS[l.kind] || l.kind}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold truncate">{l.name}</div>
-                  <div className="text-[11px] font-mono text-[#5C5C5C]">
+                  <div className="text-[11px] font-mono text-[var(--ink-2)]">
                     {Number(l.lat).toFixed(4)}, {Number(l.lng).toFixed(4)} · {l.radius_m}m radius
                   </div>
                 </div>
-                <button onClick={() => deleteLocation(l.id)} className="btn-ghost text-[#B4001C] px-2"
+                <button onClick={() => deleteLocation(l.id)} className="btn-ghost text-[var(--danger)] px-2"
                         data-testid={`loc-delete-${l.id}`}>
                   <X size={14} />
                 </button>
@@ -1822,8 +1822,8 @@ function TabBtn({ id, tab, setTab, label }) {
   return (
     <button onClick={() => setTab(id)} data-testid={`tab-${id}`}
       className={`px-4 py-2.5 text-sm border-b-2 -mb-px transition whitespace-nowrap ${tab === id
-        ? "border-[#8B7F6A] text-[#76705E] font-semibold"
-        : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}>
+        ? "border-[var(--accent)] text-[var(--accent-strong)] font-semibold"
+        : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"}`}>
       {label}
     </button>
   );
@@ -1842,7 +1842,7 @@ function MonthPicker({ ym, setYm }) {
 }
 
 function LeaveStatus({ s }) {
-  const col = { pending: "#F0A93A", approved: "#1D633E", rejected: "#B4001C", cancelled: "#5C5C5C" }[s] || "#5C5C5C";
+  const col = { pending: "#B45309", approved: "#1E6A45", rejected: "#B3261E", cancelled: "#4A4741" }[s] || "#4A4741";
   return <span className="status-chip" style={{ background: `${col}15`, color: col }}>{s}</span>;
 }
 
@@ -1861,15 +1861,15 @@ function MyLeaveBalance({ employeeId, year }) {
     <div className="card-flat" data-testid="my-leave-balance">
       <div className="overline mb-3">MY LEAVE · {year}</div>
       {rows === null ? (
-        <p className="text-sm text-[#6E6A63]">Loading…</p>
+        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-[#6E6A63]">No leave balance to show yet.</p>
+        <p className="text-sm text-[var(--ink-3)]">No leave balance to show yet.</p>
       ) : rows.map(([type, b]) => (
-        <div key={type} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
+        <div key={type} className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
           <span className="capitalize">{type.replace("_", " ")}</span>
           <span className="font-mono text-xs">
-            <span className="text-[#1A1A1A] font-semibold">{b.remaining}</span>
-            <span className="text-[#6E6A63]"> left · {b.used} used</span>
+            <span className="text-[var(--ink)] font-semibold">{b.remaining}</span>
+            <span className="text-[var(--ink-3)]"> left · {b.used} used</span>
           </span>
         </div>
       ))}

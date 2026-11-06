@@ -151,15 +151,15 @@ export default function Accounting() {
     <div className="space-y-6" data-testid="accounting-page">
       <PageHero
         eyebrow="FINANCE / ACCOUNTING"
-        title="Every rupee, in its place."
+        title="Accounting"
         kicker="Double-entry bookkeeping wired into projects, clients, and payroll. For staff reimbursement claims, use the Expenses module."
       >
         <button onClick={() => { setShowForm({ kind: "income" }); setTab("income"); }}
-          className="btn-primary bg-[#1D633E]" data-testid="quick-income-btn">
+          className="btn-primary bg-[var(--success)]" data-testid="quick-income-btn">
           <ArrowDown size={14} /> Record income
         </button>
         <button onClick={() => { setShowForm({ kind: "expense" }); setTab("expense"); }}
-          className="btn-primary bg-[#B4001C]" data-testid="quick-expense-btn">
+          className="btn-primary bg-[var(--danger)]" data-testid="quick-expense-btn">
           <ArrowUp size={14} /> Record expense
         </button>
         <button onClick={() => setShowWithdrawal(true)}
@@ -193,11 +193,11 @@ export default function Accounting() {
         />
       )}
 
-      <nav className="border border-[#E5E5E5] bg-white p-3 md:p-4" aria-label="Accounting sections" data-testid="accounting-tabs">
+      <nav className="border border-[var(--line)] bg-white p-3 md:p-4" aria-label="Accounting sections" data-testid="accounting-tabs">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
             <div className="overline">ACCOUNTING WORKSPACE</div>
-            <p className="text-xs text-[#5C5C5C] mt-1">Choose a section — every module is visible without horizontal scrolling.</p>
+            <p className="text-xs text-[var(--ink-2)] mt-1">Choose a section — every module is visible without horizontal scrolling.</p>
           </div>
           <select
             value={tab}
@@ -214,8 +214,8 @@ export default function Accounting() {
             <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
               aria-current={tab === id ? "page" : undefined}
               className={`min-h-11 px-3 py-2 text-left text-xs flex items-center gap-2 border transition ${tab === id
-                ? "border-[#8B7F6A] bg-[#F5F1EB] text-[#5B4E3A] font-semibold"
-                : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#B9AE9B] hover:text-[#0A0A0A]"}`}>
+                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[#5B4E3A] font-semibold"
+                : "border-[var(--line)] text-[var(--ink-2)] hover:border-[#B9AE9B] hover:text-[var(--ink)]"}`}>
               <Icon size={15} className="shrink-0" /> <span>{label}</span>
             </button>
           ))}
@@ -229,7 +229,7 @@ export default function Accounting() {
           <select aria-label="Fy"
             value={fy}
             onChange={(e) => { setFy(e.target.value); setFromDate(""); setToDate(""); }}
-            className="border border-[#E5E5E5] px-2 py-1 text-xs bg-white"
+            className="border border-[var(--line)] px-2 py-1 text-xs bg-white"
             data-testid="fy-select"
           >
             <option value="all">— All time —</option>
@@ -237,18 +237,18 @@ export default function Accounting() {
               <option key={o.label} value={o.label}>{`FY ${o.label}${o.is_current ? " (current)" : ""}`}</option>
             ))}
           </select>
-          <span className="text-[#6E6A63]">or</span>
+          <span className="text-[var(--ink-3)]">or</span>
           <input
             type="date" value={fromDate}
             onChange={(e) => { setFromDate(e.target.value); setFy(""); }}
-            className="border border-[#E5E5E5] px-2 py-1 text-xs"
+            className="border border-[var(--line)] px-2 py-1 text-xs"
             data-testid="from-date"
           />
-          <span className="text-[#6E6A63]">→</span>
+          <span className="text-[var(--ink-3)]">→</span>
           <input
             type="date" value={toDate}
             onChange={(e) => { setToDate(e.target.value); setFy(""); }}
-            className="border border-[#E5E5E5] px-2 py-1 text-xs"
+            className="border border-[var(--line)] px-2 py-1 text-xs"
             data-testid="to-date"
           />
           {(fromDate || toDate || fy) && (
@@ -412,35 +412,35 @@ function OwnerWithdrawalForm({ accounts, banks, onClose, onSaved }) {
   };
 
   return (
-    <form onSubmit={submit} className="border-y border-[#E5E5E5] py-4 space-y-3" data-testid="owner-withdrawal-form">
+    <form onSubmit={submit} className="border-y border-[var(--line)] py-4 space-y-3" data-testid="owner-withdrawal-form">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="overline">OWNER WITHDRAWAL</div>
-          <div className="text-xs text-[#5C5C5C] mt-1">Debit Owner Drawings and credit the selected cash or bank account.</div>
+          <div className="text-xs text-[var(--ink-2)] mt-1">Debit Owner Drawings and credit the selected cash or bank account.</div>
         </div>
         <button type="button" className="btn-icon" onClick={onClose} aria-label="Close owner withdrawal form"><X size={14} /></button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Date</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Date</span>
           <input required type="date" className="input-flat w-full mt-1" value={form.date}
             onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Amount</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Amount</span>
           <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="owner-withdrawal-amount" /></label>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Paid from</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Paid from</span>
           <SearchSelect required className="input-flat w-full mt-1" value={form.paid_from_account_id}
             onChange={(e) => setForm({ ...form, paid_from_account_id: e.target.value })}>
             <option value="">Select cash or bank</option>
             {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
           </SearchSelect></label>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Reference</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Reference</span>
           <input className="input-flat w-full mt-1" value={form.reference}
             onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Optional" /></label>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Narration</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Narration</span>
           <input required className="input-flat w-full mt-1" value={form.narration}
             onChange={(e) => setForm({ ...form, narration: e.target.value })} /></label>
       </div>
-      {error && <div className="text-xs text-[#B4001C]" role="alert">{error}</div>}
+      {error && <div className="text-xs text-[var(--danger)]" role="alert">{error}</div>}
       <div className="flex justify-end gap-2">
         <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
         <button className="btn-primary" disabled={busy || !drawings} data-testid="owner-withdrawal-submit">
@@ -503,44 +503,44 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
   };
 
   return (
-    <form onSubmit={submit} className="border-y border-[#E5E5E5] py-4 space-y-3" data-testid="capital-transfers-form">
+    <form onSubmit={submit} className="border-y border-[var(--line)] py-4 space-y-3" data-testid="capital-transfers-form">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="overline">CAPITAL, INVESTMENTS &amp; PARTY MONEY</div>
-          <div className="text-xs text-[#5C5C5C] mt-1">Balance-sheet transactions that should not be recorded as income or expense.</div>
+          <div className="text-xs text-[var(--ink-2)] mt-1">Balance-sheet transactions that should not be recorded as income or expense.</div>
         </div>
         <button type="button" className="btn-icon" onClick={onClose} aria-label="Close capital and transfers form"><X size={14} /></button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Transaction</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Transaction</span>
           <select aria-label="Transaction type" className="input-flat w-full mt-1" value={form.kind}
             onChange={(event) => setForm({ ...form, kind: event.target.value })} data-testid="transfer-kind">
             {TRANSFER_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Date</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Date</span>
           <input required type="date" className="input-flat w-full mt-1" value={form.date}
             onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Amount</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Amount</span>
           <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
             onChange={(event) => setForm({ ...form, amount: event.target.value })} data-testid="transfer-amount" /></label>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Cash / Bank</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Cash / Bank</span>
           <SearchSelect required className="input-flat w-full mt-1" value={form.bank_account_id}
             onChange={(event) => setForm({ ...form, bank_account_id: event.target.value })}>
             <option value="">Select cash or bank</option>
             {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
           </SearchSelect></label>
-        {needsParty && <label className="block"><span className="text-xs text-[#5C5C5C]">Person / party</span>
+        {needsParty && <label className="block"><span className="text-xs text-[var(--ink-2)]">Person / party</span>
           <input required className="input-flat w-full mt-1" value={form.party_name}
             onChange={(event) => setForm({ ...form, party_name: event.target.value })}
             placeholder="e.g. Ritesh Soni" data-testid="transfer-party" /></label>}
-        <label className="block"><span className="text-xs text-[#5C5C5C]">Reference</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Reference</span>
           <input className="input-flat w-full mt-1" value={form.reference}
             onChange={(event) => setForm({ ...form, reference: event.target.value })} placeholder="Optional" /></label>
-        <label className="block md:col-span-3"><span className="text-xs text-[#5C5C5C]">Notes</span>
+        <label className="block md:col-span-3"><span className="text-xs text-[var(--ink-2)]">Notes</span>
           <input className="input-flat w-full mt-1" value={form.notes}
             onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Optional details" /></label>
       </div>
-      {error && <div className="text-xs text-[#B4001C]" role="alert">{error}</div>}
+      {error && <div className="text-xs text-[var(--danger)]" role="alert">{error}</div>}
       <div className="flex justify-end gap-2">
         <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
         <button className="btn-primary" disabled={busy} data-testid="transfer-submit">
@@ -560,25 +560,25 @@ function CommissionsDashboard({ data, onDownload }) {
       <div className="flex items-center justify-between">
         <div>
           <div className="overline">VENDOR COMMISSION INCOME</div>
-          <div className="text-xs text-[#5C5C5C] mt-0.5">Earned = expected from vendor bills · Received = cash posted to income · Unallocated = receipt not matched to a bill</div>
+          <div className="text-xs text-[var(--ink-2)] mt-0.5">Earned = expected from vendor bills · Received = cash posted to income · Unallocated = receipt not matched to a bill</div>
         </div>
         <button className="btn-ghost text-xs" onClick={() => onDownload("/commissions/report.csv", "commissions.csv")} data-testid="dl-cm-csv">
           <DownloadSimple size={12} /> CSV
         </button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KPI label="Total earned" value={CURRENCY(t.total_earned)} Icon={Coins} tint="#8B7F6A" />
-        <KPI label="Received" value={CURRENCY(t.total_received)} Icon={TrendUp} tint="#1D633E" />
-        <KPI label="Pending" value={CURRENCY(t.pending)} Icon={TrendDown} tint={t.pending > 0 ? "#B22B22" : "#5C5C5C"} />
-        <KPI label="Unallocated" value={CURRENCY(t.unallocated_received)} Icon={WarningCircle} tint={t.unallocated_received > 0 ? "#7A4E1A" : "#5C5C5C"} />
-        <KPI label="This month" value={CURRENCY(t.this_month)} Icon={ChartLine} tint="#7A4E1A" />
+        <KPI label="Total earned" value={CURRENCY(t.total_earned)} Icon={Coins} tint="#9C4A28" />
+        <KPI label="Received" value={CURRENCY(t.total_received)} Icon={TrendUp} tint="#1E6A45" />
+        <KPI label="Pending" value={CURRENCY(t.pending)} Icon={TrendDown} tint={t.pending > 0 ? "#B3261E" : "#4A4741"} />
+        <KPI label="Unallocated" value={CURRENCY(t.unallocated_received)} Icon={WarningCircle} tint={t.unallocated_received > 0 ? "#85570F" : "#4A4741"} />
+        <KPI label="This month" value={CURRENCY(t.this_month)} Icon={ChartLine} tint="#85570F" />
       </div>
 
       <div className="card-flat" data-testid="commissions-vendor-table">
         <div className="overline mb-3">BY VENDOR · EARNED / RECEIVED / PENDING</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
+            <thead className="text-[10px] font-mono uppercase text-[var(--ink-3)]">
               <tr>
                 <th className="p-2 text-left">Vendor</th>
                 <th className="p-2 text-right">Earned</th>
@@ -590,18 +590,18 @@ function CommissionsDashboard({ data, onDownload }) {
               {(data.top_vendors || []).map((v) => {
                 const pending = Math.max(0, (v.earned || 0) - (v.received || 0));
                 return (
-                  <tr key={v.vendor_id} className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7]">
+                  <tr key={v.vendor_id} className="border-t border-[var(--line-soft)] hover:bg-[var(--surface-2)]">
                     <td className="p-2">
-                      <a href={`/vendors/${v.vendor_id}`} className="font-semibold hover:text-[#76705E]">{v.vendor_name}</a>
+                      <a href={`/vendors/${v.vendor_id}`} className="font-semibold hover:text-[var(--accent-strong)]">{v.vendor_name}</a>
                     </td>
                     <td className="p-2 text-right font-mono">{CURRENCY(v.earned)}</td>
-                    <td className="p-2 text-right font-mono text-[#1D633E]">{CURRENCY(v.received)}</td>
-                    <td className={`p-2 text-right font-mono font-semibold ${pending > 0 ? "text-[#B22B22]" : "text-[#5C5C5C]"}`}>{CURRENCY(pending)}</td>
+                    <td className="p-2 text-right font-mono text-[var(--success)]">{CURRENCY(v.received)}</td>
+                    <td className={`p-2 text-right font-mono font-semibold ${pending > 0 ? "text-[var(--danger)]" : "text-[var(--ink-2)]"}`}>{CURRENCY(pending)}</td>
                   </tr>
                 );
               })}
               {(data.top_vendors || []).length === 0 && (
-                <tr><td colSpan={4} className="p-6 text-center text-[#6E6A63]">No commission data yet.</td></tr>
+                <tr><td colSpan={4} className="p-6 text-center text-[var(--ink-3)]">No commission data yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -610,12 +610,12 @@ function CommissionsDashboard({ data, onDownload }) {
 
       <div className="card-flat">
         <div className="overline mb-3">BY PROJECT</div>
-        {(data.by_project || []).length === 0 && <div className="text-sm text-[#6E6A63]">No project-linked commission yet.</div>}
+        {(data.by_project || []).length === 0 && <div className="text-sm text-[var(--ink-3)]">No project-linked commission yet.</div>}
         {(data.by_project || []).slice(0, 10).map((p) => (
-          <div key={p.project_id} className="flex justify-between items-center border-b border-[#F5F5F5] py-2 text-sm">
-            <a href={`/projects/${p.project_id}`} className="font-semibold hover:text-[#76705E]">{p.project_name}</a>
+          <div key={p.project_id} className="flex justify-between items-center border-b border-[var(--hover)] py-2 text-sm">
+            <a href={`/projects/${p.project_id}`} className="font-semibold hover:text-[var(--accent-strong)]">{p.project_name}</a>
             <div className="flex gap-4 font-mono">
-              <span className="text-[#5C5C5C]">Received: {CURRENCY(p.received)}</span>
+              <span className="text-[var(--ink-2)]">Received: {CURRENCY(p.received)}</span>
               <span className="font-bold">Earned: {CURRENCY(p.earned)}</span>
             </div>
           </div>
@@ -633,9 +633,9 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
       <div className="overline mb-3">{title}</div>
       <div className="overflow-x-auto"><table className="w-full text-sm">
         <tbody>
-          {rows.length === 0 && <tr><td className="text-[#6E6A63] py-2">No entries.</td></tr>}
+          {rows.length === 0 && <tr><td className="text-[var(--ink-3)] py-2">No entries.</td></tr>}
           {rows.map((r) => (
-            <tr key={r.account_id} className="border-b border-[#F5F5F5]">
+            <tr key={r.account_id} className="border-b border-[var(--hover)]">
               <td className="py-1.5">{r.name}</td>
               <td className="py-1.5 text-right font-mono">{CURRENCY(r.balance)}</td>
             </tr>
@@ -643,7 +643,7 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
           {extraRow}
         </tbody>
         <tfoot>
-          <tr className="border-t-2 border-[#0A0A0A]">
+          <tr className="border-t-2 border-[var(--ink)]">
             <td className="py-2 overline">TOTAL</td>
             <td className="py-2 text-right font-mono font-bold text-lg">{CURRENCY(total)}</td>
           </tr>
@@ -668,7 +668,7 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
             rows={bs.equity.rows}
             total={bs.equity.total_with_net_income}
             extraRow={
-              <tr className="border-b border-[#F5F5F5] italic text-[#5C5C5C]">
+              <tr className="border-b border-[var(--hover)] italic text-[var(--ink-2)]">
                 <td className="py-1.5">Net Income (period)</td>
                 <td className="py-1.5 text-right font-mono">{CURRENCY(bs.equity.net_income)}</td>
               </tr>
@@ -676,7 +676,7 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
           />
         </div>
       </div>
-      <div className={`p-4 border text-sm ${bs.balanced ? "border-[#1D633E] bg-[#EFF7EF] text-[#1D633E]" : "border-[#B22B22] bg-[#FCEEEC] text-[#B22B22]"}`}>
+      <div className={`p-4 border text-sm ${bs.balanced ? "border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]" : "border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)]"}`}>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <span className="overline">RECONCILIATION</span> · Assets {CURRENCY(bs.total_assets)} = Liabilities + Equity {CURRENCY(bs.total_liabilities_and_equity)}
@@ -693,12 +693,12 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
               {bs.unbalanced_journal_entries.length} UNBALANCED JOURNAL ENTRIES
             </summary>
             <div className="overflow-x-auto"><table className="w-full text-xs mt-2">
-              <thead className="text-[#5C5C5C] border-b border-[#EEE]">
+              <thead className="text-[var(--ink-2)] border-b border-[var(--line-soft)]">
                 <tr><th className="text-left py-1">Date</th><th className="text-left py-1">Narration</th><th className="text-right py-1">Δ</th></tr>
               </thead>
               <tbody>
                 {bs.unbalanced_journal_entries.slice(0, 10).map((e) => (
-                  <tr key={e.id} className="border-b border-[#F5F5F5]">
+                  <tr key={e.id} className="border-b border-[var(--hover)]">
                     <td className="py-1">{formatDate(e.date)}</td>
                     <td className="py-1">{e.narration}</td>
                     <td className="py-1 text-right font-mono">{CURRENCY(e.diff)}</td>
@@ -717,8 +717,8 @@ function BalanceSheetView({ bs, onDownload, periodQs }) {
 function CashFlowView({ cf, onDownload, periodQs }) {
   if (!cf) return <div className="overline">LOADING CASH FLOW…</div>;
   const Row = ({ label, value, tint }) => (
-    <div className="flex justify-between border-b border-[#F5F5F5] py-1.5 text-sm">
-      <span className="text-[#5C5C5C] capitalize">{label.replace(/_/g, " ")}</span>
+    <div className="flex justify-between border-b border-[var(--hover)] py-1.5 text-sm">
+      <span className="text-[var(--ink-2)] capitalize">{label.replace(/_/g, " ")}</span>
       <span className={`font-mono ${tint || ""}`}>{CURRENCY(value)}</span>
     </div>
   );
@@ -734,19 +734,19 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <KPI label="Opening balance" value={CURRENCY(cf.opening_balance)} Icon={Wallet} tint="#5C5C5C" />
-        <KPI label="Inflows" value={CURRENCY(cf.total_inflow)} Icon={TrendUp} tint="#1D633E" />
-        <KPI label="Outflows" value={CURRENCY(cf.total_outflow)} Icon={TrendDown} tint="#B4001C" />
-        <KPI label="Closing balance" value={CURRENCY(cf.closing_balance)} Icon={Wallet} tint={cf.closing_balance >= 0 ? "#8B7F6A" : "#B4001C"} />
+        <KPI label="Opening balance" value={CURRENCY(cf.opening_balance)} Icon={Wallet} tint="#4A4741" />
+        <KPI label="Inflows" value={CURRENCY(cf.total_inflow)} Icon={TrendUp} tint="#1E6A45" />
+        <KPI label="Outflows" value={CURRENCY(cf.total_outflow)} Icon={TrendDown} tint="#B3261E" />
+        <KPI label="Closing balance" value={CURRENCY(cf.closing_balance)} Icon={Wallet} tint={cf.closing_balance >= 0 ? "#9C4A28" : "#B3261E"} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="card-flat">
           <div className="overline mb-3">INFLOWS</div>
           {Object.entries(cf.inflows).map(([k, v]) => (
-            <Row key={k} label={k} value={v} tint="text-[#1D633E]" />
+            <Row key={k} label={k} value={v} tint="text-[var(--success)]" />
           ))}
-          <div className="flex justify-between pt-3 mt-2 border-t-2 border-[#0A0A0A]">
+          <div className="flex justify-between pt-3 mt-2 border-t-2 border-[var(--ink)]">
             <span className="overline">TOTAL</span>
             <span className="font-mono font-bold">{CURRENCY(cf.total_inflow)}</span>
           </div>
@@ -754,9 +754,9 @@ function CashFlowView({ cf, onDownload, periodQs }) {
         <div className="card-flat">
           <div className="overline mb-3">OUTFLOWS</div>
           {Object.entries(cf.outflows).map(([k, v]) => (
-            <Row key={k} label={k} value={v} tint="text-[#B4001C]" />
+            <Row key={k} label={k} value={v} tint="text-[var(--danger)]" />
           ))}
-          <div className="flex justify-between pt-3 mt-2 border-t-2 border-[#0A0A0A]">
+          <div className="flex justify-between pt-3 mt-2 border-t-2 border-[var(--ink)]">
             <span className="overline">TOTAL</span>
             <span className="font-mono font-bold">{CURRENCY(cf.total_outflow)}</span>
           </div>
@@ -764,24 +764,24 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       </div>
 
       {cf.activities && (
-        <div className="border border-[#E5E5E5] bg-white overflow-x-auto">
+        <div className="border border-[var(--line)] bg-white overflow-x-auto">
           <table className="w-full min-w-[680px] text-sm">
-            <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+            <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr><th className="p-3 text-left overline">ACTIVITY</th><th className="p-3 text-left overline">DETAIL</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">NET</th></tr>
             </thead>
             <tbody>
               {Object.entries(cf.activities).flatMap(([activity, detail]) => (
                 detail.lines?.length ? detail.lines.map((line, index) => (
-                  <tr key={`${activity}-${line.label}`} className="border-b border-[#F0F0F0]">
+                  <tr key={`${activity}-${line.label}`} className="border-b border-[var(--line-soft)]">
                     <td className="p-3 font-semibold capitalize">{index === 0 ? activity : ""}</td>
-                    <td className="p-3 text-[#5C5C5C]">{line.label}</td>
-                    <td className="p-3 text-right font-mono text-[#1D633E]">{line.inflow ? CURRENCY(line.inflow) : "-"}</td>
-                    <td className="p-3 text-right font-mono text-[#B4001C]">{line.outflow ? CURRENCY(line.outflow) : "-"}</td>
+                    <td className="p-3 text-[var(--ink-2)]">{line.label}</td>
+                    <td className="p-3 text-right font-mono text-[var(--success)]">{line.inflow ? CURRENCY(line.inflow) : "-"}</td>
+                    <td className="p-3 text-right font-mono text-[var(--danger)]">{line.outflow ? CURRENCY(line.outflow) : "-"}</td>
                     <td className="p-3 text-right font-mono font-semibold">{CURRENCY(line.net)}</td>
                   </tr>
                 )) : [
-                  <tr key={`${activity}-empty`} className="border-b border-[#F0F0F0]">
-                    <td className="p-3 font-semibold capitalize">{activity}</td><td className="p-3 text-[#6E6A63]">No movement</td><td className="p-3" colSpan="3" />
+                  <tr key={`${activity}-empty`} className="border-b border-[var(--line-soft)]">
+                    <td className="p-3 font-semibold capitalize">{activity}</td><td className="p-3 text-[var(--ink-3)]">No movement</td><td className="p-3" colSpan="3" />
                   </tr>,
                 ]
               ))}
@@ -791,18 +791,18 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       )}
 
       {Array.isArray(cf.cash_accounts) && cf.cash_accounts.length > 0 && (
-        <div className="border border-[#E5E5E5] bg-white overflow-x-auto">
-          <div className="p-3 border-b border-[#E5E5E5] overline">CASH & BANK RECONCILIATION</div>
+        <div className="border border-[var(--line)] bg-white overflow-x-auto">
+          <div className="p-3 border-b border-[var(--line)] overline">CASH & BANK RECONCILIATION</div>
           <table className="w-full min-w-[620px] text-sm">
-            <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]"><tr><th className="p-3 text-left overline">ACCOUNT</th><th className="p-3 text-right overline">OPENING</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">CLOSING</th></tr></thead>
+            <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr><th className="p-3 text-left overline">ACCOUNT</th><th className="p-3 text-right overline">OPENING</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">CLOSING</th></tr></thead>
             <tbody>{cf.cash_accounts.map((account) => (
-              <tr key={account.account_id} className="border-b border-[#F0F0F0]"><td className="p-3 font-semibold">{account.name}</td><td className="p-3 text-right font-mono">{CURRENCY(account.opening_balance)}</td><td className="p-3 text-right font-mono text-[#1D633E]">{CURRENCY(account.inflow)}</td><td className="p-3 text-right font-mono text-[#B4001C]">{CURRENCY(account.outflow)}</td><td className="p-3 text-right font-mono font-semibold">{CURRENCY(account.closing_balance)}</td></tr>
+              <tr key={account.account_id} className="border-b border-[var(--line-soft)]"><td className="p-3 font-semibold">{account.name}</td><td className="p-3 text-right font-mono">{CURRENCY(account.opening_balance)}</td><td className="p-3 text-right font-mono text-[var(--success)]">{CURRENCY(account.inflow)}</td><td className="p-3 text-right font-mono text-[var(--danger)]">{CURRENCY(account.outflow)}</td><td className="p-3 text-right font-mono font-semibold">{CURRENCY(account.closing_balance)}</td></tr>
             ))}</tbody>
           </table>
         </div>
       )}
 
-      <div className={`p-4 border text-sm ${cf.net_change >= 0 ? "border-[#1D633E] bg-[#EFF7EF] text-[#1D633E]" : "border-[#B4001C] bg-[#FCEEEC] text-[#B4001C]"}`}>
+      <div className={`p-4 border text-sm ${cf.net_change >= 0 ? "border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)]" : "border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)]"}`}>
         <span className="overline">NET CHANGE FOR PERIOD</span>
         <span className="ml-3 font-mono font-bold text-lg">{CURRENCY(cf.net_change)}</span>
       </div>
@@ -816,16 +816,16 @@ function Dashboard({ d, onRefresh }) {
   return (
     <div className="space-y-6" data-testid="dashboard-tab">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <KPI label="Cash & Bank" value={CURRENCY(k.cash_bank)} Icon={Wallet} tint="#8B7F6A" testid="kpi-cash" />
-        <KPI label="This month P&L" value={CURRENCY(k.profit_month)} Icon={ChartLine} tint={k.profit_month >= 0 ? "#1D633E" : "#B4001C"} testid="kpi-profit" />
+        <KPI label="Cash & Bank" value={CURRENCY(k.cash_bank)} Icon={Wallet} tint="#9C4A28" testid="kpi-cash" />
+        <KPI label="This month P&L" value={CURRENCY(k.profit_month)} Icon={ChartLine} tint={k.profit_month >= 0 ? "#1E6A45" : "#B3261E"} testid="kpi-profit" />
         <KPI label="Outstanding" value={CURRENCY(k.outstanding)} Icon={TrendDown} tint="#A86400" testid="kpi-outstanding" />
-        <KPI label="Overdue" value={CURRENCY(k.overdue)} Icon={TrendDown} tint="#B4001C" testid="kpi-overdue" />
+        <KPI label="Overdue" value={CURRENCY(k.overdue)} Icon={TrendDown} tint="#B3261E" testid="kpi-overdue" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <SubKPI label="Income (month)" value={CURRENCY(k.income_month)} tint="#1D633E" />
-        <SubKPI label="Expense (month)" value={CURRENCY(k.expense_month)} tint="#B4001C" />
-        <SubKPI label="Salary (month)" value={CURRENCY(k.salary_month)} tint="#8A6DFF" />
+        <SubKPI label="Income (month)" value={CURRENCY(k.income_month)} tint="#1E6A45" />
+        <SubKPI label="Expense (month)" value={CURRENCY(k.expense_month)} tint="#B3261E" />
+        <SubKPI label="Salary (month)" value={CURRENCY(k.salary_month)} tint="#2E5694" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -835,8 +835,8 @@ function Dashboard({ d, onRefresh }) {
             <button onClick={onRefresh} className="btn-ghost text-xs"><ArrowsClockwise size={12} /> Refresh</button>
           </div>
           {k.cash_bank_by_account.map((b, i) => (
-            <div key={b.account_id ?? i} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm" data-testid={`bank-${b.account_id}`}>
-              <div className="flex items-center gap-2"><Bank size={14} className="text-[#76705E]" />{b.name}</div>
+            <div key={b.account_id ?? i} className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm" data-testid={`bank-${b.account_id}`}>
+              <div className="flex items-center gap-2"><Bank size={14} className="text-[var(--accent-strong)]" />{b.name}</div>
               <span className="font-mono font-semibold">{CURRENCY(b.balance)}</span>
             </div>
           ))}
@@ -844,12 +844,12 @@ function Dashboard({ d, onRefresh }) {
 
         <div className="card-flat">
           <div className="overline mb-3">UPCOMING PAYMENTS · next 30d</div>
-          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[#6E6A63]">All clear.</div>}
+          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[var(--ink-3)]">All clear.</div>}
           {d.upcoming_payments.slice(0, 8).map((m, i) => (
-            <div key={m.id ?? i} className="flex items-center justify-between border-b border-[#F0F0F0] py-2 text-sm">
+            <div key={m.id ?? i} className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
               <div>
                 <div className="font-semibold">{m.name}</div>
-                <div className="text-xs font-mono text-[#5C5C5C]">DUE · {formatDate(m.due_date)}</div>
+                <div className="text-xs font-mono text-[var(--ink-2)]">DUE · {formatDate(m.due_date)}</div>
               </div>
               <span className="font-mono font-semibold">{CURRENCY(m.amount)}</span>
             </div>
@@ -860,19 +860,19 @@ function Dashboard({ d, onRefresh }) {
       <div className="card-flat">
         <div className="overline mb-3">RECENT TRANSACTIONS</div>
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+          <thead className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Narration</th><th className="p-2 text-left">Source</th><th className="p-2 text-right">Amount</th></tr>
           </thead>
           <tbody>
             {d.recent_transactions.map((t, i) => (
-              <tr key={t.id ?? i} className="border-t border-[#F0F0F0]" data-testid={`recent-${t.id}`}>
+              <tr key={t.id ?? i} className="border-t border-[var(--line-soft)]" data-testid={`recent-${t.id}`}>
                 <td className="p-2 font-mono text-xs">{formatDate(t.date)}</td>
                 <td className="p-2">{t.narration}</td>
                 <td className="p-2 text-xs uppercase">{t.source}</td>
                 <td className="p-2 text-right font-mono font-semibold">{CURRENCY(t.total)}</td>
               </tr>
             ))}
-            {d.recent_transactions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[#6E6A63]">No transactions yet.</td></tr>}
+            {d.recent_transactions.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-[var(--ink-3)]">No transactions yet.</td></tr>}
           </tbody>
         </table></div>
       </div>
@@ -1060,7 +1060,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <div className="overline">MONEY IN / COLLECTIONS DUE</div>
-          <div className="text-xs text-[#5C5C5C] mt-1">Invoices, project milestones, vendor commissions and other receivables · as of {formatDate(data.as_of)}</div>
+          <div className="text-xs text-[var(--ink-2)] mt-1">Invoices, project milestones, vendor commissions and other receivables · as of {formatDate(data.as_of)}</div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <input className="input-flat min-w-[260px]" value={query}
@@ -1103,10 +1103,10 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPI label="Pending collection" value={CURRENCY(data.totals?.all)} Icon={Money} tint="#0A0A0A" />
-        <KPI label="Overdue" value={CURRENCY(data.totals?.overdue)} Icon={ArrowUp} tint="#B4001C" />
-        <KPI label="Due today / upcoming" value={CURRENCY((data.totals?.due_today || 0) + (data.totals?.upcoming || 0))} Icon={ArrowDown} tint="#7A4E1A" />
-        <KPI label="Received" value={CURRENCY(data.totals?.received)} Icon={ChartLine} tint="#1D633E" />
+        <KPI label="Pending collection" value={CURRENCY(data.totals?.all)} Icon={Money} tint="#18181B" />
+        <KPI label="Overdue" value={CURRENCY(data.totals?.overdue)} Icon={ArrowUp} tint="#B3261E" />
+        <KPI label="Due today / upcoming" value={CURRENCY((data.totals?.due_today || 0) + (data.totals?.upcoming || 0))} Icon={ArrowDown} tint="#85570F" />
+        <KPI label="Received" value={CURRENCY(data.totals?.received)} Icon={ChartLine} tint="#1E6A45" />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -1115,9 +1115,9 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
             const n = countFor(id);
             return (
               <button key={id} type="button" role="tab" aria-selected={filter === id} onClick={() => setFilter(id)}
-                className={`px-3 py-1.5 text-xs border rounded-full transition ${filter === id ? "bg-[#1A1A1A] text-white border-[#1A1A1A]" : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#76705E]"} ${id === "history" ? "sm:ml-auto" : ""}`}
+                className={`px-3 py-1.5 text-xs border rounded-full transition ${filter === id ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent-strong)]"} ${id === "history" ? "sm:ml-auto" : ""}`}
                 data-testid={`collections-filter-${id}`}>
-                {label}{n > 0 && <span className={`ml-1.5 ${filter === id ? "text-white/70" : "text-[#6E6A63]"}`}>{n}</span>}
+                {label}{n > 0 && <span className={`ml-1.5 ${filter === id ? "text-white/70" : "text-[var(--ink-3)]"}`}>{n}</span>}
               </button>
             );
           })}
@@ -1125,7 +1125,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
         <div className="flex gap-1.5 flex-wrap" aria-label="Collection category" data-testid="collections-categories">
           {categories.map(([id, label]) => (
             <button key={id} type="button" aria-pressed={category === id} onClick={() => setCategory(id)}
-              className={`px-2.5 py-1 text-[11px] rounded ${category === id ? "bg-[#EFEDE6] text-[#1A1A1A] font-semibold" : "text-[#5C5C5C] hover:bg-[#F5F4F0]"}`}
+              className={`px-2.5 py-1 text-[11px] rounded ${category === id ? "bg-[var(--hover)] text-[var(--ink)] font-semibold" : "text-[var(--ink-2)] hover:bg-[var(--hover)]"}`}
               data-testid={`collections-category-${id}`}>
               {label}
             </button>
@@ -1133,9 +1133,9 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
         </div>
       </div>
 
-      <div className="border border-[#E5E5E5] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase text-[#5C5C5C]">
+          <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase text-[var(--ink-2)]">
             <tr>
               <th className="p-3 text-left">Due date</th>
               <th className="p-3 text-left">Source</th>
@@ -1148,25 +1148,25 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7]">
+              <tr key={row.id} className="border-t border-[var(--line-soft)] hover:bg-[var(--surface-2)]">
                 <td className="p-3 font-mono text-xs whitespace-nowrap">
                   <div>{formatDate(row.due_date)}</div>
-                  {row.days_overdue > 0 && <div className="text-[10px] text-[#B4001C]">{row.days_overdue} days overdue</div>}
+                  {row.days_overdue > 0 && <div className="text-[10px] text-[var(--danger)]">{row.days_overdue} days overdue</div>}
                 </td>
                 <td className="p-3"><span className="status-chip chip-medium">{(row.source_type || "").replaceAll("_", " ")}</span></td>
-                <td className="p-3"><div className="font-semibold">{row.vendor_name || row.client_name || "—"}</div><div className="text-xs text-[#5C5C5C]">{row.project_name || "No project"}</div></td>
-                <td className="p-3"><div>{row.name || "Collection"}</div>{row.recognition === "planned" && <div className="text-[10px] text-[#7A4E1A]">Expected only - not yet earned</div>}</td>
+                <td className="p-3"><div className="font-semibold">{row.vendor_name || row.client_name || "—"}</div><div className="text-xs text-[var(--ink-2)]">{row.project_name || "No project"}</div></td>
+                <td className="p-3"><div>{row.name || "Collection"}</div>{row.recognition === "planned" && <div className="text-[10px] text-[var(--warning)]">Expected only - not yet earned</div>}</td>
                 <td className="p-3"><span className={`status-chip chip-${row.status}`}>{(row.status || "").replaceAll("_", " ")}</span></td>
                 <td className="p-3 text-right font-mono font-semibold">
                   {isHistory ? (
                     <>
-                      <div className="text-[#1D633E]">{CURRENCY(row.received_amount)}</div>
-                      {row.outstanding > 0 && <div className="text-[10px] font-normal text-[#7A4E1A]">{CURRENCY(row.outstanding)} still due</div>}
+                      <div className="text-[var(--success)]">{CURRENCY(row.received_amount)}</div>
+                      {row.outstanding > 0 && <div className="text-[10px] font-normal text-[var(--warning)]">{CURRENCY(row.outstanding)} still due</div>}
                     </>
                   ) : (
                     <>
                       <div>{CURRENCY(row.outstanding)}</div>
-                      {row.received_amount > 0 && <div className="text-[10px] font-normal text-[#6E6A63]">of {CURRENCY(row.amount)}</div>}
+                      {row.received_amount > 0 && <div className="text-[10px] font-normal text-[var(--ink-3)]">of {CURRENCY(row.amount)}</div>}
                     </>
                   )}
                 </td>
@@ -1180,13 +1180,13 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
                     : null}
                   {row.origin === "manual_expected" && row.received_amount <= 0 && <>
                     <button type="button" className="btn-ghost text-xs" onClick={() => editPlan(row)}><PencilSimple size={12} /> Edit</button>
-                    <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => cancelPlan(row)}><Trash size={12} /> Cancel</button>
+                    <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => cancelPlan(row)}><Trash size={12} /> Cancel</button>
                   </>}
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-[#6E6A63]">
+              <tr><td colSpan={7} className="p-10 text-center text-[var(--ink-3)]">
                 {isHistory ? "Nothing received yet in this view." : filter === "active" && !term
                   ? "Nothing left to collect. Every expected payment has been received."
                   : "No collections match this view."}
@@ -1198,12 +1198,12 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 
       {collecting && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <form onSubmit={saveReceipt} className="bg-white border border-[#E5E5E5] w-full max-w-lg p-5 space-y-4">
+          <form onSubmit={saveReceipt} className="bg-white border border-[var(--line)] w-full max-w-lg p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="overline">RECORD COLLECTION RECEIPT</div>
                 <h3 className="font-display text-xl mt-1">{collecting.name || "Collection"}</h3>
-                <p className="text-sm text-[#5C5C5C] mt-1">{collecting.vendor_name || collecting.client_name || collecting.project_name || "Other receivable"} · {CURRENCY(collecting.outstanding)} pending</p>
+                <p className="text-sm text-[var(--ink-2)] mt-1">{collecting.vendor_name || collecting.client_name || collecting.project_name || "Other receivable"} · {CURRENCY(collecting.outstanding)} pending</p>
               </div>
               <button type="button" className="btn-ghost" onClick={() => setCollecting(null)} aria-label="Close"><X size={16} /></button>
             </div>
@@ -1257,7 +1257,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
     <div className="space-y-4" data-testid={`${kind}-tab`}>
       <div className="flex justify-end">
         <button onClick={() => setShowForm(showForm && showForm.kind === kind ? false : { kind })}
-          className={`btn-primary ${kind === "income" ? "bg-[#1D633E]" : "bg-[#B4001C]"}`} data-testid={`${kind}-new-btn`}>
+          className={`btn-primary ${kind === "income" ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`} data-testid={`${kind}-new-btn`}>
           <Plus size={14} /> {showForm && showForm.kind === kind ? "Cancel" : `New ${kind}`}
         </button>
       </div>
@@ -1304,7 +1304,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
 
           {kind === "expense" && (
             <>
-              <div className="md:col-span-3 text-xs text-[#5C5C5C] border-l-2 border-[#8B7F6A] pl-3">
+              <div className="md:col-span-3 text-xs text-[var(--ink-2)] border-l-2 border-[var(--accent)] pl-3">
                 Employee salary is paid from Employee → Salary &amp; Bank → Run Payroll so attendance, employee history and Accounting use one transaction.
               </div>
               <SearchSelect
@@ -1345,9 +1345,9 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
         </form>
       )}
 
-      <div className="border border-[#E5E5E5] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto">
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+          <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Narration</th><th className="p-2 text-left">Account</th><th className="p-2 text-left">Reference</th><th className="p-2 text-right">Amount</th></tr>
           </thead>
           <tbody>
@@ -1355,32 +1355,32 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
               const primary = j.lines?.find((l) => l.account_type === (kind === "income" ? "income" : "expense"));
               return (
                 <tr key={j.id} onClick={() => setDetail(j)}
-                  className="border-t border-[#F0F0F0] cursor-pointer hover:bg-[#FAFAF7]"
+                  className="border-t border-[var(--line-soft)] cursor-pointer hover:bg-[var(--surface-2)]"
                   data-testid={`${kind}-row-${j.id}`}>
                   <td className="p-2 font-mono text-xs">{formatDate(j.date)}</td>
                   <td className="p-2">
                     {j.narration}
                     {j.source?.endsWith("_reversal") && (
-                      <span className="ml-2 text-[10px] text-[#76705E]">{j.undone ? "REVERSAL UNDONE" : "REVERSAL"}</span>
+                      <span className="ml-2 text-[10px] text-[var(--accent-strong)]">{j.undone ? "REVERSAL UNDONE" : "REVERSAL"}</span>
                     )}
                     {j.source?.endsWith("_reinstatement") && (
-                      <span className="ml-2 text-[10px] text-[#1D633E]">REINSTATED</span>
+                      <span className="ml-2 text-[10px] text-[var(--success)]">REINSTATED</span>
                     )}
                   </td>
                   <td className="p-2 text-xs">{primary?.account_name || "—"}</td>
                   <td className="p-2 font-mono text-xs">{j.reference || "—"}</td>
-                  <td className={`p-2 text-right font-mono font-semibold ${kind === "income" ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
+                  <td className={`p-2 text-right font-mono font-semibold ${kind === "income" ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
                     {CURRENCY(j.total)}
                   </td>
                 </tr>
               );
             })}
-            {journal.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-[#6E6A63]">No {kind} entries yet.</td></tr>}
+            {journal.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-[var(--ink-3)]">No {kind} entries yet.</td></tr>}
           </tbody>
         </table></div>
       </div>
       {page?.total > page?.limit && (
-        <div className="flex items-center justify-between text-xs text-[#5C5C5C]">
+        <div className="flex items-center justify-between text-xs text-[var(--ink-2)]">
           <span>
             {page.offset + 1}–{Math.min(page.offset + page.limit, page.total)} of {page.total}
           </span>
@@ -1492,7 +1492,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
   return (
     <div className="space-y-4" data-testid="coa-tab">
       <div className="flex justify-between items-center flex-wrap gap-2">
-        <label className="flex items-center gap-2 text-xs text-[#5C5C5C]">
+        <label className="flex items-center gap-2 text-xs text-[var(--ink-2)]">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)}
             data-testid="coa-show-inactive" />
           Show inactive accounts
@@ -1526,7 +1526,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
         <div key={type} className="card-flat" data-testid={`coa-group-${type}`}>
           <div className="overline mb-2">{type.toUpperCase()} · {list.length}</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
+            <thead className="text-[10px] font-mono uppercase text-[var(--ink-3)]">
               <tr><th className="p-2" /><th className="p-2 text-left">Code</th><th className="p-2 text-left">Account</th><th className="p-2 text-right">Current balance</th><th className="p-2 text-right">Actions</th></tr>
             </thead>
             <tbody>
@@ -1535,25 +1535,25 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
                 return (
                   <tr key={a.id}
                     onClick={() => onOpenAccount && onOpenAccount(a)}
-                    className={`border-b border-[#F0F0F0] cursor-pointer hover:bg-[#FAFAF7] transition-colors group ${a.active === false ? "opacity-50" : ""}`}
+                    className={`border-b border-[var(--line-soft)] cursor-pointer hover:bg-[var(--surface-2)] transition-colors group ${a.active === false ? "opacity-50" : ""}`}
                     data-testid={`account-${a.id}`}>
                     <td className="p-2 w-8">
                       <button onClick={(e) => toggleFav(a, e)}
-                        className={`transition-colors ${isFav ? "text-[#C9A84C]" : "text-[#C5C5C5] hover:text-[#76705E]"}`}
+                        className={`transition-colors ${isFav ? "text-[var(--accent)]" : "text-[var(--line-strong)] hover:text-[var(--accent-strong)]"}`}
                         title={isFav ? "Unpin from Favourites" : "Pin to Favourites"}
                         data-testid={`fav-toggle-${a.id}`}>
                         <Star size={14} weight={isFav ? "fill" : "regular"} />
                       </button>
                     </td>
                     <td className="p-2 font-mono text-xs w-20">{a.code || "—"}</td>
-                    <td className="p-2 font-semibold group-hover:text-[#76705E]">
+                    <td className="p-2 font-semibold group-hover:text-[var(--accent-strong)]">
                       {a.name}
-                      {a.active === false && <span className="ml-2 text-[10px] text-[#8F5B00]">INACTIVE</span>}
+                      {a.active === false && <span className="ml-2 text-[10px] text-[var(--warning)]">INACTIVE</span>}
                     </td>
-                    <td className="p-2 text-right font-mono text-xs text-[#5C5C5C]">{CURRENCY(a.current_balance ?? a.opening_balance)}</td>
+                    <td className="p-2 text-right font-mono text-xs text-[var(--ink-2)]">{CURRENCY(a.current_balance ?? a.opening_balance)}</td>
                     <td className="p-2 text-right w-32">
                       <span className="inline-flex items-center justify-end gap-1">
-                        {a.is_bank && <Bank size={12} className="text-[#76705E] mr-1" />}
+                        {a.is_bank && <Bank size={12} className="text-[var(--accent-strong)] mr-1" />}
                         <button type="button" className="btn-ghost p-1.5" title="Edit account"
                           onClick={(event) => startEdit(a, event)} data-testid={`account-edit-${a.id}`}>
                           <PencilSimple size={12} />
@@ -1563,7 +1563,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
                           onClick={(event) => toggleActive(a, event)} data-testid={`account-active-${a.id}`}>
                           {a.active === false ? <ArrowCounterClockwise size={12} /> : <Archive size={12} />}
                         </button>
-                        <CaretRight size={12} className="text-[#6E6A63]" />
+                        <CaretRight size={12} className="text-[var(--ink-3)]" />
                       </span>
                     </td>
                   </tr>
@@ -1602,18 +1602,18 @@ function Reports({ pl, tb, onReload, onDownload, periodQs }) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="overline">PROFIT &amp; LOSS</div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5">{pl.period_label || "Selected period"}</div>
+            <div className="text-xs text-[var(--ink-2)] mt-0.5">{pl.period_label || "Selected period"}</div>
           </div>
           <div className="text-right">
             <div className="overline">NET</div>
-            <div className={`font-display font-bold text-3xl ${pl.net_profit >= 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
+            <div className={`font-display font-bold text-3xl ${pl.net_profit >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
               {CURRENCY(pl.net_profit)}
             </div>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ReportBlock title="INCOME" rows={pl.income} total={pl.total_income} tint="#1D633E" testid="pl-income" />
-          <ReportBlock title="EXPENSE" rows={pl.expense} total={pl.total_expense} tint="#B4001C" testid="pl-expense" />
+          <ReportBlock title="INCOME" rows={pl.income} total={pl.total_income} tint="#1E6A45" testid="pl-income" />
+          <ReportBlock title="EXPENSE" rows={pl.expense} total={pl.total_expense} tint="#B3261E" testid="pl-expense" />
         </div>
       </div>
 
@@ -1625,14 +1625,14 @@ function Reports({ pl, tb, onReload, onDownload, periodQs }) {
           </div>
         </div>
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+          <thead className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr><th className="p-2 text-left">Account</th><th className="p-2 text-left">Type</th><th className="p-2 text-right">Debit</th><th className="p-2 text-right">Credit</th><th className="p-2 text-right">Balance</th></tr>
           </thead>
           <tbody>
             {tb.rows.map((r) => (
-              <tr key={r.account_id} className="border-t border-[#F0F0F0]">
+              <tr key={r.account_id} className="border-t border-[var(--line-soft)]">
                 <td className="p-2">{r.account_name}</td>
-                <td className="p-2 text-xs uppercase text-[#5C5C5C]">{r.account_type}</td>
+                <td className="p-2 text-xs uppercase text-[var(--ink-2)]">{r.account_type}</td>
                 <td className="p-2 text-right font-mono">{CURRENCY(r.debit)}</td>
                 <td className="p-2 text-right font-mono">{CURRENCY(r.credit)}</td>
                 <td className="p-2 text-right font-mono font-semibold">{CURRENCY(r.balance)}</td>
@@ -1649,14 +1649,14 @@ function ReportBlock({ title, rows, total, tint, testid }) {
   return (
     <div data-testid={testid}>
       <div className="overline mb-2" style={{ color: tint }}>{title}</div>
-      {rows.length === 0 && <div className="text-xs text-[#6E6A63]">No entries.</div>}
+      {rows.length === 0 && <div className="text-xs text-[var(--ink-3)]">No entries.</div>}
       {rows.map((r, i) => (
-        <div key={i} className="flex items-center justify-between text-sm border-b border-[#F0F0F0] py-1.5">
+        <div key={i} className="flex items-center justify-between text-sm border-b border-[var(--line-soft)] py-1.5">
           <span>{r.name}</span>
           <span className="font-mono">{CURRENCY(r.amount)}</span>
         </div>
       ))}
-      <div className="flex items-center justify-between text-sm font-semibold pt-2 mt-2 border-t-2 border-[#0A0A0A]">
+      <div className="flex items-center justify-between text-sm font-semibold pt-2 mt-2 border-t-2 border-[var(--ink)]">
         <span>TOTAL</span>
         <span className="font-mono" style={{ color: tint }}>{CURRENCY(total)}</span>
       </div>
@@ -1710,20 +1710,20 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
     <div className="space-y-4" data-testid="ledgers-tab">
       <div className="flex items-center gap-3 flex-wrap">
         <span className="overline">LEDGER FOR</span>
-        <div className="flex border border-[#E5E5E5] rounded-none overflow-hidden">
+        <div className="flex border border-[var(--line)] rounded-none overflow-hidden">
           {ENTITY_TYPES.map((e) => (
             <button
               key={e.id}
               onClick={() => setEntityType(e.id)}
               data-testid={`ledger-type-${e.id}`}
-              className={`px-3 py-1.5 text-xs ${entityType === e.id ? "bg-[#8B7F6A] text-white" : "text-[#5C5C5C] hover:bg-[#F5F5F5]"}`}
+              className={`px-3 py-1.5 text-xs ${entityType === e.id ? "bg-[var(--accent)] text-white" : "text-[var(--ink-2)] hover:bg-[var(--hover)]"}`}
             >{e.label}</button>
           ))}
         </div>
         <select aria-label="Entity id"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
-          className="border border-[#E5E5E5] px-3 py-1.5 text-sm bg-white min-w-[280px]"
+          className="border border-[var(--line)] px-3 py-1.5 text-sm bg-white min-w-[280px]"
           data-testid="ledger-entity-select"
         >
           <option value="">Select {ENTITY_TYPES.find((e) => e.id === entityType)?.label}…</option>
@@ -1732,16 +1732,16 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
       </div>
 
       {loading && <div className="overline">LOADING LEDGER…</div>}
-      {!loading && !ledger && entityId && <div className="text-sm text-[#6E6A63]">No data.</div>}
+      {!loading && !ledger && entityId && <div className="text-sm text-[var(--ink-3)]">No data.</div>}
       {!loading && ledger && (
         <div className="space-y-4" data-testid="ledger-body">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
             <div className="card-flat"><div className="overline">Opening</div>
               <div className="font-mono text-lg" data-testid="ledger-opening">{CURRENCY(ledger.opening_balance)}</div></div>
             <div className="card-flat"><div className="overline">Inflow</div>
-              <div className="font-mono text-lg text-[#1D633E]" data-testid="ledger-inflow">{CURRENCY(ledger.inflow)}</div></div>
+              <div className="font-mono text-lg text-[var(--success)]" data-testid="ledger-inflow">{CURRENCY(ledger.inflow)}</div></div>
             <div className="card-flat"><div className="overline">Outflow</div>
-              <div className="font-mono text-lg text-[#B22B22]" data-testid="ledger-outflow">{CURRENCY(ledger.outflow)}</div></div>
+              <div className="font-mono text-lg text-[var(--danger)]" data-testid="ledger-outflow">{CURRENCY(ledger.outflow)}</div></div>
             <div className="card-flat"><div className="overline">Closing</div>
               <div className="font-mono text-lg" data-testid="ledger-closing">{CURRENCY(ledger.closing_balance)}</div></div>
           </div>
@@ -1760,7 +1760,7 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
           <div className="card-flat">
             <div className="overline mb-2">{ledger.period?.label || "PERIOD"} · {ledger.entries?.length || 0} ENTRIES</div>
             <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead className="text-[#5C5C5C] border-b border-[#EEE]">
+              <thead className="text-[var(--ink-2)] border-b border-[var(--line-soft)]">
                 <tr>
                   <th className="text-left py-1.5">Date</th>
                   <th className="text-left py-1.5">Narration</th>
@@ -1772,15 +1772,15 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
               </thead>
               <tbody>
                 {(ledger.entries || []).length === 0 && (
-                  <tr><td colSpan="6" className="text-[#6E6A63] py-3 italic">No transactions in period.</td></tr>
+                  <tr><td colSpan="6" className="text-[var(--ink-3)] py-3 italic">No transactions in period.</td></tr>
                 )}
                 {(ledger.entries || []).map((e) => (
-                  <tr key={e.id} className="border-b border-[#F5F5F5]" data-testid="ledger-row">
+                  <tr key={e.id} className="border-b border-[var(--hover)]" data-testid="ledger-row">
                     <td className="py-1.5 font-mono text-xs">{formatDate(e.date)}</td>
                     <td className="py-1.5">{e.narration}</td>
-                    <td className="py-1.5 text-xs text-[#5C5C5C]">{e.source || "-"}</td>
-                    <td className="py-1.5 text-right font-mono text-[#1D633E]">{e.inflow ? CURRENCY(e.inflow) : "-"}</td>
-                    <td className="py-1.5 text-right font-mono text-[#B22B22]">{e.outflow ? CURRENCY(e.outflow) : "-"}</td>
+                    <td className="py-1.5 text-xs text-[var(--ink-2)]">{e.source || "-"}</td>
+                    <td className="py-1.5 text-right font-mono text-[var(--success)]">{e.inflow ? CURRENCY(e.inflow) : "-"}</td>
+                    <td className="py-1.5 text-right font-mono text-[var(--danger)]">{e.outflow ? CURRENCY(e.outflow) : "-"}</td>
                     <td className="py-1.5 text-right font-mono font-semibold">{CURRENCY(e.balance)}</td>
                   </tr>
                 ))}
@@ -1799,14 +1799,14 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
 // ================================================================
 function ValidationReport({ data }) {
   if (!data) return <div className="overline">LOADING VALIDATION REPORT…</div>;
-  if (data.error) return <div className="card-flat text-[#B22B22]">{data.error}</div>;
+  if (data.error) return <div className="card-flat text-[var(--danger)]">{data.error}</div>;
   const passed = data.difference?.match_within_1pc;
   return (
     <div className="space-y-4" data-testid="validation-tab">
-      <div className={`p-4 border ${passed ? "border-[#1D633E] bg-[#EFF7EF]" : "border-[#B22B22] bg-[#FCEEEC]"}`}>
+      <div className={`p-4 border ${passed ? "border-[var(--success)] bg-[var(--success-soft)]" : "border-[var(--danger)] bg-[var(--danger-soft)]"}`}>
         <div className="overline">{passed ? "PASS" : "REVIEW"}</div>
         <div className="text-sm mt-1">{data.recommendation}</div>
-        <div className="text-xs text-[#5C5C5C] mt-2">{data.period?.label}</div>
+        <div className="text-xs text-[var(--ink-2)] mt-2">{data.period?.label}</div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="card-flat">
@@ -1842,12 +1842,12 @@ function ValidationReport({ data }) {
         <div className="card-flat">
           <div className="overline mb-2">ORPHAN PAID INVOICES (missing journal entry)</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="text-[#5C5C5C] border-b border-[#EEE]">
+            <thead className="text-[var(--ink-2)] border-b border-[var(--line-soft)]">
               <tr><th className="text-left py-1">Invoice #</th><th className="text-left py-1">Date</th><th className="text-right py-1">Total</th></tr>
             </thead>
             <tbody>
               {data.diagnostics.orphan_paid_invoices.map((i) => (
-                <tr key={i.id} className="border-b border-[#F5F5F5]">
+                <tr key={i.id} className="border-b border-[var(--hover)]">
                   <td className="py-1">{i.invoice_number}</td>
                   <td className="py-1 text-xs">{formatDate(i.issue_date)}</td>
                   <td className="py-1 text-right font-mono">{CURRENCY(i.total)}</td>
@@ -1861,12 +1861,12 @@ function ValidationReport({ data }) {
         <div className="card-flat">
           <div className="overline mb-2">INCOME JEs WITHOUT CLIENT/PROJECT LINK</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="text-[#5C5C5C] border-b border-[#EEE]">
+            <thead className="text-[var(--ink-2)] border-b border-[var(--line-soft)]">
               <tr><th className="text-left py-1">Date</th><th className="text-left py-1">Narration</th><th className="text-right py-1">Amount</th></tr>
             </thead>
             <tbody>
               {data.diagnostics.orphan_income_je.map((e) => (
-                <tr key={e.id} className="border-b border-[#F5F5F5]">
+                <tr key={e.id} className="border-b border-[var(--hover)]">
                   <td className="py-1 text-xs">{formatDate(e.date)}</td>
                   <td className="py-1">{e.narration}</td>
                   <td className="py-1 text-right font-mono">{CURRENCY(e.total)}</td>

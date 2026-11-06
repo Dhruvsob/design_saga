@@ -59,19 +59,18 @@ function NavItem({ to, label, Icon }) {
       to={to}
       data-testid={`nav-${to.replace("/", "")}`}
       className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all relative ${
+        `group flex items-center gap-3 px-3 h-9 text-[13.5px] rounded-lg transition-colors relative ${
           isActive
-            ? "bg-[#F3EFE9] text-[#1A1A1A] font-semibold"
-            : "text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A]"
+            ? "bg-[var(--surface)] text-[var(--ink)] font-semibold"
+            : "text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)]"
         }`
       }
     >
       {({ isActive }) => (
         <>
-          {isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#8B7F6A]" />}
-          <Icon size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#76705E]" : "text-[#6E6A63] group-hover:text-[#6B6B6B]"} />
+          {isActive && <span className="nav-active-bar" aria-hidden="true" />}
+          <Icon size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[var(--accent)]" : "text-[var(--ink-3)] group-hover:text-[var(--ink-2)] transition-colors"} />
           <span className="flex-1">{label}</span>
-          {isActive && <CaretRight size={12} weight="bold" aria-hidden="true" className="text-[#76705E]" />}
         </>
       )}
     </NavLink>
@@ -141,7 +140,7 @@ export default function Layout({ children }) {
   }
   const brandName = currentOrg?.display_name || currentOrg?.name || "DESIGN SAGA";
   const brandTagline = currentOrg?.branding?.tagline || "STUDIO MANAGEMENT";
-  const brandColor = currentOrg?.branding?.primary_color || "#8B7F6A";
+  const brandColor = currentOrg?.branding?.primary_color || "#9C4A28";
   const brandLogo = currentOrg?.branding?.logo_url;
   const brandInitials = (brandName || "DS").split(/\s+/).slice(0, 2)
     .map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -154,34 +153,34 @@ export default function Layout({ children }) {
       )}
       {/* ============== SIDEBAR ============== */}
       <aside
-        className={`w-64 shrink-0 flex flex-col text-[#6B6B6B] z-40
+        className={`sidebar-dark w-64 shrink-0 flex flex-col text-[var(--ink-2)] z-40
           fixed inset-y-0 left-0 h-full overflow-y-auto transform transition-transform duration-200
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:sticky lg:top-0 lg:min-h-screen lg:h-auto`}
-        style={{ background: "var(--sidebar)", borderRight: "1px solid #E8E6E1" }}
+        style={{ borderRight: "1px solid var(--line)" }}
         data-testid="app-sidebar"
       >
         <button
           onClick={() => navigate(isSuperAdmin ? "/super-admin" : "/dashboard")}
-          className="p-6 pr-16 lg:pr-6 flex items-center gap-3 text-left hover:bg-black/[0.03] transition group"
-          style={{ borderBottom: "1px solid #E8E6E1" }}
+          className="px-5 py-5 pr-16 lg:pr-5 flex items-center gap-3 text-left hover:bg-[var(--sidebar-2)] transition-colors group"
+          style={{ borderBottom: "1px solid var(--line)" }}
           data-testid="sidebar-logo-btn"
         >
           {brandLogo ? (
-            <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
-                 className="h-12 w-auto max-w-[72px] shrink-0 object-contain transition-transform group-hover:scale-[1.03]" />
+            <span className="h-12 min-w-[48px] max-w-[76px] px-1.5 rounded-xl bg-[#F7F2EA] flex items-center justify-center shrink-0 shadow-[0_2px_8px_-3px_rgba(0,0,0,0.4)]">
+              <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
+                   className="h-10 w-auto max-w-[64px] object-contain transition-transform duration-200 group-hover:scale-[1.04]" />
+            </span>
           ) : (
-            <div className="relative w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm"
-                 style={{ background: "linear-gradient(135deg, #8B7F6A, #8a6f24)" }}>
-              <span className="text-white font-display font-bold text-base">{brandInitials}</span>
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-[#C9A84C] rounded-full" style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#F7F2EA]">
+              <span className="text-[#2A211A] font-display font-bold text-sm tracking-wide">{brandInitials}</span>
             </div>
           )}
           <div className="min-w-0">
-            <div className="font-display font-bold tracking-tight text-base text-[#1A1A1A] truncate" data-testid="sidebar-brand-name">
-              {brandName}<span className="text-[#76705E]">.</span>
+            <div className="font-display font-bold tracking-tight text-base text-[var(--ink)] truncate" data-testid="sidebar-brand-name">
+              {brandName}
             </div>
-            <div className="eyebrow text-[9px] text-[#6E6A63] truncate mt-0.5">{brandTagline}</div>
+            <div className="text-[11px] text-[var(--ink-3)] truncate mt-0.5">{brandTagline}</div>
           </div>
         </button>
 
@@ -203,17 +202,15 @@ export default function Layout({ children }) {
               className={({ isActive }) =>
                 `group flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all relative mb-1 ${
                   isActive
-                    ? "bg-[#C9A84C]/15 text-[#8a6f24] font-semibold"
-                    : "text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A]"
+                    ? "bg-[var(--surface)] text-[var(--ink)] font-semibold ring-1 ring-[var(--line)]"
+                    : "text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)]"
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  {isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#C9A84C]" />}
-                  <Crown size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} />
+                  <Crown size={17} aria-hidden="true" weight={isActive ? "fill" : "regular"} className={isActive ? "text-[var(--accent)]" : ""} />
                   <span className="flex-1">Super Admin</span>
-                  {isActive && <CaretRight size={12} weight="bold" aria-hidden="true" />}
                 </>
               )}
             </NavLink>
@@ -221,7 +218,7 @@ export default function Layout({ children }) {
           {groups.map((g) => (
             <div key={g.id} className={g.label ? "mt-4" : ""} role="group" aria-labelledby={g.label ? `nav-group-${g.id}` : undefined}>
               {g.label && (
-                <div id={`nav-group-${g.id}`} className="overline px-3 pb-1.5 text-[#6E6A63]" data-testid={`nav-group-${g.id}`}>
+                <div id={`nav-group-${g.id}`} className="px-3 pb-1 text-[11px] font-semibold text-[var(--ink-3)]" data-testid={`nav-group-${g.id}`}>
                   {g.label}
                 </div>
               )}
@@ -232,19 +229,18 @@ export default function Layout({ children }) {
           ))}
         </nav>
 
-        <div className="p-4" style={{ borderTop: "1px solid #E8E6E1" }}>
+        <div className="p-3" style={{ borderTop: "1px solid var(--line)" }}>
           <div className="flex items-center gap-3 mb-3">
             {user?.picture ? (
-              <img src={user.picture} alt="" className="w-9 h-9 rounded-lg object-cover ring-1 ring-[#E8E6E1]" />
+              <img src={user.picture} alt="" className="w-9 h-9 rounded-lg object-cover ring-1 ring-[var(--line)]" />
             ) : (
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-display font-bold text-xs" style={{ background: "var(--stone)" }}>
+              <div className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-xs bg-[var(--caramel)] text-[#2A211A]">
                 {(user?.name || "?").slice(0, 1).toUpperCase()}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-[#1A1A1A] truncate" data-testid="sidebar-user-name">{user?.name}</div>
-              <div className="text-[10px] font-mono tracking-wider uppercase text-[#6E6A63] flex items-center gap-1.5">
-                <span className="live-dot" />
+              <div className="text-sm font-semibold text-[var(--ink)] truncate" data-testid="sidebar-user-name">{user?.name}</div>
+              <div className="text-[11px] text-[var(--ink-3)] capitalize truncate">
                 {user?.role || "employee"}
               </div>
             </div>
@@ -257,7 +253,7 @@ export default function Layout({ children }) {
           <button
             onClick={logout}
             data-testid="sidebar-logout-btn"
-            className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-xl border border-[#E8E6E1] bg-white text-[#6B6B6B] hover:text-[#1A1A1A] hover:border-[#8B7F6A] transition"
+            className="w-full flex items-center justify-center gap-2 text-xs font-semibold h-9 rounded-lg text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)] transition-colors"
           >
             <SignOut size={14} /> Sign out
           </button>
@@ -268,10 +264,8 @@ export default function Layout({ children }) {
 
       {/* ============== MAIN ============== */}
       <main className="flex-1 min-w-0">
-        {/* Top brand accent strip */}
-        <div className="h-[3px] bg-gradient-to-r from-[#8B7F6A] via-[#C9A84C] to-[#8B7F6A] no-print" />
 
-        <header className="h-16 px-4 lg:px-8 flex items-center justify-between sticky top-0 z-20 no-print glass-header">
+        <header className="h-14 px-4 lg:px-8 flex items-center justify-between sticky top-0 z-20 no-print glass-header">
           {/* mobile menu */}
           <button
             className="lg:hidden btn-icon mr-2"
@@ -282,33 +276,32 @@ export default function Layout({ children }) {
             <List size={18} />
           </button>
           {/* breadcrumb */}
-          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-3 text-sm text-[#6B6B6B]" data-testid="breadcrumb">
-            <span className="overline">{(brandName || "").toUpperCase()}</span>
+          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-3 text-sm text-[var(--ink-2)]" data-testid="breadcrumb">
+            <span className="text-[var(--ink-3)]">{brandName}</span>
             {currentGroup?.label && currentGroup.label !== currentNav?.label && (
               <>
-                <CaretRight size={10} className="text-[#6E6A63]" aria-hidden="true" />
+                <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
                 <span>{currentGroup.label}</span>
               </>
             )}
-            <CaretRight size={10} className="text-[#6E6A63]" aria-hidden="true" />
-            <span className="text-[#2C2C2C] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
+            <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
+            <span className="text-[var(--ink)] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
           </nav>
 
           {/* search — opens the command palette */}
           <button
             onClick={() => setPaletteOpen(true)}
-            className="flex items-center gap-2 flex-1 max-w-md mx-2 lg:mx-8 px-3 py-2 rounded-xl border border-transparent hover:border-[#E8E6E1] hover:bg-white transition text-left"
+            className="flex items-center gap-2 flex-1 max-w-md mx-2 lg:mx-8 px-3 h-9 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] hover:bg-white hover:border-[var(--line-strong)] transition-colors text-left"
             data-testid="top-search"
           >
-            <MagnifyingGlass size={15} className="text-[#6B6B6B]" />
-            <span className="flex-1 text-sm text-[#6E6A63]">Search projects, clients, invoices…</span>
-            <kbd className="hidden md:inline-block px-1.5 py-0.5 rounded bg-[#F5F4F0] border border-[#E8E6E1] font-mono text-[10px] text-[#6B6B6B]">⌘K</kbd>
+            <MagnifyingGlass size={15} className="text-[var(--ink-2)]" />
+            <span className="flex-1 text-sm text-[var(--ink-3)]">Search projects, clients, invoices…</span>
+            <kbd className="hidden md:inline-block px-1.5 py-0.5 rounded bg-[var(--hover)] border border-[var(--line)] font-mono text-[10px] text-[var(--ink-2)]">⌘K</kbd>
           </button>
 
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 overline">
-              <span className="live-dot" />
-              <span>{formatDate(now)} · {fmtClock(now)} IST</span>
+            <div className="hidden xl:block text-xs text-[var(--ink-3)] tabular whitespace-nowrap">
+              {formatDate(now)} · {fmtClock(now)}
             </div>
             <button
               onClick={toggleFullscreen}
@@ -334,13 +327,13 @@ export default function Layout({ children }) {
         </header>
 
         {subState?.read_only && (
-          <div role="status" className="px-4 lg:px-8 py-2.5 bg-[#FBEDEA] border-b border-[#F1D3CC] text-sm text-[#7A2A1C] flex items-center gap-2 no-print" data-testid="read-only-banner">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#B22B22] shrink-0" />
+          <div role="status" className="px-4 lg:px-8 py-2.5 bg-[var(--danger-soft)] border-b border-[#F1D3CC] text-sm text-[#7A2A1C] flex items-center gap-2 no-print" data-testid="read-only-banner">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--danger)] shrink-0" />
             <span><strong>Read-only mode.</strong> {subState.ended_on ? `The plan ended on ${formatDate(subState.ended_on)}. ` : ""}Your work is preserved and can be viewed or downloaded, but editing is paused until the studio owner renews the plan.</span>
           </div>
         )}
         {!subState?.read_only && subState?.status === "trial" && subState?.days_left != null && subState.days_left <= 7 && (
-          <div role="status" className="px-4 lg:px-8 py-2 bg-[#FFF6E8] border-b border-[#F3E2C2] text-xs text-[#7A4E1A] no-print" data-testid="trial-banner">
+          <div role="status" className="px-4 lg:px-8 py-2 bg-[var(--warning-soft)] border-b border-[#F3E2C2] text-xs text-[var(--warning)] no-print" data-testid="trial-banner">
             Trial ends {subState.days_left === 0 ? "today" : `in ${subState.days_left} day${subState.days_left === 1 ? "" : "s"}`} ({formatDate(subState.trial_ends_on)}). Your data stays safe; editing pauses when it ends.
           </div>
         )}

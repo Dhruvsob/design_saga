@@ -84,7 +84,7 @@ export function ProposalDetails({ q, update, tpl, readOnly }) {
           <ListEditor items={q.design_scope || []} onChange={(items) => update({ design_scope: items })}
                       placeholder="e.g. Landscape design" readOnly={readOnly} testid="scope" />
           <details className="mt-3" open={(q.exclusions || []).length > 0}>
-            <summary className="text-xs font-semibold text-[#5C5C5C] cursor-pointer">Not included (optional)</summary>
+            <summary className="text-xs font-semibold text-[var(--ink-2)] cursor-pointer">Not included (optional)</summary>
             <div className="mt-2">
               <ListEditor items={q.exclusions || []} onChange={(items) => update({ exclusions: items })}
                           placeholder="e.g. Civil and structural design" readOnly={readOnly} testid="exclusions" />
@@ -130,12 +130,12 @@ export function ProposalDetails({ q, update, tpl, readOnly }) {
             Offer a dedicated Site Coordinator
           </label>
           {sc.enabled && (
-            <div className="space-y-3 pl-6 border-l-2 border-[#E8E6E1]">
+            <div className="space-y-3 pl-6 border-l-2 border-[var(--line)]">
               <Field label="Charge per month (Rs.)">
                 <input type="number" min="0" className="input-flat max-w-[200px]" value={sc.monthly_fee || ""} disabled={readOnly}
                        onChange={(e) => setSC({ monthly_fee: Number(e.target.value) || 0 })} data-testid="proposal-sc-fee" />
               </Field>
-              <div className="text-xs font-semibold text-[#5C5C5C]">Responsibilities</div>
+              <div className="text-xs font-semibold text-[var(--ink-2)]">Responsibilities</div>
               <ListEditor items={sc.duties || []} onChange={(items) => setSC({ duties: items })}
                           placeholder="Add a responsibility" readOnly={readOnly} testid="duties" />
               <Field label="Note on limits of the role">
@@ -213,7 +213,7 @@ export function ProposalFees({ q, update, readOnly }) {
                    onChange={(e) => update({ cost: { ...cost, tax_pct: Number(e.target.value) || 0 } })} data-testid="fee-gst" />
           </Field>
           {problems.length > 0 && (
-            <ul className="text-sm text-[#8F3B00] list-disc ml-5" role="status">
+            <ul className="text-sm text-[var(--warning)] list-disc ml-5" role="status">
               {problems.map((m) => <li key={m}>{m}</li>)}
             </ul>
           )}
@@ -222,12 +222,12 @@ export function ProposalFees({ q, update, readOnly }) {
         <Section title={`Payment schedule${schedule.length ? ` · ${schedule.length} payments` : ""}`}
                  hint="Worked out from the fee above. The last instalment takes whatever remains, so the total always matches.">
           {schedule.length === 0 ? (
-            <p className="text-sm text-[#6E6A63]">Enter the total fee to see the schedule.</p>
+            <p className="text-sm text-[var(--ink-3)]">Enter the total fee to see the schedule.</p>
           ) : (
-            <div className="overflow-x-auto max-h-[360px] overflow-y-auto border border-[#F0EEE9] rounded">
+            <div className="overflow-x-auto max-h-[360px] overflow-y-auto border border-[var(--line-soft)] rounded">
               <table className="w-full text-sm" data-testid="fee-schedule">
-                <thead className="sticky top-0 bg-[#FAF9F6]">
-                  <tr className="text-left border-b border-[#E8E6E1]">
+                <thead className="sticky top-0 bg-[var(--surface-2)]">
+                  <tr className="text-left border-b border-[var(--line)]">
                     <th className="py-2 px-3 overline">Payment</th>
                     <th className="py-2 px-3 overline">When</th>
                     <th className="py-2 px-3 overline text-right">Amount</th>
@@ -235,9 +235,9 @@ export function ProposalFees({ q, update, readOnly }) {
                 </thead>
                 <tbody>
                   {schedule.map((r) => (
-                    <tr key={r.label} className="border-b border-[#F5F4F0]">
+                    <tr key={r.label} className="border-b border-[var(--hover)]">
                       <td className="py-1.5 px-3">{r.label}</td>
-                      <td className="py-1.5 px-3 text-[#6E6A63]">
+                      <td className="py-1.5 px-3 text-[var(--ink-3)]">
                         {r.month === 0 ? "On confirmation" : r.month ? `Month ${r.month}` : "As agreed"}
                       </td>
                       <td className="py-1.5 px-3 text-right font-mono">{formatINR(r.amount)}</td>
@@ -275,7 +275,7 @@ function FeeSummaryCard({ q }) {
       {q.proposal?.site_coordinator?.enabled && Number(q.proposal.site_coordinator.monthly_fee) > 0 && (
         <Line label="Site coordinator (optional)" value={`${formatINR(q.proposal.site_coordinator.monthly_fee)}/month`} />
       )}
-      <p className="text-xs text-[#6E6A63] mt-3">Save to update the quotation total and the PDF.</p>
+      <p className="text-xs text-[var(--ink-3)] mt-3">Save to update the quotation total and the PDF.</p>
     </div>
   );
 }
@@ -283,8 +283,8 @@ function FeeSummaryCard({ q }) {
 function Line({ label, value, strong }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
-      <span className="text-[#5C5C5C]">{label}</span>
-      <span className={`font-mono text-right ${strong ? "font-semibold text-base text-[#1A1A1A]" : ""}`}>{value}</span>
+      <span className="text-[var(--ink-2)]">{label}</span>
+      <span className={`font-mono text-right ${strong ? "font-semibold text-base text-[var(--ink)]" : ""}`}>{value}</span>
     </div>
   );
 }
@@ -294,7 +294,7 @@ function Section({ title, hint, children }) {
     <section className="card-flat space-y-3">
       <div>
         <h3 className="font-display font-bold text-lg">{title}</h3>
-        {hint && <p className="text-xs text-[#6E6A63] mt-0.5">{hint}</p>}
+        {hint && <p className="text-xs text-[var(--ink-3)] mt-0.5">{hint}</p>}
       </div>
       {children}
     </section>
@@ -303,9 +303,9 @@ function Section({ title, hint, children }) {
 
 function Field({ label, children }) {
   return (
-    <label className="block text-xs font-semibold text-[#5C5C5C]">
+    <label className="block text-xs font-semibold text-[var(--ink-2)]">
       <span className="block mb-1">{label}</span>
-      <span className="block font-normal text-sm text-[#1A1A1A]">{children}</span>
+      <span className="block font-normal text-sm text-[var(--ink)]">{children}</span>
     </label>
   );
 }
@@ -324,7 +324,7 @@ function ListEditor({ items, onChange, placeholder, multiline, readOnly, testid 
     <div className="space-y-2" data-testid={`list-${testid}`}>
       {items.map((it, i) => (
         <div key={i} className="flex items-start gap-2">
-          <span className="text-xs text-[#6E6A63] w-5 pt-2.5 text-right shrink-0">{i + 1}.</span>
+          <span className="text-xs text-[var(--ink-3)] w-5 pt-2.5 text-right shrink-0">{i + 1}.</span>
           {multiline ? (
             <textarea rows={Math.min(8, Math.max(3, Math.ceil((it || "").length / 70)))} className="input-flat flex-1" value={it} disabled={readOnly}
                       aria-label={`Item ${i + 1}`} onChange={(e) => set(i, e.target.value)} />
@@ -340,7 +340,7 @@ function ListEditor({ items, onChange, placeholder, multiline, readOnly, testid 
               <button type="button" className="btn-icon" onClick={() => move(i, 1)} disabled={i === items.length - 1} aria-label={`Move item ${i + 1} down`}>
                 <ArrowDown size={14} />
               </button>
-              <button type="button" className="btn-icon text-[#B22B22]" onClick={() => remove(i)} aria-label={`Remove item ${i + 1}`}>
+              <button type="button" className="btn-icon text-[var(--danger)]" onClick={() => remove(i)} aria-label={`Remove item ${i + 1}`}>
                 <Trash size={14} />
               </button>
             </div>

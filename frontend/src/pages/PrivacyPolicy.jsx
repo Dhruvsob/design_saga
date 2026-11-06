@@ -41,24 +41,24 @@ const sections = [
 
 export default function PrivacyPolicy() {
   return (
-    <main className="min-h-screen bg-[#FAF9F6] text-[#2C2C2C]">
-      <header className="border-b border-[#E8E6E1] bg-white">
+    <main className="min-h-screen bg-[var(--surface-2)] text-[var(--ink)]">
+      <header className="border-b border-[var(--line)] bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
-          <Link to="/" className="font-display text-xl font-semibold text-[#2C2C2C]">
+          <Link to="/" className="font-display text-xl font-semibold text-[var(--ink)]">
             Design Saga ERP
           </Link>
-          <Link to="/" className="text-sm font-medium text-[#76705E] hover:text-[#2C2C2C]">
+          <Link to="/" className="text-sm font-medium text-[var(--accent-strong)] hover:text-[var(--ink)]">
             Return to sign in
           </Link>
         </div>
       </header>
 
       <article className="mx-auto max-w-4xl px-6 py-12 sm:py-16">
-        <div className="mb-10 border-b border-[#E8E6E1] pb-8">
+        <div className="mb-10 border-b border-[var(--line)] pb-8">
           <p className="overline mb-3">LEGAL</p>
           <h1 className="font-display text-4xl font-semibold sm:text-5xl">Privacy Policy</h1>
-          <p className="mt-4 text-sm text-[#6B6B6B]">Last updated: 16 October 2026</p>
-          <p className="mt-6 max-w-3xl leading-7 text-[#5C5C5C]">
+          <p className="mt-4 text-sm text-[var(--ink-2)]">Last updated: 16 October 2026</p>
+          <p className="mt-6 max-w-3xl leading-7 text-[var(--ink-2)]">
             This policy explains how Design Saga ERP handles information when organizations and
             their authorized users use the service at gamaa.in.
           </p>
@@ -68,14 +68,14 @@ export default function PrivacyPolicy() {
           {sections.map((section) => (
             <section key={section.title}>
               <h2 className="font-display text-2xl font-semibold">{section.title}</h2>
-              <div className="mt-3 space-y-3 leading-7 text-[#5C5C5C]">
+              <div className="mt-3 space-y-3 leading-7 text-[var(--ink-2)]">
                 {section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               </div>
             </section>
           ))}
         </div>
 
-        <footer className="mt-14 border-t border-[#E8E6E1] pt-6 text-sm text-[#6B6B6B]">
+        <footer className="mt-14 border-t border-[var(--line)] pt-6 text-sm text-[var(--ink-2)]">
           This policy applies to Design Saga ERP at gamaa.in and its optional Google Calendar
           integration.
         </footer>

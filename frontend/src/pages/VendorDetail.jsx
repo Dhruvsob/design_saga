@@ -296,7 +296,7 @@ export default function VendorDetail() {
     <div className="space-y-6" data-testid="vendor-detail-page">
       {/* HEADER */}
       <div>
-        <Link to="/vendors" className="text-xs text-[#5C5C5C] hover:text-[#76705E] flex items-center gap-1">
+        <Link to="/vendors" className="text-xs text-[var(--ink-2)] hover:text-[var(--accent-strong)] flex items-center gap-1">
           <ArrowLeft size={12} /> All vendors
         </Link>
         <div className="mt-3 flex items-start justify-between gap-6 flex-wrap">
@@ -305,22 +305,22 @@ export default function VendorDetail() {
               {v.agency_type?.toUpperCase().replace("_", " ") || "VENDOR"} · {v.category || "UNCATEGORISED"}
             </div>
             <h1 className="font-display font-bold tracking-tight text-4xl">{v.name}</h1>
-            {v.company && <div className="text-[#5C5C5C] mt-1">{v.company}</div>}
+            {v.company && <div className="text-[var(--ink-2)] mt-1">{v.company}</div>}
           </div>
           <div className="flex items-center gap-2">
             {canEditVendor && <button type="button" className="btn-ghost" onClick={openVendorEdit}><PencilSimple size={13}/> Edit</button>}
-            {canDeleteVendor && <button type="button" className="btn-ghost text-[#B22B22]" onClick={archiveVendor}><Archive size={13}/> Archive</button>}
-            <div className="px-3 py-2 border border-[#E5E5E5]">
+            {canDeleteVendor && <button type="button" className="btn-ghost text-[var(--danger)]" onClick={archiveVendor}><Archive size={13}/> Archive</button>}
+            <div className="px-3 py-2 border border-[var(--line)]">
               <div className="overline text-[9px]">RATING</div>
               <div className="flex items-center gap-1">
                 <Star size={14} weight="fill" className="text-[#F5B800]" />
                 <span className="font-display font-bold text-lg">{Number(v.rating || 0).toFixed(1)}</span>
-                <span className="text-xs text-[#6E6A63]">/ 5 · {v.rating_count || 0} ratings</span>
+                <span className="text-xs text-[var(--ink-3)]">/ 5 · {v.rating_count || 0} ratings</span>
               </div>
             </div>
-            <div className="px-3 py-2 border border-[#E5E5E5]">
+            <div className="px-3 py-2 border border-[var(--line)]">
               <div className="overline text-[9px]">OUTSTANDING</div>
-              <div className={`font-display font-bold text-lg ${s.outstanding > 0 ? "text-[#B22B22]" : ""}`}>
+              <div className={`font-display font-bold text-lg ${s.outstanding > 0 ? "text-[var(--danger)]" : ""}`}>
                 {INR(s.outstanding || 0)}
               </div>
             </div>
@@ -338,7 +338,7 @@ export default function VendorDetail() {
       </div>
 
       {/* TABS */}
-      <div className="flex items-center gap-1 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1 border-b border-[var(--line)] overflow-x-auto no-scrollbar">
         {TABS.map((t) => (
           <button
             key={t}
@@ -346,8 +346,8 @@ export default function VendorDetail() {
             onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition ${
               tab === t
-                ? "text-[#76705E] border-b-2 border-[#8B7F6A] -mb-px"
-                : "text-[#5C5C5C] hover:text-[#0A0A0A]"
+                ? "text-[var(--accent-strong)] border-b-2 border-[var(--accent)] -mb-px"
+                : "text-[var(--ink-2)] hover:text-[var(--ink)]"
             }`}
           >
             {t}
@@ -402,7 +402,7 @@ function VendorEditModal({ form, setForm, onSave, onClose, busy }) {
   );
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <form onSubmit={onSave} onClick={(e) => e.stopPropagation()} className="bg-white border border-[#E5E5E5] p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto space-y-4">
+      <form onSubmit={onSave} onClick={(e) => e.stopPropagation()} className="bg-white border border-[var(--line)] p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto space-y-4">
         <div className="flex justify-between items-start"><div><div className="overline">VENDOR MASTER</div><h2 className="font-display font-bold text-3xl">Edit vendor</h2></div><button type="button" className="btn-ghost" onClick={onClose}>×</button></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {field("name", "Vendor name")}{field("company", "Company")}
@@ -474,7 +474,7 @@ function Overview({ v, onRate, busy, canRate }) {
                 </div>
                 <input type="range" min={0} max={5} step={0.5}
                   value={r[k]} onChange={(e) => setR({ ...r, [k]: parseFloat(e.target.value) })}
-                  className="w-full accent-[#8B7F6A]" data-testid={`rate-${k}`} />
+                  className="w-full accent-[var(--accent)]" data-testid={`rate-${k}`} />
               </div>
             ))}
             <textarea className="input-flat w-full min-h-[60px]" placeholder="Optional comment"
@@ -499,9 +499,9 @@ function Ledger({ data }) {
         <Kpi label="Total paid" value={INR(data.total_paid)} />
         <Kpi label="Closing balance" value={INR(data.outstanding)} accent={data.outstanding > 0} />
       </div>
-      <div className="border border-[#E5E5E5]">
+      <div className="border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
               <Th>Date</Th><Th>Type</Th><Th>Reference</Th><Th>Narration</Th>
               <Th className="text-right">Debit</Th><Th className="text-right">Credit</Th>
@@ -510,14 +510,14 @@ function Ledger({ data }) {
           </thead>
           <tbody>
             {data.entries.length === 0 && (
-              <tr><td colSpan={7} className="p-8 text-center text-[#6E6A63]">No transactions yet.</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-[var(--ink-3)]">No transactions yet.</td></tr>
             )}
             {data.entries.map((e, i) => (
-              <tr key={i} className="border-b border-[#F0F0F0]" data-testid={`ledger-row-${i}`}>
+              <tr key={i} className="border-b border-[var(--line-soft)]" data-testid={`ledger-row-${i}`}>
                 <Td className="font-mono text-xs">{formatDate(e.date)}</Td>
                 <Td>
                   <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 ${
-                    e.type === "bill" ? "bg-[#FCEEEC] text-[#B22B22]" : "bg-[#EFF7EF] text-[#1D633E]"
+                    e.type === "bill" ? "bg-[var(--danger-soft)] text-[var(--danger)]" : "bg-[var(--success-soft)] text-[var(--success)]"
                   }`}>{e.type}</span>
                 </Td>
                 <Td className="font-mono text-xs">{e.ref}</Td>
@@ -632,9 +632,9 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
           </div>
           <textarea className="input-flat w-full min-h-[50px]" placeholder="Notes"
             value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
-          <div className="flex items-center justify-between pt-2 border-t border-[#E5E5E5]">
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--line)]">
             <div className="overline">TOTAL</div>
-            <div className="font-display font-bold text-2xl text-[#76705E]">{INR(total)}</div>
+            <div className="font-display font-bold text-2xl text-[var(--accent-strong)]">{INR(total)}</div>
           </div>
           <button disabled={busy} className="btn-primary" data-testid="save-bill-btn">
             <Receipt size={13} /> {busy ? "Saving…" : "Save bill"}
@@ -649,7 +649,7 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
           setEditing(null);
         }}>
           <div className="overline">EDIT BILL DETAILS · {editing.bill_number}</div>
-          <div className="text-xs text-[#5C5C5C]">For amount, GST, TDS, account or line-item mistakes, cancel the posted bill and record the corrected bill. This preserves double-entry history.</div>
+          <div className="text-xs text-[var(--ink-2)]">For amount, GST, TDS, account or line-item mistakes, cancel the posted bill and record the corrected bill. This preserves double-entry history.</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={editing.due_date || ""} onChange={(e) => setEditing({ ...editing, due_date: e.target.value })} /></label>
             <label className="text-xs">Notes<input className="input-flat mt-1 w-full" value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></label>
@@ -658,9 +658,9 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
         </form>
       )}
 
-      <div className="border border-[#E5E5E5]">
+      <div className="border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
               <Th>Number</Th><Th>Bill date</Th><Th>Due</Th><Th>Status</Th>
               <Th className="text-right">Total</Th><Th className="text-right">Paid</Th><Th className="text-right">Outstanding</Th><Th>Actions</Th>
@@ -668,20 +668,20 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
           </thead>
           <tbody>
             {(v.bills || []).length === 0 && (
-              <tr><td colSpan={8} className="p-8 text-center text-[#6E6A63]">No bills yet.</td></tr>
+              <tr><td colSpan={8} className="p-8 text-center text-[var(--ink-3)]">No bills yet.</td></tr>
             )}
             {(v.bills || []).map((b) => (
-              <tr key={b.id} className="border-b border-[#F0F0F0]" data-testid={`bill-row-${b.id}`}>
+              <tr key={b.id} className="border-b border-[var(--line-soft)]" data-testid={`bill-row-${b.id}`}>
                 <Td className="font-mono text-xs">{b.bill_number}</Td>
                 <Td>{formatDate(b.bill_date)}</Td>
                 <Td>{formatDate(b.due_date)}</Td>
                 <Td><BillStatus s={b.status} /></Td>
                 <Td className="text-right font-mono">{INR_D(b.total)}</Td>
-                <Td className="text-right font-mono text-[#1D633E]">{INR_D(b.paid_amount || 0)}</Td>
-                <Td className="text-right font-mono text-[#B22B22]">{INR_D(b.outstanding || 0)}</Td>
+                <Td className="text-right font-mono text-[var(--success)]">{INR_D(b.paid_amount || 0)}</Td>
+                <Td className="text-right font-mono text-[var(--danger)]">{INR_D(b.outstanding || 0)}</Td>
                 <Td><div className="flex gap-1">
                   {canEdit && b.status !== "cancelled" && <button type="button" className="btn-ghost text-xs" onClick={() => setEditing({ ...b })}><PencilSimple size={12} /> Edit</button>}
-                  {canDelete && b.status !== "cancelled" && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDelete(b)}><Trash size={12} /> {b.status === "draft" ? "Delete" : "Cancel"}</button>}
+                  {canDelete && b.status !== "cancelled" && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDelete(b)}><Trash size={12} /> {b.status === "draft" ? "Delete" : "Cancel"}</button>}
                 </div></Td>
               </tr>
             ))}
@@ -694,12 +694,12 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
 
 function BillStatus({ s }) {
   const map = {
-    draft: "bg-[#F2F2F2] text-[#5C5C5C]",
-    received: "bg-[#EEF2FF] text-[#76705E]",
-    partially_paid: "bg-[#FFF4E5] text-[#7A4E1A]",
-    paid: "bg-[#EFF7EF] text-[#1D633E]",
-    overdue: "bg-[#FCEEEC] text-[#B22B22]",
-    cancelled: "bg-[#F2F2F2] text-[#6E6A63]",
+    draft: "bg-[var(--line-soft)] text-[var(--ink-2)]",
+    received: "bg-[var(--info-soft)] text-[var(--accent-strong)]",
+    partially_paid: "bg-[var(--warning-soft)] text-[var(--warning)]",
+    paid: "bg-[var(--success-soft)] text-[var(--success)]",
+    overdue: "bg-[var(--danger-soft)] text-[var(--danger)]",
+    cancelled: "bg-[var(--line-soft)] text-[var(--ink-3)]",
   };
   return (
     <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 ${map[s] || map.draft}`}>
@@ -738,7 +738,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
             <Plus size={14} /> {open ? "Cancel" : "Record payment"}
           </button>
           {!canBill && (
-            <span className="text-xs text-[#6E6A63] ml-2">Only finance roles can record payments.</span>
+            <span className="text-xs text-[var(--ink-3)] ml-2">Only finance roles can record payments.</span>
           )}
         </div>
       )}
@@ -786,7 +786,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
           <input className="input-flat w-full" placeholder="Reference (UTR / cheque # / txn id)"
             value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
           {openBills.length > 0 && (
-            <div className="border border-[#E5E5E5] p-3 space-y-1">
+            <div className="border border-[var(--line)] p-3 space-y-1">
               <div className="overline">Settle bills (optional — FIFO if empty)</div>
               {openBills.map((b) => (
                 <label key={b.id} className="flex items-center gap-2 text-sm">
@@ -797,7 +797,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
                         : f.bill_ids.filter((x) => x !== b.id) });
                     }} />
                   <span className="font-mono text-xs">{b.bill_number}</span>
-                  <span className="text-[#6E6A63]">·</span>
+                  <span className="text-[var(--ink-3)]">·</span>
                   <span>{formatDate(b.bill_date)}</span>
                   <span className="ml-auto font-mono">{INR_D(b.outstanding || b.total)}</span>
                 </label>
@@ -817,7 +817,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
           setEditing(null);
         }} data-testid="edit-payment-metadata-form">
           <div className="overline">EDIT PAYMENT DETAILS</div>
-          <div className="text-xs text-[#5C5C5C]">Amount, date and account are financial facts. Reverse and record again to correct them safely.</div>
+          <div className="text-xs text-[var(--ink-2)]">Amount, date and account are financial facts. Reverse and record again to correct them safely.</div>
           <input className="input-flat w-full" maxLength={120} placeholder="Reference"
             value={editForm.reference} onChange={(e) => setEditForm({ ...editForm, reference: e.target.value })} />
           <textarea className="input-flat w-full" maxLength={500} placeholder="Notes"
@@ -827,9 +827,9 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
         </form>
       )}
 
-      <div className="border border-[#E5E5E5]">
+      <div className="border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
               <Th>Date</Th><Th>Method</Th><Th>Reference</Th>
               <Th className="text-right">Amount</Th><Th>Settled bills</Th><Th>Status / actions</Th>
@@ -837,20 +837,20 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
           </thead>
           <tbody>
             {(v.payments || []).length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-[#6E6A63]">No payments recorded.</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-[var(--ink-3)]">No payments recorded.</td></tr>
             )}
             {(v.payments || []).map((p) => (
-              <tr key={p.id} className="border-b border-[#F0F0F0]" data-testid={`payment-row-${p.id}`}>
+              <tr key={p.id} className="border-b border-[var(--line-soft)]" data-testid={`payment-row-${p.id}`}>
                 <Td className="font-mono text-xs">{formatDate(p.payment_date)}</Td>
                 <Td>{(p.payment_method || "").replace("_", " ")}</Td>
                 <Td className="font-mono text-xs">{p.reference || "—"}</Td>
-                <Td className="text-right font-mono font-semibold text-[#1D633E]">{INR_D(p.amount)}</Td>
+                <Td className="text-right font-mono font-semibold text-[var(--success)]">{INR_D(p.amount)}</Td>
                 <Td className="text-xs font-mono">
                   {(p.bill_ids || []).length ? p.bill_ids.length + " bill(s)" : "on-account"}
                 </Td>
-                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[#6E6A63]">Reversed</span> : <div className="flex flex-wrap gap-1">
+                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[var(--ink-3)]">Reversed</span> : <div className="flex flex-wrap gap-1">
                   {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => { setEditing(p); setEditForm({ reference: p.reference || "", notes: p.notes || "" }); }}><PencilSimple size={12} /> Edit</button>}
-                  {canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDelete(p)}><ArrowCounterClockwise size={12} /> Reverse</button>}
+                  {canDelete && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDelete(p)}><ArrowCounterClockwise size={12} /> Reverse</button>}
                 </div>}</Td>
               </tr>
             ))}
@@ -867,30 +867,30 @@ function ProjectsTasks({ v }) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card title={`Projects (${(v.projects || []).length})`}>
         <div className="space-y-2">
-          {(v.projects || []).length === 0 && <div className="text-sm text-[#6E6A63]">No projects linked yet.</div>}
+          {(v.projects || []).length === 0 && <div className="text-sm text-[var(--ink-3)]">No projects linked yet.</div>}
           {(v.projects || []).map((p) => (
-            <Link key={p.id} to={`/projects/${p.id}`} className="flex justify-between items-center border-b border-[#F0F0F0] pb-2 hover:text-[#76705E]">
+            <Link key={p.id} to={`/projects/${p.id}`} className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2 hover:text-[var(--accent-strong)]">
               <div>
                 <div className="text-sm font-semibold">{p.name}</div>
-                <div className="text-xs text-[#6E6A63]">{p.client_name || "—"}</div>
+                <div className="text-xs text-[var(--ink-3)]">{p.client_name || "—"}</div>
               </div>
-              <span className="text-[10px] font-mono uppercase text-[#5C5C5C]">{p.stage}</span>
+              <span className="text-[10px] font-mono uppercase text-[var(--ink-2)]">{p.stage}</span>
             </Link>
           ))}
         </div>
       </Card>
       <Card title={`Assigned tasks (${(v.tasks || []).length})`}>
         <div className="space-y-2">
-          {(v.tasks || []).length === 0 && <div className="text-sm text-[#6E6A63]">No tasks assigned.</div>}
+          {(v.tasks || []).length === 0 && <div className="text-sm text-[var(--ink-3)]">No tasks assigned.</div>}
           {(v.tasks || []).slice(0, 20).map((t) => (
-            <Link key={t.id} to={`/tasks/${t.id}`} className="flex items-start justify-between gap-3 border-b border-[#F0F0F0] pb-2 hover:text-[#76705E]">
+            <Link key={t.id} to={`/tasks/${t.id}`} className="flex items-start justify-between gap-3 border-b border-[var(--line-soft)] pb-2 hover:text-[var(--accent-strong)]">
               <div className="min-w-0">
                 <div className="text-sm font-semibold truncate">{t.title}</div>
-                <div className="text-xs text-[#6E6A63]">
+                <div className="text-xs text-[var(--ink-3)]">
                   {t.category || "—"} · due {formatDate(t.due_date)}
                 </div>
               </div>
-              <span className="text-[10px] font-mono uppercase text-[#5C5C5C] shrink-0">
+              <span className="text-[10px] font-mono uppercase text-[var(--ink-2)] shrink-0">
                 {t.status_detail || t.status}
               </span>
             </Link>
@@ -933,25 +933,25 @@ function Documents({ v, canEdit, onAdd, onEdit, onDelete, busy }) {
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {(v.documents || []).length === 0 && (
-          <div className="text-sm text-[#6E6A63] col-span-2">No documents on file.</div>
+          <div className="text-sm text-[var(--ink-3)] col-span-2">No documents on file.</div>
         )}
         {(v.documents || []).map((d) => (
-          <div key={d.id} className="border border-[#E5E5E5] p-4 flex items-start gap-3">
-            <FileText size={22} className="text-[#76705E]" />
+          <div key={d.id} className="border border-[var(--line)] p-4 flex items-start gap-3">
+            <FileText size={22} className="text-[var(--accent-strong)]" />
             <div className="flex-1 min-w-0">
               {safeFileUrl(d.url) ? (
-                <a href={safeFileUrl(d.url)} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[#76705E] break-all">
+                <a href={safeFileUrl(d.url)} target="_blank" rel="noreferrer" className="font-semibold text-sm hover:text-[var(--accent-strong)] break-all">
                   {d.label}
                 </a>
               ) : <span className="font-semibold text-sm">{d.label}</span>}
-              <div className="text-xs text-[#6E6A63] font-mono">
+              <div className="text-xs text-[var(--ink-3)] font-mono">
                 {d.kind?.replace("_", " ")} {d.expires_on ? `· expires ${d.expires_on}` : ""}
               </div>
             </div>
             {canEdit && (
               <div className="flex gap-1">
                 <button onClick={() => onEdit(d)} className="btn-ghost" aria-label="edit document metadata"><PencilSimple size={13} /></button>
-                <button onClick={() => onDelete(d.id)} className="btn-ghost text-[#B4001C]" aria-label="remove"><Trash size={13} /></button>
+                <button onClick={() => onDelete(d.id)} className="btn-ghost text-[var(--danger)]" aria-label="remove"><Trash size={13} /></button>
               </div>
             )}
           </div>
@@ -965,7 +965,7 @@ function Documents({ v, canEdit, onAdd, onEdit, onDelete, busy }) {
 function Performance({ perf }) {
   if (!perf) return <div className="overline">CALCULATING…</div>;
   const score = perf.performance_score;
-  const scoreColor = score >= 75 ? "text-[#1D633E]" : score >= 50 ? "text-[#7A4E1A]" : "text-[#B22B22]";
+  const scoreColor = score >= 75 ? "text-[var(--success)]" : score >= 50 ? "text-[var(--warning)]" : "text-[var(--danger)]";
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <Card title="Overall performance">
@@ -973,10 +973,10 @@ function Performance({ perf }) {
           <Gauge size={48} className={scoreColor} weight="duotone" />
           <div>
             <div className={`font-display font-bold text-5xl ${scoreColor}`}>{score}</div>
-            <div className="text-xs font-mono uppercase tracking-wider text-[#5C5C5C]">out of 100</div>
+            <div className="text-xs font-mono uppercase tracking-wider text-[var(--ink-2)]">out of 100</div>
           </div>
         </div>
-        <p className="text-xs text-[#5C5C5C] mt-3">
+        <p className="text-xs text-[var(--ink-2)] mt-3">
           Weighted from task completion (30%), on-time delivery (25%), quality ratings (35%) and payment reliability (10%).
         </p>
       </Card>
@@ -1083,7 +1083,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
             </div>
 
             {t === "slab" && (
-              <div className="mt-4 border border-[#E5E5E5] p-3">
+              <div className="mt-4 border border-[var(--line)] p-3">
                 <div className="overline mb-2">SLABS</div>
                 {f.slabs.map((s, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 mb-2">
@@ -1132,11 +1132,11 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
               <Row label="Unallocated" value={INR(ledger.totals.unallocated_received)} accent={ledger.totals.unallocated_received > 0} />
             </>
           ) : (
-            <div className="text-sm text-[#5C5C5C]">Save the config to see numbers.</div>
+            <div className="text-sm text-[var(--ink-2)]">Save the config to see numbers.</div>
           )}
         </Card>
         <Card title="How it works">
-          <p className="text-xs text-[#5C5C5C]">
+          <p className="text-xs text-[var(--ink-2)]">
             Whenever a bill is recorded against this vendor, we auto-book the earned commission.
             Mark it received in the <b>Commissions</b> tab and we'll post an Income journal entry
             (DR Bank · CR Commission Income) — it flows straight into P&amp;L, Cash Flow and the Dashboard.
@@ -1232,7 +1232,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
         <form className="card-flat space-y-3" onSubmit={submitPlan} data-testid="expected-commission-form">
           <div className="flex items-start justify-between gap-3">
             <div><div className="overline">{editingPlan ? "EDIT EXPECTED COMMISSION" : "EXPECTED COMMISSION"}</div>
-              <div className="text-xs text-[#5C5C5C] mt-1">This creates a collection due only. No journal is posted until money is received.</div></div>
+              <div className="text-xs text-[var(--ink-2)] mt-1">This creates a collection due only. No journal is posted until money is received.</div></div>
             <button type="button" className="btn-ghost" onClick={() => setPlanOpen(false)}>×</button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -1284,7 +1284,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
             value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
 
           {openRows.length > 0 && (
-            <div className="border border-[#E5E5E5] p-3 space-y-1">
+            <div className="border border-[var(--line)] p-3 space-y-1">
               <div className="overline">Settle specific commissions (optional — FIFO if empty)</div>
               {openRows.map((r) => (
                 <label key={r.id} className="flex items-center gap-2 text-sm">
@@ -1295,7 +1295,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                         : f.commission_ids.filter((x) => x !== r.id) });
                     }} />
                   <span className="font-mono text-xs">{r.bill_number}</span>
-                  <span className="text-[#6E6A63]">·</span>
+                  <span className="text-[var(--ink-3)]">·</span>
                   <span>{formatDate(r.bill_date)}</span>
                   <span className="ml-auto font-mono">{INR_D(r.amount - (r.received_amount || 0))} due</span>
                 </label>
@@ -1308,9 +1308,9 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
         </form>
       )}
 
-      <div className="border border-[#E5E5E5]">
+      <div className="border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5] text-left">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
               <Th>Due / bill date</Th><Th>Source / project</Th><Th className="text-right">Purchase</Th>
               <Th>Type</Th><Th className="text-right">Earned</Th>
@@ -1319,24 +1319,24 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
           </thead>
           <tbody>
             {(ledger.entries || []).length === 0 && (
-              <tr><td colSpan={8} className="p-8 text-center text-[#6E6A63]">
+              <tr><td colSpan={8} className="p-8 text-center text-[var(--ink-3)]">
                 No commissions yet. Post a bill and it'll auto-compute.
               </td></tr>
             )}
             {(ledger.entries || []).map((r) => (
-              <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`cm-row-${r.id}`}>
+              <tr key={r.id} className="border-b border-[var(--line-soft)]" data-testid={`cm-row-${r.id}`}>
                 <Td className="font-mono text-xs">{formatDate(r.due_date || r.bill_date)}</Td>
-                <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected commission"}</div><div className="text-[10px] text-[#6E6A63]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
+                <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected commission"}</div><div className="text-[10px] text-[var(--ink-3)]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
                 <Td className="text-right font-mono">{INR_D(r.purchase_amount)}</Td>
                 <Td>
-                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[#F2F2F2]">
+                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--line-soft)]">
                     {r.origin === "manual_expected" ? r.recognition : r.commission_type}
                   </span>
                 </Td>
                 <Td className="text-right font-mono">{INR_D(r.amount)}</Td>
-                <Td className="text-right font-mono text-[#1D633E]">{INR_D(r.received_amount || 0)}</Td>
+                <Td className="text-right font-mono text-[var(--success)]">{INR_D(r.received_amount || 0)}</Td>
                 <Td><CommissionStatus s={r.status} /></Td>
-                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <div className="flex gap-1">{canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => openPlan(r)}><PencilSimple size={12} /> Edit</button>}{canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button>}</div> : r.bill_id ? <span className="text-[10px] text-[#6E6A63]">Correct from bill</span> : "—"}</Td>
+                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <div className="flex gap-1">{canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => openPlan(r)}><PencilSimple size={12} /> Edit</button>}{canDelete && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button>}</div> : r.bill_id ? <span className="text-[10px] text-[var(--ink-3)]">Correct from bill</span> : "—"}</Td>
               </tr>
             ))}
           </tbody>
@@ -1344,10 +1344,10 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
       </div>
 
       {(ledger.receipts || []).length > 0 && (
-        <div className="border border-[#E5E5E5]" data-testid="commission-receipts">
+        <div className="border border-[var(--line)]" data-testid="commission-receipts">
           <div className="overline px-3 pt-3">RECEIPT HISTORY</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
+            <thead className="text-[10px] font-mono uppercase text-[var(--ink-3)]">
               <tr>
                 <Th>Date</Th><Th>Method / reference</Th>
                 <Th className="text-right">Received</Th><Th className="text-right">Unallocated</Th><Th>Actions</Th>
@@ -1355,29 +1355,29 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
             </thead>
             <tbody>
               {ledger.receipts.map((receipt) => (
-                <tr key={receipt.id} className="border-t border-[#F0F0F0]">
+                <tr key={receipt.id} className="border-t border-[var(--line-soft)]">
                   <Td className="font-mono text-xs">{formatDate(receipt.received_date)}</Td>
                   <Td>
                     <div className="capitalize">{(receipt.payment_method || "other").replaceAll("_", " ")}</div>
-                    {receipt.reference && <div className="text-xs text-[#5C5C5C]">{receipt.reference}</div>}
+                    {receipt.reference && <div className="text-xs text-[var(--ink-2)]">{receipt.reference}</div>}
                   </Td>
-                  <Td className="text-right font-mono text-[#1D633E]">{INR_D(receipt.amount)}</Td>
+                  <Td className="text-right font-mono text-[var(--success)]">{INR_D(receipt.amount)}</Td>
                   <Td className="text-right font-mono">{INR_D(receipt.unallocated || 0)}</Td>
                   <Td><div className="flex flex-wrap gap-1">
                     {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => { setEditingReceipt(receipt); setReceiptEdit({ reference: receipt.reference || "", notes: receipt.notes || "" }); }}><PencilSimple size={12} /> Edit</button>}
-                    {canDelete && <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => onDeleteReceipt(receipt)}><Trash size={12} /> Delete</button>}
+                    {canDelete && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDeleteReceipt(receipt)}><Trash size={12} /> Delete</button>}
                   </div></Td>
                 </tr>
               ))}
             </tbody>
           </table></div>
-          {editingReceipt && <form className="border-t border-[#E5E5E5] p-3 space-y-2" onSubmit={async (event) => {
+          {editingReceipt && <form className="border-t border-[var(--line)] p-3 space-y-2" onSubmit={async (event) => {
             event.preventDefault();
             await onUpdateReceipt(editingReceipt.id, receiptEdit);
             setEditingReceipt(null);
           }} data-testid="edit-commission-receipt-form">
             <div className="overline">EDIT RECEIPT DETAILS</div>
-            <div className="text-xs text-[#5C5C5C]">To correct amount, date or bank account, delete this receipt and record it again. The audit trail remains intact.</div>
+            <div className="text-xs text-[var(--ink-2)]">To correct amount, date or bank account, delete this receipt and record it again. The audit trail remains intact.</div>
             <input className="input-flat w-full" maxLength={120} placeholder="Reference" value={receiptEdit.reference}
               onChange={(e) => setReceiptEdit({ ...receiptEdit, reference: e.target.value })} />
             <textarea className="input-flat w-full" maxLength={500} placeholder="Notes" value={receiptEdit.notes}
@@ -1400,10 +1400,10 @@ const COMMISSION_STATUS_LABELS = {
 
 function CommissionStatus({ s }) {
   const map = {
-    pending:   "bg-[#EEF2FF] text-[#76705E]",
-    invoiced:  "bg-[#FFF4E5] text-[#7A4E1A]",
-    received:  "bg-[#EFF7EF] text-[#1D633E]",
-    cancelled: "bg-[#F2F2F2] text-[#6E6A63]",
+    pending:   "bg-[var(--info-soft)] text-[var(--accent-strong)]",
+    invoiced:  "bg-[var(--warning-soft)] text-[var(--warning)]",
+    received:  "bg-[var(--success-soft)] text-[var(--success)]",
+    cancelled: "bg-[var(--line-soft)] text-[var(--ink-3)]",
   };
   return (
     <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 ${map[s] || map.pending}`}
@@ -1424,11 +1424,11 @@ function Card({ title, children }) {
 }
 function Field({ icon, label, value, mono }) {
   return (
-    <div className="flex items-start gap-2 py-1 border-b last:border-b-0 border-[#F5F5F5]">
-      <div className="text-[#5C5C5C] mt-0.5">{icon}</div>
+    <div className="flex items-start gap-2 py-1 border-b last:border-b-0 border-[var(--hover)]">
+      <div className="text-[var(--ink-2)] mt-0.5">{icon}</div>
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63]">{label}</div>
-        <div className={`text-sm ${mono ? "font-mono" : ""} ${!value ? "text-[#6E6A63]" : ""}`}>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-3)]">{label}</div>
+        <div className={`text-sm ${mono ? "font-mono" : ""} ${!value ? "text-[var(--ink-3)]" : ""}`}>
           {value || "—"}
         </div>
       </div>
@@ -1437,9 +1437,9 @@ function Field({ icon, label, value, mono }) {
 }
 function Row({ label, value, accent }) {
   return (
-    <div className="flex justify-between py-1.5 border-b last:border-b-0 border-[#F5F5F5] text-sm">
-      <span className="text-[#5C5C5C]">{label}</span>
-      <span className={`font-mono font-semibold ${accent ? "text-[#B22B22]" : ""}`}>{value}</span>
+    <div className="flex justify-between py-1.5 border-b last:border-b-0 border-[var(--hover)] text-sm">
+      <span className="text-[var(--ink-2)]">{label}</span>
+      <span className={`font-mono font-semibold ${accent ? "text-[var(--danger)]" : ""}`}>{value}</span>
     </div>
   );
 }
@@ -1447,7 +1447,7 @@ function Kpi({ label, value, accent }) {
   return (
     <div className={`card-flat ${accent ? "ring-1 ring-[#8B7F6A]/20" : ""}`}>
       <div className="overline">{label}</div>
-      <div className={`font-display font-bold text-xl mt-1 ${accent ? "text-[#B22B22]" : ""}`}>{value}</div>
+      <div className={`font-display font-bold text-xl mt-1 ${accent ? "text-[var(--danger)]" : ""}`}>{value}</div>
     </div>
   );
 }

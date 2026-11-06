@@ -175,27 +175,27 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       <div onClick={(e) => e.stopPropagation()} className="relative z-[301] w-full max-w-xl bg-white shadow-2xl max-h-[90vh] overflow-auto">
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-[#E5E5E5]">
+        <div className="flex items-start justify-between p-5 border-b border-[var(--line)]">
           <div className="min-w-0">
-            <div className="overline text-[#76705E]">TRANSACTION DETAIL</div>
+            <div className="overline text-[var(--accent-strong)]">TRANSACTION DETAIL</div>
             <div className="font-display font-bold text-xl truncate" data-testid="txn-detail-narration">
               {entry.narration || "Journal entry"}
             </div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5 font-mono">
+            <div className="text-xs text-[var(--ink-2)] mt-0.5 font-mono">
               {formatDate(entry.date)}{entry.reference ? ` · Ref ${entry.reference}` : ""}{entry.created_by_name ? ` · by ${entry.created_by_name}` : ""}
             </div>
             {isReversed && (
-              <span className="inline-block mt-2 text-[10px] font-semibold text-[#B4001C] border border-[#B4001C] px-2 py-0.5" data-testid="txn-reversed-badge">
+              <span className="inline-block mt-2 text-[10px] font-semibold text-[var(--danger)] border border-[var(--danger)] px-2 py-0.5" data-testid="txn-reversed-badge">
                 REVERSED
               </span>
             )}
             {isReversal && (
-              <span className="inline-block mt-2 text-[10px] font-semibold text-[#76705E] border border-[#8B7F6A] px-2 py-0.5">
+              <span className="inline-block mt-2 text-[10px] font-semibold text-[var(--accent-strong)] border border-[var(--accent)] px-2 py-0.5">
                 {entry.undone ? "REVERSAL UNDONE" : "REVERSAL ENTRY"}
               </span>
             )}
             {isReinstatement && (
-              <span className="inline-block mt-2 text-[10px] font-semibold text-[#1D633E] border border-[#1D633E] px-2 py-0.5">
+              <span className="inline-block mt-2 text-[10px] font-semibold text-[var(--success)] border border-[var(--success)] px-2 py-0.5">
                 REINSTATED
               </span>
             )}
@@ -207,35 +207,35 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
         {mode === "edit" ? (
           <div className="p-5 space-y-3" data-testid="txn-edit-form">
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Date</label>
+              <label className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">Date</label>
               <input type="date" className="input-flat w-full" value={form.date}
                 disabled={!canCorrect}
                 onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="txn-edit-date" />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Description</label>
+              <label className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">Description</label>
               <input className="input-flat w-full" value={form.narration}
                 disabled={sourceMetadataEdit}
                 onChange={(e) => setForm({ ...form, narration: e.target.value })} data-testid="txn-edit-narration" />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Reference</label>
+              <label className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">Reference</label>
               <input className="input-flat w-full" value={form.reference}
                 onChange={(e) => setForm({ ...form, reference: e.target.value })} data-testid="txn-edit-reference" />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Amount</label>
+              <label className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">Amount</label>
               <input type="number" step="0.01" className="input-flat w-full" value={form.amount}
                 disabled={!canEditAmount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="txn-edit-amount" />
               {!canCorrect && (
-                <div className="text-[11px] text-[#6E6A63] mt-1 flex items-start gap-1">
+                <div className="text-[11px] text-[var(--ink-3)] mt-1 flex items-start gap-1">
                   <Warning size={13} className="mt-0.5 shrink-0" />
                   Linked dates and amounts must be corrected from their original invoice, expense, payroll, vendor, or loan record.
                 </div>
               )}
               {canCorrect && (
-                <div className="text-[11px] text-[#6E6A63] mt-1 flex items-start gap-1">
+                <div className="text-[11px] text-[var(--ink-3)] mt-1 flex items-start gap-1">
                   <Warning size={13} className="mt-0.5 shrink-0" />
                   Changing the date or amount creates a balanced correction and keeps the audit history.
                 </div>
@@ -252,20 +252,20 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
           <>
             {/* VIEW MODE — double entry */}
             <div className="p-5">
-              <div className="overline mb-2 text-[#6E6A63]">ACCOUNTING ENTRY (DEBIT / CREDIT)</div>
+              <div className="overline mb-2 text-[var(--ink-3)]">ACCOUNTING ENTRY (DEBIT / CREDIT)</div>
               <table className="w-full text-sm">
-                <thead className="text-[10px] font-mono uppercase text-[#6E6A63]">
+                <thead className="text-[10px] font-mono uppercase text-[var(--ink-3)]">
                   <tr><th className="p-2 text-left">Account</th><th className="p-2 text-right">Debit</th><th className="p-2 text-right">Credit</th></tr>
                 </thead>
                 <tbody>
                   {lines.map((l, i) => (
-                    <tr key={i} className="border-t border-[#F0F0F0]">
-                      <td className="p-2">{l.account_name}<span className="text-[10px] text-[#6E6A63] uppercase ml-1">{l.account_type}</span></td>
-                      <td className="p-2 text-right font-mono text-[#1D633E]">{l.debit ? CURRENCY(l.debit) : "—"}</td>
-                      <td className="p-2 text-right font-mono text-[#B4001C]">{l.credit ? CURRENCY(l.credit) : "—"}</td>
+                    <tr key={i} className="border-t border-[var(--line-soft)]">
+                      <td className="p-2">{l.account_name}<span className="text-[10px] text-[var(--ink-3)] uppercase ml-1">{l.account_type}</span></td>
+                      <td className="p-2 text-right font-mono text-[var(--success)]">{l.debit ? CURRENCY(l.debit) : "—"}</td>
+                      <td className="p-2 text-right font-mono text-[var(--danger)]">{l.credit ? CURRENCY(l.credit) : "—"}</td>
                     </tr>
                   ))}
-                  <tr className="border-t-2 border-[#0A0A0A] font-semibold">
+                  <tr className="border-t-2 border-[var(--ink)] font-semibold">
                     <td className="p-2">Total</td>
                     <td className="p-2 text-right font-mono">{CURRENCY(totalDr)}</td>
                     <td className="p-2 text-right font-mono">{CURRENCY(totalCr)}</td>
@@ -275,7 +275,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
             </div>
 
             {/* Actions */}
-            <div className="p-4 border-t border-[#E5E5E5] flex items-center justify-between gap-2 flex-wrap">
+            <div className="p-4 border-t border-[var(--line)] flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 {canModify && (
                   <button onClick={() => setMode("edit")} className="btn-ghost text-sm" data-testid="txn-edit-btn">
@@ -285,7 +285,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                 {canUndoReversal && (
                   confirmUndo ? (
                     <span className="flex items-center gap-1">
-                      <button onClick={doUndoReversal} disabled={busy} className="btn-primary bg-[#1D633E] text-sm" data-testid="txn-undo-reversal-confirm">
+                      <button onClick={doUndoReversal} disabled={busy} className="btn-primary bg-[var(--success)] text-sm" data-testid="txn-undo-reversal-confirm">
                         {busy ? "Restoring…" : "Confirm undo"}
                       </button>
                       <button onClick={() => setConfirmUndo(false)} className="btn-ghost text-sm">No</button>
@@ -299,7 +299,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                 {canReverse && (
                   confirmReverse ? (
                     <span className="flex items-center gap-1">
-                      <button onClick={doReverse} disabled={busy} className="btn-primary bg-[#8B7F6A] text-sm" data-testid="txn-reverse-confirm">
+                      <button onClick={doReverse} disabled={busy} className="btn-primary bg-[var(--accent)] text-sm" data-testid="txn-reverse-confirm">
                         {busy ? "Reversing…" : "Confirm reverse"}
                       </button>
                       <button onClick={() => setConfirmReverse(false)} className="btn-ghost text-sm">No</button>
@@ -318,7 +318,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                 {canDelete && (
                   confirmDelete ? (
                     <span className="flex items-center gap-1">
-                      <button onClick={doDelete} disabled={busy} className="btn-primary bg-[#B4001C] text-sm" data-testid="txn-delete-confirm">
+                      <button onClick={doDelete} disabled={busy} className="btn-primary bg-[var(--danger)] text-sm" data-testid="txn-delete-confirm">
                         {busy ? "Deleting…" : "Confirm delete"}
                       </button>
                       <button onClick={() => setConfirmDelete(false)} className="btn-ghost text-sm">No</button>
@@ -326,7 +326,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
                   ) : (
                     <button
                       onClick={() => { setConfirmDelete(true); setConfirmReverse(false); }}
-                      className="btn-ghost text-sm text-[#B4001C]"
+                      className="btn-ghost text-sm text-[var(--danger)]"
                       title="Remove a mistaken transaction from normal books using an audit-safe balancing entry."
                       data-testid="txn-delete-btn"
                     >
@@ -344,7 +344,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
               </div>
             </div>
             {!canModify && (isReversed || isReversal || isReinstatement) && (
-              <div className="px-4 pb-4 text-[11px] text-[#6E6A63]">
+              <div className="px-4 pb-4 text-[11px] text-[var(--ink-3)]">
                 {canUndoReversal
                   ? "Undoing creates a documented reinstatement; the reversal remains in the audit trail."
                   : `This is a ${isReversed ? "reversed" : "reversal / system"} entry and is locked to protect your books.`}

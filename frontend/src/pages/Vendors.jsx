@@ -93,7 +93,7 @@ export default function Vendors() {
           <h1 className="font-display font-bold tracking-tight text-4xl">
             Every hand that builds. In one place.
           </h1>
-          <p className="text-[#5C5C5C] mt-2 max-w-xl">
+          <p className="text-[var(--ink-2)] mt-2 max-w-xl">
             Master data for contractors, agencies and suppliers — with live bills, running ledger and performance signals.
           </p>
         </div>
@@ -118,11 +118,11 @@ export default function Vendors() {
 
       {/* FILTERS */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-1 max-w-md px-3 py-2 border border-[#E5E5E5] focus-within:border-[#8B7F6A] transition">
-          <MagnifyingGlass size={15} className="text-[#5C5C5C]" />
+        <div className="flex items-center gap-2 flex-1 max-w-md px-3 py-2 border border-[var(--line)] focus-within:border-[var(--accent)] transition">
+          <MagnifyingGlass size={15} className="text-[var(--ink-2)]" />
           <input
             data-testid="vendor-search"
-            className="bg-transparent flex-1 outline-none text-sm placeholder-[#9A9A9A]"
+            className="bg-transparent flex-1 outline-none text-sm placeholder-[var(--ink-3)]"
             placeholder="Search name, phone, GSTIN, contact…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -218,9 +218,9 @@ export default function Vendors() {
       )}
 
       {/* LIST */}
-      <div className="border border-[#E5E5E5]">
+      <div className="border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
               <Th>Vendor</Th><Th>Type</Th><Th>Contact</Th><Th>Category</Th>
               <Th>Rating</Th><Th className="text-right">Outstanding</Th><Th />
@@ -229,8 +229,8 @@ export default function Vendors() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-12 text-center text-[#5C5C5C]">
-                  <HardHat size={26} className="mx-auto text-[#6E6A63] mb-3" />
+                <td colSpan={7} className="p-12 text-center text-[var(--ink-2)]">
+                  <HardHat size={26} className="mx-auto text-[var(--ink-3)] mb-3" />
                   <div className="overline mb-1">EMPTY</div>
                   No vendors yet. Add your first one.
                 </td>
@@ -239,18 +239,18 @@ export default function Vendors() {
             {rows.map((v) => (
               <tr
                 key={v.id}
-                className="border-b border-[#F0F0F0] hover:bg-[#FAFAFA] cursor-pointer"
+                className="border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer"
                 onClick={() => navigate(`/vendors/${v.id}`)}
                 data-testid={`vendor-row-${v.id}`}
               >
                 <Td>
-                  <div className="font-semibold group-hover:text-[#76705E]">
+                  <div className="font-semibold group-hover:text-[var(--accent-strong)]">
                     <div className="flex items-center gap-2">
-                      <Buildings size={14} className="text-[#5C5C5C]" />
+                      <Buildings size={14} className="text-[var(--ink-2)]" />
                       {v.name}
                     </div>
                   </div>
-                  {v.company && <div className="text-xs text-[#6E6A63]">{v.company}</div>}
+                  {v.company && <div className="text-xs text-[var(--ink-3)]">{v.company}</div>}
                 </Td>
                 <Td><TypePill type={v.agency_type} /></Td>
                 <Td>
@@ -269,8 +269,8 @@ export default function Vendors() {
                 </Td>
                 <Td className="text-right font-mono">
                   {Number(v.outstanding) > 0 ? (
-                    <span className="text-[#B22B22] font-semibold">{INR(v.outstanding)}</span>
-                  ) : <span className="text-[#5C5C5C]">—</span>}
+                    <span className="text-[var(--danger)] font-semibold">{INR(v.outstanding)}</span>
+                  ) : <span className="text-[var(--ink-2)]">—</span>}
                 </Td>
                 <Td className="text-right">
                   <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
@@ -280,11 +280,11 @@ export default function Vendors() {
                       </Link>
                     )}
                     {canArchive && (
-                      <button type="button" className="btn-ghost text-xs text-[#B22B22]" onClick={(event) => archiveVendor(v, event)} data-testid={`vendor-archive-${v.id}`}>
+                      <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={(event) => archiveVendor(v, event)} data-testid={`vendor-archive-${v.id}`}>
                         <Archive size={12} /> Archive
                       </button>
                     )}
-                    <Link to={`/vendors/${v.id}`} className="btn-ghost text-xs text-[#76705E] font-semibold">
+                    <Link to={`/vendors/${v.id}`} className="btn-ghost text-xs text-[var(--accent-strong)] font-semibold">
                       Open <CaretRight size={11} weight="bold" />
                     </Link>
                   </div>
@@ -302,21 +302,21 @@ function Kpi({ label, value, accent, testid }) {
   return (
     <div className={`card-flat ${accent ? "ring-1 ring-[#8B7F6A]/20" : ""}`} data-testid={testid}>
       <div className="overline">{label}</div>
-      <div className={`font-display font-bold text-2xl mt-1 ${accent ? "text-[#76705E]" : ""}`}>{value}</div>
+      <div className={`font-display font-bold text-2xl mt-1 ${accent ? "text-[var(--accent-strong)]" : ""}`}>{value}</div>
     </div>
   );
 }
 
 function TypePill({ type }) {
   const map = {
-    contractor: "bg-[#F5F1EB] text-[#7A4E1A]",
-    sub_contractor: "bg-[#F5F1EB] text-[#7A4E1A]",
-    supplier: "bg-[#EEF2FF] text-[#76705E]",
-    agency: "bg-[#EFF7EF] text-[#1D633E]",
+    contractor: "bg-[var(--accent-soft)] text-[var(--warning)]",
+    sub_contractor: "bg-[var(--accent-soft)] text-[var(--warning)]",
+    supplier: "bg-[var(--info-soft)] text-[var(--accent-strong)]",
+    agency: "bg-[var(--success-soft)] text-[var(--success)]",
     consultant: "bg-[#F5EEF7] text-[#5B2A83]",
     freelancer: "bg-[#F5EEF7] text-[#5B2A83]",
-    vendor: "bg-[#F2F2F2] text-[#0A0A0A]",
-    other: "bg-[#F2F2F2] text-[#0A0A0A]",
+    vendor: "bg-[var(--line-soft)] text-[var(--ink)]",
+    other: "bg-[var(--line-soft)] text-[var(--ink)]",
   };
   return (
     <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 ${map[type] || map.vendor}`}>

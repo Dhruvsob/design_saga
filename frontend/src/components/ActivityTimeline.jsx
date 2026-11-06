@@ -15,8 +15,8 @@ const ACTION_LABELS = {
 };
 
 const ACTION_COLORS = {
-  create: "#1D633E", update: "#8B7F6A", stage_change: "#8B7F6A",
-  archive: "#B22B22", restore: "#1D633E", convert: "#8A6DFF",
+  create: "#1E6A45", update: "#9C4A28", stage_change: "#9C4A28",
+  archive: "#B3261E", restore: "#1E6A45", convert: "#2E5694",
 };
 
 const fmtWhen = (iso) => {
@@ -38,41 +38,41 @@ export default function ActivityTimeline({ entityType, entityId }) {
   }, [entityType, entityId]);
 
   return (
-    <div className="border border-[#E5E5E5]" data-testid="activity-timeline">
-      <div className="p-4 border-b border-[#E5E5E5] bg-[#FAFAFA] flex items-center gap-2">
+    <div className="border border-[var(--line)]" data-testid="activity-timeline">
+      <div className="p-4 border-b border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
         <ClockCounterClockwise size={14} />
         <span className="overline">ACTIVITY</span>
-        <span className="font-mono text-xs text-[#6E6A63] ml-auto">{rows.length}</span>
+        <span className="font-mono text-xs text-[var(--ink-3)] ml-auto">{rows.length}</span>
       </div>
       <div className="max-h-96 overflow-y-auto">
-        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[#6E6A63]">Loading…</div>}
+        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[var(--ink-3)]">Loading…</div>}
         {!loading && rows.length === 0 && (
-          <div className="p-6 text-center text-sm text-[#6E6A63]">
+          <div className="p-6 text-center text-sm text-[var(--ink-3)]">
             No recorded activity yet. Edits, stage changes and archive actions will appear here.
           </div>
         )}
         <div className="relative">
           {rows.map((r, i) => {
             const verb = r.action?.split(".").pop() || "update";
-            const color = ACTION_COLORS[verb] || "#5C5C5C";
+            const color = ACTION_COLORS[verb] || "#4A4741";
             return (
-              <div key={r.id || i} className="flex gap-3 px-4 py-3 border-b border-[#F0F0F0]" data-testid={`activity-row-${i}`}>
+              <div key={r.id || i} className="flex gap-3 px-4 py-3 border-b border-[var(--line-soft)]" data-testid={`activity-row-${i}`}>
                 <div className="flex flex-col items-center pt-1">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-                  {i < rows.length - 1 && <div className="w-px flex-1 bg-[#E5E5E5] mt-1" />}
+                  {i < rows.length - 1 && <div className="w-px flex-1 bg-[var(--line)] mt-1" />}
                 </div>
                 <div className="flex-1 min-w-0 pb-1">
                   <div className="text-sm">
                     <span className="font-semibold">{r.actor_email?.split("@")[0] || "someone"}</span>{" "}
-                    <span className="text-[#5C5C5C]">{ACTION_LABELS[r.action] || r.action}</span>
-                    {r.meta?.stage && <span className="ml-1 font-mono text-xs text-[#76705E]">→ {r.meta.stage}</span>}
+                    <span className="text-[var(--ink-2)]">{ACTION_LABELS[r.action] || r.action}</span>
+                    {r.meta?.stage && <span className="ml-1 font-mono text-xs text-[var(--accent-strong)]">→ {r.meta.stage}</span>}
                   </div>
                   {r.meta?.fields && (
-                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63] mt-0.5">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-3)] mt-0.5">
                       {r.meta.fields.join(" · ")}
                     </div>
                   )}
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63] mt-0.5">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-3)] mt-0.5">
                     {fmtWhen(r.at)}
                   </div>
                 </div>

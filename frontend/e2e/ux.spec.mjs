@@ -96,7 +96,7 @@ test("lock sits beside the bell; project overview shows facts and attention with
   const attention = page.getByTestId("project-attention");
   await expect(attention).toContainText("past due");
   await attention.getByTestId("attention-Tasks").click();
-  await expect(page.getByTestId("tab-Tasks")).toHaveClass(/border-\[#8B7F6A\]/);
+  await expect(page.getByTestId("tab-Tasks")).toHaveClass(/border-\[var\(--accent\)\]/);
 });
 
 test("ended subscription makes the workspace read-only but viewable", async ({ browser }) => {

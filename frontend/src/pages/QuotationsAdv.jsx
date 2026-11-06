@@ -83,7 +83,7 @@ export default function QuotationsAdv() {
         <div>
           <div className="overline mb-1">FINANCE / QUOTATIONS</div>
           <h1 className="font-display font-bold tracking-tight text-3xl sm:text-4xl">Quotations</h1>
-          <p className="text-[#5C5C5C] mt-2 max-w-xl">Design consultancy proposals and turnkey quotations, with versions, approval and a branded PDF.</p>
+          <p className="text-[var(--ink-2)] mt-2 max-w-xl">Design consultancy proposals and turnkey quotations, with versions, approval and a branded PDF.</p>
         </div>
         <div className="flex items-center gap-3">
           {hasPerm("quotations.create") && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-quotation-btn">
@@ -96,24 +96,24 @@ export default function QuotationsAdv() {
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="new-quotation-form">
           {allowedTypes.length > 1 ? (
             <fieldset className="md:col-span-3">
-              <legend className="text-xs font-semibold text-[#5C5C5C] mb-2">What are you quoting for?</legend>
+              <legend className="text-xs font-semibold text-[var(--ink-2)] mb-2">What are you quoting for?</legend>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup">
                 {allowedTypes.map((v) => (
                   <label key={v} data-testid={`q-type-${v}`}
                          className={`block p-4 rounded-lg border cursor-pointer transition ${form.type === v
-                           ? "border-[#76705E] bg-[#FAF9F6] ring-1 ring-[#76705E]" : "border-[#E8E6E1] bg-white hover:border-[#76705E]"}`}>
+                           ? "border-[var(--accent-strong)] bg-[var(--surface-2)] ring-1 ring-[var(--accent-strong)]" : "border-[var(--line)] bg-white hover:border-[var(--accent-strong)]"}`}>
                     <span className="flex items-center gap-2">
                       <input type="radio" name="q-type" value={v} checked={form.type === v}
                              onChange={() => setForm({ ...form, type: v })} />
                       <span className="font-semibold">{NEW_TYPE_LABELS[v]}</span>
                     </span>
-                    <span className="block text-xs text-[#6E6A63] mt-1">{TYPE_HELP[v]}</span>
+                    <span className="block text-xs text-[var(--ink-3)] mt-1">{TYPE_HELP[v]}</span>
                   </label>
                 ))}
               </div>
             </fieldset>
           ) : (
-            <p className="md:col-span-3 text-sm text-[#5C5C5C]" data-testid="q-type-fixed">
+            <p className="md:col-span-3 text-sm text-[var(--ink-2)]" data-testid="q-type-fixed">
               <strong>{NEW_TYPE_LABELS[allowedTypes[0]]}</strong> · {TYPE_HELP[allowedTypes[0]]}
             </p>
           )}
@@ -139,20 +139,20 @@ export default function QuotationsAdv() {
         </form>
       )}
 
-      <div className="border border-[#E5E5E5]">
+      <div className="border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
               <Th>Number</Th><Th>Project</Th><Th>Client</Th><Th>Type</Th><Th>Version</Th><Th className="text-right">Total</Th><Th>Status</Th><Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-b border-[#F0F0F0] hover:bg-[#FAFAFA] cursor-pointer" data-testid={`q-row-${r.id}`}>
+              <tr key={r.id} className="border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer" data-testid={`q-row-${r.id}`}>
                 <Td className="font-mono font-semibold" onClick={() => navigate(`/quotations/${r.id}`)}>{r.number}</Td>
                 <Td onClick={() => navigate(`/quotations/${r.id}`)}>
                   <div className="font-semibold">{r.project_title}</div>
-                  <div className="text-xs text-[#5C5C5C]">{r.area_sqft || 0} sq.ft</div>
+                  <div className="text-xs text-[var(--ink-2)]">{r.area_sqft || 0} sq.ft</div>
                 </Td>
                 <Td onClick={() => navigate(`/quotations/${r.id}`)}>{r.client_name || "—"}</Td>
                 <Td onClick={() => navigate(`/quotations/${r.id}`)}>
@@ -163,14 +163,14 @@ export default function QuotationsAdv() {
                 <Td onClick={() => navigate(`/quotations/${r.id}`)}><span className={`status-chip ${STATUS_COLORS[r.status] || "chip-draft"}`}>{r.status}</span></Td>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => navigate(`/quotations/${r.id}`)} className="text-[#76705E]" title="Open"><ArrowRight size={16} /></button>
-                    {hasPerm("quotations.delete") && r.status !== "converted" && <button onClick={() => del(r.id)} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>}
+                    <button onClick={() => navigate(`/quotations/${r.id}`)} className="text-[var(--accent-strong)]" title="Open"><ArrowRight size={16} /></button>
+                    {hasPerm("quotations.delete") && r.status !== "converted" && <button onClick={() => del(r.id)} className="text-[var(--danger)]" title="Delete"><Trash size={16} /></button>}
                   </div>
                 </Td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan="8" className="p-8 text-center text-[#5C5C5C]">No quotations yet. Create the first quotation to get started.</td></tr>
+              <tr><td colSpan="8" className="p-8 text-center text-[var(--ink-2)]">No quotations yet. Create the first quotation to get started.</td></tr>
             )}
           </tbody>
         </table></div>

@@ -12,12 +12,12 @@ import {
 import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
-  "Pending": "#5C5C5C", "Selection Required": "#8A6DFF",
-  "Reference Required": "#FF8C00", "Vendor Required": "#FF8C00",
-  "Quotation Requested": "#F0A93A", "Quotation Received": "#3B82F6",
-  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#8B7F6A",
+  "Pending": "#4A4741", "Selection Required": "#2E5694",
+  "Reference Required": "#B45309", "Vendor Required": "#B45309",
+  "Quotation Requested": "#B45309", "Quotation Received": "#2E5694",
+  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#9C4A28",
   "On Hold": "#F59E0B", "Inspection Pending": "#EAB308",
-  "Completed": "#1D633E", "Cancelled": "#B4001C",
+  "Completed": "#1E6A45", "Cancelled": "#B3261E",
 };
 
 const TABS = [
@@ -60,7 +60,7 @@ export default function TaskDetail() {
 
   return (
     <div className="space-y-6" data-testid="task-detail-page">
-      <button onClick={() => navigate("/tasks")} className="text-xs font-mono text-[#5C5C5C] flex items-center gap-1 hover:text-[#76705E]" data-testid="task-detail-back">
+      <button onClick={() => navigate("/tasks")} className="text-xs font-mono text-[var(--ink-2)] flex items-center gap-1 hover:text-[var(--accent-strong)]" data-testid="task-detail-back">
         <ArrowLeft size={12} /> BACK TO TASKS
       </button>
 
@@ -70,17 +70,17 @@ export default function TaskDetail() {
         kicker={[task.project_name, task.area, task.category].filter(Boolean).join(" · ")}
       >
         {overdue && (
-          <span className="status-chip" style={{ background: "#FFF2F0", color: "#FF2A00" }}>
+          <span className="status-chip" style={{ background: "#FFF2F0", color: "#B3261E" }}>
             <Warning size={12} weight="fill" /> OVERDUE
           </span>
         )}
-        <button onClick={del} className="btn-ghost text-[#FF2A00]" data-testid="delete-task-btn">
+        <button onClick={del} className="btn-ghost text-[var(--danger)]" data-testid="delete-task-btn">
           <Trash size={14} /> Delete
         </button>
       </PageHero>
 
       {task.assigned_to_me && (
-        <div className="flex items-center gap-2 border border-[#C7D7FE] bg-[#EFF4FF] text-[#1D4ED8] px-4 py-2.5 rounded-lg text-sm" data-testid="assigned-to-me-banner">
+        <div className="flex items-center gap-2 border border-[#C7D7FE] bg-[var(--info-soft)] text-[var(--info)] px-4 py-2.5 rounded-lg text-sm" data-testid="assigned-to-me-banner">
           <Users size={16} weight="fill" />
           <span className="font-semibold">Task assigned to me{task.assigned_by_name ? ` by ${task.assigned_by_name}` : ""}</span>
           <span className="text-[#4B5F9E]">— update the status below when you make progress.</span>
@@ -88,21 +88,21 @@ export default function TaskDetail() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[#E5E5E5]">
+      <div className="flex items-center gap-1 border-b border-[var(--line)]">
         {TABS.map(({ id: tid, label, Icon, testid }) => (
           <button
             key={tid} onClick={() => setTab(tid)}
             data-testid={testid}
             className={`px-4 py-2.5 text-sm border-b-2 -mb-px flex items-center gap-2 transition ${tab === tid
-              ? "border-[#8B7F6A] text-[#76705E] font-semibold"
-              : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
+              ? "border-[var(--accent)] text-[var(--accent-strong)] font-semibold"
+              : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
           >
             <Icon size={14} /> {label}
             {tid === "followups" && task.follow_ups?.length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 bg-[#F5F4F0] text-[#76705E]">{task.follow_ups.length}</span>
+              <span className="text-[10px] font-mono px-1.5 bg-[var(--hover)] text-[var(--accent-strong)]">{task.follow_ups.length}</span>
             )}
             {tid === "timeline" && task.timeline?.length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 bg-[#FAFAFA]">{task.timeline.length}</span>
+              <span className="text-[10px] font-mono px-1.5 bg-[var(--surface-2)]">{task.timeline.length}</span>
             )}
           </button>
         ))}
@@ -219,7 +219,7 @@ function Overview({ task, meta, onSave }) {
           </div>
         )}
 
-        <div className="card-flat space-y-2 text-xs text-[#5C5C5C] font-mono">
+        <div className="card-flat space-y-2 text-xs text-[var(--ink-2)] font-mono">
           <div>ID · {task.id}</div>
           <div>CREATED · {formatDateTime(task.created_at)}</div>
           <div>UPDATED · {formatDateTime(task.updated_at)}</div>
@@ -309,7 +309,7 @@ function FollowUps({ task, reload }) {
 
       <div className="space-y-3">
         {(task.follow_ups || []).length === 0 && (
-          <div className="text-center py-12 text-sm text-[#6E6A63]">No follow-ups yet.</div>
+          <div className="text-center py-12 text-sm text-[var(--ink-3)]">No follow-ups yet.</div>
         )}
         {(task.follow_ups || []).slice().reverse().map((fu) => (
           <div key={fu.id} className={`card-flat ${fu.status === "done" ? "opacity-60" : ""}`}
@@ -329,13 +329,13 @@ function FollowUps({ task, reload }) {
                     Mark done
                   </button>
                 )}
-                <button onClick={() => del(fu.id)} className="text-[#FF2A00]" data-testid={`fu-del-${fu.id}`}>
+                <button onClick={() => del(fu.id)} className="text-[var(--danger)]" data-testid={`fu-del-${fu.id}`}>
                   <Trash size={12} />
                 </button>
               </div>
             </div>
             {fu.notes && <p className="text-sm">{fu.notes}</p>}
-            <div className="flex items-center gap-4 mt-2 text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+            <div className="flex items-center gap-4 mt-2 text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
               {fu.assigned_employee_name && <span>ASSIGNED · {fu.assigned_employee_name}</span>}
               {fu.next_follow_up_date && <span>NEXT · {formatDate(fu.next_follow_up_date)}</span>}
               {fu.created_by_name && <span>BY · {fu.created_by_name}</span>}
@@ -353,17 +353,17 @@ function Timeline({ task }) {
   const items = (task.timeline || []).slice().reverse();
   return (
     <div className="space-y-3" data-testid="tab-timeline">
-      {items.length === 0 && <div className="text-center py-12 text-sm text-[#6E6A63]">No history yet.</div>}
+      {items.length === 0 && <div className="text-center py-12 text-sm text-[var(--ink-3)]">No history yet.</div>}
       {items.map((ev) => (
-        <div key={ev.id} className="flex gap-3 pb-3 border-b border-[#F0F0F0]" data-testid={`tl-${ev.id}`}>
-          <div className="w-24 flex-shrink-0 text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+        <div key={ev.id} className="flex gap-3 pb-3 border-b border-[var(--line-soft)]" data-testid={`tl-${ev.id}`}>
+          <div className="w-24 flex-shrink-0 text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             {ev.at?.slice(0, 16).replace("T", " ")}
           </div>
-          <div className="w-2 h-2 mt-1.5 rounded-full bg-[#8B7F6A] flex-shrink-0" />
+          <div className="w-2 h-2 mt-1.5 rounded-full bg-[var(--accent)] flex-shrink-0" />
           <div className="min-w-0">
-            <div className="text-xs font-mono uppercase tracking-wider text-[#76705E]">{ev.event.replace(/_/g, " ")}</div>
+            <div className="text-xs font-mono uppercase tracking-wider text-[var(--accent-strong)]">{ev.event.replace(/_/g, " ")}</div>
             <div className="text-sm">{ev.details}</div>
-            {ev.actor_name && <div className="text-[10px] text-[#6E6A63] mt-0.5">by {ev.actor_name}</div>}
+            {ev.actor_name && <div className="text-[10px] text-[var(--ink-3)] mt-0.5">by {ev.actor_name}</div>}
           </div>
         </div>
       ))}
@@ -407,12 +407,12 @@ function References({ task, onSave }) {
           <button onClick={addLink} className="btn-primary" data-testid="ref-add"><Plus size={14} /></button>
         </div>
         {(task.reference_links || []).map((l, i) => (
-          <div key={i} className="flex items-center justify-between text-xs border border-[#E5E5E5] p-2" data-testid={`ref-${i}`}>
-            {safeExternalUrl(l) ? <a href={safeExternalUrl(l)} target="_blank" rel="noreferrer" className="truncate flex-1 text-[#76705E] hover:underline">{l}</a> : <span className="truncate flex-1 text-[#6E6A63]">Invalid link</span>}
-            <button onClick={() => delLink(i)} className="text-[#FF2A00] ml-2"><Trash size={12} /></button>
+          <div key={i} className="flex items-center justify-between text-xs border border-[var(--line)] p-2" data-testid={`ref-${i}`}>
+            {safeExternalUrl(l) ? <a href={safeExternalUrl(l)} target="_blank" rel="noreferrer" className="truncate flex-1 text-[var(--accent-strong)] hover:underline">{l}</a> : <span className="truncate flex-1 text-[var(--ink-3)]">Invalid link</span>}
+            <button onClick={() => delLink(i)} className="text-[var(--danger)] ml-2"><Trash size={12} /></button>
           </div>
         ))}
-        {(task.reference_links || []).length === 0 && <div className="text-xs text-[#6E6A63] text-center py-6">No references yet.</div>}
+        {(task.reference_links || []).length === 0 && <div className="text-xs text-[var(--ink-3)] text-center py-6">No references yet.</div>}
       </div>
 
       <div className="card-flat space-y-3">
@@ -429,20 +429,20 @@ function References({ task, onSave }) {
         </div>
         <button onClick={addAtt} className="btn-primary w-full" data-testid="att-add"><Plus size={14} /> Add attachment</button>
         {(task.attachments || []).map((a, i) => (
-          <div key={i} className="flex items-center justify-between text-xs border border-[#E5E5E5] p-2" data-testid={`att-${i}`}>
+          <div key={i} className="flex items-center justify-between text-xs border border-[var(--line)] p-2" data-testid={`att-${i}`}>
             <div className="flex items-center gap-2 truncate flex-1">
               <PaperclipHorizontal size={12} />
               {safeExternalUrl(a.url) ? (
-                <a href={safeExternalUrl(a.url)} target="_blank" rel="noreferrer" className="truncate text-[#76705E] hover:underline">
+                <a href={safeExternalUrl(a.url)} target="_blank" rel="noreferrer" className="truncate text-[var(--accent-strong)] hover:underline">
                   {a.label || a.url}
                 </a>
-              ) : <span className="truncate text-[#6E6A63]">{a.label || "Invalid attachment"}</span>}
-              <span className="text-[10px] font-mono text-[#6E6A63]">{a.type}</span>
+              ) : <span className="truncate text-[var(--ink-3)]">{a.label || "Invalid attachment"}</span>}
+              <span className="text-[10px] font-mono text-[var(--ink-3)]">{a.type}</span>
             </div>
-            <button onClick={() => delAtt(i)} className="text-[#FF2A00]"><Trash size={12} /></button>
+            <button onClick={() => delAtt(i)} className="text-[var(--danger)]"><Trash size={12} /></button>
           </div>
         ))}
-        {(task.attachments || []).length === 0 && <div className="text-xs text-[#6E6A63] text-center py-6">No attachments yet.</div>}
+        {(task.attachments || []).length === 0 && <div className="text-xs text-[var(--ink-3)] text-center py-6">No attachments yet.</div>}
       </div>
     </div>
   );

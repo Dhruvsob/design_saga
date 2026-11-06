@@ -89,7 +89,7 @@ export default function Employees() {
     <div className="space-y-8" data-testid="employees-page">
       <PageHero
         eyebrow="HR / EMPLOYEES"
-        title="Your people."
+        title="Employees"
         kicker="Complete HR record — payroll structure, documents, warnings, rewards, KPIs. All in one place."
         count={rows.length}
       >
@@ -125,14 +125,14 @@ export default function Employees() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md px-3 py-2 border border-[#E5E5E5] focus-within:border-[#8B7F6A] transition">
-          <MagnifyingGlass size={15} className="text-[#5C5C5C]" />
+        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md px-3 py-2 border border-[var(--line)] focus-within:border-[var(--accent)] transition">
+          <MagnifyingGlass size={15} className="text-[var(--ink-2)]" />
           <input
             data-testid="emp-search"
             value={filter.q}
             onChange={(e) => setFilter({ ...filter, q: e.target.value })}
             placeholder="Search name, email, EMP-ID, designation…"
-            className="bg-transparent flex-1 outline-none text-sm placeholder-[#9A9A9A]"
+            className="bg-transparent flex-1 outline-none text-sm placeholder-[var(--ink-3)]"
           />
         </div>
         <select aria-label="Department" className="input-flat max-w-[200px]" value={filter.department} onChange={(e) => setFilter({ ...filter, department: e.target.value })}>
@@ -151,9 +151,9 @@ export default function Employees() {
           {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-14 w-full" />)}
         </div>
       ) : (
-        <div className="border border-[#E5E5E5]">
+        <div className="border border-[var(--line)]">
           <div className="overflow-x-auto"><table className="w-full">
-            <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+            <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr className="text-left">
                 <Th>Employee</Th>
                 <Th>EMP-ID</Th>
@@ -169,22 +169,22 @@ export default function Employees() {
               {filtered.map((r) => (
                 <tr
                   key={r.id}
-                  className="row-hover border-b border-[#F0F0F0] cursor-pointer"
+                  className="row-hover border-b border-[var(--line-soft)] cursor-pointer"
                   onClick={() => navigate(`/employees/${r.id}`)}
                   data-testid={`emp-row-${r.id}`}
                 >
                   <Td>
                     <div className="flex items-center gap-3">
                       {r.photo ? (
-                        <img src={r.photo} alt="" className="w-8 h-8 object-cover ring-1 ring-[#E5E5E5]" />
+                        <img src={r.photo} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
                       ) : (
-                        <div className="w-8 h-8 bg-[#0A0A0A] text-white flex items-center justify-center font-display font-bold text-xs">
+                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
                           {(r.first_name || "?").slice(0, 1).toUpperCase()}
                         </div>
                       )}
                       <div>
                         <div className="font-semibold text-sm">{r.first_name} {r.last_name}</div>
-                        <div className="text-xs text-[#5C5C5C]">{r.email || "—"}</div>
+                        <div className="text-xs text-[var(--ink-2)]">{r.email || "—"}</div>
                       </div>
                     </div>
                   </Td>
@@ -196,9 +196,9 @@ export default function Employees() {
                   <Td className="font-mono text-xs">{formatDate(r.joining_date)}</Td>
                   <Td>
                     <div className="flex items-center gap-2 justify-end">
-                      <ArrowRight size={14} className="text-[#5C5C5C]" />
+                      <ArrowRight size={14} className="text-[var(--ink-2)]" />
                       {canDelete && (
-                        <button onClick={(e) => remove(r.id, e)} className="text-[#FF2A00] hover:scale-110 transition" title="Terminate employee">
+                        <button onClick={(e) => remove(r.id, e)} className="text-[var(--danger)] hover:scale-110 transition" title="Terminate employee">
                           <UserMinus size={14} />
                         </button>
                       )}
@@ -207,7 +207,7 @@ export default function Employees() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={canPayrollRead ? 8 : 7} className="p-10 text-center text-[#5C5C5C]">
+                <tr><td colSpan={canPayrollRead ? 8 : 7} className="p-10 text-center text-[var(--ink-2)]">
                   {rows.length === 0 ? "No employees yet. Create the first employee to get started." : "No matches for these filters."}
                 </td></tr>
               )}

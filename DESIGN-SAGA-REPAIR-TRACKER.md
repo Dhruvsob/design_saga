@@ -11,6 +11,13 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-094: Design system — brown identity, tokens, shell, motion
+
+- Owner: "still not looking good; keep the brown pattern; sidebar colours; animations/touch".
+- Root cause found: 2,075 hard-coded hex colours across 52 screen files (plus 188 in inline styles), a leftover "jewellers ERP" stone/gold palette, Tailwind's `overline` utility drawing a stray line over every label, serif display font with old-style figures for money, slogan headings ("The control room.", "Every rupee, in its place.") and cards that bounced on hover.
+- Built: `index.css` token system (paper, surfaces, lines, ink 1-4, walnut brand `--accent #7A5A3C`, caramel, success/warning/danger/info + soft variants, radii, shadows, easing); legacy stone/gold names alias the new tokens; codemod moved every class colour to tokens (opacity-modifier colours and alpha-concatenated status colours mapped to the new palette hex). Components: walnut primary / quiet secondary buttons with press feedback, 38px inputs with brown focus ring, calm cards (lift only when clickable), unified table headers/row hover, consistent status chips. Type: Manrope headings with tabular lining figures, Inter text, calm labels. Shell: espresso sidebar with caramel active marker (tokens re-scoped so every child adapts), logo on a light tile, visible search field, quiet clock, no decorative strips. Page headers show the page name (13 slogans replaced); Dashboard greets the user with today's date. Motion: page ease-in, menus pop-in, press scale, active-bar grow; all disabled under prefers-reduced-motion.
+- Fixed contrast in Calendar (out-of-month dates, holiday/milestone colours).
+
 ### DS-093: Project page de-duplicated; subscription read-only mode
 
 - Owner feedback: DS-092 copied the reference too literally and duplicated content (facts strip vs Team/Site cards, Stage in facts and lifecycle bar, hub tiles repeating the tab bar and the header's client-portal button). Now: facts strip shows only client, type, area, location, start, target end; the Site/Schedule card is removed; the tiles are replaced by a short "Needs attention" list (overdue tasks, milestones due, invoiced-not-received, no project manager) with a link to fix each, or "Nothing overdue". Tabs remain the only navigation.

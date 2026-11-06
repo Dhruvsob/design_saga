@@ -126,10 +126,10 @@ export default function Projects() {
                 ].map((o) => (
                   <button type="button" key={o.k}
                     onClick={() => setForm({...form, engagement_type: o.k})}
-                    className={`text-left p-3 border transition ${form.engagement_type === o.k ? "border-[#8B7F6A] bg-[#F5F4F0]" : "border-[#E5E5E5]"}`}
+                    className={`text-left p-3 border transition ${form.engagement_type === o.k ? "border-[var(--accent)] bg-[var(--hover)]" : "border-[var(--line)]"}`}
                     data-testid={`engagement-${o.k}`}>
                     <div className="font-display font-bold text-sm">{o.t}</div>
-                    <div className="text-[10px] text-[#5C5C5C]">{o.d}</div>
+                    <div className="text-[10px] text-[var(--ink-2)]">{o.d}</div>
                   </button>
                 ))}
               </div>
@@ -139,11 +139,11 @@ export default function Projects() {
           <input className="input-flat" placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
 
           {/* Project Team — controls who can see this project's tasks */}
-          <div className="md:col-span-2 border-t border-[#EFEDE8] pt-3">
+          <div className="md:col-span-2 border-t border-[var(--line-soft)] pt-3">
             <div className="overline text-[10px] mb-2">PROJECT TEAM</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="block">
-                <span className="text-[11px] text-[#5C5C5C] mb-1 block">Project Manager</span>
+                <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Project Manager</span>
                 <select aria-label="Project manager" className="input-flat w-full" value={form.project_manager_id}
                   onChange={(e) => setForm({ ...form, project_manager_id: e.target.value })}
                   data-testid="project-pm-select">
@@ -156,16 +156,16 @@ export default function Projects() {
                 </select>
               </label>
               <div className="block">
-                <span className="text-[11px] text-[#5C5C5C] mb-1 block">Team members (can see project tasks)</span>
-                <div className="border border-[#E5E5E5] rounded-md max-h-32 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="project-team-picker">
-                  {employees.length === 0 && <span className="text-xs text-[#6E6A63]">No employees yet.</span>}
+                <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Team members (can see project tasks)</span>
+                <div className="border border-[var(--line)] rounded-md max-h-32 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="project-team-picker">
+                  {employees.length === 0 && <span className="text-xs text-[var(--ink-3)]">No employees yet.</span>}
                   {employees.map((emp) => {
                     const on = form.team_ids.includes(emp.id);
                     return (
                       <button type="button" key={emp.id} onClick={() => toggleTeam(emp.id)}
                         className={`px-2.5 py-1 text-xs rounded-full border transition ${on
-                          ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#76705E] font-semibold"
-                          : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#8B7F6A]"}`}
+                          ? "border-[var(--accent)] bg-[var(--hover)] text-[var(--accent-strong)] font-semibold"
+                          : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--accent)]"}`}
                         data-testid={`team-opt-${emp.id}`}>
                         {empName(emp)}
                       </button>
@@ -175,7 +175,7 @@ export default function Projects() {
               </div>
             </div>
           </div>
-          {err && <div className="md:col-span-2 border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+          {err && <div className="md:col-span-2 border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
           <button className="btn-primary md:col-span-2" data-testid="project-submit" type="submit">Create project</button>
         </form>
       )}
@@ -183,7 +183,7 @@ export default function Projects() {
       <div className="flex flex-col gap-3" data-testid="projects-toolbar">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px] max-w-md">
-            <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
+            <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
             <input className="input-flat w-full !pl-9" value={query} onChange={(e) => setQuery(e.target.value)}
                    placeholder="Search projects, clients or type" aria-label="Search projects" data-testid="projects-search" />
           </div>
@@ -193,10 +193,10 @@ export default function Projects() {
             <option value="name">Name A–Z</option>
             <option value="stage">By stage</option>
           </select>
-          <div className="ml-auto flex rounded-lg border border-[#E8E6E1] bg-white p-0.5" role="group" aria-label="Layout">
+          <div className="ml-auto flex rounded-lg border border-[var(--line)] bg-white p-0.5" role="group" aria-label="Layout">
             {[["grid", SquaresFour, "Grid view"], ["list", ListBullets, "List view"]].map(([v, Icon, label]) => (
               <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v} aria-label={label} title={label}
-                      className={`p-1.5 rounded-md transition ${view === v ? "bg-[#EFEDE6] text-[#1A1A1A]" : "text-[#6E6A63] hover:text-[#1A1A1A]"}`}
+                      className={`p-1.5 rounded-md transition ${view === v ? "bg-[var(--hover)] text-[var(--ink)]" : "text-[var(--ink-3)] hover:text-[var(--ink)]"}`}
                       data-testid={`projects-view-${v}`}>
                 <Icon size={16} />
               </button>
@@ -209,29 +209,29 @@ export default function Projects() {
             .map(([id, label, n]) => (
               <button key={id} type="button" role="tab" aria-selected={stageFilter === id} onClick={() => setStageFilter(id)}
                       className={`px-3 py-1.5 text-xs rounded-full border transition ${stageFilter === id
-                        ? "bg-[#1A1A1A] text-white border-[#1A1A1A]" : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#76705E]"}`}
+                        ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent-strong)]"}`}
                       data-testid={`projects-stage-${id}`}>
-                {label} <span className={stageFilter === id ? "text-white/70" : "text-[#6E6A63]"}>{n}</span>
+                {label} <span className={stageFilter === id ? "text-white/70" : "text-[var(--ink-3)]"}>{n}</span>
               </button>
             ))}
         </div>
       </div>
 
       {view === "list" && shown.length > 0 && (
-        <div className="border border-[#E8E6E1] rounded-xl overflow-x-auto bg-white" data-testid="projects-list">
+        <div className="border border-[var(--line)] rounded-xl overflow-x-auto bg-white" data-testid="projects-list">
           <table className="w-full text-sm">
-            <thead className="bg-[#FAF9F6] text-[10px] uppercase tracking-wider text-[#5C5C5C]">
+            <thead className="bg-[var(--surface-2)] text-[10px] uppercase tracking-wider text-[var(--ink-2)]">
               <tr><th className="p-3 text-left">Project</th><th className="p-3 text-left">Client</th>
                 <th className="p-3 text-left">Stage</th><th className="p-3 text-right">Budget</th><th className="p-3" /></tr>
             </thead>
             <tbody>
               {shown.map((p) => (
-                <tr key={p.id} className="border-t border-[#F0EEE9] hover:bg-[#FAFAF7] cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
-                  <td className="p-3"><div className="font-semibold">{p.name}</div><div className="text-xs text-[#6E6A63]">{p.project_type}{p.engagement_type ? ` · ${p.engagement_type}` : ""}</div></td>
+                <tr key={p.id} className="border-t border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
+                  <td className="p-3"><div className="font-semibold">{p.name}</div><div className="text-xs text-[var(--ink-3)]">{p.project_type}{p.engagement_type ? ` · ${p.engagement_type}` : ""}</div></td>
                   <td className="p-3">{p.client_name || "—"}</td>
                   <td className="p-3"><span className="status-chip chip-medium">{p.stage || "Requirement"}</span></td>
                   <td className="p-3 text-right font-mono">{formatINR(p.budget)}</td>
-                  <td className="p-3 text-right"><CaretRight size={14} className="inline text-[#B8B3A8]" /></td>
+                  <td className="p-3 text-right"><CaretRight size={14} className="inline text-[var(--ink-4)]" /></td>
                 </tr>
               ))}
             </tbody>
@@ -240,7 +240,7 @@ export default function Projects() {
       )}
 
       {(view === "grid" || shown.length === 0) && (
-      <div className="border-t border-l border-[#E5E5E5] grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 stagger">
+      <div className="border-t border-l border-[var(--line)] grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 stagger">
         {shown.map((p, i) => {
           const idx = STAGES.indexOf(p.stage || "Requirement");
           const pct = Math.round(((idx + 1) / STAGES.length) * 100);
@@ -248,11 +248,11 @@ export default function Projects() {
             <button
               key={p.id}
               onClick={() => navigate(`/projects/${p.id}`)}
-              className="fade-up text-left border-r border-b border-[#E5E5E5] p-6 hover:bg-[#FAFAFA] transition group relative"
+              className="fade-up text-left border-r border-b border-[var(--line)] p-6 hover:bg-[var(--surface-2)] transition group relative"
               data-testid={`project-card-${p.id}`}
             >
               {/* index number */}
-              <div className="absolute top-4 right-4 font-mono text-[10px] text-[#6E6A63] tracking-widest">
+              <div className="absolute top-4 right-4 font-mono text-[10px] text-[var(--ink-3)] tracking-widest">
                 #{String(i + 1).padStart(3, "0")}
               </div>
 
@@ -260,29 +260,29 @@ export default function Projects() {
                 {p.project_type}
                 {p.engagement_type && (
                   <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                    p.engagement_type === "consultancy" ? "bg-[#F5F4F0] text-[#76705E]" : "bg-[#FFF4E5] text-[#7A4E1A]"
+                    p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[var(--accent-strong)]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
                   }`}>{p.engagement_type}</span>
                 )}
               </div>
               <div className="font-display font-bold tracking-tighter text-2xl mb-1 leading-tight group-hover:accent-blue transition-colors">
                 {p.name}
               </div>
-              <div className="text-sm text-[#5C5C5C] mb-5">{p.client_name || "Unassigned"}</div>
+              <div className="text-sm text-[var(--ink-2)] mb-5">{p.client_name || "Unassigned"}</div>
 
               <div className="flex items-center justify-between text-xs font-mono mb-2 tabular-nums">
-                <span className="text-[#0A0A0A] font-semibold">{p.stage}</span>
-                <span className="text-[#5C5C5C]">{pct}%</span>
+                <span className="text-[var(--ink)] font-semibold">{p.stage}</span>
+                <span className="text-[var(--ink-2)]">{pct}%</span>
               </div>
-              <div className="h-1 bg-[#F0F0F0] relative overflow-hidden">
+              <div className="h-1 bg-[var(--line-soft)] relative overflow-hidden">
                 <div
-                  className="h-1 bg-[#8B7F6A] transition-all duration-500"
+                  className="h-1 bg-[var(--accent)] transition-all duration-500"
                   style={{ width: `${pct}%` }}
                 />
               </div>
 
               <div className="mt-5 flex items-center justify-between">
                 <div className="font-mono text-sm font-semibold tabular-nums">{formatINR(p.budget)}</div>
-                <div className="overline flex items-center gap-1 group-hover:text-[#76705E] transition-colors">
+                <div className="overline flex items-center gap-1 group-hover:text-[var(--accent-strong)] transition-colors">
                   OPEN <CaretRight size={10} weight="bold" className="transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
@@ -293,7 +293,7 @@ export default function Projects() {
           <EmptyState />
         )}
         {projects.length > 0 && shown.length === 0 && (
-          <div className="border-r border-b border-[#E5E5E5] p-10 col-span-full text-center text-sm text-[#5C5C5C]">
+          <div className="border-r border-b border-[var(--line)] p-10 col-span-full text-center text-sm text-[var(--ink-2)]">
             No projects match. <button type="button" className="underline" onClick={() => { setQuery(""); setStageFilter("all"); }}>Clear filters</button>
           </div>
         )}
@@ -305,10 +305,10 @@ export default function Projects() {
 
 function EmptyState() {
   return (
-    <div className="border-r border-b border-[#E5E5E5] p-12 col-span-full text-center">
+    <div className="border-r border-b border-[var(--line)] p-12 col-span-full text-center">
       <div className="inline-block mb-4 dotted-bg" style={{ width: 80, height: 80 }} />
       <div className="overline mb-2">NO PROJECTS YET</div>
-      <p className="text-[#5C5C5C] text-sm max-w-sm mx-auto">
+      <p className="text-[var(--ink-2)] text-sm max-w-sm mx-auto">
         Create a project from scratch or convert a qualified lead from the CRM.
       </p>
     </div>

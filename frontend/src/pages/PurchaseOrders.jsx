@@ -19,12 +19,12 @@ function fmtErr(d, fb = "Failed") {
 }
 
 const STATUS_TONE = {
-  draft: "bg-[#F0F0F0] text-[#5C5C5C]",
-  sent: "bg-[#F5F4F0] text-[#76705E]",
-  partial: "bg-[#FFF4E5] text-[#7A4E1A]",
-  received: "bg-[#EFF7EF] text-[#1D633E]",
-  closed: "bg-[#EFF7EF] text-[#1D633E]",
-  cancelled: "bg-[#FCEEEC] text-[#B22B22]",
+  draft: "bg-[var(--line-soft)] text-[var(--ink-2)]",
+  sent: "bg-[var(--hover)] text-[var(--accent-strong)]",
+  partial: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  received: "bg-[var(--success-soft)] text-[var(--success)]",
+  closed: "bg-[var(--success-soft)] text-[var(--success)]",
+  cancelled: "bg-[var(--danger-soft)] text-[var(--danger)]",
 };
 
 export default function PurchaseOrders() {
@@ -55,7 +55,7 @@ export default function PurchaseOrders() {
   return (
     <div className="space-y-8" data-testid="po-page">
       <PageHero eyebrow="PROCUREMENT / PURCHASE ORDERS"
-        title="Every rupee, tracked from PO to payment."
+        title="Purchase orders"
         kicker="Auto 3-way match against Goods Receipts and vendor bills."
         count={pos.length}>
         {hasPerm("purchase_orders.create") && <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="create-po-btn">
@@ -63,29 +63,29 @@ export default function PurchaseOrders() {
         </button>}
       </PageHero>
 
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 text-sm text-[#B22B22]"><Warning size={13} className="inline mr-1"/>{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]"><Warning size={13} className="inline mr-1"/>{err}</div>}
 
       <div className="card-flat p-0 overflow-hidden">
         <div className="p-6 pb-4"><div className="overline">PO LEDGER · {pos.length}</div></div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px]" data-testid="po-table">
-            <thead className="bg-[#FAFAFA] border-y border-[#E5E5E5]"><tr className="text-left">
+            <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]"><tr className="text-left">
               <Th>PO #</Th><Th>Vendor</Th><Th>Order Date</Th><Th>Expected</Th>
               <Th>Grand Total</Th><Th>Status</Th>
             </tr></thead>
             <tbody>
               {pos.map((po) => (
-                <tr key={po.id} className="row-hover border-b border-[#F0F0F0] cursor-pointer"
+                <tr key={po.id} className="row-hover border-b border-[var(--line-soft)] cursor-pointer"
                     onClick={() => setDetail(po.id)} data-testid={`po-row-${po.id}`}>
                   <Td className="font-mono text-sm accent-blue font-semibold">{po.po_number}</Td>
                   <Td className="text-sm">{po.vendor_name}</Td>
                   <Td className="font-mono text-xs">{formatDate(po.order_date)}</Td>
                   <Td className="font-mono text-xs">{po.expected_delivery || "—"}</Td>
                   <Td className="font-mono text-sm">{fmtMoney(po.grand_total)}</Td>
-                  <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[po.status] || "bg-[#F0F0F0]"}`}>{po.status}</span></Td>
+                  <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[po.status] || "bg-[var(--line-soft)]"}`}>{po.status}</span></Td>
                 </tr>
               ))}
-              {pos.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[#5C5C5C]">No purchase orders yet.</td></tr>}
+              {pos.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[var(--ink-2)]">No purchase orders yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -150,19 +150,19 @@ function CreatePO({ vendors, onClose, onCreated }) {
               <input type="number" placeholder="Price" step="0.01" className="input-flat col-span-2 font-mono" value={l.unit_price} onChange={(e) => upLine(i, {unit_price: e.target.value === "" ? "" : Number(e.target.value)})} />
               <input type="number" placeholder="Tax %" className="input-flat col-span-1 font-mono" value={l.tax_rate} onChange={(e) => upLine(i, {tax_rate: e.target.value === "" ? "" : Number(e.target.value)})} />
               <div className="col-span-1 font-mono text-xs text-right">{fmtMoney((Number(l.quantity) || 0) * (Number(l.unit_price) || 0))}</div>
-              <button type="button" onClick={() => delLine(i)} className="btn-ghost col-span-1 text-[#B22B22]"><X size={12}/></button>
+              <button type="button" onClick={() => delLine(i)} className="btn-ghost col-span-1 text-[var(--danger)]"><X size={12}/></button>
             </div>
           ))}
           <button type="button" onClick={addLine} className="btn-ghost text-xs" data-testid="po-add-line"><Plus size={11}/> Add line</button>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 pt-2 border-t border-[#E5E5E5]">
-          <div className="p-3 bg-[#F5F5F5]"><div className="overline text-[10px]">SUBTOTAL</div><div className="font-mono font-bold">{fmtMoney(subtotal)}</div></div>
-          <div className="p-3 bg-[#F5F5F5]"><div className="overline text-[10px]">TAX</div><div className="font-mono font-bold">{fmtMoney(tax)}</div></div>
+        <div className="grid grid-cols-3 gap-3 pt-2 border-t border-[var(--line)]">
+          <div className="p-3 bg-[var(--hover)]"><div className="overline text-[10px]">SUBTOTAL</div><div className="font-mono font-bold">{fmtMoney(subtotal)}</div></div>
+          <div className="p-3 bg-[var(--hover)]"><div className="overline text-[10px]">TAX</div><div className="font-mono font-bold">{fmtMoney(tax)}</div></div>
           <div className="p-3 bg-[#8B7F6A]/10"><div className="overline text-[10px]">GRAND TOTAL</div><div className="font-mono font-bold text-lg accent-blue">{fmtMoney(subtotal + tax)}</div></div>
         </div>
 
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy || !f.vendor_id} className="btn-primary" data-testid="po-submit">{busy ? "Creating…" : "Create PO"}</button>
@@ -232,12 +232,12 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
   if (!po) return <Modal onClose={onClose} title="Loading…" wide><div className="skeleton h-64"></div></Modal>;
   return (
     <Modal onClose={onClose} title={po.po_number} eyebrow={`PO · ${po.vendor_name}`} wide>
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 mb-3">{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 mb-3">{err}</div>}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <span className={`text-[10px] font-mono uppercase px-3 py-1 ${STATUS_TONE[po.status]}`}>{po.status}</span>
-        <span className="text-sm text-[#5C5C5C]">Order: {formatDate(po.order_date)}</span>
-        <span className="text-sm text-[#5C5C5C]">Expected: {po.expected_delivery || "—"}</span>
+        <span className="text-sm text-[var(--ink-2)]">Order: {formatDate(po.order_date)}</span>
+        <span className="text-sm text-[var(--ink-2)]">Expected: {po.expected_delivery || "—"}</span>
         <span className="font-mono font-bold text-lg ml-auto accent-blue">{fmtMoney(po.grand_total)}</span>
       </div>
 
@@ -250,12 +250,12 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
           <button onClick={() => setShowGRN(true)} className="btn-primary text-xs" data-testid="grn-btn"><Truck size={12}/> Record GRN</button>
         )}
         {canUpdate && ["draft","sent"].includes(po.status) && grns.filter((g) => g.status !== "reversed").length === 0 && (
-          <button onClick={cancelPO} className="btn-ghost text-xs text-[#B22B22]"><X size={12}/> Cancel PO</button>
+          <button onClick={cancelPO} className="btn-ghost text-xs text-[var(--danger)]"><X size={12}/> Cancel PO</button>
         )}
       </div>
 
       {editing && editForm && (
-        <form onSubmit={saveEdit} className="border border-[#E5E5E5] bg-[#FAFAFA] p-3 mb-6 space-y-3">
+        <form onSubmit={saveEdit} className="border border-[var(--line)] bg-[var(--surface-2)] p-3 mb-6 space-y-3">
           <div className="overline">EDIT PURCHASE ORDER</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <input type="date" className="input-flat" value={editForm.expected_delivery} onChange={(e) => setEditForm({...editForm, expected_delivery: e.target.value})}/>
@@ -270,24 +270,24 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
               <input required type="number" min="0.001" step="0.001" className="input-flat col-span-2" value={line.quantity} onChange={(e) => setEditLine(index, "quantity", Number(e.target.value))}/>
               <input required type="number" min="0" step="0.01" className="input-flat col-span-2" value={line.unit_price} onChange={(e) => setEditLine(index, "unit_price", Number(e.target.value))}/>
               <input type="number" min="0" max="100" step="0.01" className="input-flat col-span-2" value={line.tax_rate} onChange={(e) => setEditLine(index, "tax_rate", Number(e.target.value))}/>
-              <button type="button" className="btn-ghost col-span-1 text-[#B22B22]" disabled={editForm.lines.length === 1} onClick={() => setEditForm({...editForm, lines: editForm.lines.filter((_, i) => i !== index)})}><Trash size={12}/></button>
+              <button type="button" className="btn-ghost col-span-1 text-[var(--danger)]" disabled={editForm.lines.length === 1} onClick={() => setEditForm({...editForm, lines: editForm.lines.filter((_, i) => i !== index)})}><Trash size={12}/></button>
             </div>)}
             <button type="button" className="btn-ghost text-xs" onClick={() => setEditForm({...editForm, lines: [...editForm.lines, {item_name:"", description:"", quantity:1, unit:"nos", unit_price:0, tax_rate:0}]})}><Plus size={11}/> Add line</button>
           </div>}
-          <div className="text-xs text-[#5C5C5C]">Line items can only be changed while the PO is a draft. Received quantities and matched bills remain protected.</div>
+          <div className="text-xs text-[var(--ink-2)]">Line items can only be changed while the PO is a draft. Received quantities and matched bills remain protected.</div>
           <div className="flex gap-2"><button className="btn-primary text-xs">Save changes</button><button type="button" className="btn-ghost text-xs" onClick={() => setEditing(false)}>Cancel</button></div>
         </form>
       )}
 
       <div className="overline mb-2">LINE ITEMS</div>
-      <div className="border border-[#E5E5E5] mb-6 overflow-x-auto">
+      <div className="border border-[var(--line)] mb-6 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]"><tr className="text-left">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr className="text-left">
             <Th>Item</Th><Th>Ordered</Th><Th>Received</Th><Th>Unit Price</Th><Th>Line Total</Th>
           </tr></thead>
           <tbody>
             {po.lines.map((l) => (
-              <tr key={l.id} className="border-b border-[#F0F0F0]">
+              <tr key={l.id} className="border-b border-[var(--line-soft)]">
                 <Td>{l.item_name}</Td>
                 <Td className="font-mono">{l.quantity} {l.unit}</Td>
                 <Td className="font-mono">{l.received_qty_total || 0} / {l.quantity}</Td>
@@ -303,40 +303,40 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
       {grns.length > 0 ? (
         <div className="space-y-2 mb-6">
           {grns.map((g) => (
-            <div key={g.id} className="border border-[#E5E5E5] p-3 flex items-center gap-3 text-sm">
+            <div key={g.id} className="border border-[var(--line)] p-3 flex items-center gap-3 text-sm">
               <div className="font-mono accent-blue font-semibold">{g.grn_number}</div>
-              <div className="text-[#5C5C5C]">{formatDate(g.received_date)}</div>
-              {g.status === "reversed" && <span className="text-[10px] font-mono uppercase text-[#6E6A63]">Reversed</span>}
+              <div className="text-[var(--ink-2)]">{formatDate(g.received_date)}</div>
+              {g.status === "reversed" && <span className="text-[10px] font-mono uppercase text-[var(--ink-3)]">Reversed</span>}
               <div className="font-mono ml-auto">{fmtMoney(g.total_value)}</div>
-              {canReverseGrn && g.status !== "reversed" && <button type="button" className="btn-ghost text-xs text-[#B22B22]" onClick={() => reverseGRN(g)}><ArrowsClockwise size={12}/> Reverse</button>}
+              {canReverseGrn && g.status !== "reversed" && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => reverseGRN(g)}><ArrowsClockwise size={12}/> Reverse</button>}
             </div>
           ))}
         </div>
-      ) : <div className="text-xs text-[#5C5C5C] mb-6">No goods receipts yet.</div>}
+      ) : <div className="text-xs text-[var(--ink-2)] mb-6">No goods receipts yet.</div>}
 
       {match && (
         <div>
           <div className="overline mb-2"><ArrowsClockwise size={11} className="inline mr-1"/> 3-WAY MATCH REPORT</div>
-          <div className="border border-[#E5E5E5] overflow-x-auto">
+          <div className="border border-[var(--line)] overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]"><tr className="text-left">
+              <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr className="text-left">
                 <Th>Item</Th><Th>PO</Th><Th>GRN</Th><Th>Billed</Th><Th>Variance</Th><Th>Match</Th>
               </tr></thead>
               <tbody>
                 {match.lines.map((l) => (
-                  <tr key={l.po_line_id} className="border-b border-[#F0F0F0]">
+                  <tr key={l.po_line_id} className="border-b border-[var(--line-soft)]">
                     <Td>{l.item}</Td>
                     <Td className="font-mono">{l.ordered_qty}</Td>
                     <Td className="font-mono">{l.received_qty}</Td>
                     <Td className="font-mono">{l.billed_qty}</Td>
-                    <Td className={`font-mono ${l.qty_variance ? "text-[#B22B22]" : "text-[#1D633E]"}`}>{l.qty_variance || "—"}</Td>
-                    <Td>{l.matched ? <CheckSquare size={16} className="text-[#1D633E]"/> : <span className="text-[#5C5C5C]">—</span>}</Td>
+                    <Td className={`font-mono ${l.qty_variance ? "text-[var(--danger)]" : "text-[var(--success)]"}`}>{l.qty_variance || "—"}</Td>
+                    <Td>{l.matched ? <CheckSquare size={16} className="text-[var(--success)]"/> : <span className="text-[var(--ink-2)]">—</span>}</Td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-2 text-xs text-[#5C5C5C]">
+          <div className="mt-2 text-xs text-[var(--ink-2)]">
             PO total: <b>{fmtMoney(match.po_grand_total)}</b> · Billed: <b>{fmtMoney(match.bill_total)}</b>
             {match.all_matched && <span className="ml-2 accent-blue">✓ Fully matched</span>}
           </div>
@@ -375,14 +375,14 @@ function RecordGRN({ po, onClose, onSaved }) {
     <Modal onClose={onClose} title="Record Goods Receipt" eyebrow={`GRN · ${po.po_number}`} wide>
       <form onSubmit={submit} className="space-y-3" data-testid="grn-form">
         <F label="Delivery Challan No."><input className="input-flat w-full font-mono" value={challan} onChange={(e) => setChallan(e.target.value)} /></F>
-        <div className="border border-[#E5E5E5] overflow-x-auto">
+        <div className="border border-[var(--line)] overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]"><tr className="text-left">
+            <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr className="text-left">
               <Th>Item</Th><Th>Ordered</Th><Th>Already</Th><Th>Receive Now</Th><Th>Rejected</Th><Th>Remarks</Th>
             </tr></thead>
             <tbody>
               {lines.map((l, i) => (
-                <tr key={l.po_line_id} className="border-b border-[#F0F0F0]">
+                <tr key={l.po_line_id} className="border-b border-[var(--line-soft)]">
                   <Td>{l.item_name}</Td>
                   <Td className="font-mono text-xs">{l.ordered}</Td>
                   <Td className="font-mono text-xs">{l.already}</Td>
@@ -394,7 +394,7 @@ function RecordGRN({ po, onClose, onSaved }) {
             </tbody>
           </table>
         </div>
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy} className="btn-primary" data-testid="grn-submit">{busy ? "Recording…" : "Record GRN"}</button>
@@ -405,12 +405,12 @@ function RecordGRN({ po, onClose, onSaved }) {
 }
 
 function F({ label, children }) {
-  return <label className="block"><div className="text-xs text-[#5C5C5C] mb-1">{label}</div>{children}</label>;
+  return <label className="block"><div className="text-xs text-[var(--ink-2)] mb-1">{label}</div>{children}</label>;
 }
 function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[#E5E5E5] max-h-[92vh] overflow-y-auto ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
+      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>{eyebrow && <div className="overline mb-1">{eyebrow}</div>}<div className="font-display font-bold tracking-tighter text-3xl">{title}</div></div>
           <button onClick={onClose} className="btn-ghost"><X size={13}/></button>

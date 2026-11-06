@@ -56,14 +56,14 @@ export default function Login() {
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-white">
       {/* ============== LEFT: form ============== */}
-      <div className="flex flex-col justify-between p-10 lg:p-16 border-r border-[#E5E5E5] relative overflow-hidden">
+      <div className="flex flex-col justify-between p-10 lg:p-16 border-r border-[var(--line)] relative overflow-hidden">
         <div className="absolute inset-0 dotted-bg opacity-30 pointer-events-none" />
 
         <div className="relative flex items-center justify-between fade-up">
           <div className="flex items-center gap-3">
-            <div className="relative w-9 h-9 bg-[#8B7F6A] flex items-center justify-center">
+            <div className="relative w-9 h-9 bg-[var(--accent)] flex items-center justify-center">
               <span className="text-white font-display font-bold text-sm">DS</span>
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-[#1D633E] rounded-full" style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }} />
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--success)] rounded-full" style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }} />
             </div>
             <span className="font-display font-bold tracking-tighter text-lg">DESIGN SAGA</span>
           </div>
@@ -73,18 +73,18 @@ export default function Login() {
         <div className="relative max-w-md fade-up" style={{ animationDelay: "120ms" }}>
           <div className="overline mb-6 flex items-center gap-3">
             <span className="font-bold">01 / STUDIO LOGIN</span>
-            <span className="h-px flex-1 bg-[#E5E5E5]" />
+            <span className="h-px flex-1 bg-[var(--line)]" />
           </div>
 
           <h1 className="font-display font-bold tracking-tighter text-5xl lg:text-6xl leading-[0.92] mb-6">
             Run your<br/>
             design studio<br/>
             like a <span className="accent-blue relative inline-block">masterpiece
-              <span className="absolute -bottom-2 left-0 right-0 h-1 bg-[#8B7F6A]" />
+              <span className="absolute -bottom-2 left-0 right-0 h-1 bg-[var(--accent)]" />
             </span>.
           </h1>
 
-          <p className="text-[#5C5C5C] text-base leading-relaxed mb-8 max-w-sm">
+          <p className="text-[var(--ink-2)] text-base leading-relaxed mb-8 max-w-sm">
             CRM, projects, drawings, invoices and AI — one calm, editorial command centre for architecture &amp; interior firms.
           </p>
 
@@ -103,15 +103,15 @@ export default function Login() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
-            <div className="h-px flex-1 bg-[#E5E5E5]" />
+            <div className="h-px flex-1 bg-[var(--line)]" />
             <div className="overline text-[10px]">OR STUDIO ID</div>
-            <div className="h-px flex-1 bg-[#E5E5E5]" />
+            <div className="h-px flex-1 bg-[var(--line)]" />
           </div>
 
           {/* Password form */}
           <form onSubmit={handlePasswordLogin} className="space-y-3" data-testid="password-login-form">
-            <div className="flex items-center gap-2 border border-[#E5E5E5] px-3 py-2.5 focus-within:border-[#8B7F6A] transition bg-white">
-              <User size={14} className="text-[#5C5C5C]" />
+            <div className="flex items-center gap-2 border border-[var(--line)] px-3 py-2.5 focus-within:border-[var(--accent)] transition bg-white">
+              <User size={14} className="text-[var(--ink-2)]" />
               <input
                 required
                 data-testid="login-identifier"
@@ -122,8 +122,8 @@ export default function Login() {
                 autoComplete="username"
               />
             </div>
-            <div className="flex items-center gap-2 border border-[#E5E5E5] px-3 py-2.5 focus-within:border-[#8B7F6A] transition bg-white">
-              <LockKey size={14} className="text-[#5C5C5C]" />
+            <div className="flex items-center gap-2 border border-[var(--line)] px-3 py-2.5 focus-within:border-[var(--accent)] transition bg-white">
+              <LockKey size={14} className="text-[var(--ink-2)]" />
               <input
                 required
                 type="password"
@@ -137,7 +137,7 @@ export default function Login() {
             </div>
             {err && (
               <div
-                className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 flex items-center gap-2"
+                className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 flex items-center gap-2"
                 data-testid="login-error"
               >
                 <Warning size={13} /> {err}
@@ -147,7 +147,7 @@ export default function Login() {
               type="submit"
               disabled={busy}
               data-testid="login-password-btn"
-              className="w-full py-2.5 bg-[#0A0A0A] text-white text-sm font-semibold hover:bg-[#8B7F6A] transition disabled:opacity-60"
+              className="w-full py-2.5 bg-[var(--ink)] text-white text-sm font-semibold hover:bg-[var(--accent)] transition disabled:opacity-60"
             >
               {busy ? "Signing in…" : "Sign in with password"}
             </button>
@@ -155,7 +155,7 @@ export default function Login() {
 
         </div>
 
-        <div className="relative flex items-center gap-4 text-xs text-[#5C5C5C] font-mono tracking-wider fade-up" style={{ animationDelay: "240ms" }}>
+        <div className="relative flex items-center gap-4 text-xs text-[var(--ink-2)] font-mono tracking-wider fade-up" style={{ animationDelay: "240ms" }}>
           <span>© {new Date().getFullYear()} DESIGN SAGA</span>
           <Link to="/privacy" className="underline-offset-4 hover:underline">PRIVACY</Link>
         </div>
@@ -174,7 +174,7 @@ export default function Login() {
         <div className="absolute top-10 left-10 right-10 flex items-center justify-between">
           <div className="overline text-white/90">REEL · 001</div>
           <div className="overline text-white/90 flex items-center gap-2">
-            <span className="w-2 h-2 bg-[#FF2A00] rounded-full" style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }} />
+            <span className="w-2 h-2 bg-[var(--danger)] rounded-full" style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }} />
             REC
           </div>
         </div>

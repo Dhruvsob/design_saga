@@ -105,7 +105,7 @@ export default function SuperAdminPanel() {
     <div className="space-y-8" data-testid="super-admin-page">
       <PageHero
         eyebrow="PLATFORM · SUPER ADMIN"
-        title="One studio to rule them all."
+        title="Platform admin"
         kicker="Create, monitor and control every company workspace on the platform."
         count={orgs.length}
       >
@@ -115,7 +115,7 @@ export default function SuperAdminPanel() {
       </PageHero>
 
       {err && (
-        <div className="border border-[#B22B22] bg-[#FCEEEC] p-4 text-sm text-[#B22B22] flex items-center gap-2">
+        <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)] flex items-center gap-2">
           <Warning size={16} /> {err}
         </div>
       )}
@@ -125,14 +125,14 @@ export default function SuperAdminPanel() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPI icon={Buildings} label="ACTIVE WORKSPACES"
                value={analytics.orgs.active} total={analytics.orgs.total}
-               tone="#8B7F6A" testid="kpi-active-orgs" />
+               tone="#9C4A28" testid="kpi-active-orgs" />
           <KPI icon={Users} label="TOTAL USERS"
                value={analytics.users.active} total={analytics.users.total}
-               tone="#1D633E" testid="kpi-users" />
+               tone="#1E6A45" testid="kpi-users" />
           <KPI icon={Briefcase} label="TOTAL PROJECTS"
                value={analytics.projects} tone="#7A1FA2" testid="kpi-projects" />
           <KPI icon={CurrencyInr} label="PLATFORM REVENUE"
-               display={fmtMoney(analytics.revenue_total)} tone="#B87500" testid="kpi-revenue" />
+               display={fmtMoney(analytics.revenue_total)} tone="#85570F" testid="kpi-revenue" />
         </div>
       )}
 
@@ -143,8 +143,8 @@ export default function SuperAdminPanel() {
           </div>
           <div className="space-y-2">
             {analytics.leaderboard.map((row, i) => (
-              <div key={row.org_id} className="flex items-center gap-3 p-2 border border-[#F0F0F0] hover:bg-[#FAFAFA]">
-                <div className="font-mono text-xs w-8 text-[#6E6A63]">#{i + 1}</div>
+              <div key={row.org_id} className="flex items-center gap-3 p-2 border border-[var(--line-soft)] hover:bg-[var(--surface-2)]">
+                <div className="font-mono text-xs w-8 text-[var(--ink-3)]">#{i + 1}</div>
                 <div className="flex-1 font-semibold text-sm">{row.name}</div>
                 <div className="font-mono text-sm accent-blue">{fmtMoney(row.revenue)}</div>
               </div>
@@ -155,27 +155,27 @@ export default function SuperAdminPanel() {
 
       {/* Pending Google signups needing org assignment */}
       {pending.length > 0 && (
-        <div className="card-flat border-l-4 border-l-[#B87500]" data-testid="pending-signups-card">
+        <div className="card-flat border-l-4 border-l-[var(--warning)]" data-testid="pending-signups-card">
           <div className="flex items-center justify-between mb-3">
-            <div className="overline text-[#B87500]">
+            <div className="overline text-[var(--warning)]">
               <Warning size={11} className="inline mr-1"/> PENDING GOOGLE SIGNUPS · {pending.length}
             </div>
           </div>
-          <div className="text-xs text-[#5C5C5C] mb-3">
+          <div className="text-xs text-[var(--ink-2)] mb-3">
             These users signed in with Google but their email domain didn't match any workspace. Assign each to a company below.
           </div>
           <div className="space-y-2">
             {pending.map((u) => (
-              <div key={u.user_id} className="flex flex-wrap items-center gap-3 p-2 border border-[#F0F0F0] hover:bg-[#FAFAFA]"
+              <div key={u.user_id} className="flex flex-wrap items-center gap-3 p-2 border border-[var(--line-soft)] hover:bg-[var(--surface-2)]"
                    data-testid={`pending-row-${u.user_id}`}>
-                <div className="w-8 h-8 bg-[#F0F0F0] flex items-center justify-center font-mono text-xs">
+                <div className="w-8 h-8 bg-[var(--line-soft)] flex items-center justify-center font-mono text-xs">
                   {(u.name || u.email || "?").slice(0,2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">{u.name || u.email}</div>
-                  <div className="text-xs text-[#5C5C5C]">{u.email}</div>
+                  <div className="text-xs text-[var(--ink-2)]">{u.email}</div>
                 </div>
-                <div className="text-xs font-mono text-[#5C5C5C]">
+                <div className="text-xs font-mono text-[var(--ink-2)]">
                   Signed up {formatDate(u.created_at)}
                 </div>
                 <button onClick={() => setReassignUser(u)} className="btn-primary text-xs" data-testid={`assign-${u.user_id}`}>
@@ -192,7 +192,7 @@ export default function SuperAdminPanel() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="overline"><ShieldCheck size={11} className="inline mr-1"/> TENANT ISOLATION</div>
-            <div className="text-xs text-[#5C5C5C] mt-1">
+            <div className="text-xs text-[var(--ink-2)] mt-1">
               Verify every business record is attributed to a valid workspace — no cross-tenant leakage.
             </div>
           </div>
@@ -202,20 +202,20 @@ export default function SuperAdminPanel() {
           </button>
         </div>
         {isoResult && (
-          <div className="mt-4 border-t border-[#F0F0F0] pt-4" data-testid="isolation-result">
+          <div className="mt-4 border-t border-[var(--line-soft)] pt-4" data-testid="isolation-result">
             <div className="flex items-center gap-3">
               <span className={`text-[11px] font-mono uppercase px-2.5 py-1 ${isoResult.status === "PASS"
-                ? "bg-[#EFF7EF] text-[#1D633E]" : "bg-[#FCEEEC] text-[#B22B22]"}`}>
+                ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--danger-soft)] text-[var(--danger)]"}`}>
                 {isoResult.status}
               </span>
-              <span className="text-xs text-[#5C5C5C]">
+              <span className="text-xs text-[var(--ink-2)]">
                 {isoResult.collections_checked} collections · {isoResult.organisations} workspaces · {(isoResult.checked_at || "").slice(0, 19).replace("T", " ")}
               </span>
             </div>
             {(isoResult.problems || []).length > 0 && (
               <div className="mt-3 space-y-1">
                 {isoResult.problems.map((p) => (
-                  <div key={p.collection} className="text-xs font-mono text-[#B22B22]">
+                  <div key={p.collection} className="text-xs font-mono text-[var(--danger)]">
                     {p.collection}: {p.missing_org_id} missing org · {p.unknown_org_id} unknown org
                   </div>
                 ))}
@@ -232,7 +232,7 @@ export default function SuperAdminPanel() {
         </div>
         <div className="overflow-x-auto">
         <div className="overflow-x-auto"><table className="w-full min-w-[900px]" data-testid="orgs-table">
-          <thead className="bg-[#FAFAFA] border-y border-[#E5E5E5]">
+          <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]">
             <tr className="text-left">
               <Th>Workspace</Th>
               <Th>Owner</Th>
@@ -248,14 +248,14 @@ export default function SuperAdminPanel() {
           </thead>
           <tbody>
             {orgs.map((o) => (
-              <tr key={o.org_id} className="row-hover border-b border-[#F0F0F0]" data-testid={`org-row-${o.org_id}`}>
+              <tr key={o.org_id} className="row-hover border-b border-[var(--line-soft)]" data-testid={`org-row-${o.org_id}`}>
                 <Td>
                   <div className="flex items-center gap-3">
                     {o.branding?.logo_url ? (
-                      <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[#E5E5E5] bg-white" />
+                      <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[var(--line)] bg-white" />
                     ) : (
                       <div className="w-8 h-8 flex items-center justify-center text-white font-display font-bold text-xs"
-                           style={{ backgroundColor: o.branding?.primary_color || "#8B7F6A" }}>
+                           style={{ backgroundColor: o.branding?.primary_color || "#9C4A28" }}>
                         {(o.name || "?").slice(0, 2).toUpperCase()}
                       </div>
                     )}
@@ -263,29 +263,29 @@ export default function SuperAdminPanel() {
                       <div className="font-semibold text-sm truncate flex items-center gap-2">
                         {o.name} {o.is_default && <span className="overline text-[9px] accent-blue">DEFAULT</span>}
                       </div>
-                      <div className="text-xs text-[#5C5C5C]">{o.industry || "—"}</div>
+                      <div className="text-xs text-[var(--ink-2)]">{o.industry || "—"}</div>
                     </div>
                   </div>
                 </Td>
                 <Td>
                   <div className="text-sm truncate max-w-[160px]">{o.owner || "—"}</div>
-                  {o.owner_email && <div className="text-[10px] text-[#6E6A63] truncate max-w-[160px]">{o.owner_email}</div>}
+                  {o.owner_email && <div className="text-[10px] text-[var(--ink-3)] truncate max-w-[160px]">{o.owner_email}</div>}
                 </Td>
                 <Td>
                   {(() => {
-                    const tone = { consultancy: "bg-[#F5F4F0] text-[#76705E]",
-                                   turnkey: "bg-[#FFF4E5] text-[#7A4E1A]",
-                                   hybrid: "bg-[#EFF7EF] text-[#1D633E]" }[o.business_mode || "hybrid"];
+                    const tone = { consultancy: "bg-[var(--hover)] text-[var(--accent-strong)]",
+                                   turnkey: "bg-[var(--warning-soft)] text-[var(--warning)]",
+                                   hybrid: "bg-[var(--success-soft)] text-[var(--success)]" }[o.business_mode || "hybrid"];
                     return <span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${tone}`}>{o.business_mode || "hybrid"}</span>;
                   })()}
                 </Td>
                 <Td>
-                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">{o.plan || "starter"}</span>
+                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">{o.plan || "starter"}</span>
                 </Td>
                 <Td className="font-mono text-xs tabular-nums">
                   {o.billing?.amount_charged != null ? fmtMoney(o.billing.amount_charged) : "—"}
                   {o.billing?.maintenance_charge != null && (
-                    <div className="text-[10px] text-[#6E6A63]">+{fmtMoney(o.billing.maintenance_charge)} AMC</div>
+                    <div className="text-[10px] text-[var(--ink-3)]">+{fmtMoney(o.billing.maintenance_charge)} AMC</div>
                   )}
                 </Td>
                 <Td className="font-mono text-xs">{o.billing?.renewal_date ? formatDate(o.billing.renewal_date) : "—"}</Td>
@@ -293,11 +293,11 @@ export default function SuperAdminPanel() {
                 <Td className="font-mono text-xs tabular-nums">{o.stats?.projects ?? 0}</Td>
                 <Td>
                   {o.is_suspended ? (
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FFF4E5] text-[#7A4E1A]">suspended</span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--warning-soft)] text-[var(--warning)]">suspended</span>
                   ) : o.is_active === false ? (
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FCEEEC] text-[#B22B22]">deactivated</span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--danger-soft)] text-[var(--danger)]">deactivated</span>
                   ) : (
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EFF7EF] text-[#1D633E]">active</span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--success-soft)] text-[var(--success)]">active</span>
                   )}
                   {!o.is_default && <SubscriptionControl org={o} onSaved={load} />}
                 </Td>
@@ -311,12 +311,12 @@ export default function SuperAdminPanel() {
                     </button>
                     {!o.is_default && (o.is_suspended ? (
                       <button title="Activate" onClick={() => changeStatus(o, "activate")}
-                              className="btn-ghost text-xs text-[#1D633E]" data-testid={`activate-${o.org_id}`}>
+                              className="btn-ghost text-xs text-[var(--success)]" data-testid={`activate-${o.org_id}`}>
                         <PlayCircle size={13} />
                       </button>
                     ) : (
                       <button title="Suspend" onClick={() => changeStatus(o, "suspend")}
-                              className="btn-ghost text-xs text-[#B87500]" data-testid={`suspend-${o.org_id}`}>
+                              className="btn-ghost text-xs text-[var(--warning)]" data-testid={`suspend-${o.org_id}`}>
                         <PauseCircle size={13} />
                       </button>
                     ))}
@@ -326,7 +326,7 @@ export default function SuperAdminPanel() {
                     </button>
                     {!o.is_default && (
                       <button title="Delete" onClick={() => setConfirmDelete(o)}
-                              className="btn-ghost text-xs text-[#B22B22]" data-testid={`delete-${o.org_id}`}>
+                              className="btn-ghost text-xs text-[var(--danger)]" data-testid={`delete-${o.org_id}`}>
                         <Trash size={12} />
                       </button>
                     )}
@@ -335,7 +335,7 @@ export default function SuperAdminPanel() {
               </tr>
             ))}
             {orgs.length === 0 && (
-              <tr><td colSpan={10} className="p-12 text-center text-[#5C5C5C]">
+              <tr><td colSpan={10} className="p-12 text-center text-[var(--ink-2)]">
                 No workspaces yet. Click <em>Create workspace</em> to spin up the first tenant.
               </td></tr>
             )}
@@ -373,19 +373,19 @@ function ReassignModal({ user, orgs, onClose, onDone }) {
   };
   return (
     <Modal onClose={onClose} title={user.name || user.email} eyebrow="ASSIGN TO WORKSPACE">
-      <div className="text-sm text-[#5C5C5C] mb-3">
+      <div className="text-sm text-[var(--ink-2)] mb-3">
         Move <b>{user.email}</b> into an existing workspace and set their role. They'll be able to log in immediately.
       </div>
       <div className="space-y-3">
         <label className="block">
-          <div className="text-xs text-[#5C5C5C] mb-1">Target workspace</div>
+          <div className="text-xs text-[var(--ink-2)] mb-1">Target workspace</div>
           <select aria-label="Organisation" className="input-flat w-full" value={orgId} onChange={(e) => setOrgId(e.target.value)}
                   data-testid="reassign-org-select">
             {orgs.map((o) => <option key={o.org_id} value={o.org_id}>{o.name}</option>)}
           </select>
         </label>
         <label className="block">
-          <div className="text-xs text-[#5C5C5C] mb-1">Role in workspace</div>
+          <div className="text-xs text-[var(--ink-2)] mb-1">Role in workspace</div>
           <select aria-label="Role" className="input-flat w-full" value={role} onChange={(e) => setRole(e.target.value)}
                   data-testid="reassign-role-select">
             {["Employee","Designer","ProjectManager","Accountant","HR","Director","Admin"].map((r) => (
@@ -393,7 +393,7 @@ function ReassignModal({ user, orgs, onClose, onDone }) {
             ))}
           </select>
         </label>
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy} onClick={submit} className="btn-primary" data-testid="reassign-submit">
@@ -413,11 +413,11 @@ function KPI({ icon: Icon, label, value, total, display, tone, testid }) {
       <div className="flex items-start justify-between mb-3">
         <Icon size={22} style={{ color: tone }} weight="duotone" />
       </div>
-      <div className="overline text-[10px] text-[#5C5C5C] mb-1">{label}</div>
+      <div className="overline text-[10px] text-[var(--ink-2)] mb-1">{label}</div>
       <div className="font-display font-bold tracking-tighter text-3xl tabular-nums">
         {display ?? value}
         {typeof total === "number" && (
-          <span className="text-sm text-[#6E6A63] font-normal ml-1">/{total}</span>
+          <span className="text-sm text-[var(--ink-3)] font-normal ml-1">/{total}</span>
         )}
       </div>
     </div>
@@ -445,7 +445,7 @@ function CreateOrgModal({ onClose, onCreated }) {
   return (
     <Modal onClose={onClose} title="Create Workspace" eyebrow="NEW TENANT">
       <form onSubmit={submit} className="space-y-4" data-testid="create-org-form">
-        <div className="overline text-[#76705E]">01 · BUSINESS MODE</div>
+        <div className="overline text-[var(--accent-strong)]">01 · BUSINESS MODE</div>
         <div className="grid grid-cols-3 gap-3">
           {[
             {k:"consultancy", t:"Consultancy", d:"Design-only studio. CRM, projects, quotations, HR, accounting — without procurement."},
@@ -454,15 +454,15 @@ function CreateOrgModal({ onClose, onCreated }) {
           ].map(o => (
             <button key={o.k} type="button"
               onClick={() => setF({...f, business_mode: o.k})}
-              className={`text-left p-3 border transition ${f.business_mode === o.k ? "border-[#8B7F6A] bg-[#F5F4F0]" : "border-[#E5E5E5] hover:border-[#0A0A0A]"}`}
+              className={`text-left p-3 border transition ${f.business_mode === o.k ? "border-[var(--accent)] bg-[var(--hover)]" : "border-[var(--line)] hover:border-[var(--ink)]"}`}
               data-testid={`mode-${o.k}`}>
               <div className="font-display font-bold tracking-tighter text-base mb-1">{o.t}</div>
-              <div className="text-[10px] text-[#5C5C5C] leading-relaxed">{o.d}</div>
+              <div className="text-[10px] text-[var(--ink-2)] leading-relaxed">{o.d}</div>
             </button>
           ))}
         </div>
 
-        <div className="overline text-[#76705E]">02 · WORKSPACE</div>
+        <div className="overline text-[var(--accent-strong)]">02 · WORKSPACE</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input required data-testid="co-name" className="input-flat" placeholder="Company / Studio name *"
                  value={f.name} onChange={(e) => setF({...f, name: e.target.value})} />
@@ -477,7 +477,7 @@ function CreateOrgModal({ onClose, onCreated }) {
           <input className="input-flat" placeholder="GSTIN (optional)"
                  value={f.gstin} onChange={(e) => setF({...f, gstin: e.target.value})} />
         </div>
-        <div className="overline text-[#76705E]">03 · FIRST ADMIN</div>
+        <div className="overline text-[var(--accent-strong)]">03 · FIRST ADMIN</div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input required data-testid="co-admin-name" className="input-flat" placeholder="Admin name *"
                  value={f.admin_name} onChange={(e) => setF({...f, admin_name: e.target.value})} />
@@ -489,7 +489,7 @@ function CreateOrgModal({ onClose, onCreated }) {
                  data-testid="co-admin-password" className="input-flat" placeholder="Password (letters + digits, min 8) *"
                  value={f.admin_password} onChange={(e) => setF({...f, admin_password: e.target.value})} />
         </div>
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy} className="btn-primary" data-testid="co-submit">
@@ -540,7 +540,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
     <Modal onClose={onClose} title={`Edit · ${org.name}`} eyebrow="WORKSPACE INFO">
       <form onSubmit={submit} className="space-y-3" data-testid="edit-org-form">
         <label className="block">
-          <div className="text-xs text-[#5C5C5C] mb-1">Business mode</div>
+          <div className="text-xs text-[var(--ink-2)] mb-1">Business mode</div>
           <select aria-label="Business mode" className="input-flat w-full" value={f.business_mode}
                   onChange={(e) => setF({...f, business_mode: e.target.value})}
                   data-testid="edit-mode">
@@ -549,7 +549,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
             <option value="hybrid">Hybrid</option>
           </select>
           {f.business_mode !== org.business_mode && (
-            <div className="text-[11px] text-[#B87500] mt-1">
+            <div className="text-[11px] text-[var(--warning)] mt-1">
               ⚠ Changing mode will enable/disable modules for this workspace.
             </div>
           )}
@@ -576,17 +576,17 @@ function EditOrgModal({ org, onClose, onSaved }) {
         </div>
 
         {/* Subscription / billing (manual bookkeeping — no payment gateway) */}
-        <div className="border-t border-[#EFEDE8] pt-3">
+        <div className="border-t border-[var(--line-soft)] pt-3">
           <div className="overline mb-2">SUBSCRIPTION & BILLING</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Owner name (override)</span>
+              <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Owner name (override)</span>
               <input className="input-flat w-full" placeholder={org.owner || "Primary Admin"}
                      value={billing.owner_override} onChange={(e) => setB("owner_override", e.target.value)}
                      data-testid="billing-owner" />
             </label>
             <label className="block">
-              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Billing cycle</span>
+              <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Billing cycle</span>
               <select aria-label="Billing cycle" className="input-flat w-full" value={billing.billing_cycle}
                       onChange={(e) => setB("billing_cycle", e.target.value)} data-testid="billing-cycle">
                 <option value="monthly">Monthly</option>
@@ -595,32 +595,32 @@ function EditOrgModal({ org, onClose, onSaved }) {
               </select>
             </label>
             <label className="block">
-              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Amount charged (₹)</span>
+              <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Amount charged (₹)</span>
               <input className="input-flat w-full" type="number" placeholder="Enter amount"
                      value={billing.amount_charged} onChange={(e) => setB("amount_charged", e.target.value)}
                      data-testid="billing-amount" />
             </label>
             <label className="block">
-              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Maintenance / AMC (₹)</span>
+              <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Maintenance / AMC (₹)</span>
               <input className="input-flat w-full" type="number" placeholder="Enter charge"
                      value={billing.maintenance_charge} onChange={(e) => setB("maintenance_charge", e.target.value)}
                      data-testid="billing-maintenance" />
             </label>
             <label className="block">
-              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Start date</span>
+              <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Start date</span>
               <input className="input-flat w-full" type="date"
                      value={billing.start_date} onChange={(e) => setB("start_date", e.target.value)}
                      data-testid="billing-start" />
             </label>
             <label className="block">
-              <span className="text-[11px] text-[#5C5C5C] mb-1 block">Renewal date</span>
+              <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Renewal date</span>
               <input className="input-flat w-full" type="date"
                      value={billing.renewal_date} onChange={(e) => setB("renewal_date", e.target.value)}
                      data-testid="billing-renewal" />
             </label>
           </div>
         </div>
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy} className="btn-primary">{busy ? "Saving…" : "Save"}</button>
@@ -671,15 +671,15 @@ function OrgAdminsModal({ org, onClose }) {
 
   return (
     <Modal onClose={onClose} title={org.name} eyebrow="ADMINS & USERS" wide>
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 mb-3">{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 mb-3">{err}</div>}
       <div className="flex justify-between items-center mb-4">
-        <div className="text-sm text-[#5C5C5C]">{users.length} users in this workspace</div>
+        <div className="text-sm text-[var(--ink-2)]">{users.length} users in this workspace</div>
         <button onClick={() => setShowCreate(!showCreate)} className="btn-ghost text-xs">
           <Plus size={11} /> Add admin
         </button>
       </div>
       {showCreate && (
-        <form onSubmit={createAdmin} className="border border-[#E5E5E5] p-3 mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+        <form onSubmit={createAdmin} className="border border-[var(--line)] p-3 mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
           <input required className="input-flat" placeholder="Name" value={newAdmin.name}
                  onChange={(e) => setNewAdmin({...newAdmin, name: e.target.value})} />
           <input required type="email" className="input-flat" placeholder="Email" value={newAdmin.email}
@@ -693,15 +693,15 @@ function OrgAdminsModal({ org, onClose }) {
         </form>
       )}
       <div className="overflow-x-auto"><table className="w-full">
-        <thead className="bg-[#FAFAFA] border-y border-[#E5E5E5]">
+        <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]">
           <tr className="text-left"><Th>Name</Th><Th>Email</Th><Th>Role</Th><Th className="text-right">Actions</Th></tr>
         </thead>
         <tbody>
           {users.map((u) => (
-            <tr key={u.user_id} className="border-b border-[#F0F0F0]">
+            <tr key={u.user_id} className="border-b border-[var(--line-soft)]">
               <Td className="font-semibold text-sm">{u.name}</Td>
               <Td className="font-mono text-xs">{u.email}</Td>
-              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">{u.role}</span></Td>
+              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">{u.role}</span></Td>
               <Td className="text-right">
                 <button onClick={() => setResetting(u.user_id)} className="btn-ghost text-xs">
                   <Key size={11} /> Reset password
@@ -743,7 +743,7 @@ function ConfirmDeleteModal({ org, onClose, onConfirm }) {
   return (
     <Modal onClose={onClose} title="Delete Workspace" eyebrow="DANGER ZONE">
       <div className="space-y-3">
-        <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 text-sm text-[#B22B22]">
+        <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
           <div className="flex items-center gap-2 font-semibold mb-1">
             <Warning size={14} /> This action affects <em>{org.name}</em>.
           </div>
@@ -753,13 +753,13 @@ function ConfirmDeleteModal({ org, onClose, onConfirm }) {
           <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)} />
           <span>Also permanently delete all workspace data (irreversible)</span>
         </label>
-        <div className="text-xs text-[#5C5C5C]">Type <code className="font-mono bg-[#F0F0F0] px-1">{org.name}</code> to confirm.</div>
+        <div className="text-xs text-[var(--ink-2)]">Type <code className="font-mono bg-[var(--line-soft)] px-1">{org.name}</code> to confirm.</div>
         <input className="input-flat w-full" value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
                data-testid="delete-confirm-input" />
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={!canDelete} onClick={() => onConfirm(org, purge)}
-                  className="btn-primary bg-[#B22B22]" data-testid="delete-confirm-btn">
+                  className="btn-primary bg-[var(--danger)]" data-testid="delete-confirm-btn">
             <Trash size={12} /> {purge ? "Purge forever" : "Deactivate"}
           </button>
         </div>
@@ -773,7 +773,7 @@ function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-           className={`bg-white p-6 w-full border border-[#E5E5E5] max-h-[92vh] overflow-y-auto ${wide ? "max-w-4xl" : "max-w-2xl"}`}>
+           className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-4xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>
             {eyebrow && <div className="overline mb-1">{eyebrow}</div>}
@@ -826,8 +826,8 @@ function OrgHealthModal({ org, onClose, onSaved }) {
   };
 
   const CountCell = ({ label, value }) => (
-    <div className="border border-[#F0F0F0] p-2">
-      <div className="text-[10px] font-mono uppercase text-[#6E6A63]">{label}</div>
+    <div className="border border-[var(--line-soft)] p-2">
+      <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">{label}</div>
       <div className="font-mono text-sm tabular-nums">{value ?? "—"}</div>
     </div>
   );
@@ -843,25 +843,25 @@ function OrgHealthModal({ org, onClose, onSaved }) {
           </div>
           <button onClick={onClose} className="btn-ghost text-xs">Close</button>
         </div>
-        {err && <div className="text-xs text-[#B22B22] border border-[#B22B22] bg-[#FCEEEC] p-2">{err}</div>}
+        {err && <div className="text-xs text-[var(--danger)] border border-[var(--danger)] bg-[var(--danger-soft)] p-2">{err}</div>}
         {!health && !err && <div className="skeleton h-40 w-full" />}
         {health && (
           <>
             {(health.warnings || []).length > 0 && (
-              <div className="border-l-4 border-l-[#B87500] bg-[#FFF9F0] p-3 space-y-1">
+              <div className="border-l-4 border-l-[var(--warning)] bg-[var(--warning-soft)] p-3 space-y-1">
                 {health.warnings.map((w, i) => (
-                  <div key={i} className="text-xs text-[#7A4E1A]">{w}</div>
+                  <div key={i} className="text-xs text-[var(--warning)]">{w}</div>
                 ))}
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <div className="border border-[#E5E5E5] p-3">
-                <div className="text-[10px] font-mono uppercase text-[#6E6A63]">USERS</div>
-                <div className="font-mono text-lg">{health.usage.users.used}<span className="text-xs text-[#6E6A63]"> / {health.usage.users.limit ?? "∞"}</span></div>
+              <div className="border border-[var(--line)] p-3">
+                <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">USERS</div>
+                <div className="font-mono text-lg">{health.usage.users.used}<span className="text-xs text-[var(--ink-3)]"> / {health.usage.users.limit ?? "∞"}</span></div>
               </div>
-              <div className="border border-[#E5E5E5] p-3">
-                <div className="text-[10px] font-mono uppercase text-[#6E6A63]">PROJECTS</div>
-                <div className="font-mono text-lg">{health.usage.projects.used}<span className="text-xs text-[#6E6A63]"> / {health.usage.projects.limit ?? "∞"}</span></div>
+              <div className="border border-[var(--line)] p-3">
+                <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">PROJECTS</div>
+                <div className="font-mono text-lg">{health.usage.projects.used}<span className="text-xs text-[var(--ink-3)]"> / {health.usage.projects.limit ?? "∞"}</span></div>
               </div>
             </div>
             <div>
@@ -872,15 +872,15 @@ function OrgHealthModal({ org, onClose, onSaved }) {
                 ))}
               </div>
             </div>
-            <div className="text-xs text-[#5C5C5C]">
+            <div className="text-xs text-[var(--ink-2)]">
               Last login: <span className="font-mono">{(health.last_login || "never").slice(0, 19).replace("T", " ")}</span>
               {" · "}Active admins: <span className="font-mono">{health.admins}</span>
             </div>
-            <div className="border-t border-[#F0F0F0] pt-4">
+            <div className="border-t border-[var(--line-soft)] pt-4">
               <div className="overline mb-3">PLAN &amp; LIMITS</div>
               <div className="grid grid-cols-3 gap-3">
                 <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[#6E6A63]">Plan</span>
+                  <span className="font-mono uppercase text-[var(--ink-3)]">Plan</span>
                   <select aria-label="Plan" value={limits.plan} onChange={(e) => setLimits({ ...limits, plan: e.target.value })}
                           className="input w-full" data-testid="limits-plan">
                     <option value="starter">starter</option>
@@ -889,13 +889,13 @@ function OrgHealthModal({ org, onClose, onSaved }) {
                   </select>
                 </label>
                 <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[#6E6A63]">Max users</span>
+                  <span className="font-mono uppercase text-[var(--ink-3)]">Max users</span>
                   <input type="number" min="1" value={limits.max_users}
                          onChange={(e) => setLimits({ ...limits, max_users: e.target.value })}
                          className="input w-full" data-testid="limits-max-users" />
                 </label>
                 <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[#6E6A63]">Max projects</span>
+                  <span className="font-mono uppercase text-[var(--ink-3)]">Max projects</span>
                   <input type="number" min="1" value={limits.max_projects}
                          onChange={(e) => setLimits({ ...limits, max_projects: e.target.value })}
                          className="input w-full" data-testid="limits-max-projects" />
@@ -953,7 +953,7 @@ function SubscriptionControl({ org, onSaved }) {
         <input type="date" aria-label="Trial ends on" className="input-flat !py-1 !text-xs !w-auto" value={trialEnd} disabled={busy}
                onChange={(e) => { setTrialEnd(e.target.value); save("trial", e.target.value); }} />
       )}
-      {readOnly && <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FCEEEC] text-[#B22B22] w-fit">read-only</span>}
+      {readOnly && <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--danger-soft)] text-[var(--danger)] w-fit">read-only</span>}
     </div>
   );
 }

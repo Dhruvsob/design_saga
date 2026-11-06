@@ -1,37 +1,67 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ============================================================
-   DESIGN SAGA — warm ivory base, Playfair display, stone + gold
-   (visual identity ported from the Jewellers ERP)
+   DESIGN SAGA STUDIO — design tokens
+   Brown identity: warm walnut brand on warm paper, espresso sidebar,
+   clean geometric type. Every page colour comes from these tokens.
+   Every page colour should come from these tokens.
 ============================================================ */
 :root {
-  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-display: 'Manrope', 'Inter', -apple-system, "Segoe UI", sans-serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  --app: #FAF9F6;
+  /* surfaces */
+  --app: #F5F2EC;          /* warm paper */
   --surface: #FFFFFF;
-  --surface-2: #F5F4F0;
-  --sidebar: #F5F4F0;
-  --sidebar-2: #F3EFE9;
-  --hover: #F5F4F0;
-  --border: #E8E6E1;
-  --ink: #2C2C2C;
-  --ink-2: #6B6B6B;
-  --ink-3: #6E6A63;  /* WCAG AA: 4.9:1 on cream, 5.4:1 on white */
+  --surface-2: #F8F7F4;    /* table headers, quiet fills */
+  --hover: #F1EFEA;
+  --sidebar: #2A211A;      /* espresso */
+  --sidebar-2: #3A2E25;
 
-  /* Stone — primary base accent */
-  --stone: #8B7F6A;
-  --stone-600: #76705E;
-  --stone-subtle: rgba(139, 127, 106, 0.10);
-  /* Gold — subtle jewellery accent */
-  --gold-500: #C9A84C;
-  --gold-600: #B3923A;
-  --gold-100: #F9F6ED;
+  /* lines */
+  --line: #E3E0D8;
+  --line-soft: #EEEBE5;
+  --line-strong: #D2CEC4;
+  --border: var(--line);
+
+  /* text (all AA on white and paper) */
+  --ink: #18181B;
+  --ink-2: #4A4741;
+  --ink-3: #6A665F;
+  --ink-4: #A9A49A;        /* decorative icons only, not text */
+
+  /* brand — walnut brown (white text 6.4:1) */
+  --accent: #7A5A3C;
+  --accent-strong: #5E432B;
+  --accent-soft: #F3ECE3;
+  --accent-ring: rgba(122, 90, 60, 0.20);
+  --caramel: #D2A777;      /* highlights on the dark sidebar */
+
+  /* semantic */
+  --success: #1E6A45;  --success-soft: #E7F1EB;
+  --warning: #85570F;  --warning-soft: #FBF1DC;
+  --danger:  #B3261E;  --danger-soft:  #FBE9E7;
+  --info:    #2E5694;  --info-soft:    #E9EFF8;
+
+  /* legacy names kept so older classes resolve to the new identity */
+  --stone: var(--accent);
+  --stone-600: var(--accent-strong);
+  --stone-subtle: var(--accent-ring);
+  --gold-500: var(--accent);
+  --gold-600: var(--accent-strong);
+  --gold-100: var(--accent-soft);
+
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-1: 0 1px 2px rgba(24, 24, 27, 0.05);
+  --shadow-2: 0 8px 24px -12px rgba(24, 24, 27, 0.18);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 html, body, #root {
@@ -42,7 +72,9 @@ html, body, #root {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  letter-spacing: -0.01em;
+  font-size: 14px;
+  letter-spacing: -0.006em;
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -58,31 +90,33 @@ code, .font-mono {
 
 .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum", "lnum";   /* aligned figures for money */
 }
+.tabular, td, .font-mono { font-variant-numeric: tabular-nums; }
 
 @layer base {
   :root {
-    --background: 48 27% 97%;      /* ivory #FAF9F6 */
-    --foreground: 0 0% 17%;        /* ink #2C2C2C */
+    --background: 45 17% 95%;      /* paper #F4F3EF */
+    --foreground: 240 6% 10%;      /* ink #18181B */
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 17%;
+    --card-foreground: 240 6% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 17%;
-    --primary: 41 14% 48%;         /* stone #8B7F6A */
+    --popover-foreground: 240 6% 10%;
+    --primary: 30 34% 36%;         /* walnut buttons */
     --primary-foreground: 0 0% 100%;
-    --secondary: 40 19% 95%;       /* surface-2 #F5F4F0 */
-    --secondary-foreground: 0 0% 17%;
-    --muted: 40 19% 95%;
-    --muted-foreground: 0 0% 42%;  /* ink-2 #6B6B6B */
-    --accent: 40 19% 95%;
-    --accent-foreground: 0 0% 17%;
-    --destructive: 4 62% 44%;      /* warm red */
+    --secondary: 45 15% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 45 15% 96%;
+    --muted-foreground: 40 5% 39%;
+    --accent: 45 15% 93%;
+    --accent-foreground: 240 6% 10%;
+    --destructive: 3 71% 41%;
     --destructive-foreground: 0 0% 100%;
-    --border: 43 14% 90%;          /* #E8E6E1 */
-    --input: 43 14% 90%;
-    --ring: 41 14% 48%;            /* stone */
-    --radius: 0.75rem;
+    --border: 43 15% 87%;
+    --input: 43 15% 87%;
+    --ring: 30 34% 36%;            /* walnut */
+    --radius: 0.625rem;
   }
 }
 
@@ -177,195 +211,151 @@ code, .font-mono {
 /* ============================================================
    TYPOGRAPHY HELPERS
 ============================================================ */
+/* NB: Tailwind also ships an `overline` utility (text-decoration: overline),
+   which drew a stray line over every label. Reset it here. */
 .overline {
+  text-decoration: none;
   font-family: var(--font-sans);
   font-size: 11px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 600;
   color: var(--ink-3);
 }
 .eyebrow {
+  text-decoration: none;
   font-family: var(--font-sans);
-  font-size: 10px;
-  letter-spacing: 0.22em;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 600;
 }
-.accent-blue { color: var(--stone-600); }
-.bg-accent-blue { background-color: var(--stone); }
+.accent-blue { color: var(--accent); }
+.bg-accent-blue { background-color: var(--accent); }
 .tracking-tight { letter-spacing: -0.02em; }
-.tracking-tighter { letter-spacing: -0.03em; }
+.tracking-tighter { letter-spacing: -0.025em; }
 
 /* ============================================================
-   BUTTONS
+   BUTTONS — ink primary, quiet secondary, no jumping
 ============================================================ */
+.btn-primary, .btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 38px; padding: 0 16px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0;
+  border-radius: var(--radius);
+  transition: background-color 150ms var(--ease), border-color 150ms var(--ease),
+              color 150ms var(--ease), box-shadow 150ms var(--ease);
+  white-space: nowrap;
+}
 .btn-primary {
-  background-color: var(--stone-600);   /* white text 5:1 (stone was 3.9:1) */
-  color: #FFFFFF;
-  padding: 10px 20px;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.01em;
-  border-radius: 0.75rem;
-  transition: background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-  border: 1px solid var(--stone-600);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-  overflow: hidden;
+  background: var(--accent); color: #FFFFFF; border: 1px solid var(--accent-strong);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 1px 2px rgba(94, 67, 43, 0.25);
 }
-.btn-primary:hover {
-  background-color: #5F5A4B;
-  border-color: #5F5A4B;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 22px -8px rgba(139, 127, 106, 0.55);
-}
-.btn-primary:active { transform: translateY(0); }
-.btn-primary:disabled {
-  opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none;
-}
+.btn-primary:hover { background: var(--accent-strong); box-shadow: 0 6px 16px -8px rgba(94, 67, 43, 0.55); }
+.btn-primary:disabled, .btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-ghost {
-  background-color: var(--surface);
-  color: var(--ink);
-  padding: 10px 18px;
-  font-weight: 600;
-  font-size: 13px;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
 }
-.btn-ghost:hover {
-  border-color: var(--stone);
-  color: var(--stone-600);
-  background-color: var(--hover);
-  transform: translateY(-1px);
-}
+.btn-ghost:hover { background: var(--hover); border-color: var(--line-strong); }
+.btn-ghost.text-xs, .btn-primary.text-xs { height: 32px; padding: 0 12px; font-size: 12px; }
 
 .btn-icon {
-  width: 38px; height: 38px;
+  width: 36px; height: 36px;
   display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--ink);
-  border-radius: 0.75rem;
-  transition: border-color 180ms ease, background-color 180ms ease;
+  border: 1px solid transparent; background: transparent; color: var(--ink-2);
+  border-radius: var(--radius);
+  transition: background-color 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease);
 }
-.btn-icon:hover { border-color: var(--stone); background: var(--hover); color: var(--stone-600); }
+.btn-icon:hover { background: var(--hover); color: var(--ink); border-color: var(--line); }
 
 /* ============================================================
-   CARDS / INPUTS
+   CARDS / INPUTS — calm surfaces, no hover bounce
 ============================================================ */
 .card-flat {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  padding: 24px;
-  box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04);
-  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 240ms ease, border-color 200ms ease;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-1);
   position: relative;
 }
-.card-flat:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 40px -14px rgba(17, 17, 17, 0.16);
-  border-color: #D8D2C4;
-}
-
 .card-bordered-accent { position: relative; }
 .card-bordered-accent::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 0;
-  width: 3px; height: 24px;
-  border-radius: 0 3px 3px 0;
-  background: var(--stone);
+  content: ""; position: absolute; top: 18px; left: 0;
+  width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--accent);
 }
 
 .input-flat {
   background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 10px 14px;
+  border: 1px solid var(--line);
+  height: 38px;
+  padding: 0 12px;
   font-size: 14px;
   color: var(--ink);
   width: 100%;
-  border-radius: 0.75rem;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
+  border-radius: var(--radius);
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
   outline: none;
   font-family: var(--font-sans);
 }
-.input-flat:focus {
-  border-color: var(--stone);
-  box-shadow: 0 0 0 3px var(--stone-subtle);
-}
-.input-flat:hover:not(:focus) { border-color: #CFC9BB; }
+textarea.input-flat { height: auto; padding: 9px 12px; line-height: 1.5; }
+select.input-flat { padding-right: 32px; }
+.input-flat::placeholder { color: var(--ink-3); opacity: 0.85; }
+.input-flat:hover:not(:focus):not(:disabled) { border-color: var(--line-strong); }
+.input-flat:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.input-flat:disabled { background: var(--surface-2); color: var(--ink-3); }
 
-/* Glass sticky header helper */
 .glass-header {
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border-bottom: 1px solid var(--line);
 }
 
 /* ============================================================
-   STATUS CHIPS — soft rounded pills
+   TABLES — one look everywhere
+============================================================ */
+main table thead { background: var(--surface-2); }
+main table thead th {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-3); text-decoration: none; font-family: var(--font-sans);
+}
+main table tbody tr { transition: background-color 120ms var(--ease); }
+main table tbody tr:hover { background: var(--surface-2); }
+
+/* ============================================================
+   STATUS CHIPS — soft, readable, consistent
 ============================================================ */
 .status-chip {
   font-family: var(--font-sans);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-transform: capitalize;
-  padding: 3px 10px;
-  font-weight: 600;
-  border: 1px solid transparent;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  line-height: 1.35;
-  white-space: nowrap;
+  font-size: 11.5px; letter-spacing: 0; text-transform: capitalize; font-weight: 600;
+  padding: 2px 9px; border: 1px solid transparent; border-radius: 9999px;
+  display: inline-flex; align-items: center; gap: 6px; line-height: 1.5; white-space: nowrap;
 }
 .status-chip::before {
-  content: "";
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-  display: inline-block;
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block;
 }
 .status-chip.no-dot::before { display: none; }
-
-.chip-draft   { border-color: var(--border); color: var(--ink-2); background: var(--hover); }
-.chip-sent    { border-color: #CFDBF3; color: #2B5299; background: #EAEFFC; }
-.chip-paid    { border-color: #CDE5D8; color: #2E6B4B; background: #EAF2EE; }
-.chip-paid::before { animation: pulse-dot 1.8s ease-in-out infinite; }
-.chip-overdue { border-color: #F1CFCF; color: #992B2B; background: #FCEAEA; }
-.chip-overdue::before { animation: pulse-dot 1.2s ease-in-out infinite; }
-.chip-cancelled { border-color: #E5E5E5; color: #5C5C5C; background: #F3F3F3; text-decoration: line-through; }
-
-.chip-low    { border-color: var(--border); color: var(--ink-2); background: var(--hover); }
-.chip-medium { border-color: #EADFB9; color: var(--gold-600); background: var(--gold-100); }
-.chip-high   { border-color: #F1CFCF; color: #992B2B; background: #FCEAEA; }
+.chip-draft, .chip-low { color: var(--ink-2); background: var(--hover); border-color: var(--line); }
+.chip-sent, .chip-under_review, .chip-upcoming, .chip-later { color: var(--info); background: var(--info-soft); border-color: #D5E0F1; }
+.chip-paid, .chip-approved, .chip-received, .chip-converted, .chip-done, .chip-closed { color: var(--success); background: var(--success-soft); border-color: #CDE3D6; }
+.chip-overdue, .chip-high, .chip-rejected { color: var(--danger); background: var(--danger-soft); border-color: #F2CFCB; }
+.chip-medium, .chip-partially_received, .chip-partially_paid, .chip-due_today, .chip-pending { color: var(--warning); background: var(--warning-soft); border-color: #EFDDB5; }
+.chip-cancelled { color: var(--ink-3); background: var(--hover); border-color: var(--line); text-decoration: line-through; }
 
 /* Live indicator */
 .live-dot { position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .live-dot::before {
-  content: "";
-  width: 6px; height: 6px;
-  background: #2E6B4B;
-  border-radius: 50%;
-  animation: pulse-dot 1.5s ease-in-out infinite;
+  content: ""; width: 6px; height: 6px; background: var(--success); border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
 }
 
 /* ============================================================
    SKELETON LOADING
 ============================================================ */
 .skeleton {
-  background: linear-gradient(90deg, #EFEDE7 25%, #F7F5F0 37%, #EFEDE7 63%);
+  background: linear-gradient(90deg, var(--hover) 25%, var(--surface-2) 37%, var(--hover) 63%);
   background-size: 800px 100%;
   animation: shimmer 1.4s linear infinite;
   border-radius: 0.5rem;
@@ -377,11 +367,11 @@ code, .font-mono {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #D4D0C8;
+  background: var(--line-strong);
   border: 2px solid var(--app);
   border-radius: 6px;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--stone); }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
 
 /* ============================================================
    ROW HOVER LIFT (tables)
@@ -397,8 +387,14 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--stone);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Respect reduced-motion preferences everywhere */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
 /* ============================================================
@@ -433,7 +429,7 @@ textarea:focus-visible {
   .table-mobile-compact th,
   .table-mobile-compact td { padding: 8px !important; font-size: 12px; }
   /* Reduce hero padding on phones */
-  .btn-primary, .btn-ghost { padding: 9px 14px; font-size: 12px; }
+  .btn-primary, .btn-ghost { padding: 0 14px; font-size: 12.5px; }
 }
 
 /* ============================================================
@@ -449,7 +445,6 @@ textarea:focus-visible {
     page-break-inside: avoid;
     padding: 10px !important;
   }
-  .card-flat:hover { transform: none !important; box-shadow: none !important; }
   input, select, textarea { display: none !important; }
   button:not(.print-keep) { display: none !important; }
   table { font-size: 11px !important; page-break-inside: auto; }
@@ -459,3 +454,54 @@ textarea:focus-visible {
   .grid { display: block !important; }
   .grid > * { margin-bottom: 10px; }
 }
+
+/* ============================================================
+   MOTION — purposeful, quick, never in the way
+============================================================ */
+.btn-primary:active, .btn-ghost:active, .btn-icon:active { transform: scale(0.97); }
+.btn-primary, .btn-ghost, .btn-icon { transition-property: background-color, border-color, color, box-shadow, transform; }
+
+/* clickable cards (links/buttons styled as cards) lift slightly */
+a.card-flat, button.card-flat, .card-link {
+  transition: transform 180ms var(--ease), box-shadow 180ms var(--ease), border-color 180ms var(--ease);
+}
+a.card-flat:hover, button.card-flat:hover, .card-link:hover {
+  transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--line-strong);
+}
+
+/* page content eases in on navigation */
+main > div:last-child { animation: page-in 260ms var(--ease) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* menus, popovers and dialogs scale in */
+[role="menu"], [role="listbox"], [data-radix-popper-content-wrapper] > * {
+  animation: pop-in 160ms var(--ease) both;
+}
+@keyframes pop-in { from { opacity: 0; transform: scale(0.98) translateY(-2px); } to { opacity: 1; transform: none; } }
+
+/* ============================================================
+   DARK SIDEBAR — tokens re-scoped so every child adapts
+============================================================ */
+.sidebar-dark {
+  --ink: #F4EDE3;
+  --ink-2: #D8CDBF;
+  --ink-3: #A99A89;
+  --ink-4: #7E6F60;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --surface: rgba(255, 255, 255, 0.08);
+  --hover: rgba(255, 255, 255, 0.06);
+  --accent: var(--caramel);
+  color: var(--ink-2);
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(210, 167, 119, 0.10), transparent 60%),
+    var(--sidebar);
+}
+.sidebar-dark .btn-icon { color: var(--ink-2); }
+.sidebar-dark .btn-icon:hover { background: var(--sidebar-2); border-color: var(--line); color: var(--ink); }
+.sidebar-dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-color: var(--sidebar); }
+.nav-active-bar {
+  position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--caramel); animation: bar-in 220ms var(--ease) both;
+}
+@keyframes bar-in { from { transform: scaleY(0.3); opacity: 0; } to { transform: none; opacity: 1; } }

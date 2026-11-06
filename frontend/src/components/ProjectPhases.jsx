@@ -10,9 +10,9 @@ const STATUS = [
   { value: "done", label: "Done" },
 ];
 const STATUS_STYLE = {
-  not_started: "bg-[#F5F4F0] text-[#5C5C5C]",
-  in_progress: "bg-[#FFF4E5] text-[#7A4E1A]",
-  done: "bg-[#EFF7EF] text-[#1D633E]",
+  not_started: "bg-[var(--hover)] text-[var(--ink-2)]",
+  in_progress: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  done: "bg-[var(--success-soft)] text-[var(--success)]",
 };
 
 /**
@@ -77,12 +77,12 @@ export default function ProjectPhases({ projectId, project, canEdit, canSeeFinan
   if (error) {
     return (
       <div className="card-flat" role="alert">
-        <p className="text-sm text-[#B22B22]">{error}</p>
+        <p className="text-sm text-[var(--danger)]">{error}</p>
         <button type="button" className="btn-ghost mt-3" onClick={load}>Retry</button>
       </div>
     );
   }
-  if (!data) return <div className="card-flat text-sm text-[#6E6A63]" aria-busy="true">Loading phase plan…</div>;
+  if (!data) return <div className="card-flat text-sm text-[var(--ink-3)]" aria-busy="true">Loading phase plan…</div>;
 
   const budget = Number(project?.budget || 0);
 
@@ -92,24 +92,24 @@ export default function ProjectPhases({ projectId, project, canEdit, canSeeFinan
       <div className="card-flat" data-testid="phase-setup">
         <div className="overline">PHASE PLAN</div>
         <h3 className="font-display font-bold text-xl mt-1">Plan this project in phases</h3>
-        <p className="text-sm text-[#5C5C5C] mt-1 max-w-2xl">
+        <p className="text-sm text-[var(--ink-2)] mt-1 max-w-2xl">
           Start from a standard architecture workflow. Phases, dates and deliverables stay fully editable afterwards.
         </p>
         {!canEdit ? (
-          <p className="text-sm text-[#6E6A63] mt-4">No phase plan yet. Someone who can edit projects can create one.</p>
+          <p className="text-sm text-[var(--ink-3)] mt-4">No phase plan yet. Someone who can edit projects can create one.</p>
         ) : (
           <form onSubmit={apply} className="mt-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="Phase template">
               {templates.map((t) => (
                 <label key={t.key} data-testid={`template-${t.key}`}
                        className={`block p-4 rounded-lg border cursor-pointer transition ${choice === t.key
-                         ? "border-[#76705E] bg-[#FAF9F6]" : "border-[#E8E6E1] bg-white hover:border-[#76705E]"}`}>
+                         ? "border-[var(--accent-strong)] bg-[var(--surface-2)]" : "border-[var(--line)] bg-white hover:border-[var(--accent-strong)]"}`}>
                   <span className="flex items-center gap-2">
                     <input type="radio" name="template" value={t.key} checked={choice === t.key}
                            onChange={() => setChoice(t.key)} />
                     <span className="font-semibold">{t.label}</span>
                   </span>
-                  <span className="block text-xs text-[#6E6A63] mt-1">
+                  <span className="block text-xs text-[var(--ink-3)] mt-1">
                     {t.phases.length} phases · about {t.total_weeks} weeks · {t.description}
                   </span>
                 </label>
@@ -118,9 +118,9 @@ export default function ProjectPhases({ projectId, project, canEdit, canSeeFinan
             {selected && (
               <ol className="text-sm grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1" aria-label="Phases in this template">
                 {selected.phases.map((ph, i) => (
-                  <li key={ph.name} className="flex justify-between gap-3 border-b border-[#F0EEE9] py-1">
+                  <li key={ph.name} className="flex justify-between gap-3 border-b border-[var(--line-soft)] py-1">
                     <span>{i + 1}. {ph.name}</span>
-                    <span className="text-[#6E6A63] whitespace-nowrap">{ph.weeks} wk · {ph.fee_pct}% fee</span>
+                    <span className="text-[var(--ink-3)] whitespace-nowrap">{ph.weeks} wk · {ph.fee_pct}% fee</span>
                   </li>
                 ))}
               </ol>
@@ -135,7 +135,7 @@ export default function ProjectPhases({ projectId, project, canEdit, canSeeFinan
                   <input type="checkbox" checked={withMilestones} disabled={budget <= 0}
                          onChange={(e) => setWithMilestones(e.target.checked)} data-testid="phase-milestones" />
                   Create fee milestones from phases
-                  <span className="text-xs text-[#6E6A63]">
+                  <span className="text-xs text-[var(--ink-3)]">
                     {budget > 0 ? `(fee ${formatINR(budget)})` : "(set a project fee first)"}
                   </span>
                 </label>
@@ -159,16 +159,16 @@ export default function ProjectPhases({ projectId, project, canEdit, canSeeFinan
             <div className="overline">PHASE PLAN · {s.done} OF {s.total} DONE</div>
             <div className="text-sm mt-1">
               {s.current_phase ? <>Current phase: <strong>{s.current_phase}</strong></> : "All phases complete"}
-              <span className="text-[#6E6A63]"> · Deliverables {s.deliverables_done}/{s.deliverables_total}</span>
+              <span className="text-[var(--ink-3)]"> · Deliverables {s.deliverables_done}/{s.deliverables_total}</span>
             </div>
           </div>
           <div className="text-2xl font-display font-bold" data-testid="phase-progress">{s.progress_pct}%</div>
         </div>
-        <div className="mt-3 h-2 rounded-full bg-[#F0EEE9] overflow-hidden" aria-hidden="true">
-          <div className="h-full bg-[#76705E]" style={{ width: `${s.progress_pct}%` }} />
+        <div className="mt-3 h-2 rounded-full bg-[var(--line-soft)] overflow-hidden" aria-hidden="true">
+          <div className="h-full bg-[var(--accent-strong)]" style={{ width: `${s.progress_pct}%` }} />
         </div>
         {s.overdue_phases.length > 0 && (
-          <p className="mt-3 text-sm text-[#8F3B00] flex items-center gap-2" role="status">
+          <p className="mt-3 text-sm text-[var(--warning)] flex items-center gap-2" role="status">
             <Warning size={16} aria-hidden="true" /> Past planned end: {s.overdue_phases.join(", ")}
           </p>
         )}
@@ -179,9 +179,9 @@ export default function ProjectPhases({ projectId, project, canEdit, canSeeFinan
           <li key={ph.id} className="card-flat" data-testid={`phase-${index}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-xs text-[#6E6A63]">Phase {index + 1}</div>
+                <div className="text-xs text-[var(--ink-3)]">Phase {index + 1}</div>
                 <h4 className="font-semibold text-base">{ph.name}</h4>
-                <div className="text-xs text-[#5C5C5C] mt-1">
+                <div className="text-xs text-[var(--ink-2)] mt-1">
                   Planned {formatDate(ph.planned_start)} – {formatDate(ph.planned_end)}
                   {ph.actual_start && <> · Started {formatDate(ph.actual_start)}</>}
                   {ph.actual_end && <> · Finished {formatDate(ph.actual_end)}</>}
@@ -220,11 +220,11 @@ export default function ProjectPhases({ projectId, project, canEdit, canSeeFinan
                   <li key={d.id}>
                     <button type="button" disabled={!canEdit} onClick={() => toggleDeliverable(ph, d.id)}
                             aria-pressed={d.done} data-testid={`deliverable-${d.id}`}
-                            className={`flex items-center gap-2 text-sm text-left w-full px-2 py-1 rounded ${canEdit ? "hover:bg-[#F5F4F0]" : ""}`}>
+                            className={`flex items-center gap-2 text-sm text-left w-full px-2 py-1 rounded ${canEdit ? "hover:bg-[var(--hover)]" : ""}`}>
                       {d.done
-                        ? <CheckSquare size={16} weight="fill" className="text-[#1D633E] shrink-0" aria-hidden="true" />
-                        : <Square size={16} className="text-[#6E6A63] shrink-0" aria-hidden="true" />}
-                      <span className={d.done ? "line-through text-[#6E6A63]" : ""}>{d.name}</span>
+                        ? <CheckSquare size={16} weight="fill" className="text-[var(--success)] shrink-0" aria-hidden="true" />
+                        : <Square size={16} className="text-[var(--ink-3)] shrink-0" aria-hidden="true" />}
+                      <span className={d.done ? "line-through text-[var(--ink-3)]" : ""}>{d.name}</span>
                     </button>
                   </li>
                 ))}

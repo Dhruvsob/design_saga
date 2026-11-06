@@ -68,7 +68,7 @@ export default function AuditLog() {
         <div>
           <div className="overline mb-2">ADMINISTRATION</div>
           <h1 className="font-display font-bold tracking-tight text-3xl">Audit Log</h1>
-          <p className="text-sm text-[#5C5C5C] mt-1">{rows.length} recent tenant activities</p>
+          <p className="text-sm text-[var(--ink-2)] mt-1">{rows.length} recent tenant activities</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="btn-secondary" onClick={load} disabled={loading} data-testid="audit-refresh">
@@ -85,8 +85,8 @@ export default function AuditLog() {
 
       {verification && (
         <div className={`mb-4 px-4 py-3 border flex items-center gap-3 ${verification.ok
-          ? "border-[#B8D8C0] bg-[#F1F8F2] text-[#1D633E]"
-          : "border-[#E8B9B5] bg-[#FFF5F4] text-[#B22B22]"}`} data-testid="audit-verification-result">
+          ? "border-[#B8D8C0] bg-[#F1F8F2] text-[var(--success)]"
+          : "border-[#E8B9B5] bg-[var(--danger-soft)] text-[var(--danger)]"}`} data-testid="audit-verification-result">
           {verification.ok ? <CheckCircle size={18} weight="fill" /> : <Warning size={18} weight="fill" />}
           <div className="text-sm font-semibold">
             {verification.ok ? `Verified ${verification.rows_checked} chained activities.`
@@ -96,29 +96,29 @@ export default function AuditLog() {
       )}
 
       <div className="relative mb-4 max-w-lg">
-        <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
+        <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
         <input className="input-field pl-9 w-full" value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder="Search action, actor or record" data-testid="audit-search" />
       </div>
 
-      <div className="border border-[#E5E5E5] bg-white overflow-x-auto">
+      <div className="border border-[var(--line)] bg-white overflow-x-auto">
         <table className="w-full min-w-[780px] text-left">
-          <thead className="bg-[#F8F8F6] border-b border-[#E5E5E5]">
-            <tr className="text-[10px] font-mono uppercase tracking-wider text-[#6B6B6B]">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
+            <tr className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
               <th className="px-4 py-3">Time</th><th className="px-4 py-3">Action</th>
               <th className="px-4 py-3">Actor</th><th className="px-4 py-3">Record</th>
               <th className="px-4 py-3">Sequence</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#EEEEEB]">
-            {loading && <tr><td colSpan="5" className="px-4 py-10 text-center text-sm text-[#6B6B6B]">Loading activities...</td></tr>}
-            {!loading && filtered.length === 0 && <tr><td colSpan="5" className="px-4 py-10 text-center text-sm text-[#6B6B6B]">No matching activities.</td></tr>}
+            {loading && <tr><td colSpan="5" className="px-4 py-10 text-center text-sm text-[var(--ink-2)]">Loading activities...</td></tr>}
+            {!loading && filtered.length === 0 && <tr><td colSpan="5" className="px-4 py-10 text-center text-sm text-[var(--ink-2)]">No matching activities.</td></tr>}
             {!loading && filtered.map((row) => (
-              <tr key={row.id} className="hover:bg-[#FAFAF8]" data-testid={`audit-row-${row.id}`}>
+              <tr key={row.id} className="hover:bg-[var(--surface-2)]" data-testid={`audit-row-${row.id}`}>
                 <td className="px-4 py-3 whitespace-nowrap font-mono text-xs">{formatDateTime(row.at)}</td>
                 <td className="px-4 py-3 text-sm font-semibold">{humanize(row.action)}</td>
-                <td className="px-4 py-3"><div className="text-sm">{row.actor_email || "System"}</div><div className="text-[10px] font-mono uppercase text-[#6E6A63]">{row.actor_role || "service"}</div></td>
-                <td className="px-4 py-3"><div className="text-sm">{row.target || "-"}</div><div className="text-[10px] font-mono uppercase text-[#6E6A63]">{row.target_type || "record"}</div></td>
+                <td className="px-4 py-3"><div className="text-sm">{row.actor_email || "System"}</div><div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">{row.actor_role || "service"}</div></td>
+                <td className="px-4 py-3"><div className="text-sm">{row.target || "-"}</div><div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">{row.target_type || "record"}</div></td>
                 <td className="px-4 py-3 font-mono text-xs">{row.seq ?? "legacy"}</td>
               </tr>
             ))}

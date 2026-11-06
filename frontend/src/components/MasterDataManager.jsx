@@ -106,17 +106,17 @@ export default function MasterDataManager() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" data-testid="master-data-manager">
       {/* kind list */}
-      <div className="border border-[#E5E5E5]">
-        <div className="overline p-3 border-b border-[#E5E5E5] bg-[#FAFAFA]">CONFIGURATION KINDS</div>
+      <div className="border border-[var(--line)]">
+        <div className="overline p-3 border-b border-[var(--line)] bg-[var(--surface-2)]">CONFIGURATION KINDS</div>
         {Object.entries(kinds).map(([k, label]) => (
           <button key={k} onClick={() => { setSelected(k); setEditingId(null); }}
-            className={`w-full text-left px-3 py-2.5 text-sm border-b border-[#F0F0F0] transition flex items-center justify-between ${
-              selected === k ? "bg-[#F5F4F0] text-[#76705E] font-semibold" : "hover:bg-[#FAFAFA]"
+            className={`w-full text-left px-3 py-2.5 text-sm border-b border-[var(--line-soft)] transition flex items-center justify-between ${
+              selected === k ? "bg-[var(--hover)] text-[var(--accent-strong)] font-semibold" : "hover:bg-[var(--surface-2)]"
             }`}
             data-testid={`md-kind-${k}`}
           >
             <span>{label}</span>
-            <span className="font-mono text-[10px] text-[#6E6A63]">{(data[k] || []).length}</span>
+            <span className="font-mono text-[10px] text-[var(--ink-3)]">{(data[k] || []).length}</span>
           </button>
         ))}
       </div>
@@ -124,17 +124,17 @@ export default function MasterDataManager() {
       {/* items */}
       <div className="lg:col-span-3 space-y-4">
         {err && (
-          <div className="border border-[#B22B22] bg-[#FCEEEC] px-3 py-2 text-sm text-[#B22B22] flex items-center gap-2">
+          <div className="border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)] flex items-center gap-2">
             <Warning size={13} /> {err}
           </div>
         )}
         {notice && (
-          <div className="border border-[#1D633E] bg-[#EFF7EF] px-3 py-2 text-sm text-[#1D633E] flex items-center gap-2">
+          <div className="border border-[var(--success)] bg-[var(--success-soft)] px-3 py-2 text-sm text-[var(--success)] flex items-center gap-2">
             <Check size={13} /> {notice}
           </div>
         )}
         {isSystem && (
-          <div className="border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2 text-xs text-[#5C5C5C]">
+          <div className="border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--ink-2)]">
             System pipeline — order defines the workflow. Values can be renamed, reordered and deactivated but not deleted.
           </div>
         )}
@@ -147,9 +147,9 @@ export default function MasterDataManager() {
           </button>
         </form>
 
-        <div className="border border-[#E5E5E5]">
+        <div className="border border-[var(--line)]">
           <table className="w-full">
-            <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+            <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr className="text-left">
                 <th className="px-4 py-2.5 overline w-10">#</th>
                 <th className="px-4 py-2.5 overline">Value</th>
@@ -159,9 +159,9 @@ export default function MasterDataManager() {
             </thead>
             <tbody>
               {rows.map((item, i) => (
-                <tr key={item.id} className={`border-b border-[#F0F0F0] ${!item.is_active ? "opacity-50" : ""}`}
+                <tr key={item.id} className={`border-b border-[var(--line-soft)] ${!item.is_active ? "opacity-50" : ""}`}
                     data-testid={`md-row-${item.id}`}>
-                  <td className="px-4 py-2 font-mono text-[10px] text-[#6E6A63]">{String(i + 1).padStart(2, "0")}</td>
+                  <td className="px-4 py-2 font-mono text-[10px] text-[var(--ink-3)]">{String(i + 1).padStart(2, "0")}</td>
                   <td className="px-4 py-2 text-sm">
                     {editingId === item.id ? (
                       <div className="flex items-center gap-2">
@@ -178,7 +178,7 @@ export default function MasterDataManager() {
                   </td>
                   <td className="px-4 py-2">
                     <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                      item.is_active ? "bg-[#EFF7EF] text-[#1D633E]" : "bg-[#F5F5F5] text-[#6E6A63]"
+                      item.is_active ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--hover)] text-[var(--ink-3)]"
                     }`}>{item.is_active ? "Active" : "Inactive"}</span>
                   </td>
                   <td className="px-4 py-2">
@@ -195,14 +195,14 @@ export default function MasterDataManager() {
                       </button>
                       {!item.is_system && (
                         <button onClick={() => remove(item)} title="Delete"
-                          className="btn-ghost p-1 text-[#B22B22]" data-testid={`md-delete-${item.id}`}><Trash size={12} /></button>
+                          className="btn-ghost p-1 text-[var(--danger)]" data-testid={`md-delete-${item.id}`}><Trash size={12} /></button>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan="4" className="p-6 text-center text-sm text-[#5C5C5C]">No values yet.</td></tr>
+                <tr><td colSpan="4" className="p-6 text-center text-sm text-[var(--ink-2)]">No values yet.</td></tr>
               )}
             </tbody>
           </table>

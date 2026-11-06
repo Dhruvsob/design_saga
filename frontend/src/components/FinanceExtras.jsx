@@ -82,7 +82,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <div className="overline">RECURRING EXPENSES</div>
-          <div className="text-xs text-[#5C5C5C] mt-0.5">Rent, Internet, Salaries — post themselves each period. Idempotent (never posts twice for the same date).</div>
+          <div className="text-xs text-[var(--ink-2)] mt-0.5">Rent, Internet, Salaries — post themselves each period. Idempotent (never posts twice for the same date).</div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={scan} className="btn-ghost text-xs" data-testid="rec-scan-btn">
@@ -107,9 +107,9 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
         />
       )}
 
-      <div className="border border-[#E5E5E5] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+          <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Frequency</th>
@@ -125,15 +125,15 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
               const expName = expenseAccs.find((a) => a.id === r.expense_account_id)?.name || "—";
               const isDue = r.next_run_date && r.next_run_date <= dateForInput(new Date());
               return (
-                <tr key={r.id} className={`border-t border-[#F0F0F0] ${!r.active ? "opacity-60" : ""}`} data-testid={`rec-row-${r.id}`}>
+                <tr key={r.id} className={`border-t border-[var(--line-soft)] ${!r.active ? "opacity-60" : ""}`} data-testid={`rec-row-${r.id}`}>
                   <td className="p-3">
                     <div className="font-semibold">{r.name}</div>
-                    {!r.active && <div className="text-[10px] text-[#B87500] mt-0.5"><Pause size={10} className="inline mr-1" />PAUSED</div>}
+                    {!r.active && <div className="text-[10px] text-[var(--warning)] mt-0.5"><Pause size={10} className="inline mr-1" />PAUSED</div>}
                   </td>
                   <td className="p-3 text-xs">{FREQ.find((f) => f.id === r.frequency)?.label || r.frequency}</td>
                   <td className="p-3 text-xs">{expName}</td>
                   <td className="p-3 text-right font-mono">{CURRENCY(r.amount)}</td>
-                  <td className={`p-3 font-mono text-xs ${isDue && r.active ? "text-[#B4001C] font-semibold" : "text-[#5C5C5C]"}`}>
+                  <td className={`p-3 font-mono text-xs ${isDue && r.active ? "text-[var(--danger)] font-semibold" : "text-[var(--ink-2)]"}`}>
                     {formatDate(r.next_run_date)}
                     {isDue && r.active && <span className="ml-1 text-[10px] font-semibold">DUE</span>}
                   </td>
@@ -149,7 +149,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
                       <button onClick={() => { setEditing(r); setShowForm(true); }} className="btn-ghost text-[11px]" title="Edit">
                         <PencilSimple size={11} />
                       </button>
-                      <button onClick={() => doDelete(r.id)} className="btn-ghost text-[11px] text-[#B4001C]" title="Delete">
+                      <button onClick={() => doDelete(r.id)} className="btn-ghost text-[11px] text-[var(--danger)]" title="Delete">
                         <Trash size={11} />
                       </button>
                     </div>
@@ -158,7 +158,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
               );
             })}
             {!loading && rules.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-[#6E6A63]">
+              <tr><td colSpan={7} className="p-10 text-center text-[var(--ink-3)]">
                 No recurring rules yet. Add one for Rent, Internet, or Salaries so they post themselves.
               </td></tr>
             )}
@@ -386,7 +386,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
     <div className="space-y-4" data-testid="bank-rec-tab">
       <div>
         <div className="overline">BANK RECONCILIATION</div>
-        <div className="text-xs text-[#5C5C5C] mt-0.5">Upload your bank statement CSV → we auto-match rows to posted journal entries and flag the rest for review.</div>
+        <div className="text-xs text-[var(--ink-2)] mt-0.5">Upload your bank statement CSV → we auto-match rows to posted journal entries and flag the rest for review.</div>
       </div>
 
       <div className="card-flat space-y-3">
@@ -410,19 +410,19 @@ export const BankReconciliation = ({ accounts = [] }) => {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
           {[
-            { k: "unmatched", label: "Unmatched", tint: "#B4001C" },
-            { k: "auto_matched", label: "Auto-matched", tint: "#B87500" },
-            { k: "matched", label: "Matched", tint: "#8B7F6A" },
-            { k: "reconciled", label: "Reconciled", tint: "#1D633E" },
-            { k: "ignored", label: "Ignored", tint: "#5C5C5C" },
+            { k: "unmatched", label: "Unmatched", tint: "#B3261E" },
+            { k: "auto_matched", label: "Auto-matched", tint: "#85570F" },
+            { k: "matched", label: "Matched", tint: "#9C4A28" },
+            { k: "reconciled", label: "Reconciled", tint: "#1E6A45" },
+            { k: "ignored", label: "Ignored", tint: "#4A4741" },
           ].map((s) => (
-            <div key={s.k} className="border border-[#E5E5E5] p-2 text-center">
+            <div key={s.k} className="border border-[var(--line)] p-2 text-center">
               <div className="overline">{s.label}</div>
               <div className="font-mono font-bold text-lg" style={{ color: s.tint }}>{counts[s.k] || 0}</div>
             </div>
           ))}
         </div>
-        <div className="text-[11px] text-[#6E6A63]">
+        <div className="text-[11px] text-[var(--ink-3)]">
           Expected CSV columns (case-insensitive): <code>Date, Description, Debit, Credit</code> (or a single signed <code>Amount</code>), and optional <code>Reference</code>.
         </div>
       </div>
@@ -437,19 +437,19 @@ export const BankReconciliation = ({ accounts = [] }) => {
         >
           <div className="flex items-center gap-2">
             {showLog ? <CaretDown size={12} /> : <CaretRight size={12} />}
-            <ClockClockwise size={13} className="text-[#76705E]" />
+            <ClockClockwise size={13} className="text-[var(--accent-strong)]" />
             <span className="overline">IMPORT LOG</span>
-            <span className="text-[11px] text-[#6E6A63]">
+            <span className="text-[11px] text-[var(--ink-3)]">
               {batches.length} upload{batches.length === 1 ? "" : "s"}
             </span>
           </div>
-          <span className="text-[11px] text-[#6E6A63]">Re-download or delete a bad import</span>
+          <span className="text-[11px] text-[var(--ink-3)]">Re-download or delete a bad import</span>
         </button>
 
         {showLog && (
-          <div className="mt-3 border border-[#E5E5E5] overflow-x-auto">
+          <div className="mt-3 border border-[var(--line)] overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+              <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                 <tr>
                   <th className="p-3 text-left">Uploaded</th>
                   <th className="p-3 text-left">File</th>
@@ -464,22 +464,22 @@ export const BankReconciliation = ({ accounts = [] }) => {
                 {batches.map((b) => {
                   const live = b.live || {};
                   return (
-                    <tr key={b.id} className="border-t border-[#F0F0F0]" data-testid={`import-batch-${b.id}`}>
+                    <tr key={b.id} className="border-t border-[var(--line-soft)]" data-testid={`import-batch-${b.id}`}>
                       <td className="p-3 text-xs">
                         <div className="font-mono">{formatDateTime(b.created_at)}</div>
-                        <div className="text-[10px] text-[#6E6A63]">{b.created_by_name || "—"}</div>
+                        <div className="text-[10px] text-[var(--ink-3)]">{b.created_by_name || "—"}</div>
                       </td>
                       <td className="p-3 text-xs max-w-[220px] truncate" title={b.filename}>{b.filename || "—"}</td>
                       <td className="p-3 text-right font-mono text-xs">{b.rows_saved ?? 0}</td>
-                      <td className="p-3 text-right font-mono text-xs text-[#B87500]">{b.auto_matched ?? 0}</td>
-                      <td className="p-3 text-right font-mono text-xs text-[#1D633E]">{live.reconciled ?? 0}</td>
-                      <td className="p-3 text-right font-mono text-xs text-[#5C5C5C]">{live.total ?? 0}</td>
+                      <td className="p-3 text-right font-mono text-xs text-[var(--warning)]">{b.auto_matched ?? 0}</td>
+                      <td className="p-3 text-right font-mono text-xs text-[var(--success)]">{live.reconciled ?? 0}</td>
+                      <td className="p-3 text-right font-mono text-xs text-[var(--ink-2)]">{live.total ?? 0}</td>
                       <td className="p-3 text-right">
                         <div className="inline-flex items-center gap-1">
                           <button onClick={() => downloadBatch(b)} className="btn-ghost text-[11px]" title="Re-download original CSV" data-testid={`import-download-${b.id}`}>
                             <DownloadSimple size={12} /> CSV
                           </button>
-                          <button onClick={() => deleteBatch(b)} className="btn-ghost text-[11px] text-[#B4001C]" title="Delete this import" data-testid={`import-delete-${b.id}`}>
+                          <button onClick={() => deleteBatch(b)} className="btn-ghost text-[11px] text-[var(--danger)]" title="Delete this import" data-testid={`import-delete-${b.id}`}>
                             <Trash size={12} />
                           </button>
                         </div>
@@ -488,7 +488,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
                   );
                 })}
                 {batches.length === 0 && (
-                  <tr><td colSpan={7} className="p-8 text-center text-[#6E6A63]">
+                  <tr><td colSpan={7} className="p-8 text-center text-[var(--ink-3)]">
                     No statement imports yet for this account.
                   </td></tr>
                 )}
@@ -498,9 +498,9 @@ export const BankReconciliation = ({ accounts = [] }) => {
         )}
       </div>
 
-      <div className="border border-[#E5E5E5] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+          <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
               <th className="p-3 text-left">Date</th>
               <th className="p-3 text-left">Description</th>
@@ -512,11 +512,11 @@ export const BankReconciliation = ({ accounts = [] }) => {
           </thead>
           <tbody data-testid="bank-rec-rows">
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-[#F0F0F0]" data-testid={`bank-row-${r.id}`}>
+              <tr key={r.id} className="border-t border-[var(--line-soft)]" data-testid={`bank-row-${r.id}`}>
                 <td className="p-3 font-mono text-xs">{formatDate(r.date)}</td>
                 <td className="p-3 max-w-[280px] truncate">{r.description || "—"}</td>
-                <td className="p-3 font-mono text-xs text-[#5C5C5C]">{r.reference || "—"}</td>
-                <td className={`p-3 text-right font-mono font-semibold ${r.amount > 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
+                <td className="p-3 font-mono text-xs text-[var(--ink-2)]">{r.reference || "—"}</td>
+                <td className={`p-3 text-right font-mono font-semibold ${r.amount > 0 ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
                   {r.amount > 0 ? "+" : ""}{CURRENCY(r.amount)}
                 </td>
                 <td className="p-3"><StatusChip status={r.status} /></td>
@@ -532,7 +532,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
                       </>
                     )}
                     {r.status !== "ignored" && (
-                      <button onClick={() => act(r.id, "ignore")} className="btn-ghost text-[11px] text-[#5C5C5C]" title="Ignore">
+                      <button onClick={() => act(r.id, "ignore")} className="btn-ghost text-[11px] text-[var(--ink-2)]" title="Ignore">
                         <X size={11} />
                       </button>
                     )}
@@ -541,7 +541,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
               </tr>
             ))}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={6} className="p-10 text-center text-[#6E6A63]">
+              <tr><td colSpan={6} className="p-10 text-center text-[var(--ink-3)]">
                 No rows. Upload your bank statement CSV to get started.
               </td></tr>
             )}
@@ -566,11 +566,11 @@ export const BankReconciliation = ({ accounts = [] }) => {
 
 const StatusChip = ({ status }) => {
   const map = {
-    unmatched:    { label: "Unmatched",    tint: "#B4001C", bg: "#FCEEEC", border: "#F1CFCF" },
-    auto_matched: { label: "Auto-matched", tint: "#B87500", bg: "#FFF4E5", border: "#EADFB9" },
-    matched:      { label: "Matched",      tint: "#8B7F6A", bg: "#F5F4F0", border: "#E5E5E5" },
-    reconciled:   { label: "Reconciled",   tint: "#1D633E", bg: "#EFF7EF", border: "#CDE5D8" },
-    ignored:      { label: "Ignored",      tint: "#5C5C5C", bg: "#F5F5F5", border: "#E5E5E5" },
+    unmatched:    { label: "Unmatched",    tint: "#B3261E", bg: "#FBE9E7", border: "#F1CFCF" },
+    auto_matched: { label: "Auto-matched", tint: "#85570F", bg: "#FBF1DC", border: "#EADFB9" },
+    matched:      { label: "Matched",      tint: "#9C4A28", bg: "#F5F4F0", border: "#E3E0D8" },
+    reconciled:   { label: "Reconciled",   tint: "#1E6A45", bg: "#EFF7EF", border: "#CDE5D8" },
+    ignored:      { label: "Ignored",      tint: "#4A4741", bg: "#F1EFEA", border: "#E3E0D8" },
   };
   const s = map[status] || map.unmatched;
   return (
@@ -608,24 +608,24 @@ const LinkJEDialog = ({ row, accountId, onClose, onLinked }) => {
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       <div onClick={(e) => e.stopPropagation()} className="relative z-[301] w-full max-w-2xl bg-white shadow-2xl max-h-[85vh] overflow-hidden flex flex-col rounded-lg" data-testid="link-je-dialog">
-        <div className="p-4 border-b border-[#E5E5E5] flex items-start justify-between">
+        <div className="p-4 border-b border-[var(--line)] flex items-start justify-between">
           <div>
-            <div className="overline text-[#76705E]">LINK BANK ROW TO JOURNAL ENTRY</div>
+            <div className="overline text-[var(--accent-strong)]">LINK BANK ROW TO JOURNAL ENTRY</div>
             <div className="font-semibold mt-1">{row.description}</div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)}</div>
+            <div className="text-xs text-[var(--ink-2)] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)}</div>
           </div>
           <button onClick={onClose} className="btn-ghost"><X size={14} /></button>
         </div>
         <div className="flex-1 overflow-auto">
           {loading && <div className="p-8 text-center overline">LOADING…</div>}
-          {!loading && candidates.length === 0 && <div className="p-8 text-center text-[#6E6A63]">No candidate journal entries in this bank account ±5 days.</div>}
+          {!loading && candidates.length === 0 && <div className="p-8 text-center text-[var(--ink-3)]">No candidate journal entries in this bank account ±5 days.</div>}
           {candidates.map((je) => (
             <button key={je.id} onClick={() => link(je)}
-              className="w-full text-left p-3 border-t border-[#F0F0F0] hover:bg-[#FAFAF7] block">
+              className="w-full text-left p-3 border-t border-[var(--line-soft)] hover:bg-[var(--surface-2)] block">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold truncate">{je.narration || "—"}</div>
-                  <div className="text-xs text-[#5C5C5C]">{formatDate(je.date)} · {je.reference || ""} · {je.source}</div>
+                  <div className="text-xs text-[var(--ink-2)]">{formatDate(je.date)} · {je.reference || ""} · {je.source}</div>
                 </div>
                 <div className="font-mono font-semibold text-sm">{CURRENCY(je.total)}</div>
               </div>
@@ -660,27 +660,27 @@ const CreateJEDialog = ({ row, accounts, onClose, onCreated }) => {
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       <div onClick={(e) => e.stopPropagation()} className="relative z-[301] w-full max-w-lg bg-white shadow-2xl rounded-lg" data-testid="create-je-dialog">
-        <div className="p-4 border-b border-[#E5E5E5] flex items-start justify-between">
+        <div className="p-4 border-b border-[var(--line)] flex items-start justify-between">
           <div>
-            <div className="overline text-[#76705E]">CREATE JOURNAL ENTRY</div>
+            <div className="overline text-[var(--accent-strong)]">CREATE JOURNAL ENTRY</div>
             <div className="font-semibold mt-1">{row.description}</div>
-            <div className="text-xs text-[#5C5C5C] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)} · {wantType.toUpperCase()}</div>
+            <div className="text-xs text-[var(--ink-2)] mt-0.5">{formatDate(row.date)} · {CURRENCY(row.amount)} · {wantType.toUpperCase()}</div>
           </div>
           <button onClick={onClose} className="btn-ghost"><X size={14} /></button>
         </div>
         <div className="p-4 space-y-3">
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Counterpart {wantType} account</label>
+            <label className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">Counterpart {wantType} account</label>
             <select aria-label="Counterpart account" className="input-flat w-full" value={counterId} onChange={(e) => setCounterId(e.target.value)}>
               {options.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-[#6E6A63]">Narration</label>
+            <label className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">Narration</label>
             <input className="input-flat w-full" value={narration} onChange={(e) => setNarration(e.target.value)} />
           </div>
         </div>
-        <div className="p-4 border-t border-[#E5E5E5] flex justify-end gap-2">
+        <div className="p-4 border-t border-[var(--line)] flex justify-end gap-2">
           <button onClick={onClose} className="btn-ghost text-xs">Cancel</button>
           <button onClick={submit} className="btn-primary text-xs" data-testid="create-je-submit">Post & link</button>
         </div>
@@ -702,7 +702,7 @@ export const FavoriteAccountsStrip = ({ onOpen }) => {
       <div className="flex flex-wrap gap-1.5">
         {rows.map((a) => (
           <button key={a.id} onClick={() => onOpen && onOpen(a)}
-            className="px-3 py-1 text-xs rounded-full border border-[#E5E5E5] bg-white hover:border-[#8B7F6A] hover:text-[#76705E] transition"
+            className="px-3 py-1 text-xs rounded-full border border-[var(--line)] bg-white hover:border-[var(--accent)] hover:text-[var(--accent-strong)] transition"
             data-testid={`fav-open-${a.id}`}>
             {a.name}
           </button>

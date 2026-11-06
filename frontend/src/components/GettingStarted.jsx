@@ -82,24 +82,24 @@ export default function GettingStarted() {
           <X size={16} />
         </button>
       </div>
-      <div className="mt-3 h-1.5 rounded-full bg-[#F0EEE9] overflow-hidden" aria-hidden="true">
-        <div className="h-full bg-[#76705E]" style={{ width: `${Math.round((doneCount / steps.length) * 100)}%` }} />
+      <div className="mt-3 h-1.5 rounded-full bg-[var(--line-soft)] overflow-hidden" aria-hidden="true">
+        <div className="h-full bg-[var(--accent-strong)]" style={{ width: `${Math.round((doneCount / steps.length) * 100)}%` }} />
       </div>
       <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
         {steps.map((step) => (
           <li key={step.key}>
             <Link to={step.to} data-testid={`setup-step-${step.key}`}
                   className={`flex items-start gap-3 p-3 rounded-lg border transition ${step.done
-                    ? "border-[#E8E6E1] bg-[#FAF9F6]" : "border-[#E8E6E1] bg-white hover:border-[#76705E]"}`}>
+                    ? "border-[var(--line)] bg-[var(--surface-2)]" : "border-[var(--line)] bg-white hover:border-[var(--accent-strong)]"}`}>
               {step.done
-                ? <CheckCircle size={18} weight="fill" className="text-[#1D633E] shrink-0 mt-0.5" aria-hidden="true" />
-                : <Circle size={18} className="text-[#6E6A63] shrink-0 mt-0.5" aria-hidden="true" />}
+                ? <CheckCircle size={18} weight="fill" className="text-[var(--success)] shrink-0 mt-0.5" aria-hidden="true" />
+                : <Circle size={18} className="text-[var(--ink-3)] shrink-0 mt-0.5" aria-hidden="true" />}
               <span className="min-w-0">
-                <span className={`block text-sm font-semibold ${step.done ? "text-[#6E6A63] line-through" : "text-[#1A1A1A]"}`}>
+                <span className={`block text-sm font-semibold ${step.done ? "text-[var(--ink-3)] line-through" : "text-[var(--ink)]"}`}>
                   {step.label}
                   {step.done && <span className="sr-only"> (done)</span>}
                 </span>
-                <span className="block text-xs text-[#6E6A63]">{step.hint}</span>
+                <span className="block text-xs text-[var(--ink-3)]">{step.hint}</span>
               </span>
             </Link>
           </li>

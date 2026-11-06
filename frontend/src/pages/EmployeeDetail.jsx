@@ -187,7 +187,7 @@ export default function EmployeeDetail() {
       <div className="space-y-4" data-testid="emp-detail-loading">
         <div className="skeleton h-8 w-48" />
         <div className="skeleton h-32 w-full" />
-        {err && <p className="text-sm text-[#FF2A00]">{err}</p>}
+        {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
       </div>
     );
   }
@@ -197,17 +197,17 @@ export default function EmployeeDetail() {
 
   return (
     <div className="space-y-8 pb-16" data-testid="emp-detail">
-      <Link to="/employees" className="inline-flex items-center gap-1 text-sm text-[#5C5C5C] hover:text-[#0A0A0A]">
+      <Link to="/employees" className="inline-flex items-center gap-1 text-sm text-[var(--ink-2)] hover:text-[var(--ink)]">
         <ArrowLeft size={14} /> All employees
       </Link>
 
       {/* Header */}
-      <div className="border border-[#E5E5E5] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
+      <div className="border border-[var(--line)] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
         <div className="flex items-start gap-5 flex-1 min-w-[280px]">
           {emp.photo ? (
-            <img src={emp.photo} alt="" className="w-20 h-20 object-cover ring-1 ring-[#E5E5E5]" />
+            <img src={emp.photo} alt="" className="w-20 h-20 object-cover ring-1 ring-[var(--line)]" />
           ) : (
-            <div className="w-20 h-20 bg-[#0A0A0A] text-white flex items-center justify-center font-display font-bold text-3xl">
+            <div className="w-20 h-20 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-3xl">
               {(emp.first_name || "?").slice(0, 1).toUpperCase()}
             </div>
           )}
@@ -220,7 +220,7 @@ export default function EmployeeDetail() {
             <h1 className="font-display font-bold tracking-tighter text-3xl">
               {emp.first_name} {emp.last_name}
             </h1>
-            <div className="mt-2 text-sm text-[#5C5C5C]">
+            <div className="mt-2 text-sm text-[var(--ink-2)]">
               {emp.designation || "—"} · {emp.department}
               {emp.joining_date && <> · joined {formatDate(emp.joining_date)}</>}
             </div>
@@ -236,7 +236,7 @@ export default function EmployeeDetail() {
       </div>
 
       {err && (
-        <div className="border border-[#FF2A00] bg-[#FFF5F3] p-3 text-sm text-[#FF2A00] flex items-center gap-2">
+        <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)] flex items-center gap-2">
           <ShieldWarning size={16} /> {err}
         </div>
       )}
@@ -257,7 +257,7 @@ export default function EmployeeDetail() {
             <FileText size={14} /> Add document
           </button>
           {canDelete && (
-            <button onClick={remove} className="btn-ghost ml-auto" style={{ color: "#FF2A00", borderColor: "#FF2A00" }}>
+            <button onClick={remove} className="btn-ghost ml-auto" style={{ color: "#B3261E", borderColor: "#B3261E" }}>
               <UserMinus size={14} /> Terminate
             </button>
           )}
@@ -265,14 +265,14 @@ export default function EmployeeDetail() {
       )}
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-[#E5E5E5]">
+      <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
         {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             data-testid={`emp-tab-${t.replace(/[\s&]/g, "-")}`}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
-              tab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === t ? "border-[var(--accent)] text-[var(--accent-strong)]" : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
             }`}
           >
             {t}
@@ -345,7 +345,7 @@ export default function EmployeeDetail() {
                 <input disabled={!canEdit} className="input-flat" value={emp.pincode || ""} onChange={(e) => patch(() => ({ pincode: e.target.value }))} />
               </Row>
             </div>
-            <div className="border-t border-[#F0F0F0] pt-4 mt-2">
+            <div className="border-t border-[var(--line-soft)] pt-4 mt-2">
               <div className="overline mb-3">EMERGENCY CONTACT</div>
               <div className="grid grid-cols-3 gap-3">
                 <Row label="Name">
@@ -420,7 +420,7 @@ export default function EmployeeDetail() {
                 <input disabled={!canPayrollWrite} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
-            <div className="border-t border-[#0A0A0A] mt-2 pt-3 flex items-center justify-between">
+            <div className="border-t border-[var(--ink)] mt-2 pt-3 flex items-center justify-between">
               <div className="font-display font-bold">Gross</div>
               <div className="font-mono font-bold">{fmt(s.gross_monthly)}</div>
             </div>
@@ -432,14 +432,14 @@ export default function EmployeeDetail() {
                 <input disabled={!canPayrollWrite} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
-            <div className="border-t border-[#0A0A0A] mt-2 pt-3 flex items-center justify-between">
+            <div className="border-t border-[var(--ink)] mt-2 pt-3 flex items-center justify-between">
               <div className="font-display font-bold">Total deductions</div>
               <div className="font-mono font-bold">{fmt(s.total_deductions)}</div>
             </div>
-            <div className="mt-3 border border-[#0A0A0A] p-4 bg-[#FAFAFA]">
+            <div className="mt-3 border border-[var(--ink)] p-4 bg-[var(--surface-2)]">
               <div className="overline mb-1">NET / MONTH</div>
               <div className="font-display font-bold text-3xl tracking-tighter accent-blue">{fmt(s.net_monthly)}</div>
-              <div className="text-xs text-[#5C5C5C] mt-1">CTC · {fmt(s.ctc_annual)} / year</div>
+              <div className="text-xs text-[var(--ink-2)] mt-1">CTC · {fmt(s.ctc_annual)} / year</div>
             </div>
           </Card>
 
@@ -480,17 +480,17 @@ export default function EmployeeDetail() {
               actions={canEdit && <button onClick={addDocument} className="btn-ghost text-xs"><Plus size={12} /> Add</button>}
               testid="emp-tab-documents">
           {(emp.documents || []).length === 0 ? (
-            <p className="text-sm text-[#5C5C5C]">No documents yet. Add offer letter, Aadhaar, PAN, contract etc.</p>
+            <p className="text-sm text-[var(--ink-2)]">No documents yet. Add offer letter, Aadhaar, PAN, contract etc.</p>
           ) : (
             <div className="space-y-2">
               {(emp.documents || []).map((d) => {
                 const safeUrl = safeExternalUrl(d.url);
                 return (
-                <div key={d.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition">
+                <div key={d.id} className="border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-sm">{d.label}</div>
-                    <div className="text-xs text-[#5C5C5C] font-mono truncate">{d.url}</div>
-                    <div className="text-[10px] text-[#6E6A63] font-mono tracking-widest uppercase mt-1">
+                    <div className="text-xs text-[var(--ink-2)] font-mono truncate">{d.url}</div>
+                    <div className="text-[10px] text-[var(--ink-3)] font-mono tracking-widest uppercase mt-1">
                       UPLOADED {formatDate(d.uploaded_at)} · {d.uploaded_by || "—"}
                     </div>
                   </div>
@@ -505,7 +505,7 @@ export default function EmployeeDetail() {
                         <button onClick={() => editDocument(d)} className="hover:scale-110 transition p-2" aria-label="Edit document">
                           <PencilSimple size={14} />
                         </button>
-                        <button onClick={() => removeDocument(d.id)} className="text-[#FF2A00] hover:scale-110 transition p-2" aria-label="Remove document">
+                        <button onClick={() => removeDocument(d.id)} className="text-[var(--danger)] hover:scale-110 transition p-2" aria-label="Remove document">
                           <Trash size={14} />
                         </button>
                       </>
@@ -533,28 +533,28 @@ export default function EmployeeDetail() {
                 <input type="number" min={0} max={100} className="input-flat" placeholder="Enter score (0-100)" value={perf.current_kpi_score ?? ""} onChange={(e) => patch(() => ({ current_kpi_score: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
             )}
-            <div className="mt-3 h-2 bg-[#F0F0F0] relative">
-              <div className="h-2 bg-[#8B7F6A]" style={{ width: `${Math.min(100, Math.max(0, perf.current_kpi_score || 0))}%` }} />
+            <div className="mt-3 h-2 bg-[var(--line-soft)] relative">
+              <div className="h-2 bg-[var(--accent)]" style={{ width: `${Math.min(100, Math.max(0, perf.current_kpi_score || 0))}%` }} />
             </div>
           </Card>
 
           <Card title={`WARNINGS · ${(perf.warnings || []).length}`}
                 actions={canEdit && <button onClick={addWarning} className="btn-ghost text-xs"><Plus size={12} /> Log</button>}>
             {(perf.warnings || []).length === 0 ? (
-              <p className="text-sm text-[#5C5C5C]">No warnings recorded.</p>
+              <p className="text-sm text-[var(--ink-2)]">No warnings recorded.</p>
             ) : (
               <div className="space-y-2">
                 {[...(perf.warnings || [])].reverse().map((w) => (
-                  <div key={w.id} className="border-l-2 border-[#FF2A00] pl-3 py-1">
+                  <div key={w.id} className="border-l-2 border-[var(--danger)] pl-3 py-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-semibold text-sm">{w.reason}</div>
                       {canEdit && <div className="flex gap-1 shrink-0">
                         <button type="button" className="btn-ghost p-1" onClick={() => editWarning(w)} aria-label="Edit warning"><PencilSimple size={12} /></button>
-                        <button type="button" className="btn-ghost p-1 text-[#B4001C]" onClick={() => deleteWarning(w)} aria-label="Delete warning"><Trash size={12} /></button>
+                        <button type="button" className="btn-ghost p-1 text-[var(--danger)]" onClick={() => deleteWarning(w)} aria-label="Delete warning"><Trash size={12} /></button>
                       </div>}
                     </div>
-                    {w.note && <p className="text-xs text-[#5C5C5C] mt-1">{w.note}</p>}
-                    <div className="text-[10px] font-mono tracking-widest uppercase text-[#6E6A63] mt-1">
+                    {w.note && <p className="text-xs text-[var(--ink-2)] mt-1">{w.note}</p>}
+                    <div className="text-[10px] font-mono tracking-widest uppercase text-[var(--ink-3)] mt-1">
                       {formatDate(w.at)} · {w.by || "—"}
                     </div>
                   </div>
@@ -566,20 +566,20 @@ export default function EmployeeDetail() {
           <Card title={`REWARDS · ${(perf.rewards || []).length}`}
                 actions={canEdit && <button onClick={addReward} className="btn-ghost text-xs"><Plus size={12} /> Log</button>}>
             {(perf.rewards || []).length === 0 ? (
-              <p className="text-sm text-[#5C5C5C]">No rewards yet.</p>
+              <p className="text-sm text-[var(--ink-2)]">No rewards yet.</p>
             ) : (
               <div className="space-y-2">
                 {[...(perf.rewards || [])].reverse().map((r) => (
-                  <div key={r.id} className="border-l-2 border-[#1D633E] pl-3 py-1">
+                  <div key={r.id} className="border-l-2 border-[var(--success)] pl-3 py-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-semibold text-sm">{r.title}</div>
                       {canEdit && <div className="flex gap-1 shrink-0">
                         <button type="button" className="btn-ghost p-1" onClick={() => editReward(r)} aria-label="Edit reward"><PencilSimple size={12} /></button>
-                        <button type="button" className="btn-ghost p-1 text-[#B4001C]" onClick={() => deleteReward(r)} aria-label="Delete reward"><Trash size={12} /></button>
+                        <button type="button" className="btn-ghost p-1 text-[var(--danger)]" onClick={() => deleteReward(r)} aria-label="Delete reward"><Trash size={12} /></button>
                       </div>}
                     </div>
-                    {r.note && <p className="text-xs text-[#5C5C5C] mt-1">{r.note}</p>}
-                    <div className="text-[10px] font-mono tracking-widest uppercase text-[#6E6A63] mt-1">
+                    {r.note && <p className="text-xs text-[var(--ink-2)] mt-1">{r.note}</p>}
+                    <div className="text-[10px] font-mono tracking-widest uppercase text-[var(--ink-3)] mt-1">
                       {formatDate(r.at)} · {r.by || "—"}
                     </div>
                   </div>
@@ -695,12 +695,12 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
             <input type="number" className="input-flat w-full text-right font-mono" value={extras[k]} onChange={(e) => setExtras({ ...extras, [k]: Number(e.target.value) || 0 })} data-testid={`extra-${k}`} />
             {k === "advances_recovered" && (
               advance.outstanding > 0 ? (
-                <button type="button" className="mt-1 text-[11px] text-[#76705E] underline"
+                <button type="button" className="mt-1 text-[11px] text-[var(--accent-strong)] underline"
                         onClick={() => setExtras({ ...extras, advances_recovered: advance.suggested_recovery || advance.outstanding })}
                         data-testid="use-suggested-recovery">
                   {fmt(advance.outstanding)} outstanding · use {fmt(advance.suggested_recovery || advance.outstanding)}
                 </button>
-              ) : <div className="mt-1 text-[11px] text-[#6E6A63]">No advance outstanding</div>
+              ) : <div className="mt-1 text-[11px] text-[var(--ink-3)]">No advance outstanding</div>
             )}
           </label>
         ))}
@@ -709,9 +709,9 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
       {b && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
           <StatBox label="Gross" value={fmt(b.gross)} />
-          <StatBox label="Deductions" value={fmt(b.deductions_total)} tint="#B4001C" />
-          <StatBox label="Additions" value={fmt(b.additions)} tint="#1D633E" />
-          <StatBox label="Net payable" value={fmt(b.net)} tint="#8B7F6A" big />
+          <StatBox label="Deductions" value={fmt(b.deductions_total)} tint="#B3261E" />
+          <StatBox label="Additions" value={fmt(b.additions)} tint="#1E6A45" />
+          <StatBox label="Net payable" value={fmt(b.net)} tint="#9C4A28" big />
         </div>
       )}
       {b && <SalaryWorking b={b} />}
@@ -764,10 +764,10 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
           {paid ? "Already paid" : busy ? "Processing…" : `Pay ${fmt(b?.net || netMonthly)}`}
         </button>
       </div>
-      {msg && <div className="mt-3 text-sm text-[#76705E]" data-testid="pay-msg">{msg}</div>}
+      {msg && <div className="mt-3 text-sm text-[var(--accent-strong)]" data-testid="pay-msg">{msg}</div>}
       {paid && (
         <div className="mt-2 flex items-center justify-between gap-3" data-testid="paid-badge">
-          <div className="text-xs text-[#5C5C5C] font-mono">
+          <div className="text-xs text-[var(--ink-2)] font-mono">
             PAID ON {formatDate(paid.paid_at)} · NET {fmt(paid.net)} · Run {paid.id}
           </div>
           <a
@@ -784,9 +784,9 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
   );
 }
 
-function StatBox({ label, value, tint = "#0A0A0A", big }) {
+function StatBox({ label, value, tint = "#18181B", big }) {
   return (
-    <div className="border border-[#E5E5E5] p-3">
+    <div className="border border-[var(--line)] p-3">
       <div className="overline">{label}</div>
       <div className={`font-mono font-bold ${big ? "text-2xl" : "text-lg"}`} style={{ color: tint }}>{value}</div>
     </div>
@@ -874,14 +874,14 @@ function ErpAccessTab({ employeeId, isAdmin }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="emp-tab-erp-access">
       <Card title="ERP LOGIN" testid="erp-access-card">
-        {err && <div className="text-xs text-[#B22B22] border border-[#B22B22] bg-[#FCEEEC] p-2">{String(err)}</div>}
+        {err && <div className="text-xs text-[var(--danger)] border border-[var(--danger)] bg-[var(--danger-soft)] p-2">{String(err)}</div>}
         {!acct && !err && <div className="skeleton h-24 w-full" />}
         {acct && acct.linked && (
           <div className="space-y-3">
             <Row label="Email / Login"><div className="font-mono text-sm">{acct.user.email}</div></Row>
             <Row label="Employee ID"><div className="font-mono text-sm">{acct.user.employee_id || "—"}</div></Row>
             <Row label="Status">
-              <span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${acct.user.is_active !== false ? "bg-[#EFF7EF] text-[#1D633E]" : "bg-[#FCEEEC] text-[#B22B22]"}`}>
+              <span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${acct.user.is_active !== false ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--danger-soft)] text-[var(--danger)]"}`}>
                 {acct.user.is_active !== false ? "active" : "deactivated"}
               </span>
             </Row>
@@ -899,7 +899,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
                 <button onClick={toggleActive} className="btn-ghost text-xs" data-testid="erp-toggle-active">
                   {acct.user.is_active !== false ? "Deactivate login" : "Reactivate login"}
                 </button>
-                <div className="border-t border-[#E5E5E5] pt-3 mt-1 space-y-2">
+                <div className="border-t border-[var(--line)] pt-3 mt-1 space-y-2">
                   <div className="overline flex items-center gap-1.5"><Key size={12} /> Reset password</div>
                   <div className="flex items-center gap-2">
                     <input type="password" minLength={8} maxLength={128} autoComplete="new-password"
@@ -910,18 +910,18 @@ function ErpAccessTab({ employeeId, isAdmin }) {
                             disabled={!/^(?=.*[A-Za-z])(?=.*\d).{8,128}$/.test(newPass)}
                             className="btn-ghost text-xs disabled:opacity-40" data-testid="erp-reset-password-btn">Set</button>
                   </div>
-                  {pwMsg && <div className="text-[11px] text-[#76705E]" data-testid="erp-reset-password-msg">{pwMsg}</div>}
+                  {pwMsg && <div className="text-[11px] text-[var(--accent-strong)]" data-testid="erp-reset-password-msg">{pwMsg}</div>}
                 </div>
               </>
             )}
           </div>
         )}
         {acct && !acct.linked && !isAdmin && (
-          <p className="text-sm text-[#5C5C5C]">No ERP login linked. Ask an Admin to create one.</p>
+          <p className="text-sm text-[var(--ink-2)]">No ERP login linked. Ask an Admin to create one.</p>
         )}
         {acct && !acct.linked && isAdmin && (
           <form onSubmit={createAccount} className="space-y-3" data-testid="erp-create-form">
-            <p className="text-xs text-[#5C5C5C]">
+            <p className="text-xs text-[var(--ink-2)]">
               No ERP login yet — create one so this employee can sign in with role-based access.
             </p>
             <Row label="Email (defaults to employee email)">
@@ -950,7 +950,7 @@ function ErpAccessTab({ employeeId, isAdmin }) {
         )}
       </Card>
       <Card title="HOW ACCESS WORKS">
-        <ul className="text-xs text-[#5C5C5C] space-y-2 list-disc pl-4">
+        <ul className="text-xs text-[var(--ink-2)] space-y-2 list-disc pl-4">
           <li>Each employee can have one ERP login tied to their Employee ID.</li>
           <li>The role controls what they can see and do — enforced by the server on every request.</li>
           <li>Deactivating a login instantly ends all of that person's sessions.</li>
@@ -1046,8 +1046,8 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       </div>
 
       {open && (
-        <div className="border border-[#0A0A0A] p-4 mb-4 space-y-3" data-testid="salary-revision-form">
-          {correctingId && <div className="text-xs border border-[#B87500] bg-[#FFF6E5] p-2">
+        <div className="border border-[var(--ink)] p-4 mb-4 space-y-3" data-testid="salary-revision-form">
+          {correctingId && <div className="text-xs border border-[var(--warning)] bg-[var(--warning-soft)] p-2">
             This correction preserves the original revision as superseded and creates a replacement.
           </div>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1082,12 +1082,12 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
               </label>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-4 border-t border-[#E5E5E5] pt-3">
+          <div className="flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-3">
             <div><span className="overline">New gross</span> <span className="font-mono font-bold ml-1">{fmt(previewGross)}</span></div>
             <div><span className="overline">New net</span> <span className="font-mono font-bold ml-1 accent-blue">{fmt(previewNet)}</span></div>
             <div>
               <span className="overline">Change</span>{" "}
-              <span className={`font-mono font-bold ml-1 ${deltaNet >= 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`} data-testid="salary-revision-delta">
+              <span className={`font-mono font-bold ml-1 ${deltaNet >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"}`} data-testid="salary-revision-delta">
                 {deltaNet >= 0 ? "+" : ""}{fmt(deltaNet)}
               </span>
             </div>
@@ -1098,27 +1098,27 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
               </button>
             </div>
           </div>
-          {msg && <div className="text-xs text-[#B4001C]">{msg}</div>}
+          {msg && <div className="text-xs text-[var(--danger)]">{msg}</div>}
         </div>
       )}
 
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : history.length === 0 ? (
-        <div className="text-xs text-[#6E6A63] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="salary-history-empty">
+        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)]" data-testid="salary-history-empty">
           No revisions recorded yet. Record an increment to start a history — past payslips remain unchanged.
         </div>
       ) : (
         <div className="space-y-2" data-testid="salary-history-list">
           {history.map((h) => (
-            <div key={h.id} className={`flex items-center justify-between border border-[#E5E5E5] px-3 py-2 ${h.superseded_at ? "bg-[#F3F1EC] opacity-70" : "bg-[#FAFAFA]"}`} data-testid={`salary-history-${h.id}`}>
+            <div key={h.id} className={`flex items-center justify-between border border-[var(--line)] px-3 py-2 ${h.superseded_at ? "bg-[var(--hover)] opacity-70" : "bg-[var(--surface-2)]"}`} data-testid={`salary-history-${h.id}`}>
               <div className="min-w-0">
                 <div className="text-sm font-semibold flex items-center gap-2">
-                  <ClockCounterClockwise size={13} className="text-[#76705E]" />
+                  <ClockCounterClockwise size={13} className="text-[var(--accent-strong)]" />
                   {h.reason || "Salary revision"}
                   {h.superseded_at && <span className="text-[9px] font-mono uppercase border px-1">Superseded</span>}
                 </div>
-                <div className="text-[11px] text-[#5C5C5C] font-mono">
+                <div className="text-[11px] text-[var(--ink-2)] font-mono">
                   Effective {formatDate(h.effective_date)} · by {h.changed_by_name || "—"}
                   {h.note ? ` · ${h.note}` : ""}
                 </div>
@@ -1130,9 +1130,9 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
                   </button>
                 )}
                 <div>
-                <div className="font-mono font-bold">{fmt(h.net_monthly)}<span className="text-[10px] text-[#6E6A63]"> net</span></div>
+                <div className="font-mono font-bold">{fmt(h.net_monthly)}<span className="text-[10px] text-[var(--ink-3)]"> net</span></div>
                 {typeof h.delta_net === "number" && (
-                  <div className={`text-[11px] font-mono ${h.delta_net >= 0 ? "text-[#1D633E]" : "text-[#B4001C]"}`}>
+                  <div className={`text-[11px] font-mono ${h.delta_net >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
                     {h.delta_net >= 0 ? "+" : ""}{fmt(h.delta_net)}
                   </div>
                 )}
@@ -1182,14 +1182,14 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : runs.length === 0 ? (
-        <div className="text-xs text-[#6E6A63] py-4 text-center border border-dashed border-[#E5E5E5]" data-testid="payment-history-empty">
+        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)]" data-testid="payment-history-empty">
           No salary payments recorded yet.
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="payment-history-table">
             <thead>
-              <tr className="text-left overline border-b border-[#E5E5E5]">
+              <tr className="text-left overline border-b border-[var(--line)]">
                 <th className="py-2 pr-3">Period</th>
                 <th className="py-2 pr-3 text-right">Net paid</th>
                 <th className="py-2 pr-3">Paid on</th>
@@ -1201,7 +1201,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
             </thead>
             <tbody>
               {runs.map((r) => (
-                <tr key={r.id} className="border-b border-[#F0F0F0]" data-testid={`payment-run-${r.id}`}>
+                <tr key={r.id} className="border-b border-[var(--line-soft)]" data-testid={`payment-run-${r.id}`}>
                   <td className="py-2 pr-3 font-mono">{MONTHS[(r.month || 1) - 1]} {r.year}</td>
                   <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(r.net)}</td>
                   <td className="py-2 pr-3 font-mono text-xs">{formatDate(r.payment_date || r.paid_at)}</td>
@@ -1209,15 +1209,15 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
                   <td className="py-2 pr-3 text-xs">{r.paid_from_account_name || "—"}{r.reference ? ` · ${r.reference}` : ""}</td>
                   <td className="py-2 pr-3">
                     <a href={`${api.defaults.baseURL}/payroll/runs/${r.id}/slip.pdf`} target="_blank" rel="noreferrer"
-                       className="text-[#76705E] hover:underline text-xs inline-flex items-center gap-1"
+                       className="text-[var(--accent-strong)] hover:underline text-xs inline-flex items-center gap-1"
                        data-testid={`payment-slip-${r.id}`}>
                       <FileText size={12} /> PDF
                     </a>
                   </td>
                   {canCorrect && <td className="py-2 pr-3">
-                    {r.status === "paid" ? <button className="btn-ghost text-xs text-[#B4001C]" onClick={() => reverse(r)}>
+                    {r.status === "paid" ? <button className="btn-ghost text-xs text-[var(--danger)]" onClick={() => reverse(r)}>
                       <ClockCounterClockwise size={12} /> Reverse
-                    </button> : <span className="text-[10px] uppercase text-[#6E6A63]">{r.status}</span>}
+                    </button> : <span className="text-[10px] uppercase text-[var(--ink-3)]">{r.status}</span>}
                   </td>}
                 </tr>
               ))}
@@ -1241,27 +1241,27 @@ function SalaryWorking({ b }) {
     ["Unpaid leave", sum.unpaid_leave], ["Absent", sum.absent], ["Weekly off", sum.week_off], ["Holiday", sum.holidays],
   ].filter(([, v]) => Number(v) > 0);
   return (
-    <details className="mb-4 border border-[#E8E6E1] rounded-lg bg-[#FAF9F6]" data-testid="salary-working">
+    <details className="mb-4 border border-[var(--line)] rounded-lg bg-[var(--surface-2)]" data-testid="salary-working">
       <summary className="cursor-pointer px-4 py-3 text-sm font-semibold flex items-center justify-between gap-3">
         <span>How this is calculated</span>
-        <span className="text-xs font-normal text-[#5C5C5C]">
+        <span className="text-xs font-normal text-[var(--ink-2)]">
           {b.per_day_rate ? `${money(b.per_day_rate)} per day · ${b.basis_days}-day basis` : "Salary structure"}
         </span>
       </summary>
       <div className="px-4 pb-4 space-y-4 text-sm">
         {b.per_day_rate > 0 && (
-          <p className="text-[#5C5C5C]">
+          <p className="text-[var(--ink-2)]">
             Per-day rate = monthly salary {money(b.monthly_salary_used || b.basic)} ÷ {b.basis_days} days
-            = <strong className="text-[#1A1A1A]">{money(b.per_day_rate)}</strong>.
-            Paid days this month: <strong className="text-[#1A1A1A]">{b.payable_days}</strong>
-            {Number(b.lop_days) > 0 && <> · loss-of-pay days: <strong className="text-[#B4001C]">{b.lop_days}</strong></>}.
+            = <strong className="text-[var(--ink)]">{money(b.per_day_rate)}</strong>.
+            Paid days this month: <strong className="text-[var(--ink)]">{b.payable_days}</strong>
+            {Number(b.lop_days) > 0 && <> · loss-of-pay days: <strong className="text-[var(--danger)]">{b.lop_days}</strong></>}.
             {Number(b.monthly_paid_leave_allowance) > 0 && <> {b.paid_leave_allowance_used || 0} of {b.monthly_paid_leave_allowance} paid leave(s) used.</>}
           </p>
         )}
         {counts.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {counts.map(([k, v]) => (
-              <span key={k} className="text-xs px-2 py-1 rounded bg-white border border-[#E8E6E1]">{k}: <strong>{v}</strong></span>
+              <span key={k} className="text-xs px-2 py-1 rounded bg-white border border-[var(--line)]">{k}: <strong>{v}</strong></span>
             ))}
           </div>
         )}
@@ -1278,24 +1278,24 @@ function SalaryWorking({ b }) {
         {lines.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead><tr className="text-left text-[#5C5C5C] border-b border-[#E8E6E1]">
+              <thead><tr className="text-left text-[var(--ink-2)] border-b border-[var(--line)]">
                 <th className="py-1.5 pr-3 font-semibold">Date</th><th className="py-1.5 pr-3 font-semibold">Reason</th>
                 <th className="py-1.5 text-right font-semibold">Deducted</th>
               </tr></thead>
               <tbody>
                 {lines.map((l, i) => (
-                  <tr key={`${l.date}-${l.kind}-${i}`} className="border-b border-[#F0EEE9]">
+                  <tr key={`${l.date}-${l.kind}-${i}`} className="border-b border-[var(--line-soft)]">
                     <td className="py-1.5 pr-3 font-mono whitespace-nowrap">{formatDate(l.date)}</td>
                     <td className="py-1.5 pr-3">{l.reason}</td>
-                    <td className="py-1.5 text-right font-mono text-[#B4001C]">− {money(l.amount)}</td>
+                    <td className="py-1.5 text-right font-mono text-[var(--danger)]">− {money(l.amount)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="text-[11px] text-[#6E6A63] mt-2">Day-wise reasons come from attendance. Fix a wrong day in Attendance and the amount updates here.</p>
+            <p className="text-[11px] text-[var(--ink-3)] mt-2">Day-wise reasons come from attendance. Fix a wrong day in Attendance and the amount updates here.</p>
           </div>
         ) : (
-          <p className="text-xs text-[#1D633E]">No attendance deductions this month.</p>
+          <p className="text-xs text-[var(--success)]">No attendance deductions this month.</p>
         )}
       </div>
     </details>
@@ -1304,9 +1304,9 @@ function SalaryWorking({ b }) {
 
 function Item({ label, value, good, bad, strong }) {
   return (
-    <div className={`flex justify-between gap-3 py-1 ${strong ? "border-t border-[#E8E6E1] mt-1 pt-2 font-semibold" : ""}`}>
-      <span className="text-[#5C5C5C]">{label}</span>
-      <span className={`font-mono ${good ? "text-[#1D633E]" : bad ? "text-[#B4001C]" : "text-[#1A1A1A]"}`}>{value}</span>
+    <div className={`flex justify-between gap-3 py-1 ${strong ? "border-t border-[var(--line)] mt-1 pt-2 font-semibold" : ""}`}>
+      <span className="text-[var(--ink-2)]">{label}</span>
+      <span className={`font-mono ${good ? "text-[var(--success)]" : bad ? "text-[var(--danger)]" : "text-[var(--ink)]"}`}>{value}</span>
     </div>
   );
 }

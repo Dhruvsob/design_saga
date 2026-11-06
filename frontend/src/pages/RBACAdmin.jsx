@@ -109,7 +109,7 @@ export default function RBACAdmin() {
     <div className="space-y-8" data-testid="rbac-page">
       <PageHero
         eyebrow="ADMIN / TEAM & ROLES"
-        title="Who sees what."
+        title="Team & roles"
         kicker="Role-based access control. Admin-only zone."
         count={users.length}
       >
@@ -122,7 +122,7 @@ export default function RBACAdmin() {
       </PageHero>
 
       {error && (
-        <div className="border border-[#B22B22] bg-[#FCEEEC] p-4 text-sm text-[#B22B22] flex items-center gap-2" data-testid="rbac-error">
+        <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)] flex items-center gap-2" data-testid="rbac-error">
           <Warning size={16} /> {error}
         </div>
       )}
@@ -131,17 +131,17 @@ export default function RBACAdmin() {
 
       {/* Pending approvals */}
       {pending.length > 0 && (
-        <div className="card-flat p-0 overflow-hidden border-l-4 border-l-[#F0A93A]" data-testid="pending-section">
+        <div className="card-flat p-0 overflow-hidden border-l-4 border-l-[var(--warning)]" data-testid="pending-section">
           <div className="p-6 pb-4 flex items-center justify-between">
             <div>
-              <div className="overline text-[#B87500]">PENDING APPROVALS · {pending.length}</div>
-              <div className="text-xs text-[#5C5C5C] mt-1">
+              <div className="overline text-[var(--warning)]">PENDING APPROVALS · {pending.length}</div>
+              <div className="text-xs text-[var(--ink-2)] mt-1">
                 New Google sign-ins waiting for you to grant access.
               </div>
             </div>
           </div>
           <div className="overflow-x-auto"><table className="w-full">
-            <thead className="bg-[#FFF8EC] border-y border-[#F0DDB8] text-left">
+            <thead className="bg-[var(--warning-soft)] border-y border-[#F0DDB8] text-left">
               <tr><Th>Name</Th><Th>Email</Th><Th>Assign role</Th><Th className="text-right">Action</Th></tr>
             </thead>
             <tbody>
@@ -159,7 +159,7 @@ export default function RBACAdmin() {
           <div className="overline">TEAM MEMBERS · {users.length}</div>
         </div>
         <div className="overflow-x-auto"><table className="w-full" data-testid="rbac-users-table">
-          <thead className="bg-[#FAFAFA] border-y border-[#E5E5E5]">
+          <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]">
             <tr className="text-left">
               <Th>Name</Th><Th>Employee ID</Th><Th>Email</Th><Th>Role</Th>
               <Th>Status</Th><Th>Joined</Th><Th className="text-right">Actions</Th>
@@ -170,13 +170,13 @@ export default function RBACAdmin() {
               const isMe = u.user_id === me?.user_id;
               const isSaving = savingId === u.user_id;
               return (
-                <tr key={u.user_id} className="row-hover border-b border-[#F0F0F0]">
+                <tr key={u.user_id} className="row-hover border-b border-[var(--line-soft)]">
                   <Td>
                     <div className="flex items-center gap-3">
                       {u.picture ? (
-                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[#E5E5E5]" />
+                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
                       ) : (
-                        <div className="w-8 h-8 bg-[#0A0A0A] text-white flex items-center justify-center font-display font-bold text-xs">
+                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
                           {(u.name || "?").slice(0, 1).toUpperCase()}
                         </div>
                       )}
@@ -204,7 +204,7 @@ export default function RBACAdmin() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <StatusPill status={u.approval_status || "approved"} active={u.is_active !== false} />
                       {u.is_locked && (
-                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FFF4E5] text-[#B87500]" data-testid={`locked-${u.user_id}`}>locked</span>
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--warning-soft)] text-[var(--warning)]" data-testid={`locked-${u.user_id}`}>locked</span>
                       )}
                     </div>
                   </Td>
@@ -214,7 +214,7 @@ export default function RBACAdmin() {
                       <button
                         onClick={() => unlockUser(u.user_id)}
                         disabled={isSaving}
-                        className={`btn-ghost text-xs ${u.is_locked ? "text-[#B87500]" : ""}`}
+                        className={`btn-ghost text-xs ${u.is_locked ? "text-[var(--warning)]" : ""}`}
                         data-testid={`unlock-${u.user_id}`}
                         title="Clear login lockout"
                       ><LockKeyOpen size={12} /> Unlock</button>
@@ -228,7 +228,7 @@ export default function RBACAdmin() {
               );
             })}
             {users.length === 0 && (
-              <tr><td colSpan={7} className="p-8 text-center text-[#5C5C5C]">No users yet.</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-[var(--ink-2)]">No users yet.</td></tr>
             )}
           </tbody>
         </table></div>
@@ -247,34 +247,34 @@ export default function RBACAdmin() {
         <div className="flex items-center justify-between mb-2">
           <div>
             <div className="overline">ROLES &amp; PERMISSIONS</div>
-            <div className="text-xs text-[#5C5C5C] mt-1">
+            <div className="text-xs text-[var(--ink-2)] mt-1">
               Choose exactly what each role can View, Create, Edit or Delete. Changes apply to your studio only.
             </div>
           </div>
           <span className="overline">{roles.length} ROLES</span>
         </div>
-        <div className="border border-[#E5E5E5] divide-y divide-[#F0F0F0]">
+        <div className="border border-[var(--line)] divide-y divide-[var(--line-soft)]">
           {roles.map((r) => {
             const isOpen = expandedRole === r.name;
             return (
               <div key={r.name}>
                 <button
                   onClick={() => setExpandedRole(isOpen ? null : r.name)}
-                  className="w-full text-left p-4 hover:bg-[#FAFAFA] transition flex items-center justify-between"
+                  className="w-full text-left p-4 hover:bg-[var(--surface-2)] transition flex items-center justify-between"
                   data-testid={`role-row-${r.name}`}
                 >
                   <div className="flex items-center gap-4 min-w-0">
                     <div className="font-display font-bold tracking-tight text-lg w-40 flex-shrink-0">{r.name}</div>
-                    <div className="text-sm text-[#5C5C5C] truncate">{ROLE_DESCRIPTIONS[r.name] || "—"}</div>
+                    <div className="text-sm text-[var(--ink-2)] truncate">{ROLE_DESCRIPTIONS[r.name] || "—"}</div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     {r.customized && (
                       <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EAF1FF] text-[#2B5FB4]">customized</span>
                     )}
                     {!r.editable && (
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#5F5A4B]">locked</span>
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">locked</span>
                     )}
-                    <span className="font-mono text-xs tabular-nums text-[#5C5C5C]">{r.permissions.length} grants</span>
+                    <span className="font-mono text-xs tabular-nums text-[var(--ink-2)]">{r.permissions.length} grants</span>
                     <CaretDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
                   </div>
                 </button>
@@ -364,8 +364,8 @@ function RolePermissionEditor({ role, catalog, onSaved }) {
 
   if (!role.editable) {
     return (
-      <div className="text-sm text-[#5C5C5C] flex items-center gap-2">
-        <ShieldCheck size={16} className="text-[#76705E]" />
+      <div className="text-sm text-[var(--ink-2)] flex items-center gap-2">
+        <ShieldCheck size={16} className="text-[var(--accent-strong)]" />
         This role has full, fixed access and cannot be edited.
       </div>
     );
@@ -373,9 +373,9 @@ function RolePermissionEditor({ role, catalog, onSaved }) {
 
   return (
     <div className="space-y-3" data-testid={`perm-editor-${role.name}`}>
-      <div className="overflow-x-auto border border-[#E5E5E5]">
+      <div className="overflow-x-auto border border-[var(--line)]">
         <table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+          <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
               <th className="p-3 text-left">Module</th>
               {ACTION_COLS.map((c) => <th key={c.key} className="p-3 text-center w-16">{c.label}</th>)}
@@ -384,14 +384,14 @@ function RolePermissionEditor({ role, catalog, onSaved }) {
           </thead>
           <tbody>
             {modules.map((mod) => (
-              <tr key={mod.key} className="border-t border-[#F0F0F0]">
+              <tr key={mod.key} className="border-t border-[var(--line-soft)]">
                 <td className="p-3 font-semibold">{mod.label}</td>
                 {ACTION_COLS.map((c) => (
                   <td key={c.key} className="p-3 text-center">
                     {mod.actions.includes(c.key) ? (
                       <input
                         type="checkbox"
-                        className="w-4 h-4 accent-[#8B7F6A] cursor-pointer"
+                        className="w-4 h-4 accent-[var(--accent)] cursor-pointer"
                         checked={has(mod, c.key)}
                         onChange={() => toggle(mod, c.key)}
                         data-testid={`perm-${role.name}-${mod.key}-${c.key}`}
@@ -402,7 +402,7 @@ function RolePermissionEditor({ role, catalog, onSaved }) {
                 <td className="p-3 text-center">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 accent-[#0A0A0A] cursor-pointer"
+                    className="w-4 h-4 accent-[var(--ink)] cursor-pointer"
                     checked={allOn(mod)}
                     onChange={() => toggleAll(mod)}
                     data-testid={`perm-${role.name}-${mod.key}-all`}
@@ -434,9 +434,9 @@ function PendingRow({ u, roles, onDecide, savingId }) {
       <Td>
         <div className="flex items-center gap-3">
           {u.picture ? (
-            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[#E5E5E5]" />
+            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
           ) : (
-            <div className="w-8 h-8 bg-[#0A0A0A] text-white flex items-center justify-center font-display font-bold text-xs">
+            <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
               {(u.name || "?").slice(0, 1).toUpperCase()}
             </div>
           )}
@@ -458,7 +458,7 @@ function PendingRow({ u, roles, onDecide, savingId }) {
           ><X size={11} /> Reject</button>
           <button
             disabled={isSaving} onClick={() => onDecide(u.user_id, "approve", role)}
-            className="btn-primary bg-[#1D633E] text-xs" data-testid={`approve-${u.user_id}`}
+            className="btn-primary bg-[var(--success)] text-xs" data-testid={`approve-${u.user_id}`}
           ><Check size={11} /> Approve</button>
         </div>
       </Td>
@@ -469,13 +469,13 @@ function PendingRow({ u, roles, onDecide, savingId }) {
 /* ---------- Status pill ---------- */
 function StatusPill({ status, active }) {
   if (!active || status === "rejected") return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FCEEEC] text-[#B22B22]">deactivated</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--danger-soft)] text-[var(--danger)]">deactivated</span>
   );
   if (status === "pending") return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FFF4E5] text-[#7A4E1A]">pending</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--warning-soft)] text-[var(--warning)]">pending</span>
   );
   return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EFF7EF] text-[#1D633E]">approved</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--success-soft)] text-[var(--success)]">approved</span>
   );
 }
 
@@ -520,7 +520,7 @@ function CreateUserForm({ roles, onDone }) {
           Approve immediately
         </label>
       </div>
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
       <button disabled={busy} className="btn-primary" data-testid="cu-submit">
         {busy ? "Creating…" : "Create user"}
       </button>
@@ -545,20 +545,20 @@ function ResetPasswordModal({ userId, user, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="bg-white p-6 max-w-md w-full border border-[#E5E5E5] space-y-3" data-testid="reset-pwd-modal">
+        className="bg-white p-6 max-w-md w-full border border-[var(--line)] space-y-3" data-testid="reset-pwd-modal">
         <div className="overline">RESET PASSWORD</div>
         <div className="font-display font-bold tracking-tight text-2xl">{user?.name || "User"}</div>
-        <div className="text-xs text-[#5C5C5C]">{user?.email} · {user?.employee_id}</div>
+        <div className="text-xs text-[var(--ink-2)]">{user?.email} · {user?.employee_id}</div>
         <input required minLength={8} maxLength={128} type="password" autoComplete="new-password"
           pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
           title="Use at least 8 characters with at least one letter and one digit"
           data-testid="reset-pwd-input" className="input-flat w-full"
           placeholder="New password (letters + digits, min 8)"
           value={pw} onChange={(e) => setPw(e.target.value)} />
-        <p className="text-xs text-[#6E6A63]">
+        <p className="text-xs text-[var(--ink-3)]">
           All active sessions will be logged out. An existing app PIN will also be cleared so the user can sign in and set a new one.
         </p>
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy} className="btn-primary" data-testid="reset-pwd-submit">

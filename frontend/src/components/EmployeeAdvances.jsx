@@ -71,15 +71,15 @@ export default function EmployeeAdvances({ employeeId, canWrite, onChanged }) {
     }
   };
 
-  if (!data) return <div className="card-flat text-sm text-[#6E6A63]">Loading advances…</div>;
+  if (!data) return <div className="card-flat text-sm text-[var(--ink-3)]">Loading advances…</div>;
 
   return (
     <div className="card-flat" data-testid="employee-advances">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
           <div className="overline flex items-center gap-1.5"><HandCoins size={12} /> ADVANCES</div>
-          <div className="mt-1 text-sm text-[#5C5C5C]">
-            Outstanding <strong className="text-[#1A1A1A] font-mono text-base" data-testid="advance-outstanding">{formatINR(data.outstanding)}</strong>
+          <div className="mt-1 text-sm text-[var(--ink-2)]">
+            Outstanding <strong className="text-[var(--ink)] font-mono text-base" data-testid="advance-outstanding">{formatINR(data.outstanding)}</strong>
             {data.suggested_recovery > 0 && <> · suggested recovery this month {formatINR(data.suggested_recovery)}</>}
           </div>
         </div>
@@ -91,7 +91,7 @@ export default function EmployeeAdvances({ employeeId, canWrite, onChanged }) {
       </div>
 
       {open && (
-        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 p-4 rounded-lg bg-[#FAF9F6] border border-[#E8E6E1]" data-testid="advance-form">
+        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 p-4 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]" data-testid="advance-form">
           <label className="text-xs">Amount (Rs.)
             <input type="number" min="1" step="0.01" required className="input-flat mt-1 w-full" value={form.amount}
                    onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="advance-amount" />
@@ -129,14 +129,14 @@ export default function EmployeeAdvances({ employeeId, canWrite, onChanged }) {
         </form>
       )}
 
-      {data.error && <p className="text-sm text-[#B4001C]">{data.error}</p>}
+      {data.error && <p className="text-sm text-[var(--danger)]">{data.error}</p>}
       {data.items.length === 0 ? (
-        <p className="text-sm text-[#6E6A63]">No advances given to this employee.</p>
+        <p className="text-sm text-[var(--ink-3)]">No advances given to this employee.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-[#5C5C5C] border-b border-[#E8E6E1]">
+              <tr className="text-left text-[10px] uppercase tracking-wider text-[var(--ink-2)] border-b border-[var(--line)]">
                 <th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Reason</th>
                 <th className="py-2 pr-3 text-right">Given</th><th className="py-2 pr-3 text-right">Recovered</th>
                 <th className="py-2 pr-3 text-right">Outstanding</th><th className="py-2 pr-3">Status</th><th />
@@ -144,13 +144,13 @@ export default function EmployeeAdvances({ employeeId, canWrite, onChanged }) {
             </thead>
             <tbody>
               {data.items.map((a) => (
-                <tr key={a.id} className="border-b border-[#F0EEE9] align-top">
+                <tr key={a.id} className="border-b border-[var(--line-soft)] align-top">
                   <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">{formatDate(a.date)}</td>
                   <td className="py-2 pr-3">
                     <div>{a.reason || "—"}</div>
-                    <div className="text-[11px] text-[#6E6A63]">{a.bank_account_name}{a.monthly_recovery ? ` · ${formatINR(a.monthly_recovery)}/month` : ""}</div>
+                    <div className="text-[11px] text-[var(--ink-3)]">{a.bank_account_name}{a.monthly_recovery ? ` · ${formatINR(a.monthly_recovery)}/month` : ""}</div>
                     {(a.recoveries || []).filter((r) => r.active !== false).map((r) => (
-                      <div key={`${r.payroll_run_id}-${r.amount}`} className="text-[11px] text-[#1D633E]">
+                      <div key={`${r.payroll_run_id}-${r.amount}`} className="text-[11px] text-[var(--success)]">
                         Recovered {formatINR(r.amount)} in salary {String(r.month).padStart(2, "0")}/{r.year}
                       </div>
                     ))}
@@ -165,7 +165,7 @@ export default function EmployeeAdvances({ employeeId, canWrite, onChanged }) {
                   </td>
                   <td className="py-2 text-right">
                     {canWrite && a.status === "open" && !(a.recovered_amount > 0) && (
-                      <button type="button" className="btn-ghost text-xs text-[#B4001C]" onClick={() => cancel(a)}>Cancel</button>
+                      <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => cancel(a)}>Cancel</button>
                     )}
                   </td>
                 </tr>

@@ -91,7 +91,7 @@ export default function Clients() {
     <div className="space-y-6" data-testid="clients-page">
       <PageHero
         eyebrow="DIRECTORY / CLIENTS"
-        title="People we make things for."
+        title="Clients"
         kicker="Click a client to open their profile — projects, invoices and ledger in one place."
         count={filtered.length}
       >
@@ -124,15 +124,15 @@ export default function Clients() {
           </select>
           <input className="input-flat" placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           <textarea className="input-flat md:col-span-2" rows="2" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          {err && <div className="md:col-span-2 border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+          {err && <div className="md:col-span-2 border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
           <button className="btn-primary md:col-span-2" data-testid="client-submit">{editing ? "Save changes" : "Save client"}</button>
         </form>
       )}
 
       {/* filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 px-3 py-2 border border-[#E5E5E5] focus-within:border-[#8B7F6A] transition flex-1 max-w-sm">
-          <MagnifyingGlass size={14} className="text-[#5C5C5C]" />
+        <div className="flex items-center gap-2 px-3 py-2 border border-[var(--line)] focus-within:border-[var(--accent)] transition flex-1 max-w-sm">
+          <MagnifyingGlass size={14} className="text-[var(--ink-2)]" />
           <input className="flex-1 outline-none text-sm bg-transparent" placeholder="Search name, company, email, phone…"
             value={query} onChange={(e) => setQuery(e.target.value)} data-testid="clients-search" />
         </div>
@@ -140,33 +140,33 @@ export default function Clients() {
           <option value="">All types</option>
           {clientTypes.map((t) => <option key={t}>{t}</option>)}
         </select>
-        <label className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#5C5C5C] cursor-pointer">
+        <label className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[var(--ink-2)] cursor-pointer">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} data-testid="clients-show-archived" />
           Show archived
         </label>
       </div>
 
-      <div className="border border-[#E5E5E5]">
+      <div className="border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
               <Th>Name</Th><Th>Type</Th><Th>Company</Th><Th>Email</Th><Th>Phone</Th><Th>Added</Th><Th className="text-right">Actions</Th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan="7" className="p-6 text-center text-sm text-[#6E6A63] font-mono uppercase tracking-wider">Loading…</td></tr>
+              <tr><td colSpan="7" className="p-6 text-center text-sm text-[var(--ink-3)] font-mono uppercase tracking-wider">Loading…</td></tr>
             )}
             {!loading && filtered.map((c) => (
               <tr key={c.id}
                   onClick={() => navigate(`/clients/${c.id}`)}
-                  className={`border-b border-[#F0F0F0] hover:bg-[#FAFAFA] cursor-pointer transition ${c.archived ? "opacity-50" : ""}`}
+                  className={`border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer transition ${c.archived ? "opacity-50" : ""}`}
                   data-testid={`client-${c.id}`}>
                 <Td className="font-semibold">
                   <span className="inline-flex items-center gap-2">
                     {c.name}
-                    {c.archived && <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#6E6A63]">Archived</span>}
-                    <CaretRight size={10} className="text-[#6E6A63]" />
+                    {c.archived && <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">Archived</span>}
+                    <CaretRight size={10} className="text-[var(--ink-3)]" />
                   </span>
                 </Td>
                 <Td>{c.client_type || "—"}</Td>
@@ -187,7 +187,7 @@ export default function Clients() {
                       </button>
                     )}
                     {hasPerm("clients.update") && c.archived && (
-                      <button onClick={(e) => restore(c, e)} className="btn-ghost p-1.5 text-[#1D633E]" title="Restore" data-testid={`client-restore-${c.id}`}>
+                      <button onClick={(e) => restore(c, e)} className="btn-ghost p-1.5 text-[var(--success)]" title="Restore" data-testid={`client-restore-${c.id}`}>
                         <ArrowCounterClockwise size={13} />
                       </button>
                     )}
@@ -196,7 +196,7 @@ export default function Clients() {
               </tr>
             ))}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan="7" className="p-8 text-center text-[#5C5C5C]">
+              <tr><td colSpan="7" className="p-8 text-center text-[var(--ink-2)]">
                 <div className="overline mb-1">{query || typeFilter ? "NO MATCHES" : "NO CLIENTS YET"}</div>
                 <div className="text-sm">{query || typeFilter ? "Try a different search or filter." : "Add your first client or convert a lead from the CRM."}</div>
               </td></tr>

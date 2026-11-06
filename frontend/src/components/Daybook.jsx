@@ -177,15 +177,15 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
         <div className="card-flat" data-testid="daybook-summary-count">
           <div className="overline">{periodLabel(preset, from, to)}</div>
           <div className="font-display font-bold text-3xl">{loading ? "…" : total}</div>
-          <div className="text-xs text-[#5C5C5C]">transactions</div>
+          <div className="text-xs text-[var(--ink-2)]">transactions</div>
         </div>
         <div className="card-flat" data-testid="daybook-summary-in">
-          <div className="overline text-[#1D633E]">MONEY IN (this page)</div>
-          <div className="font-display font-bold text-3xl text-[#1D633E]">{CURRENCY(totals.inc)}</div>
+          <div className="overline text-[var(--success)]">MONEY IN (this page)</div>
+          <div className="font-display font-bold text-3xl text-[var(--success)]">{CURRENCY(totals.inc)}</div>
         </div>
         <div className="card-flat" data-testid="daybook-summary-out">
-          <div className="overline text-[#B4001C]">MONEY OUT (this page)</div>
-          <div className="font-display font-bold text-3xl text-[#B4001C]">{CURRENCY(totals.out)}</div>
+          <div className="overline text-[var(--danger)]">MONEY OUT (this page)</div>
+          <div className="font-display font-bold text-3xl text-[var(--danger)]">{CURRENCY(totals.out)}</div>
         </div>
       </div>
 
@@ -199,8 +199,8 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
               data-testid={`daybook-preset-${p.id}`}
               className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                 preset === p.id
-                  ? "bg-[#0A0A0A] text-white border-[#0A0A0A]"
-                  : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#8B7F6A]"
+                  ? "bg-[var(--ink)] text-white border-[var(--ink)]"
+                  : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent)]"
               }`}
             >
               {p.label}
@@ -210,21 +210,21 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
             onClick={() => setShowFilters((s) => !s)}
             className={`ml-auto px-3 py-1 text-xs rounded-full border flex items-center gap-1 transition-colors ${
               showFilters || activeFilterCount > 0
-                ? "bg-[#8B7F6A] text-white border-[#8B7F6A]"
-                : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#8B7F6A]"
+                ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent)]"
             }`}
             data-testid="daybook-toggle-filters"
           >
             <FunnelSimple size={12} /> Filters
             {activeFilterCount > 0 && (
-              <span className="ml-1 bg-white text-[#76705E] rounded-full px-1.5 text-[10px] font-bold">{activeFilterCount}</span>
+              <span className="ml-1 bg-white text-[var(--accent-strong)] rounded-full px-1.5 text-[10px] font-bold">{activeFilterCount}</span>
             )}
           </button>
         </div>
         {preset === "custom" && (
           <div className="flex items-center gap-2 text-xs">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input-flat" data-testid="daybook-from" />
-            <span className="text-[#6E6A63]">→</span>
+            <span className="text-[var(--ink-3)]">→</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input-flat" data-testid="daybook-to" />
           </div>
         )}
@@ -257,7 +257,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
         )}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">
-            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
+            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -278,8 +278,8 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
                 data-testid={`daybook-type-${t.id}`}
                 className={`px-3 py-1 text-xs border transition-colors ${
                   typeFilter === t.id
-                    ? "bg-[#8B7F6A] text-white border-[#8B7F6A]"
-                    : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#8B7F6A]"
+                    ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                    : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent)]"
                 }`}
               >
                 {t.label}
@@ -290,9 +290,9 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
       </div>
 
       {/* Timeline table */}
-      <div className="border border-[#E5E5E5] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+          <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
               <th className="p-3 text-left">Date</th>
               <th className="p-3 text-left">Type</th>
@@ -308,26 +308,26 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
               <tr
                 key={e.id}
                 onClick={() => setDetail(e)}
-                className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7] cursor-pointer"
+                className="border-t border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer"
                 data-testid={`daybook-row-${e.id}`}
               >
                 <td className="p-3 font-mono text-xs whitespace-nowrap">{formatDate(e.date)}</td>
                 <td className="p-3"><DirBadge dir={e._dir} /></td>
                 <td className="p-3 max-w-[280px]">
                   <div className="truncate">{e.narration || "—"}</div>
-                  {e.reference && <div className="text-[10px] text-[#6E6A63] font-mono">Ref: {e.reference}</div>}
+                  {e.reference && <div className="text-[10px] text-[var(--ink-3)] font-mono">Ref: {e.reference}</div>}
                 </td>
-                <td className="p-3 text-xs text-[#5C5C5C] max-w-[180px] truncate">{e._accounts || "—"}</td>
-                <td className="p-3 text-xs text-[#5C5C5C] max-w-[180px] truncate">{e._party || "—"}</td>
-                <td className={`p-3 text-right font-mono font-semibold ${e._dir === "in" ? "text-[#1D633E]" : e._dir === "out" ? "text-[#B4001C]" : ""}`}>
+                <td className="p-3 text-xs text-[var(--ink-2)] max-w-[180px] truncate">{e._accounts || "—"}</td>
+                <td className="p-3 text-xs text-[var(--ink-2)] max-w-[180px] truncate">{e._party || "—"}</td>
+                <td className={`p-3 text-right font-mono font-semibold ${e._dir === "in" ? "text-[var(--success)]" : e._dir === "out" ? "text-[var(--danger)]" : ""}`}>
                   {CURRENCY(e.total)}
                 </td>
-                <td className="p-3 text-[#C5C5C5]"><CaretRight size={14} /></td>
+                <td className="p-3 text-[var(--line-strong)]"><CaretRight size={14} /></td>
               </tr>
             ))}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-10 text-center text-[#6E6A63]">
+                <td colSpan={7} className="p-10 text-center text-[var(--ink-3)]">
                   {entries.length === 0 ? "No transactions in this period." : "No matches — try a different search or period."}
                 </td>
               </tr>
@@ -339,7 +339,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
 
       {/* Pagination */}
       {total > 0 && (
-        <div className="flex items-center justify-between text-xs text-[#5C5C5C] print:hidden" data-testid="daybook-pagination">
+        <div className="flex items-center justify-between text-xs text-[var(--ink-2)] print:hidden" data-testid="daybook-pagination">
           <div>Showing {pageStart}–{pageEnd} of {total}</div>
           <div className="flex gap-2">
             <button
@@ -371,8 +371,8 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
 
 const DirBadge = ({ dir }) => {
   if (dir === "in")
-    return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1D633E]"><ArrowDown size={12} /> IN</span>;
+    return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--success)]"><ArrowDown size={12} /> IN</span>;
   if (dir === "out")
-    return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#B4001C]"><ArrowUp size={12} /> OUT</span>;
-  return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#76705E]"><ArrowsLeftRight size={12} /> JE</span>;
+    return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--danger)]"><ArrowUp size={12} /> OUT</span>;
+  return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--accent-strong)]"><ArrowsLeftRight size={12} /> JE</span>;
 };

@@ -144,12 +144,12 @@ export default function QuotationBuilder() {
 
   return (
     <div className="space-y-6 pb-32" data-testid="quotation-builder">
-      <Link to="/quotations" className="inline-flex items-center gap-1 text-sm text-[#5C5C5C] hover:text-[#0A0A0A]">
+      <Link to="/quotations" className="inline-flex items-center gap-1 text-sm text-[var(--ink-2)] hover:text-[var(--ink)]">
         <ArrowLeft size={14} /> All quotations
       </Link>
 
       {/* Header */}
-      <div className="border border-[#E5E5E5] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
+      <div className="border border-[var(--line)] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
         <div className="flex-1 min-w-[280px]">
           <div className="overline mb-2 flex items-center gap-3">
             {q.number} · {TYPE_LABELS[q.type]} · {q.version_label}
@@ -159,13 +159,13 @@ export default function QuotationBuilder() {
             value={q.project_title || ""}
             onChange={(e) => update({ project_title: e.target.value })}
             aria-label="Quotation title"
-            className="font-display font-bold tracking-tight text-2xl sm:text-3xl w-full bg-transparent outline-none border-b border-transparent focus:border-[#8B7F6A]"
+            className="font-display font-bold tracking-tight text-2xl sm:text-3xl w-full bg-transparent outline-none border-b border-transparent focus:border-[var(--accent)]"
             data-testid="builder-title"
           />
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#5C5C5C]">
-            <div><span className="overline">CLIENT</span> <span className="ml-1 text-[#0A0A0A]">{q.client_name || "—"}</span></div>
-            <div><span className="overline">LOCATION</span> <span className="ml-1 text-[#0A0A0A]">{q.project_location || "—"}</span></div>
-            {Number(q.area_sqft) > 0 && <div><span className="overline">AREA</span> <span className="ml-1 text-[#0A0A0A]">{q.area_sqft} sq.ft</span></div>}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--ink-2)]">
+            <div><span className="overline">CLIENT</span> <span className="ml-1 text-[var(--ink)]">{q.client_name || "—"}</span></div>
+            <div><span className="overline">LOCATION</span> <span className="ml-1 text-[var(--ink)]">{q.project_location || "—"}</span></div>
+            {Number(q.area_sqft) > 0 && <div><span className="overline">AREA</span> <span className="ml-1 text-[var(--ink)]">{q.area_sqft} sq.ft</span></div>}
           </div>
         </div>
         <div className="text-right">
@@ -189,7 +189,7 @@ export default function QuotationBuilder() {
         </a>
         {canSwitchType && (
           <label className="flex items-center gap-2 text-sm">
-            <span className="text-[#5C5C5C]">Type</span>
+            <span className="text-[var(--ink-2)]">Type</span>
             <select aria-label="Quotation type" className="input-flat !w-auto" value={q.type}
                     onChange={(e) => swapType(e.target.value)} data-testid="builder-type">
               {allowedTypes.map((t) => <option key={t} value={t}>{SELECTABLE_TYPE_LABELS[t]}</option>)}
@@ -212,13 +212,13 @@ export default function QuotationBuilder() {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-[#E5E5E5]">
+      <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
         {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
-              activeTab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              activeTab === t ? "border-[var(--accent)] text-[var(--accent-strong)]" : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
             }`}
             data-testid={`tab-${t.replace(/\s/g, "-")}`}
           >
@@ -245,8 +245,8 @@ export default function QuotationBuilder() {
 
       {/* AI panel drawer */}
       {aiPanel.open && (
-        <div className="fixed inset-y-0 right-0 w-[480px] max-w-[100vw] bg-white border-l border-[#E5E5E5] z-50 flex flex-col" style={{ boxShadow: "-20px 0 60px rgba(0,0,0,0.10)" }}>
-          <div className="p-4 border-b border-[#E5E5E5] flex items-center justify-between bg-[#8B7F6A] text-white">
+        <div className="fixed inset-y-0 right-0 w-[480px] max-w-[100vw] bg-white border-l border-[var(--line)] z-50 flex flex-col" style={{ boxShadow: "-20px 0 60px rgba(0,0,0,0.10)" }}>
+          <div className="p-4 border-b border-[var(--line)] flex items-center justify-between bg-[var(--accent)] text-white">
             <div className="flex items-center gap-2">
               <Sparkle size={18} weight="fill" />
               <div>
@@ -311,14 +311,14 @@ function Overview({ q, update, isConsult }) {
             ? [["design_scope", "Design scope"], ["exclusions", "Exclusions"]]
             : [["design_scope", "Design scope"], ["execution_scope", "Execution scope"], ["exclusions", "Exclusions"]]
           ).map(([k, l]) => (
-            <div key={k} className="border-t border-[#F0F0F0] pt-4">
+            <div key={k} className="border-t border-[var(--line-soft)] pt-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="overline">{l}</div>
                 <button onClick={() => editList(k)} className="text-xs underline">edit</button>
               </div>
-              <ul className="text-sm list-disc ml-5 space-y-1 text-[#0A0A0A]">
+              <ul className="text-sm list-disc ml-5 space-y-1 text-[var(--ink)]">
                 {(q[k] || []).map((it, i) => <li key={i}>{it}</li>)}
-                {(q[k] || []).length === 0 && <li className="list-none text-[#5C5C5C]">—</li>}
+                {(q[k] || []).length === 0 && <li className="list-none text-[var(--ink-2)]">—</li>}
               </ul>
             </div>
           ))}
@@ -435,13 +435,13 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
         <Card key={ci} title={cat.category} actions={
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm font-semibold">{fmt(cat.category_total)}</span>
-            <button onClick={() => removeCat(ci)} className="text-[#FF2A00]"><Trash size={14} /></button>
+            <button onClick={() => removeCat(ci)} className="text-[var(--danger)]"><Trash size={14} /></button>
           </div>
         }>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left border-b border-[#E5E5E5]">
+                <tr className="text-left border-b border-[var(--line)]">
                   <th className="py-2 overline" style={{ minWidth: 70 }}>Code</th>
                   <th className="py-2 overline" style={{ minWidth: 220 }}>{isConsult ? "Professional service" : "Description"}</th>
                   <th className="py-2 overline">Unit</th>
@@ -458,7 +458,7 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
                 {cat.items.map((it, ii) => {
                   const amt = (Number(it.quantity) || 0) * (Number(it.rate) || 0) * (1 + (Number(it.margin_pct) || 0) / 100);
                   return (
-                    <tr key={ii} className="border-b border-[#F0F0F0]">
+                    <tr key={ii} className="border-b border-[var(--line-soft)]">
                       <td><input className="input-flat" style={{ padding: "6px 8px" }} value={it.code || ""} onChange={(e) => updateItem(ci, ii, "code", e.target.value)} /></td>
                       <td><input className="input-flat" style={{ padding: "6px 8px" }} value={it.description || ""} onChange={(e) => updateItem(ci, ii, "description", e.target.value)} /></td>
                       <td><input className="input-flat" style={{ padding: "6px 8px", width: 70 }} value={it.unit || ""} onChange={(e) => updateItem(ci, ii, "unit", e.target.value)} /></td>
@@ -480,7 +480,7 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
                         </select>
                       </td>
                       )}
-                      <td><button onClick={() => removeItem(ci, ii)} className="text-[#FF2A00]"><Trash size={14} /></button></td>
+                      <td><button onClick={() => removeItem(ci, ii)} className="text-[var(--danger)]"><Trash size={14} /></button></td>
                     </tr>
                   );
                 })}
@@ -494,7 +494,7 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
       ))}
       {(!q.boq || q.boq.length === 0) && (
         <Card title={isConsult ? "EMPTY FEE SCHEDULE" : "EMPTY BOQ"}>
-          <p className="text-sm text-[#5C5C5C]">
+          <p className="text-sm text-[var(--ink-2)]">
             {isConsult
               ? "Add a fee block from the library above — design fees, consultations, site services and more."
               : "Add a category from the library above to get started."}
@@ -525,20 +525,20 @@ function Rooms({ q }) {
   return (
     <div className="space-y-4" data-testid="tab-rooms">
       <Card title="ROOM-WISE COST MAPPING">
-        {rooms.length === 0 ? <p className="text-sm text-[#5C5C5C]">No items yet. Add BOQ lines first.</p> : (
+        {rooms.length === 0 ? <p className="text-sm text-[var(--ink-2)]">No items yet. Add BOQ lines first.</p> : (
           <div className="space-y-2">
             {rooms.map((r) => {
               const pct = total ? (r.total / total) * 100 : 0;
               return (
-                <div key={r.room} className="border border-[#E5E5E5] p-4">
+                <div key={r.room} className="border border-[var(--line)] p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-display font-semibold">{r.room}</div>
-                    <div className="font-mono font-semibold">{fmt(r.total)} <span className="text-xs text-[#5C5C5C] ml-2">({pct.toFixed(0)}%)</span></div>
+                    <div className="font-mono font-semibold">{fmt(r.total)} <span className="text-xs text-[var(--ink-2)] ml-2">({pct.toFixed(0)}%)</span></div>
                   </div>
-                  <div className="h-1 bg-[#F0F0F0] mb-3">
-                    <div className="h-1 bg-[#8B7F6A]" style={{ width: `${pct}%` }} />
+                  <div className="h-1 bg-[var(--line-soft)] mb-3">
+                    <div className="h-1 bg-[var(--accent)]" style={{ width: `${pct}%` }} />
                   </div>
-                  <div className="text-xs text-[#5C5C5C] space-y-1">
+                  <div className="text-xs text-[var(--ink-2)] space-y-1">
                     {(itemsByRoom[r.room] || []).slice(0, 8).map((it, i) => (
                       <div key={i} className="flex justify-between">
                         <span>{it.category} · {it.description}</span>
@@ -577,7 +577,7 @@ function Materials({ q, update, tpl }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left border-b border-[#E5E5E5]">
+            <tr className="text-left border-b border-[var(--line)]">
               <th className="py-2 overline">Category</th>
               <th className="py-2 overline">Premium</th>
               <th className="py-2 overline">Standard</th>
@@ -589,7 +589,7 @@ function Materials({ q, update, tpl }) {
           </thead>
           <tbody>
             {(q.materials || []).map((m, i) => (
-              <tr key={i} className="border-b border-[#F0F0F0]">
+              <tr key={i} className="border-b border-[var(--line-soft)]">
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={m.category || ""} onChange={(e) => setRow(i, "category", e.target.value)} /></td>
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={m.brand_premium || ""} onChange={(e) => setRow(i, "brand_premium", e.target.value)} /></td>
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={m.brand_standard || ""} onChange={(e) => setRow(i, "brand_standard", e.target.value)} /></td>
@@ -600,7 +600,7 @@ function Materials({ q, update, tpl }) {
                   </select>
                 </td>
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={m.notes || ""} onChange={(e) => setRow(i, "notes", e.target.value)} /></td>
-                <td><button onClick={() => removeRow(i)} className="text-[#FF2A00]"><Trash size={14} /></button></td>
+                <td><button onClick={() => removeRow(i)} className="text-[var(--danger)]"><Trash size={14} /></button></td>
               </tr>
             ))}
           </tbody>
@@ -621,7 +621,7 @@ function Costing({ q, update }) {
         <Field label="Discount %"><input type="number" className="input-flat" placeholder="Enter discount %" value={c.discount_pct ?? ""} onChange={(e) => setC("discount_pct", e.target.value)} /></Field>
         <Field label="Contingency %"><input type="number" className="input-flat" placeholder="Enter contingency %" value={c.contingency_pct ?? ""} onChange={(e) => setC("contingency_pct", e.target.value)} /></Field>
         <Field label="GST %"><input type="number" className="input-flat" value={c.tax_pct || 18} onChange={(e) => setC("tax_pct", e.target.value)} /></Field>
-        <p className="text-xs text-[#5C5C5C] mt-2">Save to recompute totals on the server.</p>
+        <p className="text-xs text-[var(--ink-2)] mt-2">Save to recompute totals on the server.</p>
       </Card>
 
       <Card title="SUMMARY">
@@ -629,14 +629,14 @@ function Costing({ q, update }) {
         <Row label={`Discount (${c.discount_pct || 0}%)`} val={-(c.discount_amt || 0)} />
         <Row label={`Contingency (${c.contingency_pct || 0}%)`} val={c.contingency_amt} />
         <Row label={`GST (${c.tax_pct || 18}%)`} val={c.tax_amt} />
-        <div className="border-t border-[#0A0A0A] mt-3 pt-3">
+        <div className="border-t border-[var(--ink)] mt-3 pt-3">
           <div className="flex items-center justify-between">
             <div className="font-display font-bold tracking-tight text-xl">GRAND TOTAL</div>
             <div className="font-display font-bold tracking-tight text-2xl accent-blue">{fmt(c.grand_total)}</div>
           </div>
         </div>
 
-        <div className="mt-6 border-t border-[#F0F0F0] pt-4">
+        <div className="mt-6 border-t border-[var(--line-soft)] pt-4">
           <div className="overline mb-2">CATEGORY BREAKDOWN</div>
           {(q.category_totals || []).map((c) => (
             <div key={c.category} className="flex justify-between text-sm py-1">
@@ -677,7 +677,7 @@ function PaymentPlan({ q, update, tpl }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left border-b border-[#E5E5E5]">
+            <tr className="text-left border-b border-[var(--line)]">
               <th className="py-2 overline" style={{ minWidth: 200 }}>Milestone</th>
               <th className="py-2 overline">Type</th>
               <th className="py-2 overline text-right">%</th>
@@ -689,7 +689,7 @@ function PaymentPlan({ q, update, tpl }) {
           </thead>
           <tbody>
             {(q.payment_plan || []).map((p, i) => (
-              <tr key={i} className="border-b border-[#F0F0F0]">
+              <tr key={i} className="border-b border-[var(--line-soft)]">
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={p.label || ""} onChange={(e) => setRow(i, "label", e.target.value)} /></td>
                 <td>
                   <select aria-label="Milestone type" className="input-flat" style={{ padding: "6px 8px" }} value={p.type || "milestone"} onChange={(e) => setRow(i, "type", e.target.value)}>
@@ -702,13 +702,13 @@ function PaymentPlan({ q, update, tpl }) {
                 <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} placeholder="Days" value={p.due_after_days ?? ""} onChange={(e) => setRow(i, "due_after_days", e.target.value)} /></td>
                 <td className="font-mono text-right">{fmt(p.amount)}</td>
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={p.notes || ""} onChange={(e) => setRow(i, "notes", e.target.value)} /></td>
-                <td><button onClick={() => removeRow(i)} className="text-[#FF2A00]"><Trash size={14} /></button></td>
+                <td><button onClick={() => removeRow(i)} className="text-[var(--danger)]"><Trash size={14} /></button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className={`mt-4 text-sm font-mono ${Math.abs(totalPct - 100) < 0.5 ? "text-[#1D633E]" : "text-[#FF2A00]"}`}>
+      <div className={`mt-4 text-sm font-mono ${Math.abs(totalPct - 100) < 0.5 ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
         Total: {totalPct}% {Math.abs(totalPct - 100) < 0.5 ? "✓" : "(should be 100%)"}
       </div>
     </Card>
@@ -747,10 +747,10 @@ function Timeline({ q, update, tpl }) {
             <input className="input-flat col-span-5" value={p.phase || ""} onChange={(e) => setRow(i, "phase", e.target.value)} placeholder="Phase name" />
             <div className="col-span-2"><input type="number" className="input-flat" value={p.start_offset_weeks || 0} onChange={(e) => setRow(i, "start_offset_weeks", e.target.value)} placeholder="Start (wk)" /></div>
             <div className="col-span-2"><input type="number" className="input-flat" value={p.duration_weeks || 0} onChange={(e) => setRow(i, "duration_weeks", e.target.value)} placeholder="Duration" /></div>
-            <div className="col-span-2 h-6 bg-[#F0F0F0] relative">
-              <div className="absolute top-0 h-6 bg-[#8B7F6A]" style={{ left: `${(p.start_offset_weeks / Math.max(total, 1)) * 100}%`, width: `${(p.duration_weeks / Math.max(total, 1)) * 100}%` }} />
+            <div className="col-span-2 h-6 bg-[var(--line-soft)] relative">
+              <div className="absolute top-0 h-6 bg-[var(--accent)]" style={{ left: `${(p.start_offset_weeks / Math.max(total, 1)) * 100}%`, width: `${(p.duration_weeks / Math.max(total, 1)) * 100}%` }} />
             </div>
-            <button onClick={() => removeRow(i)} className="text-[#FF2A00]"><Trash size={14} /></button>
+            <button onClick={() => removeRow(i)} className="text-[var(--danger)]"><Trash size={14} /></button>
           </div>
         ))}
       </div>
@@ -786,10 +786,10 @@ function Terms({ q, update, tpl }) {
     } testid="tab-terms">
       <div className="space-y-4">
         {(q.terms || []).map((t, i) => (
-          <div key={i} className="border border-[#E5E5E5] p-4">
+          <div key={i} className="border border-[var(--line)] p-4">
             <div className="flex items-center justify-between mb-2">
-              <input className="font-display font-bold text-lg bg-transparent outline-none border-b border-transparent focus:border-[#8B7F6A]" value={t.section || ""} onChange={(e) => setRow(i, "section", e.target.value)} />
-              <button onClick={() => removeRow(i)} className="text-[#FF2A00]"><Trash size={14} /></button>
+              <input className="font-display font-bold text-lg bg-transparent outline-none border-b border-transparent focus:border-[var(--accent)]" value={t.section || ""} onChange={(e) => setRow(i, "section", e.target.value)} />
+              <button onClick={() => removeRow(i)} className="text-[var(--danger)]"><Trash size={14} /></button>
             </div>
             <textarea rows={3} className="input-flat" value={t.content || ""} onChange={(e) => setRow(i, "content", e.target.value)} />
           </div>
@@ -804,34 +804,34 @@ function Versions({ q }) {
   return (
     <Card title="VERSION HISTORY" testid="tab-versions">
       <div className="overline mb-2">CURRENT</div>
-      <div className="border border-[#0A0A0A] p-4 mb-6">
+      <div className="border border-[var(--ink)] p-4 mb-6">
         <div className="flex items-center justify-between">
           <div>
             <div className="font-display font-bold text-lg">{q.version_label}</div>
-            <div className="text-xs text-[#5C5C5C]">Live working version</div>
+            <div className="text-xs text-[var(--ink-2)]">Live working version</div>
           </div>
           <div className="font-mono font-semibold">{fmt(q.cost?.grand_total)}</div>
         </div>
       </div>
       <div className="overline mb-2">PREVIOUS SNAPSHOTS</div>
       {(q.versions_log || []).length === 0 ? (
-        <p className="text-sm text-[#5C5C5C]">No prior versions yet. Use "New version" to snapshot the current quotation.</p>
+        <p className="text-sm text-[var(--ink-2)]">No prior versions yet. Use "New version" to snapshot the current quotation.</p>
       ) : (
         <div className="space-y-2">
           {[...(q.versions_log || [])].reverse().map((v, i) => {
             const diff = (q.cost?.grand_total || 0) - (v.grand_total || 0);
             return (
-              <div key={i} className="border border-[#E5E5E5] p-4">
+              <div key={i} className="border border-[var(--line)] p-4">
                 <div className="flex items-center justify-between mb-1">
                   <div className="font-display font-bold">{v.version_label}</div>
                   <div className="font-mono">{fmt(v.grand_total)}</div>
                 </div>
-                <div className="text-xs text-[#5C5C5C] flex items-center gap-2">
+                <div className="text-xs text-[var(--ink-2)] flex items-center gap-2">
                   <Clock size={12} />
                   {(v.snapshot_at || "").slice(0, 16).replace("T", " ")} · by {v.by || "—"}
                 </div>
                 {v.note && <p className="text-sm mt-2">{v.note}</p>}
-                <div className={`text-xs mt-1 font-mono ${diff > 0 ? "text-[#1D633E]" : diff < 0 ? "text-[#FF2A00]" : "text-[#5C5C5C]"}`}>
+                <div className={`text-xs mt-1 font-mono ${diff > 0 ? "text-[var(--success)]" : diff < 0 ? "text-[var(--danger)]" : "text-[var(--ink-2)]"}`}>
                   Δ vs current: {diff >= 0 ? "+" : ""}{fmt(diff)}
                 </div>
               </div>
@@ -846,7 +846,7 @@ function Versions({ q }) {
 /* ========= Preview ========= */
 function Preview({ qid }) {
   return (
-    <div className="border border-[#E5E5E5]" style={{ height: "85vh" }} data-testid="tab-preview">
+    <div className="border border-[var(--line)]" style={{ height: "85vh" }} data-testid="tab-preview">
       <PdfFrame path={`/quotations-adv/${qid}/pdf`} title="Quotation preview" />
     </div>
   );
@@ -877,7 +877,7 @@ function Field({ label, children }) {
 function Row({ label, val }) {
   return (
     <div className="flex items-center justify-between text-sm py-1">
-      <span className="text-[#5C5C5C]">{label}</span>
+      <span className="text-[var(--ink-2)]">{label}</span>
       <span className="font-mono">{fmt(val)}</span>
     </div>
   );

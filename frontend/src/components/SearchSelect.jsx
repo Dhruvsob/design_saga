@@ -59,8 +59,8 @@ export default function SearchSelect({
             onKeyDown={(e) => { if (e.key === "ArrowDown" && !open) { e.preventDefault(); setOpen(true); } }}
             className={`${className} flex items-center justify-between gap-2 text-left w-full ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
           >
-            <span className={`truncate ${selected && selected.value !== "" ? "" : "text-[#6E6A63]"}`}>{label}</span>
-            <CaretDown size={12} aria-hidden="true" className="shrink-0 text-[#6E6A63]" />
+            <span className={`truncate ${selected && selected.value !== "" ? "" : "text-[var(--ink-3)]"}`}>{label}</span>
+            <CaretDown size={12} aria-hidden="true" className="shrink-0 text-[var(--ink-3)]" />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="p-0 z-[80]"
@@ -80,7 +80,7 @@ export default function SearchSelect({
                       keywords={[o.label]}
                       disabled={o.disabled}
                       onSelect={() => choose(o)}
-                      className={o.value === "" ? "text-[#6E6A63]" : ""}
+                      className={o.value === "" ? "text-[var(--ink-3)]" : ""}
                     >
                       <Check size={12} aria-hidden="true"
                              className={`mr-2 shrink-0 ${o.value === current ? "opacity-100" : "opacity-0"}`} />

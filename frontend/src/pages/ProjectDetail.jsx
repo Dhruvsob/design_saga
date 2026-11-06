@@ -215,7 +215,7 @@ export default function ProjectDetail() {
 
   return (
     <div className="space-y-8" data-testid="project-detail">
-      <Link to="/projects" className="inline-flex items-center gap-1 text-sm text-[#5C5C5C] hover:text-[#0A0A0A]">
+      <Link to="/projects" className="inline-flex items-center gap-1 text-sm text-[var(--ink-2)] hover:text-[var(--ink)]">
         <ArrowLeft size={14} /> Back to projects
       </Link>
 
@@ -223,17 +223,17 @@ export default function ProjectDetail() {
         <div>
           <div className="overline mb-2">
             {p.project_type} · {p.client_id ? (
-              <Link to={`/clients/${p.client_id}`} className="hover:text-[#76705E] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
+              <Link to={`/clients/${p.client_id}`} className="hover:text-[var(--accent-strong)] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
             ) : (p.client_name || "—")}
             {p.engagement_type && (
               <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
-                p.engagement_type === "consultancy" ? "bg-[#F5F4F0] text-[#76705E]" : "bg-[#FFF4E5] text-[#7A4E1A]"
+                p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[var(--accent-strong)]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
               }`}>{p.engagement_type}</span>
             )}
-            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#6E6A63]">ARCHIVED</span>}
+            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{p.name}</h1>
-          {p.description && <p className="mt-2 text-[#5C5C5C] max-w-2xl">{p.description}</p>}
+          {p.description && <p className="mt-2 text-[var(--ink-2)] max-w-2xl">{p.description}</p>}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {hasPerm("projects.update") && (
@@ -260,7 +260,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Stage tracker */}
-      <div className="border border-[#E5E5E5] p-6 bg-white" data-testid="stage-tracker">
+      <div className="border border-[var(--line)] p-6 bg-white" data-testid="stage-tracker">
         <div className="overline mb-4">LIFECYCLE STAGE</div>
         <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-1">
           {STAGES.map((s, i) => {
@@ -271,9 +271,9 @@ export default function ProjectDetail() {
                 key={s}
                 onClick={() => setStage(s)}
                 className={`p-2 text-[10px] font-mono uppercase tracking-wider border text-left transition ${
-                  current ? "bg-[#8B7F6A] text-white border-[#8B7F6A]"
-                  : done ? "bg-[#0A0A0A] text-white border-[#0A0A0A]"
-                  : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#0A0A0A]"
+                  current ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                  : done ? "bg-[var(--ink)] text-white border-[var(--ink)]"
+                  : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--ink)]"
                 }`}
                 data-testid={`stage-${s}`}
               >
@@ -286,22 +286,22 @@ export default function ProjectDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#E5E5E5] overflow-x-auto">
+      <div className="flex gap-1 border-b border-[var(--line)] overflow-x-auto">
         {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition whitespace-nowrap ${
-              tab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === t ? "border-[var(--accent)] text-[var(--accent-strong)]" : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
             }`}
             data-testid={`tab-${t}`}
           >
             {t}
-            {t === "Tasks" && (p.tasks || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.tasks.length}</span>}
-            {t === "Milestones" && (p.milestones || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.milestones.length}</span>}
-            {t === "Vendors" && ((p.purchase_orders || []).length + (p.vendor_bills || []).length) > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{(p.purchase_orders || []).length + (p.vendor_bills || []).length}</span>}
-            {t === "Files" && (p.files || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.files.length}</span>}
-            {t === "Invoices" && (p.invoices || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[#6E6A63]">{p.invoices.length}</span>}
+            {t === "Tasks" && (p.tasks || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{p.tasks.length}</span>}
+            {t === "Milestones" && (p.milestones || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{p.milestones.length}</span>}
+            {t === "Vendors" && ((p.purchase_orders || []).length + (p.vendor_bills || []).length) > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{(p.purchase_orders || []).length + (p.vendor_bills || []).length}</span>}
+            {t === "Files" && (p.files || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{p.files.length}</span>}
+            {t === "Invoices" && (p.invoices || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{p.invoices.length}</span>}
           </button>
         ))}
       </div>
@@ -313,15 +313,15 @@ export default function ProjectDetail() {
                             onOpen={(t) => setTab(t)} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[#E5E5E5]" data-testid="project-financials">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[var(--line)]" data-testid="project-financials">
               <MiniStat label="Budget" value={inr(fin.budget)} />
               <MiniStat label="Invoiced" value={inr(fin.invoiced)} />
-              <MiniStat label="Collected" value={inr(fin.collected)} accent="#1D633E" />
-              <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B22B22" : undefined} />
+              <MiniStat label="Collected" value={inr(fin.collected)} accent="#1E6A45" />
+              <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B3261E" : undefined} />
               {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-t border-l border-[#E5E5E5]" data-testid="project-operational-stats">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-t border-l border-[var(--line)]" data-testid="project-operational-stats">
               <MiniStat label="Tasks" value={`${(p.tasks || []).length}`} />
               <MiniStat label="Team" value={`${(p.team || []).length + (p.project_manager ? 1 : 0)}`} />
               <MiniStat label="Files" value={`${(p.files || []).length}`} />
@@ -331,7 +331,7 @@ export default function ProjectDetail() {
 
           <div className="grid grid-cols-1 gap-6">
             {/* team */}
-            <div className="border border-[#E5E5E5] p-5">
+            <div className="border border-[var(--line)] p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="overline"><UsersThree size={12} className="inline mr-1" /> TEAM</div>
                 {hasPerm("projects.update") && (
@@ -342,22 +342,22 @@ export default function ProjectDetail() {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-[#5C5C5C]">Project Manager</span>
+                  <span className="text-[var(--ink-2)]">Project Manager</span>
                   {p.project_manager ? (
-                    <Link to={`/employees/${p.project_manager.id}`} className="font-semibold hover:text-[#76705E]">
+                    <Link to={`/employees/${p.project_manager.id}`} className="font-semibold hover:text-[var(--accent-strong)]">
                       {p.project_manager.name}
-                      <span className="text-xs text-[#6E6A63] ml-1.5">{p.project_manager.designation}</span>
+                      <span className="text-xs text-[var(--ink-3)] ml-1.5">{p.project_manager.designation}</span>
                     </Link>
-                  ) : <span className="text-[#6E6A63]">Unassigned</span>}
+                  ) : <span className="text-[var(--ink-3)]">Unassigned</span>}
                 </div>
-                <div className="border-t border-[#F0F0F0] pt-2">
-                  <div className="text-xs text-[#5C5C5C] mb-1.5">Members</div>
-                  {(p.team || []).length === 0 && <div className="text-sm text-[#6E6A63]">No members assigned.</div>}
+                <div className="border-t border-[var(--line-soft)] pt-2">
+                  <div className="text-xs text-[var(--ink-2)] mb-1.5">Members</div>
+                  {(p.team || []).length === 0 && <div className="text-sm text-[var(--ink-3)]">No members assigned.</div>}
                   <div className="flex flex-wrap gap-1.5">
                     {(p.team || []).map((m) => (
                       <Link key={m.id} to={`/employees/${m.id}`}
-                        className="text-xs border border-[#E5E5E5] px-2 py-1 hover:border-[#0A0A0A] transition">
-                        {m.name} {m.designation && <span className="text-[#6E6A63]">· {m.designation}</span>}
+                        className="text-xs border border-[var(--line)] px-2 py-1 hover:border-[var(--ink)] transition">
+                        {m.name} {m.designation && <span className="text-[var(--ink-3)]">· {m.designation}</span>}
                       </Link>
                     ))}
                   </div>
@@ -379,20 +379,20 @@ export default function ProjectDetail() {
           {(p.tasks || []).length === 0 && <Empty text="No tasks yet. Add them from the Tasks page." />}
           {(p.tasks || []).map((t) => (
             <button key={t.id} onClick={() => navigate(`/tasks/${t.id}`)}
-              className="w-full text-left border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition"
+              className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition"
               data-testid={`project-task-${t.id}`}>
               <div>
                 <div className="font-semibold text-sm">{t.title}</div>
-                <div className="text-xs text-[#5C5C5C]">
+                <div className="text-xs text-[var(--ink-2)]">
                   {[t.area, t.category].filter(Boolean).join(" · ") || null}
                   {(t.area || t.category) && " · "}
                   Due {formatDate(t.due_date)} · {t.assignee_name || "Unassigned"}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#5C5C5C]">{t.status_detail || t.status}</span>
+                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
                 <span className={`status-chip chip-${t.priority}`}>{t.priority}</span>
-                <CaretRight size={12} className="text-[#6E6A63]" />
+                <CaretRight size={12} className="text-[var(--ink-3)]" />
               </div>
             </button>
           ))}
@@ -418,10 +418,10 @@ export default function ProjectDetail() {
           )}
           {(p.milestones || []).length === 0 && <Empty text="No payment milestones yet." />}
           {(p.milestones || []).map((m) => (
-            <div key={m.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
+            <div key={m.id} className="border border-[var(--line)] p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
               <div>
                 <div className="font-semibold text-sm">{m.name}</div>
-                <div className="text-xs text-[#5C5C5C]">Due {formatDate(m.due_date)}</div>
+                <div className="text-xs text-[var(--ink-2)]">Due {formatDate(m.due_date)}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold">{inr(m.amount)}</span>
@@ -440,10 +440,10 @@ export default function ProjectDetail() {
             <div className="space-y-2">
               {(p.purchase_orders || []).map((po) => (
                 <button key={po.id} onClick={() => navigate("/purchase-orders")}
-                  className="w-full text-left border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition">
+                  className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div>
                     <div className="font-mono font-semibold text-sm">{po.po_number}</div>
-                    <div className="text-xs text-[#5C5C5C]">{po.vendor_name || "—"}</div>
+                    <div className="text-xs text-[var(--ink-2)]">{po.vendor_name || "—"}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-semibold">{inr(po.total)}</span>
@@ -459,10 +459,10 @@ export default function ProjectDetail() {
             <div className="space-y-2">
               {(p.vendor_bills || []).map((b) => (
                 <button key={b.id} onClick={() => b.vendor_id && navigate(`/vendors/${b.vendor_id}`)}
-                  className="w-full text-left border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition">
+                  className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div>
                     <div className="font-mono font-semibold text-sm">{b.bill_number || b.id}</div>
-                    <div className="text-xs text-[#5C5C5C]">{b.vendor_name || "—"} · {formatDate(b.bill_date)}</div>
+                    <div className="text-xs text-[var(--ink-2)]">{b.vendor_name || "—"} · {formatDate(b.bill_date)}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-semibold">{inr(b.total)}</span>
@@ -497,20 +497,20 @@ export default function ProjectDetail() {
           )}
           {(p.files || []).length === 0 && <Empty text="No files yet." />}
           {(p.files || []).map((f) => (
-            <div key={f.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between hover:border-[#0A0A0A] transition group">
+            <div key={f.id} className="border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition group">
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm">{f.name}</div>
-                <div className="text-xs text-[#5C5C5C]">{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
+                <div className="text-xs text-[var(--ink-2)]">{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
               </div>
               <div className="flex items-center gap-2">
                 {(f.created_by === user?.user_id || hasPerm("files.update")) && (
-                  <label className="flex items-center gap-2 text-xs text-[#5C5C5C]" title="Control whether this file appears in the public client portal">
+                  <label className="flex items-center gap-2 text-xs text-[var(--ink-2)]" title="Control whether this file appears in the public client portal">
                     <input type="checkbox" checked={Boolean(f.client_visible)} onChange={(e) => setFileClientVisibility(f.id, e.target.checked)} />
                     Client portal
                   </label>
                 )}
-                {safeFileUrl(f.url) ? <a href={safeFileUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[#6E6A63]">UNAVAILABLE</span>}
-                <button onClick={() => deleteFile(f.id)} className="btn-ghost p-1 text-[#B22B22] opacity-0 group-hover:opacity-100 transition" title="Remove" data-testid={`file-delete-${f.id}`}>
+                {safeFileUrl(f.url) ? <a href={safeFileUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[var(--ink-3)]">UNAVAILABLE</span>}
+                <button onClick={() => deleteFile(f.id)} className="btn-ghost p-1 text-[var(--danger)] opacity-0 group-hover:opacity-100 transition" title="Remove" data-testid={`file-delete-${f.id}`}>
                   <Trash size={12} />
                 </button>
               </div>
@@ -523,10 +523,10 @@ export default function ProjectDetail() {
         <div className="space-y-2">
           {(p.invoices || []).length === 0 && <Empty text="No invoices yet." />}
           {(p.invoices || []).map((i) => (
-            <div key={i.id} className="border border-[#E5E5E5] p-3 flex items-center justify-between">
+            <div key={i.id} className="border border-[var(--line)] p-3 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
-                <div className="text-xs text-[#5C5C5C]">{i.doc_type} · Due {formatDate(i.due_date)}</div>
+                <div className="text-xs text-[var(--ink-2)]">{i.doc_type} · Due {formatDate(i.due_date)}</div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="font-mono font-semibold">{inr(i.total)}</div>
@@ -548,7 +548,7 @@ export default function ProjectDetail() {
       {editOpen && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditOpen(false); }}>
-          <form onSubmit={saveEdit} className="bg-white border border-[#0A0A0A] w-full max-w-lg p-6 space-y-3 max-h-[85vh] overflow-y-auto" data-testid="project-edit-modal">
+          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] w-full max-w-lg p-6 space-y-3 max-h-[85vh] overflow-y-auto" data-testid="project-edit-modal">
             <div className="flex items-center justify-between">
               <div className="overline">EDIT PROJECT</div>
               <button type="button" onClick={() => setEditOpen(false)} className="btn-ghost p-1"><X size={14} /></button>
@@ -559,17 +559,17 @@ export default function ProjectDetail() {
                 {TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
               <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="edit-project-budget" />
-              <label className="text-xs text-[#5C5C5C]">Start date
+              <label className="text-xs text-[var(--ink-2)]">Start date
                 <input className="input-flat w-full mt-1" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
               </label>
-              <label className="text-xs text-[#5C5C5C]">End date
+              <label className="text-xs text-[var(--ink-2)]">End date
                 <input className="input-flat w-full mt-1" type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
               </label>
             </div>
             <input className="input-flat w-full" placeholder="Site address" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
             <input className="input-flat w-full" type="number" placeholder="Enter site area (sq ft)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} />
             <textarea className="input-flat w-full" rows="2" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
+            {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
             <button className="btn-primary w-full" data-testid="edit-project-save">Save changes</button>
           </form>
         </div>
@@ -579,7 +579,7 @@ export default function ProjectDetail() {
       {teamOpen && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setTeamOpen(false); }}>
-          <form onSubmit={saveTeam} className="bg-white border border-[#0A0A0A] w-full max-w-lg p-6 space-y-4 max-h-[85vh] overflow-y-auto" data-testid="team-modal">
+          <form onSubmit={saveTeam} className="bg-white border border-[var(--ink)] w-full max-w-lg p-6 space-y-4 max-h-[85vh] overflow-y-auto" data-testid="team-modal">
             <div className="flex items-center justify-between">
               <div className="overline">ASSIGN TEAM</div>
               <button type="button" onClick={() => setTeamOpen(false)} className="btn-ghost p-1"><X size={14} /></button>
@@ -597,10 +597,10 @@ export default function ProjectDetail() {
             </label>
             <div>
               <div className="overline text-[10px] mb-2">TEAM MEMBERS</div>
-              {employees.length === 0 && <div className="text-sm text-[#6E6A63]">No employees found. Add them in the Employees module.</div>}
-              <div className="max-h-56 overflow-y-auto border border-[#E5E5E5] divide-y divide-[#F0F0F0]">
+              {employees.length === 0 && <div className="text-sm text-[var(--ink-3)]">No employees found. Add them in the Employees module.</div>}
+              <div className="max-h-56 overflow-y-auto border border-[var(--line)] divide-y divide-[var(--line-soft)]">
                 {employees.map((emp) => (
-                  <label key={emp.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-[#FAFAFA]">
+                  <label key={emp.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-[var(--surface-2)]">
                     <input type="checkbox"
                       checked={teamForm.team_ids.includes(emp.id)}
                       onChange={(e) => setTeamForm((f) => ({
@@ -610,7 +610,7 @@ export default function ProjectDetail() {
                           : f.team_ids.filter((x) => x !== emp.id),
                       }))} />
                     <span className="font-semibold">{empName(emp)}</span>
-                    <span className="text-xs text-[#6E6A63]">{emp.designation || emp.department || ""}</span>
+                    <span className="text-xs text-[var(--ink-3)]">{emp.designation || emp.department || ""}</span>
                   </label>
                 ))}
               </div>
@@ -625,7 +625,7 @@ export default function ProjectDetail() {
 
 function MiniStat({ label, value, accent }) {
   return (
-    <div className="border-r border-b border-[#E5E5E5] p-5">
+    <div className="border-r border-b border-[var(--line)] p-5">
       <div className="overline mb-2">{label}</div>
       <div className="font-display font-bold tracking-tight text-2xl tabular-nums" style={accent ? { color: accent } : undefined}>{value}</div>
     </div>
@@ -635,12 +635,12 @@ function MiniStat({ label, value, accent }) {
 function Row({ k, v }) {
   return (
     <div className="flex items-center justify-between">
-      <dt className="text-[#5C5C5C]">{k}</dt>
+      <dt className="text-[var(--ink-2)]">{k}</dt>
       <dd className="font-semibold">{v}</dd>
     </div>
   );
 }
 
 function Empty({ text }) {
-  return <p className="text-[#5C5C5C] text-sm border border-dashed border-[#E5E5E5] p-6 text-center">{text}</p>;
+  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] p-6 text-center">{text}</p>;
 }

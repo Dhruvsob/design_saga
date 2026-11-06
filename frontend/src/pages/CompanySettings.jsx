@@ -83,13 +83,13 @@ export default function CompanySettings() {
     <div className="space-y-8" data-testid="company-settings-page">
       <PageHero
         eyebrow="ADMIN / COMPANY"
-        title="Your identity, everywhere."
+        title="Company settings"
         kicker={org?.business_mode
           ? `Business mode: ${(org.business_mode || "hybrid").toUpperCase()} · Logo, colours and company info flow into the sidebar, login screen, PDFs and every export.`
           : "Logo, colours and company info flow into the sidebar, login screen, PDFs and every export."}
       >
         {saved && (
-          <span className="text-xs text-[#1D633E] font-mono flex items-center gap-1" data-testid="saved-indicator">
+          <span className="text-xs text-[var(--success)] font-mono flex items-center gap-1" data-testid="saved-indicator">
             <Check size={13} /> SAVED
           </span>
         )}
@@ -99,12 +99,12 @@ export default function CompanySettings() {
       </PageHero>
 
       {err && (
-        <div className="border border-[#B22B22] bg-[#FCEEEC] p-4 text-sm text-[#B22B22] flex items-center gap-2">
+        <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)] flex items-center gap-2">
           <Warning size={14} /> {err}
         </div>
       )}
 
-      <div className="flex items-center gap-1 border-b border-[#E5E5E5]">
+      <div className="flex items-center gap-1 border-b border-[var(--line)]">
         {[
           { key: "branding", label: "Brand & Colours", Icon: Palette },
           { key: "profile",  label: "Company Profile", Icon: Buildings },
@@ -112,7 +112,7 @@ export default function CompanySettings() {
         ].map(({ key, label, Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-3 text-sm font-semibold border-b-2 transition ${
-              tab === key ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === key ? "border-[var(--accent)] text-[var(--accent-strong)]" : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
             }`}
             data-testid={`tab-${key}`}
           >
@@ -129,10 +129,10 @@ export default function CompanySettings() {
               <div className="overline mb-4"><ImageSquare size={11} className="inline mr-1"/> LOGO</div>
               <div className="flex items-center gap-4">
                 {branding.logo_url ? (
-                  <img src={branding.logo_url} alt="Current logo" className="w-28 h-28 object-contain ring-1 ring-[#E5E5E5] bg-white p-2 rounded-lg" data-testid="logo-preview" />
+                  <img src={branding.logo_url} alt="Current logo" className="w-28 h-28 object-contain ring-1 ring-[var(--line)] bg-white p-2 rounded-lg" data-testid="logo-preview" />
                 ) : (
-                  <div className="w-20 h-20 flex items-center justify-center text-white font-display font-bold text-lg ring-1 ring-[#E5E5E5]"
-                       style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
+                  <div className="w-20 h-20 flex items-center justify-center text-white font-display font-bold text-lg ring-1 ring-[var(--line)]"
+                       style={{ backgroundColor: branding.primary_color || "#9C4A28" }}>
                     {(org.name || "DS").slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -141,7 +141,7 @@ export default function CompanySettings() {
                           data-testid="upload-logo-btn">
                     <Upload size={12} /> {saving ? "Uploading…" : branding.logo_url ? "Replace logo" : "Upload logo"}
                   </button>
-                  <div className="text-xs text-[#5C5C5C] mt-2 max-w-xs">
+                  <div className="text-xs text-[var(--ink-2)] mt-2 max-w-xs">
                     PNG, JPG or WebP, up to 2 MB. A transparent PNG looks best. Empty borders are trimmed
                     automatically; the logo is used in the sidebar and on every PDF.
                   </div>
@@ -160,19 +160,19 @@ export default function CompanySettings() {
             <div className="card-flat">
               <div className="overline mb-4"><PaintBrush size={11} className="inline mr-1"/> COLOURS</div>
               <div className="grid grid-cols-2 gap-4">
-                <ColorField label="Primary" value={branding.primary_color || "#8B7F6A"}
+                <ColorField label="Primary" value={branding.primary_color || "#9C4A28"}
                             onChange={(v) => setBranding({ primary_color: v })} testid="color-primary" />
-                <ColorField label="Accent" value={branding.accent_color || "#0A0A0A"}
+                <ColorField label="Accent" value={branding.accent_color || "#18181B"}
                             onChange={(v) => setBranding({ accent_color: v })} testid="color-accent" />
               </div>
               <div className="mt-4">
-                <label className="block text-xs text-[#5C5C5C] mb-1">Tagline (shown in sidebar)</label>
+                <label className="block text-xs text-[var(--ink-2)] mb-1">Tagline (shown in sidebar)</label>
                 <input className="input-flat w-full" placeholder="Studio management"
                        value={branding.tagline || ""} onChange={(e) => setBranding({ tagline: e.target.value })}
                        data-testid="tagline-input" />
               </div>
               <div className="mt-4">
-                <label className="block text-xs text-[#5C5C5C] mb-1">PDF Footer note (appears on invoices, quotes, slips)</label>
+                <label className="block text-xs text-[var(--ink-2)] mb-1">PDF Footer note (appears on invoices, quotes, slips)</label>
                 <input className="input-flat w-full" placeholder="e.g. Thank you for your business — Design Saga"
                        value={branding.pdf_footer || ""} onChange={(e) => setBranding({ pdf_footer: e.target.value })}
                        data-testid="pdf-footer-input" />
@@ -185,12 +185,12 @@ export default function CompanySettings() {
             <div className="card-flat sticky top-24">
               <div className="overline mb-3">LIVE PREVIEW</div>
               {/* Sidebar preview */}
-              <div className="border border-[#E5E5E5] p-4 flex items-center gap-3 mb-4">
+              <div className="border border-[var(--line)] p-4 flex items-center gap-3 mb-4">
                 {branding.logo_url ? (
                   <img src={branding.logo_url} alt="" className="h-10 w-auto max-w-[64px] object-contain" />
                 ) : (
                   <div className="w-9 h-9 flex items-center justify-center text-white font-display font-bold text-sm"
-                       style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
+                       style={{ backgroundColor: branding.primary_color || "#9C4A28" }}>
                     {(org.name || "DS").slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -198,7 +198,7 @@ export default function CompanySettings() {
                   <div className="font-display font-bold tracking-tight text-sm">
                     {(org.display_name || org.name || "").toUpperCase()}
                   </div>
-                  <div className="text-[10px] text-[#5C5C5C] font-mono uppercase">
+                  <div className="text-[10px] text-[var(--ink-2)] font-mono uppercase">
                     {branding.tagline || "STUDIO OS"}
                   </div>
                 </div>
@@ -207,20 +207,20 @@ export default function CompanySettings() {
               <div className="mb-4">
                 <div className="overline mb-2 text-[9px]">BUTTON</div>
                 <button className="text-white text-xs font-semibold px-4 py-2 w-full"
-                        style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
+                        style={{ backgroundColor: branding.primary_color || "#9C4A28" }}>
                   Continue
                 </button>
               </div>
               {/* Invoice header preview */}
               <div>
                 <div className="overline mb-2 text-[9px]">INVOICE HEADER</div>
-                <div className="border border-[#E5E5E5] p-3">
+                <div className="border border-[var(--line)] p-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="text-sm font-display font-bold" style={{ color: branding.primary_color || "#8B7F6A" }}>
+                      <div className="text-sm font-display font-bold" style={{ color: branding.primary_color || "#9C4A28" }}>
                         {org.display_name || org.name}
                       </div>
-                      <div className="text-[10px] text-[#5C5C5C] font-mono">
+                      <div className="text-[10px] text-[var(--ink-2)] font-mono">
                         GSTIN: {org.gstin || "—"}
                       </div>
                     </div>
@@ -228,7 +228,7 @@ export default function CompanySettings() {
                       <img src={branding.logo_url} alt="" className="w-10 h-10 object-contain" />
                     )}
                   </div>
-                  <div className="mt-2 h-[3px]" style={{ background: branding.primary_color || "#8B7F6A" }} />
+                  <div className="mt-2 h-[3px]" style={{ background: branding.primary_color || "#9C4A28" }} />
                 </div>
               </div>
             </div>
@@ -262,7 +262,7 @@ export default function CompanySettings() {
           </div>
           <div className="card-flat">
             <div className="overline mb-4">BILLING &amp; BANK DETAILS</div>
-            <p className="text-xs text-[#5C5C5C] mb-3">
+            <p className="text-xs text-[var(--ink-2)] mb-3">
               These details are printed in the &ldquo;Payment Details&rdquo; box on every invoice PDF.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -278,7 +278,7 @@ export default function CompanySettings() {
 
       {tab === "masterdata" && (
         <div className="space-y-4">
-          <p className="text-sm text-[#5C5C5C] max-w-2xl">
+          <p className="text-sm text-[var(--ink-2)] max-w-2xl">
             Configure the dropdown values used across the ERP — project types, lead sources,
             task categories, designations and more. Values referenced by existing records are
             deactivated instead of deleted, so history is never broken.
@@ -293,11 +293,11 @@ export default function CompanySettings() {
 function Field({ label, value, onChange, testid, readOnly, hint }) {
   return (
     <div>
-      <label className="block text-xs text-[#5C5C5C] mb-1">{label}</label>
+      <label className="block text-xs text-[var(--ink-2)] mb-1">{label}</label>
       <input className="input-flat w-full" value={value} readOnly={readOnly}
              onChange={onChange ? (e) => onChange(e.target.value) : undefined}
              data-testid={testid} />
-      {hint && <div className="text-[10px] text-[#6E6A63] mt-1">{hint}</div>}
+      {hint && <div className="text-[10px] text-[var(--ink-3)] mt-1">{hint}</div>}
     </div>
   );
 }
@@ -305,8 +305,8 @@ function Field({ label, value, onChange, testid, readOnly, hint }) {
 function ColorField({ label, value, onChange, testid }) {
   return (
     <div>
-      <label className="block text-xs text-[#5C5C5C] mb-1">{label}</label>
-      <div className="flex items-center gap-2 border border-[#E5E5E5] p-1 bg-white">
+      <label className="block text-xs text-[var(--ink-2)] mb-1">{label}</label>
+      <div className="flex items-center gap-2 border border-[var(--line)] p-1 bg-white">
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} picker`}
                className="w-10 h-10 border-none cursor-pointer" data-testid={`${testid}-picker`} />
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} hex code`}

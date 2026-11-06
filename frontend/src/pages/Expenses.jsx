@@ -19,14 +19,14 @@ function fmtErr(d, fb = "Failed") {
 }
 
 const STATUS_TONE = {
-  draft: "bg-[#F0F0F0] text-[#5C5C5C]",
-  pending_l1: "bg-[#FFF4E5] text-[#7A4E1A]",
-  pending_l2: "bg-[#FFF4E5] text-[#7A4E1A]",
-  receipt_required: "bg-[#FFF4E5] text-[#B87500]",
-  approved: "bg-[#F5F4F0] text-[#76705E]",
-  rejected: "bg-[#FCEEEC] text-[#B22B22]",
-  reimbursed: "bg-[#EFF7EF] text-[#1D633E]",
-  cancelled: "bg-[#F0F0F0] text-[#5C5C5C]",
+  draft: "bg-[var(--line-soft)] text-[var(--ink-2)]",
+  pending_l1: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  pending_l2: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  receipt_required: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  approved: "bg-[var(--hover)] text-[var(--accent-strong)]",
+  rejected: "bg-[var(--danger-soft)] text-[var(--danger)]",
+  reimbursed: "bg-[var(--success-soft)] text-[var(--success)]",
+  cancelled: "bg-[var(--line-soft)] text-[var(--ink-2)]",
 };
 
 export default function Expenses() {
@@ -73,7 +73,7 @@ export default function Expenses() {
   return (
     <div className="space-y-6" data-testid="expenses-page">
       <PageHero eyebrow="FINANCE / STAFF EXPENSE CLAIMS"
-        title="From claim to reimbursement, in minutes."
+        title="Expense claims"
         kicker="For staff reimbursement claims that need approval. For direct company expenses (rent, tea, salary etc.), use Accounting → Expense."
         count={expenses.length}>
         {canCreate && <button onClick={() => setShowCreate(true)} className="btn-primary" data-testid="new-expense-btn">
@@ -81,21 +81,21 @@ export default function Expenses() {
         </button>}
       </PageHero>
 
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 text-sm text-[#B22B22]"><Warning size={13} className="inline mr-1"/>{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]"><Warning size={13} className="inline mr-1"/>{err}</div>}
 
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPI label="PENDING APPROVAL" value={summary.pending} tone="#B87500" />
-          <KPI label="APPROVED · TO PAY" value={summary.approved} tone="#8B7F6A" />
-          <KPI label="REIMBURSED · MONTH" value={summary.reimbursed_this_month} tone="#1D633E" />
-          <KPI label="MY PENDING" value={summary.my_pending} tone="#7A4E1A" />
+          <KPI label="PENDING APPROVAL" value={summary.pending} tone="#85570F" />
+          <KPI label="APPROVED · TO PAY" value={summary.approved} tone="#9C4A28" />
+          <KPI label="REIMBURSED · MONTH" value={summary.reimbursed_this_month} tone="#1E6A45" />
+          <KPI label="MY PENDING" value={summary.my_pending} tone="#85570F" />
         </div>
       )}
 
-      <div className="flex items-center gap-1 border-b border-[#E5E5E5]">
+      <div className="flex items-center gap-1 border-b border-[var(--line)]">
         {[["all","All"],["mine","My Expenses"],["approvals","Awaiting My Approval"]].map(([k,l]) => (
           <button key={k} onClick={() => setTab(k)}
-            className={`px-4 py-2 text-sm border-b-2 ${tab === k ? "border-[#8B7F6A] text-[#76705E] font-semibold" : "border-transparent text-[#5C5C5C]"}`}
+            className={`px-4 py-2 text-sm border-b-2 ${tab === k ? "border-[var(--accent)] text-[var(--accent-strong)] font-semibold" : "border-transparent text-[var(--ink-2)]"}`}
             data-testid={`tab-${k}`}>
             {l}
           </button>
@@ -105,12 +105,12 @@ export default function Expenses() {
       <div className="card-flat p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px]" data-testid="expenses-table">
-            <thead className="bg-[#FAFAFA] border-y border-[#E5E5E5]"><tr className="text-left">
+            <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]"><tr className="text-left">
               <Th>Title</Th><Th>Claimant</Th><Th>Total</Th><Th>Status</Th><Th>Next Approver</Th><Th>Date</Th>
             </tr></thead>
             <tbody>
               {expenses.map((e) => (
-                <tr key={e.id} onClick={() => setDetail(e.id)} className="row-hover border-b border-[#F0F0F0] cursor-pointer" data-testid={`exp-row-${e.id}`}>
+                <tr key={e.id} onClick={() => setDetail(e.id)} className="row-hover border-b border-[var(--line-soft)] cursor-pointer" data-testid={`exp-row-${e.id}`}>
                   <Td className="font-semibold text-sm">{e.title}</Td>
                   <Td className="text-xs">{e.claimant_name}</Td>
                   <Td className="font-mono">{fmtMoney(e.total)}</Td>
@@ -119,7 +119,7 @@ export default function Expenses() {
                   <Td className="font-mono text-xs">{formatDate(e.created_at)}</Td>
                 </tr>
               ))}
-              {expenses.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[#5C5C5C]">No expenses yet.</td></tr>}
+              {expenses.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[var(--ink-2)]">No expenses yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -140,7 +140,7 @@ function KPI({ label, value, tone }) {
   return (
     <div className="card-flat p-4 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: tone }} />
-      <div className="overline text-[10px] text-[#5C5C5C] mb-1">{label}</div>
+      <div className="overline text-[10px] text-[var(--ink-2)] mb-1">{label}</div>
       <div className="font-display font-bold tracking-tighter text-3xl tabular-nums">{value ?? "—"}</div>
     </div>
   );
@@ -195,7 +195,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
             <input placeholder="Description" className="input-flat col-span-4" value={l.description} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, description: e.target.value} : x)}))} />
             <input type="number" step="0.01" placeholder="Amount" className="input-flat col-span-2 font-mono" value={l.amount} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, amount: Number(e.target.value)} : x)}))} />
             <input placeholder="Receipt URL" className="input-flat col-span-3" value={l.receipt_url} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, receipt_url: e.target.value} : x)}))} />
-            <button type="button" onClick={() => setF((s) => ({...s, lines: s.lines.filter((_,j) => j !== i)}))} className="btn-ghost col-span-1 text-[#B22B22]"><X size={12}/></button>
+            <button type="button" onClick={() => setF((s) => ({...s, lines: s.lines.filter((_,j) => j !== i)}))} className="btn-ghost col-span-1 text-[var(--danger)]"><X size={12}/></button>
           </div>
         ))}
         <button type="button" onClick={() => setF((s) => ({...s, lines: [...s.lines, { category: "travel", amount: 0, description: "", receipt_url: "", tax_rate: 0 }]}))} className="btn-ghost text-xs"><Plus size={11}/> Add line</button>
@@ -203,7 +203,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
         <F label="Notes"><textarea className="input-flat w-full h-16" value={f.notes} onChange={(e) => setF({...f, notes: e.target.value})} /></F>
         <div className="text-right font-mono font-bold text-lg accent-blue" data-testid="exp-total">Total: {fmtMoney(total)}</div>
 
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy || !f.title || f.lines.length === 0} className="btn-primary" data-testid="exp-submit">{busy ? "Saving…" : expenseId ? "Save and restart approval" : "Submit claim"}</button>
@@ -266,34 +266,34 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
 
   return (
     <Modal onClose={onClose} title={exp.title} eyebrow={`EXPENSE · ${exp.claimant_name}`} wide>
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 mb-3">{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 mb-3">{err}</div>}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <span className={`text-[10px] font-mono uppercase px-3 py-1 ${STATUS_TONE[exp.status]}`}>{exp.status}</span>
-        {exp.pending_approver_role && <span className="text-xs text-[#5C5C5C]">Awaiting: <b>{exp.pending_approver_role}</b></span>}
+        {exp.pending_approver_role && <span className="text-xs text-[var(--ink-2)]">Awaiting: <b>{exp.pending_approver_role}</b></span>}
         <span className="font-mono font-bold text-lg ml-auto accent-blue">{fmtMoney(exp.total)}</span>
       </div>
 
       {(canEdit || canCancel) && (
         <div className="flex gap-2 mb-4">
           {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => onEdit(exp)}><PencilSimple size={12}/> Edit claim</button>}
-          {canCancel && <button type="button" disabled={busy === "delete"} className="btn-ghost text-xs text-[#B22B22]" onClick={cancelExpense}><Trash size={12}/> {exp.status === "reimbursed" ? "Delete with reversal" : "Delete"}</button>}
+          {canCancel && <button type="button" disabled={busy === "delete"} className="btn-ghost text-xs text-[var(--danger)]" onClick={cancelExpense}><Trash size={12}/> {exp.status === "reimbursed" ? "Delete with reversal" : "Delete"}</button>}
         </div>
       )}
 
       <div className="overline mb-2">LINE ITEMS</div>
-      <div className="border border-[#E5E5E5] mb-6 overflow-x-auto">
+      <div className="border border-[var(--line)] mb-6 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]"><tr className="text-left">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr className="text-left">
             <Th>Category</Th><Th>Description</Th><Th>Amount</Th><Th>Receipt</Th>
           </tr></thead>
           <tbody>
             {exp.lines.map((l) => (
-              <tr key={l.id} className="border-b border-[#F0F0F0]">
+              <tr key={l.id} className="border-b border-[var(--line-soft)]">
                 <Td className="text-xs uppercase font-mono">{l.category}</Td>
                 <Td>{l.description || "—"}</Td>
                 <Td className="font-mono">{fmtMoney(l.amount)}</Td>
-                <Td>{safeExternalUrl(l.receipt_url) ? <a href={safeExternalUrl(l.receipt_url)} target="_blank" rel="noreferrer" className="accent-blue text-xs">View</a> : <span className="text-[#6E6A63]">—</span>}</Td>
+                <Td>{safeExternalUrl(l.receipt_url) ? <a href={safeExternalUrl(l.receipt_url)} target="_blank" rel="noreferrer" className="accent-blue text-xs">View</a> : <span className="text-[var(--ink-3)]">—</span>}</Td>
               </tr>
             ))}
           </tbody>
@@ -305,7 +305,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
           <div className="overline mb-2">APPROVAL TRAIL</div>
           <div className="space-y-2">
             {exp.approval_trail.map((t, i) => (
-              <div key={i} className="border border-[#E5E5E5] p-2 text-xs">
+              <div key={i} className="border border-[var(--line)] p-2 text-xs">
                 <div className="font-mono">{(t.at || "").slice(0,16)} · {t.actor_name || t.actor} ({t.actor_role || "system"})</div>
                 <div><b>{t.decision}</b> {t.comment && `— ${t.comment}`}</div>
               </div>
@@ -315,18 +315,18 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       {canDecide && (
-        <div className="border border-[#E5E5E5] p-3 mb-4 bg-[#FAFAFA]">
+        <div className="border border-[var(--line)] p-3 mb-4 bg-[var(--surface-2)]">
           <div className="overline mb-2">MY DECISION</div>
           <textarea className="input-flat w-full h-16 mb-2" placeholder="Optional comment" value={comment} onChange={(e) => setComment(e.target.value)} data-testid="dec-comment" />
           <div className="flex gap-2">
             <button disabled={busy === "approve"} onClick={() => decide("approve")} className="btn-primary text-xs" data-testid="approve-btn"><ThumbsUp size={12}/> Approve</button>
-            <button disabled={busy === "reject"} onClick={() => decide("reject")} className="btn-ghost text-xs text-[#B22B22]" data-testid="reject-btn"><ThumbsDown size={12}/> Reject</button>
+            <button disabled={busy === "reject"} onClick={() => decide("reject")} className="btn-ghost text-xs text-[var(--danger)]" data-testid="reject-btn"><ThumbsDown size={12}/> Reject</button>
           </div>
         </div>
       )}
 
       {canReimburse && (
-        <div className="border border-[#E5E5E5] p-3 bg-[#F5F4F0]">
+        <div className="border border-[var(--line)] p-3 bg-[var(--hover)]">
           <div className="overline mb-2">REIMBURSE</div>
           <div className="flex flex-wrap gap-2 items-center">
             <select aria-label="Pay from" className="input-flat" value={payFrom} onChange={(e) => setPayFrom(e.target.value)} data-testid="pay-from">
@@ -340,7 +340,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       {exp.status === "reimbursed" && (
-        <div className="border border-[#1D633E] bg-[#EFF7EF] p-3 text-sm text-[#1D633E]">
+        <div className="border border-[var(--success)] bg-[var(--success-soft)] p-3 text-sm text-[var(--success)]">
           <Check size={13} className="inline mr-1"/> Reimbursed on {formatDate(exp.reimbursed_at)} · JE {exp.reimbursement_journal_id}
         </div>
       )}
@@ -348,11 +348,11 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
   );
 }
 
-function F({ label, children }) { return <label className="block"><div className="text-xs text-[#5C5C5C] mb-1">{label}</div>{children}</label>; }
+function F({ label, children }) { return <label className="block"><div className="text-xs text-[var(--ink-2)] mb-1">{label}</div>{children}</label>; }
 function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[#E5E5E5] max-h-[92vh] overflow-y-auto ${wide ? "max-w-5xl" : "max-w-2xl"}`}>
+      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-5xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>{eyebrow && <div className="overline mb-1">{eyebrow}</div>}<div className="font-display font-bold tracking-tighter text-3xl">{title}</div></div>
           <button onClick={onClose} className="btn-ghost"><X size={13}/></button>

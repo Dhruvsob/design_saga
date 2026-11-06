@@ -29,27 +29,27 @@ export function MandatoryPinSetupOverlay() {
   };
 
   return (
-    <div className="fixed inset-0 z-[1001] bg-[#F7F6F2] flex items-center justify-center p-5" data-testid="app-pin-setup-required">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[#E5E5E5] shadow-xl p-7">
-        <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[#0A0A0A] text-white">
+    <div className="fixed inset-0 z-[1001] bg-[var(--surface-2)] flex items-center justify-center p-5" data-testid="app-pin-setup-required">
+      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[var(--line)] shadow-xl p-7">
+        <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[var(--ink)] text-white">
           <ShieldCheck size={23} weight="fill" />
         </div>
-        <div className="overline text-center text-[#76705E]">PERSONAL SECURITY</div>
+        <div className="overline text-center text-[var(--accent-strong)]">PERSONAL SECURITY</div>
         <h1 className="font-display font-bold text-3xl text-center mt-2">Create your App PIN</h1>
-        <p className="text-sm text-[#5C5C5C] text-center mt-2 mb-6">
+        <p className="text-sm text-[var(--ink-2)] text-center mt-2 mb-6">
           Choose a personal 4- or 6-digit PIN. It protects only your account and is required after five minutes without activity.
         </p>
-        <label className="block"><span className="text-xs text-[#5C5C5C]">New PIN</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">New PIN</span>
           <input type="password" inputMode="numeric" maxLength={6} autoComplete="new-password"
             className="input-flat w-full mt-1 text-center font-mono text-xl" value={pin}
             onChange={(event) => { setError(""); setPin(cleanPin(event.target.value)); }}
             data-testid="mandatory-pin-new" autoFocus /></label>
-        <label className="block mt-3"><span className="text-xs text-[#5C5C5C]">Confirm PIN</span>
+        <label className="block mt-3"><span className="text-xs text-[var(--ink-2)]">Confirm PIN</span>
           <input type="password" inputMode="numeric" maxLength={6} autoComplete="new-password"
             className="input-flat w-full mt-1 text-center font-mono text-xl" value={confirmPin}
             onChange={(event) => { setError(""); setConfirmPin(cleanPin(event.target.value)); }}
             data-testid="mandatory-pin-confirm" /></label>
-        {error && <div className="text-xs text-[#B4001C] text-center mt-3" role="alert">{error}</div>}
+        {error && <div className="text-xs text-[var(--danger)] text-center mt-3" role="alert">{error}</div>}
         <button className="btn-primary w-full justify-center mt-4" disabled={busy || !validPin(pin)}>
           <ShieldCheck size={15} /> {busy ? "Saving..." : "Save personal PIN"}
         </button>
@@ -102,14 +102,14 @@ export function PinLockOverlay() {
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-[#F7F6F2] flex items-center justify-center p-5" data-testid="app-pin-lock">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[#E5E5E5] shadow-xl p-7">
-        <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[#0A0A0A] text-white">
+    <div className="fixed inset-0 z-[1000] bg-[var(--surface-2)] flex items-center justify-center p-5" data-testid="app-pin-lock">
+      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[var(--line)] shadow-xl p-7">
+        <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[var(--ink)] text-white">
           <LockKey size={23} weight="fill" />
         </div>
-        <div className="overline text-center text-[#76705E]">APP LOCKED</div>
+        <div className="overline text-center text-[var(--accent-strong)]">APP LOCKED</div>
         <h1 className="font-display font-bold text-3xl text-center mt-2">Welcome back, {user.name?.split(" ")[0] || "there"}.</h1>
-        <p className="text-sm text-[#5C5C5C] text-center mt-2 mb-6">
+        <p className="text-sm text-[var(--ink-2)] text-center mt-2 mb-6">
           Enter your personal 4- or 6-digit PIN. The ERP locks after five minutes without activity.
         </p>
         <input
@@ -127,18 +127,18 @@ export function PinLockOverlay() {
         <div className="grid grid-cols-3 gap-2 mt-4" aria-label="PIN keypad">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
             <button key={digit} type="button" onClick={() => addDigit(String(digit))}
-              className="h-11 border border-[#E5E5E5] bg-white hover:bg-[#F7F6F2] font-mono font-semibold">
+              className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] font-mono font-semibold">
               {digit}
             </button>
           ))}
           <span />
           <button type="button" onClick={() => addDigit("0")}
-            className="h-11 border border-[#E5E5E5] bg-white hover:bg-[#F7F6F2] font-mono font-semibold">0</button>
+            className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] font-mono font-semibold">0</button>
           <button type="button" onClick={() => setPin((current) => current.slice(0, -1))}
-            className="h-11 border border-[#E5E5E5] bg-white hover:bg-[#F7F6F2] flex items-center justify-center"
+            className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] flex items-center justify-center"
             aria-label="Delete last digit"><Backspace size={18} /></button>
         </div>
-        {error && <div className="text-xs text-[#B4001C] text-center mt-3" role="alert">{error}</div>}
+        {error && <div className="text-xs text-[var(--danger)] text-center mt-3" role="alert">{error}</div>}
         <button className="btn-primary w-full justify-center mt-4" disabled={busy || !validPin(pin)} data-testid="app-pin-unlock">
           <LockKey size={15} /> {busy ? "Unlocking..." : "Unlock"}
         </button>
@@ -177,10 +177,10 @@ export function PinSecurityDialog({ onClose }) {
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
-      <div className="relative w-full max-w-md bg-white border border-[#E5E5E5] shadow-2xl p-6" onClick={(event) => event.stopPropagation()} data-testid="pin-security-dialog">
+      <div className="relative w-full max-w-md bg-white border border-[var(--line)] shadow-2xl p-6" onClick={(event) => event.stopPropagation()} data-testid="pin-security-dialog">
         <div className="flex items-start justify-between gap-3 mb-5">
           <div>
-            <div className="overline text-[#76705E]">PERSONAL SECURITY</div>
+            <div className="overline text-[var(--accent-strong)]">PERSONAL SECURITY</div>
             <h2 className="font-display font-bold text-2xl mt-1">App Lock</h2>
           </div>
           <button className="btn-icon" onClick={onClose} aria-label="Close App Lock settings"><X size={16} /></button>
@@ -188,11 +188,11 @@ export function PinSecurityDialog({ onClose }) {
 
         {mode === "summary" && (
           <div>
-            <div className="flex items-start gap-3 py-4 border-y border-[#E5E5E5]">
-              <ShieldCheck size={24} className="text-[#1D633E] shrink-0" weight="fill" />
+            <div className="flex items-start gap-3 py-4 border-y border-[var(--line)]">
+              <ShieldCheck size={24} className="text-[var(--success)] shrink-0" weight="fill" />
               <div>
                 <div className="font-semibold">Personal PIN enabled</div>
-                <div className="text-xs text-[#5C5C5C] mt-1">This account locks after five minutes without activity. Each user has a separate PIN.</div>
+                <div className="text-xs text-[var(--ink-2)] mt-1">This account locks after five minutes without activity. Each user has a separate PIN.</div>
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-2 mt-5">
@@ -206,19 +206,19 @@ export function PinSecurityDialog({ onClose }) {
 
         {(mode === "setup" || mode === "change") && (
           <form onSubmit={save} className="space-y-3">
-            <p className="text-sm text-[#5C5C5C]">Use 4 or 6 digits that employees cannot guess. Do not reuse your phone PIN or birth date.</p>
+            <p className="text-sm text-[var(--ink-2)]">Use 4 or 6 digits that employees cannot guess. Do not reuse your phone PIN or birth date.</p>
             {mode === "change" && (
-              <label className="block"><span className="text-xs text-[#5C5C5C]">Current PIN</span>
+              <label className="block"><span className="text-xs text-[var(--ink-2)]">Current PIN</span>
                 <input type="password" inputMode="numeric" maxLength={6} autoComplete="off" className="input-flat w-full mt-1"
                   value={currentPin} onChange={(event) => setCurrentPin(cleanPin(event.target.value))} /></label>
             )}
-            <label className="block"><span className="text-xs text-[#5C5C5C]">New 4- or 6-digit PIN</span>
+            <label className="block"><span className="text-xs text-[var(--ink-2)]">New 4- or 6-digit PIN</span>
               <input type="password" inputMode="numeric" maxLength={6} autoComplete="off" className="input-flat w-full mt-1"
                 value={pin} onChange={(event) => setPin(cleanPin(event.target.value))} data-testid="pin-setup-new" /></label>
-            <label className="block"><span className="text-xs text-[#5C5C5C]">Confirm PIN</span>
+            <label className="block"><span className="text-xs text-[var(--ink-2)]">Confirm PIN</span>
               <input type="password" inputMode="numeric" maxLength={6} autoComplete="off" className="input-flat w-full mt-1"
                 value={confirmPin} onChange={(event) => setConfirmPin(cleanPin(event.target.value))} data-testid="pin-setup-confirm" /></label>
-            {error && <div className="text-xs text-[#B4001C]" role="alert">{error}</div>}
+            {error && <div className="text-xs text-[var(--danger)]" role="alert">{error}</div>}
             <div className="flex justify-end gap-2 pt-2">
               {enabled && <button type="button" className="btn-ghost" onClick={() => setMode("summary")}>Back</button>}
               <button className="btn-primary" disabled={busy}>{busy ? "Saving..." : (enabled ? "Save new PIN" : "Enable App Lock")}</button>

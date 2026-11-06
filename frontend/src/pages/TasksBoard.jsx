@@ -13,24 +13,24 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
 const LANES = [
-  { id: "todo", label: "To do", color: "#5C5C5C" },
-  { id: "in_progress", label: "In progress", color: "#8B7F6A" },
-  { id: "review", label: "Review", color: "#FF8C00" },
-  { id: "done", label: "Done", color: "#1D633E" },
+  { id: "todo", label: "To do", color: "#4A4741" },
+  { id: "in_progress", label: "In progress", color: "#9C4A28" },
+  { id: "review", label: "Review", color: "#B45309" },
+  { id: "done", label: "Done", color: "#1E6A45" },
 ];
 
 const PRIORITY_COLORS = {
-  low: "#5C5C5C", medium: "#0A0A0A", high: "#FF8C00",
-  urgent: "#FF2A00", critical: "#B4001C",
+  low: "#4A4741", medium: "#18181B", high: "#B45309",
+  urgent: "#B3261E", critical: "#B3261E",
 };
 
 const STATUS_COLORS = {
-  "Pending": "#5C5C5C", "Selection Required": "#8A6DFF",
-  "Reference Required": "#FF8C00", "Vendor Required": "#FF8C00",
-  "Quotation Requested": "#F0A93A", "Quotation Received": "#3B82F6",
-  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#8B7F6A",
+  "Pending": "#4A4741", "Selection Required": "#2E5694",
+  "Reference Required": "#B45309", "Vendor Required": "#B45309",
+  "Quotation Requested": "#B45309", "Quotation Received": "#2E5694",
+  "Ordered": "#0EA5E9", "Work Started": "#0891B2", "In Progress": "#9C4A28",
   "On Hold": "#F59E0B", "Inspection Pending": "#EAB308",
-  "Completed": "#1D633E", "Cancelled": "#B4001C",
+  "Completed": "#1E6A45", "Cancelled": "#B3261E",
 };
 
 const EMPTY_TASK = {
@@ -175,7 +175,7 @@ export default function TasksBoard() {
     <div className="space-y-6" data-testid="tasks-page">
       <PageHero
         eyebrow={`WORK / TASKS${overdueCount ? `  ·  ${overdueCount} OVERDUE` : ""}`}
-        title="Ship without chaos."
+        title="Tasks"
         kicker="Employee & Agency tasks, one board. Filter, follow-up, and audit — end-to-end."
         count={filtered.length}
       >
@@ -188,7 +188,7 @@ export default function TasksBoard() {
       </PageHero>
 
       {/* Task-type tabs */}
-      <div className="flex items-center gap-1 border-b border-[#E5E5E5]" data-testid="task-type-tabs">
+      <div className="flex items-center gap-1 border-b border-[var(--line)]" data-testid="task-type-tabs">
         {[
           { id: "all", label: "All" },
           { id: "employee", label: "Employee tasks" },
@@ -199,19 +199,19 @@ export default function TasksBoard() {
             onClick={() => setTaskType(t.id)}
             data-testid={`tab-${t.id}`}
             className={`px-4 py-2.5 text-sm border-b-2 -mb-px transition-all ${taskType === t.id
-              ? "border-[#8B7F6A] text-[#76705E] font-semibold"
-              : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"}`}
+              ? "border-[var(--accent)] text-[var(--accent-strong)] font-semibold"
+              : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
           >
             {t.label}
           </button>
         ))}
         <div className="ml-auto flex items-center gap-1 pb-2">
           <button onClick={() => setView("kanban")} data-testid="view-kanban-btn"
-            className={`btn-icon ${view === "kanban" ? "bg-[#0A0A0A] text-white" : ""}`} aria-label="Kanban view">
+            className={`btn-icon ${view === "kanban" ? "bg-[var(--ink)] text-white" : ""}`} aria-label="Kanban view">
             <SquaresFour size={16} />
           </button>
           <button onClick={() => setView("table")} data-testid="view-table-btn"
-            className={`btn-icon ${view === "table" ? "bg-[#0A0A0A] text-white" : ""}`} aria-label="Table view">
+            className={`btn-icon ${view === "table" ? "bg-[var(--ink)] text-white" : ""}`} aria-label="Table view">
             <TableIcon size={16} />
           </button>
         </div>
@@ -220,7 +220,7 @@ export default function TasksBoard() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2" data-testid="task-filters">
         <div className="relative">
-          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
+          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, item, vendor…"
             className="input-flat pl-9 !w-72" data-testid="task-search" />
         </div>
@@ -252,8 +252,8 @@ export default function TasksBoard() {
         )}
         <button onClick={() => setMineOnly((v) => !v)}
           className={`text-xs px-3 py-2 rounded-md border transition ${mineOnly
-            ? "border-[#1D4ED8] bg-[#EFF4FF] text-[#1D4ED8] font-semibold"
-            : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#1D4ED8]"}`}
+            ? "border-[var(--info)] bg-[var(--info-soft)] text-[var(--info)] font-semibold"
+            : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--info)]"}`}
           data-testid="filter-assigned-to-me">
           Assigned to me
         </button>
@@ -318,7 +318,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
   };
 
   return (
-    <div className="border border-[#0A0A0A] bg-[#0A0A0A] text-white px-4 py-3 scale-in space-y-2" data-testid="bulk-bar">
+    <div className="border border-[var(--ink)] bg-[var(--ink)] text-white px-4 py-3 scale-in space-y-2" data-testid="bulk-bar">
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <ListChecks size={16} />
         <span className="font-mono text-xs tracking-wider">{count} SELECTED</span>
@@ -344,7 +344,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
           <input type="date" value={patch.due_date} onChange={(e) => setPatch({ ...patch, due_date: e.target.value })}
             className="bg-transparent border border-white/30 px-2 py-1 text-xs [color-scheme:dark]" data-testid="bulk-due-date" />
         </label>
-        <button onClick={apply} className="bg-white text-[#0A0A0A] px-4 py-1.5 text-xs font-semibold hover:bg-[#F0F0F0] transition"
+        <button onClick={apply} className="bg-white text-[var(--ink)] px-4 py-1.5 text-xs font-semibold hover:bg-[var(--line-soft)] transition"
           data-testid="bulk-apply">
           Apply to {count}
         </button>
@@ -362,25 +362,25 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
 function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOver, onOpen, selected, onToggleSelect }) {
   const today = dateForInput(new Date());
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 border-t border-l border-[#E5E5E5] stagger" data-testid="kanban-board">
+    <div className="grid grid-cols-1 md:grid-cols-4 border-t border-l border-[var(--line)] stagger" data-testid="kanban-board">
       {LANES.map((c) => {
         const items = tasks.filter((t) => t.status === c.id);
         const isOver = dragOver === c.id;
         return (
           <div
             key={c.id}
-            className={`fade-up border-r border-b border-[#E5E5E5] min-h-[500px] flex flex-col transition-all ${isOver ? "bg-[#F5F4F0]" : ""}`}
+            className={`fade-up border-r border-b border-[var(--line)] min-h-[500px] flex flex-col transition-all ${isOver ? "bg-[var(--hover)]" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setDragOver(c.id); }}
             onDragLeave={() => setDragOver(null)}
             onDrop={() => onDrop(c.id)}
             data-testid={`col-${c.id}`}
           >
-            <div className="p-3 border-b border-[#E5E5E5] bg-[#FAFAFA] flex items-center justify-between">
+            <div className="p-3 border-b border-[var(--line)] bg-[var(--surface-2)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ background: c.color }} />
                 <div className="overline">{c.label}</div>
               </div>
-              <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[#E5E5E5]">{items.length}</div>
+              <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)]">{items.length}</div>
             </div>
             <div className="p-3 flex-1 space-y-3">
               {items.map((t) => {
@@ -394,41 +394,41 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                     onDragStart={() => onDragStart(t.id)}
                     onClick={() => onOpen(t.id)}
                     className={`border p-3 bg-white cursor-grab active:cursor-grabbing transition-all hover:-translate-y-0.5 group ${
-                      isSel ? "border-[#8B7F6A] ring-1 ring-[#8B7F6A]" :
-                      overdue ? "border-[#FF2A00]" : "border-[#E5E5E5] hover:border-[#0A0A0A]"}`}
+                      isSel ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" :
+                      overdue ? "border-[var(--danger)]" : "border-[var(--line)] hover:border-[var(--ink)]"}`}
                     data-testid={`task-${t.id}`}
                   >
                     <div className="flex items-center gap-2 mb-2 text-[10px] font-mono uppercase tracking-wider">
                       <button
                         onClick={(e) => { e.stopPropagation(); onToggleSelect(t.id); }}
                         title={isSel ? "Deselect" : "Select for bulk actions"}
-                        className={`transition ${isSel ? "text-[#76705E]" : "text-[#CCCCCC] hover:text-[#0A0A0A]"}`}
+                        className={`transition ${isSel ? "text-[var(--accent-strong)]" : "text-[var(--line-strong)] hover:text-[var(--ink)]"}`}
                         data-testid={`select-${t.id}`}
                       >
                         {isSel ? <CheckSquare size={14} weight="fill" /> : <Square size={14} />}
                       </button>
-                      <span className="px-1.5 py-0.5 border" style={{ borderColor: isVendor ? "#8A6DFF" : "#8B7F6A", color: isVendor ? "#8A6DFF" : "#8B7F6A" }}>
+                      <span className="px-1.5 py-0.5 border" style={{ borderColor: isVendor ? "#2E5694" : "#9C4A28", color: isVendor ? "#2E5694" : "#9C4A28" }}>
                         {isVendor ? "AGENCY" : "TEAM"}
                       </span>
                       <span style={{ color: PRIORITY_COLORS[t.priority] || "#000" }}>{t.priority}</span>
-                      {overdue && <span className="text-[#FF2A00] flex items-center gap-1"><Warning size={10} weight="fill" /> OVERDUE</span>}
-                      <DotsSixVertical size={12} className="text-[#CCCCCC] ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                      {overdue && <span className="text-[var(--danger)] flex items-center gap-1"><Warning size={10} weight="fill" /> OVERDUE</span>}
+                      <DotsSixVertical size={12} className="text-[var(--line-strong)] ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     <div className="font-semibold text-sm leading-snug">{t.title}</div>
                     {t.assigned_to_me && (
                       <div className="mt-1.5">
-                        <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#EFF4FF] text-[#1D4ED8] border border-[#C7D7FE]" data-testid={`assigned-to-me-${t.id}`}>
+                        <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[var(--info-soft)] text-[var(--info)] border border-[#C7D7FE]" data-testid={`assigned-to-me-${t.id}`}>
                           Assigned to me
                         </span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C5C5C]">
+                    <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[var(--ink-2)]">
                       {t.area && <span>{t.area}</span>}
                       {t.category && <span>· {t.category}</span>}
                     </div>
-                    {t.project_name && <div className="text-xs text-[#5C5C5C] mt-1.5">{t.project_name}</div>}
+                    {t.project_name && <div className="text-xs text-[var(--ink-2)] mt-1.5">{t.project_name}</div>}
                     {t.assigned_to_me && t.assigned_by_name && (
-                      <div className="text-[10px] text-[#76705E] mt-1">Assigned by {t.assigned_by_name}</div>
+                      <div className="text-[10px] text-[var(--accent-strong)] mt-1">Assigned by {t.assigned_by_name}</div>
                     )}
                     {t.status_detail && (
                       <div className="mt-2">
@@ -442,22 +442,22 @@ function KanbanView({ tasks, onDelete, onDragStart, onDrop, dragOver, setDragOve
                         <Bell size={10} /> FOLLOW-UP {formatDate(t.follow_up_date || t.reminder_date)}
                       </div>
                     )}
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#F0F0F0]">
-                      <div className="text-[10px] font-mono tracking-wider uppercase text-[#5C5C5C]">
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--line-soft)]">
+                      <div className="text-[10px] font-mono tracking-wider uppercase text-[var(--ink-2)]">
                         {t.due_date ? `DUE ${formatDate(t.due_date)}` : "NO DUE"}
                         {(t.assignee_name || t.vendor_contact?.vendor_name) && (
-                          <span className="ml-2 text-[#0A0A0A]">· {t.task_type === "vendor" ? t.vendor_contact?.vendor_name : t.assignee_name}</span>
+                          <span className="ml-2 text-[var(--ink)]">· {t.task_type === "vendor" ? t.vendor_contact?.vendor_name : t.assignee_name}</span>
                         )}
                       </div>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }}
-                        className="text-[#FF2A00] hover:scale-110 transition" data-testid={`delete-${t.id}`}>
+                        className="text-[var(--danger)] hover:scale-110 transition" data-testid={`delete-${t.id}`}>
                         <Trash size={12} />
                       </button>
                     </div>
                   </div>
                 );
               })}
-              {items.length === 0 && <div className="text-center py-8 text-xs text-[#6E6A63]">—</div>}
+              {items.length === 0 && <div className="text-center py-8 text-xs text-[var(--ink-3)]">—</div>}
             </div>
           </div>
         );
@@ -479,10 +479,10 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
   const today = dateForInput(new Date());
 
   return (
-    <div className="border border-[#E5E5E5] overflow-x-auto" data-testid="task-table">
+    <div className="border border-[var(--line)] overflow-x-auto" data-testid="task-table">
       <table className="w-full text-sm">
-        <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
-          <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C]">
+        <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
+          <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <th className="p-2 w-8"><input type="checkbox" onChange={(e) => toggleAll(e.target.checked)} data-testid="tbl-select-all" /></th>
             <th className="p-2 w-8">#</th>
             <th className="p-2">Area</th>
@@ -503,12 +503,12 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
           {tasks.map((t, i) => {
             const overdue = t.due_date && t.due_date < today && t.status !== "done";
             return (
-              <tr key={t.id} className={`border-b border-[#F0F0F0] hover:bg-[#FAFAFA] ${overdue ? "bg-[#FFF2F0]" : ""}`}
+              <tr key={t.id} className={`border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)] ${overdue ? "bg-[var(--danger-soft)]" : ""}`}
                 data-testid={`row-${t.id}`}>
                 <td className="p-2">
                   <input type="checkbox" checked={selected.has(t.id)} onChange={(e) => toggleOne(t.id, e.target.checked)} />
                 </td>
-                <td className="p-2 font-mono text-xs text-[#6E6A63]">{i + 1}</td>
+                <td className="p-2 font-mono text-xs text-[var(--ink-3)]">{i + 1}</td>
                 <td className="p-2">
                   <InlineSelect label="Area" value={t.area || ""} options={areas} onChange={(v) => onInline(t.id, "area", v)} />
                 </td>
@@ -516,10 +516,10 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
                   <InlineSelect label="Category" value={t.category || ""} options={categories} onChange={(v) => onInline(t.id, "category", v)} />
                 </td>
                 <td className="p-2">
-                  <button onClick={() => onOpen(t.id)} className="text-left font-semibold hover:text-[#76705E]" data-testid={`open-${t.id}`}>
+                  <button onClick={() => onOpen(t.id)} className="text-left font-semibold hover:text-[var(--accent-strong)]" data-testid={`open-${t.id}`}>
                     {t.title}
                   </button>
-                  {t.item_description && <div className="text-xs text-[#5C5C5C]">{t.item_description}</div>}
+                  {t.item_description && <div className="text-xs text-[var(--ink-2)]">{t.item_description}</div>}
                 </td>
                 <td className="p-2">
                   <InlineNumber value={t.quantity} onChange={(v) => onInline(t.id, "quantity", v)} />
@@ -541,10 +541,10 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
                   {t.task_type === "vendor" ? (t.vendor_contact?.phone || "—") : "—"}
                 </td>
                 <td className="p-2 text-xs font-mono">{formatDate(t.follow_up_date || t.reminder_date)}</td>
-                <td className={`p-2 text-xs font-mono ${overdue ? "text-[#FF2A00] font-semibold" : ""}`}>{formatDate(t.due_date)}</td>
-                <td className="p-2 text-xs text-[#5C5C5C] max-w-[200px] truncate" title={t.remarks || ""}>{t.remarks || "—"}</td>
+                <td className={`p-2 text-xs font-mono ${overdue ? "text-[var(--danger)] font-semibold" : ""}`}>{formatDate(t.due_date)}</td>
+                <td className="p-2 text-xs text-[var(--ink-2)] max-w-[200px] truncate" title={t.remarks || ""}>{t.remarks || "—"}</td>
                 <td className="p-2">
-                  <button onClick={() => onDelete(t.id)} className="text-[#FF2A00] hover:scale-110" data-testid={`row-del-${t.id}`}>
+                  <button onClick={() => onDelete(t.id)} className="text-[var(--danger)] hover:scale-110" data-testid={`row-del-${t.id}`}>
                     <Trash size={12} />
                   </button>
                 </td>
@@ -552,7 +552,7 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
             );
           })}
           {tasks.length === 0 && (
-            <tr><td colSpan={14} className="p-8 text-center text-sm text-[#6E6A63]">No tasks match your filters.</td></tr>
+            <tr><td colSpan={14} className="p-8 text-center text-sm text-[var(--ink-3)]">No tasks match your filters.</td></tr>
           )}
         </tbody>
       </table>
@@ -634,13 +634,13 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
 
   return (
     <form onSubmit={onSubmit} className="card-flat space-y-4 scale-in" data-testid="task-form">
-      <div className="flex items-center gap-2 border-b border-[#E5E5E5] pb-3">
+      <div className="flex items-center gap-2 border-b border-[var(--line)] pb-3">
         {["employee", "vendor"].map((tt) => (
           <button
             key={tt} type="button" onClick={() => set("task_type", tt)}
             data-testid={`form-tt-${tt}`}
             className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider border ${form.task_type === tt
-              ? "bg-[#0A0A0A] text-white border-[#0A0A0A]" : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#0A0A0A]"}`}
+              ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--ink)]"}`}
           >
             {tt === "employee" ? "Employee Task" : "Agency / Vendor Task"}
           </button>
@@ -700,16 +700,16 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
         ) : (
           <>
             <div className="md:col-span-2">
-              <div className="text-[11px] text-[#5C5C5C] mb-1">Assign to employee(s) — they'll see it as "Assigned to me"</div>
-              <div className="border border-[#E5E5E5] rounded-md max-h-28 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="task-assignee-picker">
-                {employees.length === 0 && <span className="text-xs text-[#6E6A63]">No employees yet — type a name below.</span>}
+              <div className="text-[11px] text-[var(--ink-2)] mb-1">Assign to employee(s) — they'll see it as "Assigned to me"</div>
+              <div className="border border-[var(--line)] rounded-md max-h-28 overflow-y-auto p-2 flex flex-wrap gap-1.5" data-testid="task-assignee-picker">
+                {employees.length === 0 && <span className="text-xs text-[var(--ink-3)]">No employees yet — type a name below.</span>}
                 {employees.map((emp) => {
                   const on = (form.assignees || []).includes(emp.id);
                   return (
                     <button type="button" key={emp.id} onClick={() => toggleAssignee(emp.id)}
                       className={`px-2.5 py-1 text-xs rounded-full border transition ${on
-                        ? "border-[#8B7F6A] bg-[#F5F4F0] text-[#76705E] font-semibold"
-                        : "border-[#E5E5E5] text-[#5C5C5C] hover:border-[#8B7F6A]"}`}
+                        ? "border-[var(--accent)] bg-[var(--hover)] text-[var(--accent-strong)] font-semibold"
+                        : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--accent)]"}`}
                       data-testid={`assignee-opt-${emp.id}`}>
                       {empName(emp)}
                     </button>

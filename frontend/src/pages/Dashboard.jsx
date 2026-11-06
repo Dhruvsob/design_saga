@@ -22,7 +22,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const { hasPerm } = useAuth();
+  const { hasPerm, user } = useAuth();
 
   const load = async () => {
     try {
@@ -55,23 +55,21 @@ export default function Dashboard() {
   const totalLeads = pipeline.reduce((s, p) => s + p.count, 0);
   const wonRate = totalLeads ? Math.round(((pipeline.find((p) => p.stage === "Won")?.count || 0) / totalLeads) * 100) : 0;
 
+  const firstName = (user?.name || "").trim().split(/\s+/)[0];
   return (
-    <div className="space-y-10 stagger" data-testid="dashboard-page">
+    <div className="space-y-8" data-testid="dashboard-page">
       {/* ============== HERO ============== */}
-      <div className="fade-up flex items-start justify-between flex-wrap gap-4 pb-2 border-b border-[#E5E5E5]">
+      <div className="fade-in flex items-end justify-between flex-wrap gap-x-6 gap-y-3 pb-5 border-b border-[var(--line)]">
         <div>
-          <div className="overline mb-3 flex items-center gap-3">
-            <span className="live-dot" />
-            OVERVIEW · {formatDate(new Date())}
+          <div className="text-xs font-medium text-[var(--ink-3)] mb-1.5">
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" })}
           </div>
-          <h1 className="font-display font-bold tracking-tighter text-5xl lg:text-6xl leading-[0.95]">
-            The control<br/>room.
+          <h1 className="font-display font-bold text-[26px] sm:text-[28px] leading-tight tracking-tight">
+            {greeting()}{firstName ? `, ${firstName}` : ""}
           </h1>
-          <p className="text-[#5C5C5C] mt-3 max-w-md text-lg">
-            Every lead, line item, and late task — in one frame.
-          </p>
+          <p className="text-[var(--ink-3)] mt-1 text-sm">Here is what needs your attention today.</p>
         </div>
-        <div className="flex items-center gap-3 mt-2">
+        <div className="flex items-center gap-2">
           <button onClick={() => navigate("/tasks")} className="btn-ghost" data-testid="go-tasks-btn">
             <Lightning size={14} /> Task board
           </button>
@@ -85,14 +83,14 @@ export default function Dashboard() {
 
       {/* ============== KPI ROW ============== */}
       <div className="fade-up">
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${kpiGrid} border-t border-l border-[#E5E5E5]`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${kpiGrid} border-t border-l border-[var(--line)]`}>
           {canSeeRevenue && (
             <Kpi
               label="Revenue collected"
               value={compactMoney(kpis.revenue)}
               sub={fmtMoney(kpis.revenue)}
               Icon={Money}
-              accent="#1D633E"
+              accent="#1E6A45"
               onClick={() => navigate("/accounting")}
               testid="kpi-revenue"
             />
@@ -102,7 +100,7 @@ export default function Dashboard() {
             value={kpis.active_projects || 0}
             sub={`${kpis.total_projects || 0} total`}
             Icon={Briefcase}
-            accent="#8B7F6A"
+            accent="#9C4A28"
             onClick={() => navigate("/projects")}
             testid="kpi-active-projects"
           />
@@ -111,7 +109,7 @@ export default function Dashboard() {
             value={kpis.overdue_tasks || 0}
             sub={kpis.overdue_tasks > 0 ? "Action needed" : "All clear"}
             Icon={Warning}
-            accent={kpis.overdue_tasks ? "#FF2A00" : "#5C5C5C"}
+            accent={kpis.overdue_tasks ? "#B3261E" : "#4A4741"}
             trend={kpis.overdue_tasks > 0 ? "HOT" : "OK"}
             onClick={() => navigate("/tasks")}
             testid="kpi-overdue"
@@ -122,7 +120,7 @@ export default function Dashboard() {
               value={compactMoney(kpis.collection_due)}
               sub={fmtMoney(kpis.collection_due)}
               Icon={Clock}
-              accent="#8B7F6A"
+              accent="#9C4A28"
               trend={kpis.collection_due > 0 ? "FOLLOW UP" : "—"}
               onClick={() => navigate("/invoices")}
               testid="kpi-collection"
@@ -140,7 +138,7 @@ export default function Dashboard() {
               <div className="font-display font-bold text-2xl tracking-tighter">Leads by stage</div>
             </div>
             <div className="flex items-center gap-2 overline">
-              <ChartBar size={14} className="text-[#76705E]" />
+              <ChartBar size={14} className="text-[var(--accent-strong)]" />
               {totalLeads} TOTAL · {wonRate}% WIN
             </div>
           </div>
@@ -148,15 +146,15 @@ export default function Dashboard() {
             {pipeline.map((s, i) => (
               <div key={s.stage} className="flex items-center gap-4 group">
                 <div className="w-28 flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-[#6E6A63]">0{i + 1}</span>
-                  <span className="text-xs font-mono tracking-wider uppercase text-[#5C5C5C] group-hover:text-[#0A0A0A] transition">{s.stage}</span>
+                  <span className="font-mono text-[10px] text-[var(--ink-3)]">0{i + 1}</span>
+                  <span className="text-xs font-mono tracking-wider uppercase text-[var(--ink-2)] group-hover:text-[var(--ink)] transition">{s.stage}</span>
                 </div>
-                <div className="flex-1 h-9 bg-[#F5F4F0] relative overflow-hidden rounded-md border border-[#EFEDE7]">
+                <div className="flex-1 h-9 bg-[var(--hover)] relative overflow-hidden rounded-md border border-[#EFEDE7]">
                   <div
                     className="h-full transition-all duration-700 ease-out flex items-center px-3"
                     style={{
                       width: `${(s.count / maxFunnel) * 100}%`,
-                      background: s.stage === "Won" ? "#2E6B4B" : s.stage === "Lost" ? "#B4342B" : "#8B7F6A",
+                      background: s.stage === "Won" ? "#1E6A45" : s.stage === "Lost" ? "#B3261E" : "#9C4A28",
                       animation: "width-in 700ms cubic-bezier(0.16, 1, 0.3, 1)",
                     }}
                   >
@@ -171,7 +169,7 @@ export default function Dashboard() {
               </div>
             ))}
             {totalLeads === 0 && (
-              <p className="text-sm text-[#5C5C5C] py-6 text-center">No leads yet. Tap "New lead" to start your pipeline.</p>
+              <p className="text-sm text-[var(--ink-2)] py-6 text-center">No leads yet. Tap "New lead" to start your pipeline.</p>
             )}
           </div>
         </div>
@@ -179,22 +177,22 @@ export default function Dashboard() {
         <div className="card-flat card-bordered-accent" data-testid="alerts-panel">
           <div className="flex items-center justify-between mb-4">
             <div className="overline">ALERTS / NOW</div>
-            <Lightning size={16} className="text-[#FF2A00]" />
+            <Lightning size={16} className="text-[var(--danger)]" />
           </div>
           {alerts.length === 0 ? (
             <div className="py-8 text-center">
-              <div className="font-display text-3xl tracking-tighter text-[#1D633E] mb-1">⏤</div>
-              <p className="text-sm text-[#5C5C5C]">All clear.<br/>Proceed calmly.</p>
+              <div className="font-display text-3xl tracking-tighter text-[var(--success)] mb-1">⏤</div>
+              <p className="text-sm text-[var(--ink-2)]">All clear.<br/>Proceed calmly.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {alerts.map((a, i) => (
                 <div
                   key={i}
-                  className="border-l-2 pl-3 py-2 hover:bg-[#FAFAFA] transition"
-                  style={{ borderColor: a.level === "high" ? "#FF2A00" : "#8B7F6A" }}
+                  className="border-l-2 pl-3 py-2 hover:bg-[var(--surface-2)] transition"
+                  style={{ borderColor: a.level === "high" ? "#B3261E" : "#9C4A28" }}
                 >
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-[#5C5C5C]">{a.level}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--ink-2)]">{a.level}</div>
                   <div className="text-sm font-medium">{a.message}</div>
                 </div>
               ))}
@@ -211,7 +209,7 @@ export default function Dashboard() {
             <div className="overline">{util.length} {util.length === 1 ? "PERSON" : "PEOPLE"}</div>
           </div>
           {util.length === 0 ? (
-            <p className="text-sm text-[#5C5C5C] py-6">No active tasks assigned.</p>
+            <p className="text-sm text-[var(--ink-2)] py-6">No active tasks assigned.</p>
           ) : (
             <div className="space-y-4">
               {util.map((u, i) => {
@@ -220,19 +218,19 @@ export default function Dashboard() {
                   <div key={u.name} className="group">
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-[#0A0A0A] text-white flex items-center justify-center text-[10px] font-display font-bold">
+                        <div className="w-6 h-6 bg-[var(--ink)] text-white flex items-center justify-center text-[10px] font-display font-bold">
                           {u.name.slice(0, 1).toUpperCase()}
                         </div>
                         <span className="text-sm font-medium">{u.name}</span>
                       </div>
                       <span className="font-mono text-sm tabular-nums">
                         <span className="font-semibold">{u.load}</span>
-                        <span className="text-[#6E6A63]"> tasks</span>
+                        <span className="text-[var(--ink-3)]"> tasks</span>
                       </span>
                     </div>
-                    <div className="h-2 bg-[#F0F0F0] relative overflow-hidden">
+                    <div className="h-2 bg-[var(--line-soft)] relative overflow-hidden">
                       <div
-                        className="h-2 bg-[#0A0A0A] group-hover:bg-[#8B7F6A] transition-colors"
+                        className="h-2 bg-[var(--ink)] group-hover:bg-[var(--accent)] transition-colors"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -246,19 +244,19 @@ export default function Dashboard() {
         <div className="card-flat" data-testid="sources">
           <div className="flex items-center justify-between mb-4">
             <div className="overline">LEADS / BY SOURCE</div>
-            <button onClick={() => navigate("/crm")} className="overline hover:text-[#76705E] flex items-center gap-1 transition">
+            <button onClick={() => navigate("/crm")} className="overline hover:text-[var(--accent-strong)] flex items-center gap-1 transition">
               VIEW PIPELINE <CaretRight size={10} weight="bold" />
             </button>
           </div>
           {sources.length === 0 ? (
-            <p className="text-sm text-[#5C5C5C] py-6">No leads recorded yet.</p>
+            <p className="text-sm text-[var(--ink-2)] py-6">No leads recorded yet.</p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {sources.map((s) => (
-                <div key={s.source} className="border border-[#E5E5E5] p-4 hover:border-[#0A0A0A] hover:-translate-y-0.5 transition cursor-pointer">
+                <div key={s.source} className="border border-[var(--line)] p-4 hover:border-[var(--ink)] hover:-translate-y-0.5 transition cursor-pointer">
                   <div className="overline">{s.source}</div>
                   <div className="font-display font-bold text-3xl tracking-tighter mt-1">{s.count}</div>
-                  <div className="mt-2 h-0.5 bg-[#8B7F6A]" style={{ width: `${Math.min(100, s.count * 25)}%` }} />
+                  <div className="mt-2 h-0.5 bg-[var(--accent)]" style={{ width: `${Math.min(100, s.count * 25)}%` }} />
                 </div>
               ))}
             </div>
@@ -267,8 +265,8 @@ export default function Dashboard() {
       </div>
 
       {/* ============== MARQUEE FOOTER ============== */}
-      <div className="fade-up border-t border-[#E5E5E5] pt-6 marquee">
-        <div className="marquee-track text-[#5C5C5C]">
+      <div className="fade-up border-t border-[var(--line)] pt-6 marquee">
+        <div className="marquee-track text-[var(--ink-2)]">
           {Array.from({ length: 2 }).map((_, k) => (
             <div key={k} className="flex items-center gap-12">
               <span className="overline">DESIGN SAGA STUDIO OS</span>
@@ -297,28 +295,28 @@ function Kpi({ label, value, sub, Icon, accent, trend, sparkData, testid, onClic
     <div
       onClick={onClick}
       role={onClick ? "button" : undefined}
-      className={`border-r border-b border-[#E5E5E5] p-6 bg-white hover:bg-[#FAFAFA] transition relative group ${onClick ? "cursor-pointer" : ""}`}
+      className={`border-r border-b border-[var(--line)] p-6 bg-white hover:bg-[var(--surface-2)] transition relative group ${onClick ? "cursor-pointer" : ""}`}
       data-testid={testid}
     >
       {/* hover left bar */}
-      <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: accent || "#0A0A0A" }} />
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: accent || "#18181B" }} />
 
       <div className="flex items-start justify-between mb-8">
         <div className="overline">{label}</div>
-        <Icon size={18} style={{ color: accent || "#5C5C5C" }} weight="duotone" />
+        <Icon size={18} style={{ color: accent || "#4A4741" }} weight="duotone" />
       </div>
 
       <div
         className="font-display font-bold tracking-tighter text-4xl lg:text-5xl"
-        style={{ color: accent || "#0A0A0A" }}
+        style={{ color: accent || "#18181B" }}
       >
         {value}
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2">
-        <div className="text-xs text-[#5C5C5C] truncate flex-1">{sub}</div>
+        <div className="text-xs text-[var(--ink-2)] truncate flex-1">{sub}</div>
         {trend && (
-          <div className="font-mono text-[10px] font-semibold tracking-widest" style={{ color: accent || "#5C5C5C" }}>
+          <div className="font-mono text-[10px] font-semibold tracking-widest" style={{ color: accent || "#4A4741" }}>
             {trend}
           </div>
         )}
@@ -333,7 +331,7 @@ function Kpi({ label, value, sub, Icon, accent, trend, sparkData, testid, onClic
               className="flex-1 transition-all"
               style={{
                 height: `${(v / max) * 100}%`,
-                background: i === sparkData.length - 1 ? (accent || "#0A0A0A") : "#E5E5E5",
+                background: i === sparkData.length - 1 ? (accent || "#18181B") : "#E3E0D8",
                 minHeight: 2,
               }}
             />
@@ -353,7 +351,7 @@ function DashboardSkeleton() {
         <div className="skeleton h-16 w-72"></div>
         <div className="skeleton h-4 w-96"></div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-px bg-[#E5E5E5]">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-px bg-[var(--line)]">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="bg-white p-6 space-y-3">
             <div className="skeleton h-3 w-24"></div>
@@ -375,4 +373,9 @@ function DashboardSkeleton() {
       </div>
     </div>
   );
+}
+
+function greeting() {
+  const h = Number(new Date().toLocaleString("en-IN", { hour: "numeric", hour12: false, timeZone: "Asia/Kolkata" }));
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }

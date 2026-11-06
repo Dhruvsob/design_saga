@@ -34,8 +34,8 @@ export function PdfFrame({ path, title, className = "w-full h-full" }) {
 
   if (error) {
     return (
-      <div className={`${className} flex flex-col items-center justify-center gap-3 text-sm text-[#5C5C5C] bg-[#FAF9F6]`} role="alert">
-        <FilePdf size={36} className="text-[#B4001C]" />
+      <div className={`${className} flex flex-col items-center justify-center gap-3 text-sm text-[var(--ink-2)] bg-[var(--surface-2)]`} role="alert">
+        <FilePdf size={36} className="text-[var(--danger)]" />
         {error}
         <a className="btn-ghost" href={`${API}${path}`} target="_blank" rel="noreferrer"><ArrowSquareOut size={14} /> Open in new tab</a>
       </div>
@@ -43,9 +43,9 @@ export function PdfFrame({ path, title, className = "w-full h-full" }) {
   }
   if (!url) {
     return (
-      <div className={`${className} flex items-center justify-center bg-[#FAF9F6]`} aria-busy="true">
-        <div className="flex flex-col items-center gap-3 text-sm text-[#6E6A63]">
-          <span className="w-8 h-8 rounded-full border-2 border-[#E8E6E1] border-t-[#76705E] animate-spin" />
+      <div className={`${className} flex items-center justify-center bg-[var(--surface-2)]`} aria-busy="true">
+        <div className="flex flex-col items-center gap-3 text-sm text-[var(--ink-3)]">
+          <span className="w-8 h-8 rounded-full border-2 border-[var(--line)] border-t-[var(--accent-strong)] animate-spin" />
           Preparing preview…
         </div>
       </div>
@@ -67,9 +67,9 @@ export default function PdfPreviewModal({ path, title, filename, onClose }) {
          onClick={onClose} role="dialog" aria-modal="true" aria-label={title} data-testid="pdf-preview">
       <div className="bg-white w-full max-w-4xl h-[94vh] flex flex-col rounded-xl overflow-hidden shadow-2xl"
            onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#E8E6E1]">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--line)]">
           <div className="min-w-0 flex items-center gap-2">
-            <FilePdf size={18} className="text-[#76705E] shrink-0" />
+            <FilePdf size={18} className="text-[var(--accent-strong)] shrink-0" />
             <span className="font-semibold truncate">{title}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">

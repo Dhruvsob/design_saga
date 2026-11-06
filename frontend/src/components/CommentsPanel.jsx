@@ -51,42 +51,42 @@ export default function CommentsPanel({ entityType, entityId }) {
   };
 
   return (
-    <div className="border border-[#E5E5E5]" data-testid="comments-panel">
-      <div className="p-4 border-b border-[#E5E5E5] bg-[#FAFAFA] flex items-center gap-2">
+    <div className="border border-[var(--line)]" data-testid="comments-panel">
+      <div className="p-4 border-b border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
         <ChatCircleText size={14} />
         <span className="overline">NOTES &amp; COMMENTS</span>
-        <span className="font-mono text-xs text-[#6E6A63] ml-auto">{comments.length}</span>
+        <span className="font-mono text-xs text-[var(--ink-3)] ml-auto">{comments.length}</span>
       </div>
 
-      <div className="max-h-96 overflow-y-auto divide-y divide-[#F0F0F0]">
-        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[#6E6A63]">Loading…</div>}
+      <div className="max-h-96 overflow-y-auto divide-y divide-[var(--line-soft)]">
+        {loading && <div className="p-4 text-xs font-mono uppercase tracking-wider text-[var(--ink-3)]">Loading…</div>}
         {!loading && comments.length === 0 && (
-          <div className="p-6 text-center text-sm text-[#6E6A63]">No comments yet. Start the discussion.</div>
+          <div className="p-6 text-center text-sm text-[var(--ink-3)]">No comments yet. Start the discussion.</div>
         )}
         {comments.map((c) => (
           <div key={c.id} className="p-4 group" data-testid={`comment-${c.id}`}>
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 bg-[#0A0A0A] text-white flex items-center justify-center font-display font-bold text-[10px]">
+              <div className="w-6 h-6 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-[10px]">
                 {(c.author_name || "?").slice(0, 1).toUpperCase()}
               </div>
               <span className="text-sm font-semibold">{c.author_name}</span>
-              <span className="text-[10px] font-mono uppercase tracking-wider text-[#6E6A63]">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-3)]">
                 {c.author_role} · {relativeTime(c.created_at)}
               </span>
               {(c.author_id === user?.user_id || user?.role === "Admin") && (
                 <button onClick={() => remove(c.id)} title="Delete"
-                  className="ml-auto text-[#B22B22] opacity-0 group-hover:opacity-100 transition"
+                  className="ml-auto text-[var(--danger)] opacity-0 group-hover:opacity-100 transition"
                   data-testid={`comment-delete-${c.id}`}>
                   <Trash size={12} />
                 </button>
               )}
             </div>
-            <p className="text-sm text-[#0A0A0A] whitespace-pre-wrap pl-8">{c.body}</p>
+            <p className="text-sm text-[var(--ink)] whitespace-pre-wrap pl-8">{c.body}</p>
           </div>
         ))}
       </div>
 
-      <form onSubmit={submit} className="p-3 border-t border-[#E5E5E5] flex items-center gap-2">
+      <form onSubmit={submit} className="p-3 border-t border-[var(--line)] flex items-center gap-2">
         <input
           className="input-flat flex-1"
           placeholder="Write a note or comment…"

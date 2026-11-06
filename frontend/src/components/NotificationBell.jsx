@@ -13,20 +13,20 @@ const PREFERENCE_LABELS = [
 ];
 
 const KIND_COLOR = {
-  task_assigned: "bg-[#EEF2FF] text-[#76705E]",
-  task_due: "bg-[#FFF4E5] text-[#7A4E1A]",
-  task_overdue: "bg-[#FCEEEC] text-[#B22B22]",
-  vendor_bill_due: "bg-[#FFF4E5] text-[#7A4E1A]",
-  vendor_bill_overdue: "bg-[#FCEEEC] text-[#B22B22]",
-  invoice_due: "bg-[#FFF4E5] text-[#7A4E1A]",
-  invoice_overdue: "bg-[#FCEEEC] text-[#B22B22]",
-  milestone_due: "bg-[#FFF4E5] text-[#7A4E1A]",
-  milestone_overdue: "bg-[#FCEEEC] text-[#B22B22]",
+  task_assigned: "bg-[var(--info-soft)] text-[var(--accent-strong)]",
+  task_due: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  task_overdue: "bg-[var(--danger-soft)] text-[var(--danger)]",
+  vendor_bill_due: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  vendor_bill_overdue: "bg-[var(--danger-soft)] text-[var(--danger)]",
+  invoice_due: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  invoice_overdue: "bg-[var(--danger-soft)] text-[var(--danger)]",
+  milestone_due: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  milestone_overdue: "bg-[var(--danger-soft)] text-[var(--danger)]",
   leave_request: "bg-[#F5EEF7] text-[#5B2A83]",
-  leave_decided: "bg-[#EFF7EF] text-[#1D633E]",
-  account_approved: "bg-[#EFF7EF] text-[#1D633E]",
-  account_rejected: "bg-[#FCEEEC] text-[#B22B22]",
-  info: "bg-[#F2F2F2] text-[#0A0A0A]",
+  leave_decided: "bg-[var(--success-soft)] text-[var(--success)]",
+  account_approved: "bg-[var(--success-soft)] text-[var(--success)]",
+  account_rejected: "bg-[var(--danger-soft)] text-[var(--danger)]",
+  info: "bg-[var(--line-soft)] text-[var(--ink)]",
 };
 
 const relativeTime = (iso) => {
@@ -151,7 +151,7 @@ export default function NotificationBell() {
         {unread > 0 && (
           <span
             data-testid="notif-badge"
-            className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#B22B22] text-white text-[10px] font-mono font-bold flex items-center justify-center rounded-full"
+            className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[var(--danger)] text-white text-[10px] font-mono font-bold flex items-center justify-center rounded-full"
           >
             {unread > 99 ? "99+" : unread}
           </span>
@@ -161,13 +161,13 @@ export default function NotificationBell() {
       {open && (
         <div
           data-testid="notif-panel"
-          className="absolute right-0 mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[520px] bg-white border border-[#E5E5E5] shadow-xl z-50 flex flex-col"
+          className="absolute right-0 mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[520px] bg-white border border-[var(--line)] shadow-xl z-50 flex flex-col"
         >
           {/* header */}
-          <div className="p-4 border-b border-[#E5E5E5] flex items-center justify-between">
+          <div className="p-4 border-b border-[var(--line)] flex items-center justify-between">
             <div>
               <div className="overline">{settingsOpen ? "NOTIFICATION SETTINGS" : "NOTIFICATIONS"}</div>
-              <div className="text-xs text-[#5C5C5C] mt-0.5">
+              <div className="text-xs text-[var(--ink-2)] mt-0.5">
                 {settingsOpen ? "Choose alerts for this account." : (unread > 0 ? `${unread} unread` : "All caught up.")}
               </div>
             </div>
@@ -202,7 +202,7 @@ export default function NotificationBell() {
           {/* list */}
           {settingsOpen ? (
             <div className="overflow-y-auto flex-1 p-4" data-testid="notif-settings-panel">
-              <div className="divide-y divide-[#E5E5E5] border-y border-[#E5E5E5]">
+              <div className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
                 {PREFERENCE_LABELS.map(([key, label]) => (
                   <label key={key} className="min-h-12 flex items-center justify-between gap-4 py-3 cursor-pointer">
                     <span className="text-sm font-semibold">{label}</span>
@@ -210,13 +210,13 @@ export default function NotificationBell() {
                       type="checkbox"
                       checked={preferences?.[key] !== false}
                       onChange={(e) => setPreferences((cur) => ({ ...cur, [key]: e.target.checked }))}
-                      className="h-4 w-4 accent-[#8B7F6A]"
+                      className="h-4 w-4 accent-[var(--accent)]"
                       data-testid={`notif-pref-${key}`}
                     />
                   </label>
                 ))}
               </div>
-              <div className="text-xs text-[#5C5C5C] mt-3">
+              <div className="text-xs text-[var(--ink-2)] mt-3">
                 Account approval and security notices remain enabled.
               </div>
               <button
@@ -227,17 +227,17 @@ export default function NotificationBell() {
           ) : <div className="overflow-y-auto flex-1">
             {sorted.length === 0 && (
               <div className="p-10 text-center">
-                <Bell size={24} className="mx-auto text-[#6E6A63] mb-2" />
+                <Bell size={24} className="mx-auto text-[var(--ink-3)] mb-2" />
                 <div className="overline mb-1">EMPTY</div>
-                <div className="text-xs text-[#5C5C5C]">No notifications yet.</div>
+                <div className="text-xs text-[var(--ink-2)]">No notifications yet.</div>
               </div>
             )}
             {sorted.map((n) => (
               <div
                 key={n.id}
                 data-testid={`notif-row-${n.id}`}
-                className={`p-3 border-b border-[#F0F0F0] hover:bg-[#FAFAFA] transition ${
-                  !n.read ? "bg-[#F7F9FE]" : ""
+                className={`p-3 border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)] transition ${
+                  !n.read ? "bg-[var(--info-soft)]" : ""
                 }`}
               >
                 <div className="flex items-start gap-2">
@@ -248,11 +248,11 @@ export default function NotificationBell() {
                     <div className={`text-sm ${!n.read ? "font-semibold" : ""}`}>
                       {n.link ? (
                         <Link to={n.link} onClick={() => { markRead(n.id); setOpen(false); }}
-                          className="hover:text-[#76705E]">{n.title}</Link>
+                          className="hover:text-[var(--accent-strong)]">{n.title}</Link>
                       ) : n.title}
                     </div>
-                    {n.body && <div className="text-xs text-[#5C5C5C] mt-0.5">{n.body}</div>}
-                    <div className="text-[10px] text-[#6E6A63] font-mono uppercase tracking-wider mt-1">
+                    {n.body && <div className="text-xs text-[var(--ink-2)] mt-0.5">{n.body}</div>}
+                    <div className="text-[10px] text-[var(--ink-3)] font-mono uppercase tracking-wider mt-1">
                       {relativeTime(n.created_at)}
                     </div>
                   </div>

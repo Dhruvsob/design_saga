@@ -91,23 +91,23 @@ export default function ClientDetail() {
 
   return (
     <div className="space-y-8" data-testid="client-detail">
-      <Link to="/clients" className="inline-flex items-center gap-1 text-sm text-[#5C5C5C] hover:text-[#0A0A0A]">
+      <Link to="/clients" className="inline-flex items-center gap-1 text-sm text-[var(--ink-2)] hover:text-[var(--ink)]">
         <ArrowLeft size={14} /> Back to clients
       </Link>
 
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <div className="overline mb-2">
-            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#F5F5F5] text-[#6E6A63]">ARCHIVED</span>}
+            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{c.name}</h1>
-          <div className="mt-2 text-sm text-[#5C5C5C] space-x-3">
+          <div className="mt-2 text-sm text-[var(--ink-2)] space-x-3">
             {c.company && <span>{c.company}</span>}
             {c.email && <span className="font-mono text-xs">{c.email}</span>}
             {c.phone && <span className="font-mono text-xs">{c.phone}</span>}
           </div>
-          {c.address && <div className="mt-1 text-sm text-[#5C5C5C]">{c.address}</div>}
-          {c.notes && <p className="mt-2 text-sm text-[#5C5C5C] max-w-2xl border-l-2 border-[#E5E5E5] pl-3">{c.notes}</p>}
+          {c.address && <div className="mt-1 text-sm text-[var(--ink-2)]">{c.address}</div>}
+          {c.notes && <p className="mt-2 text-sm text-[var(--ink-2)] max-w-2xl border-l-2 border-[var(--line)] pl-3">{c.notes}</p>}
         </div>
         <div className="flex items-center gap-2">
           {hasPerm("clients.update") && (
@@ -124,19 +124,19 @@ export default function ClientDetail() {
       </div>
 
       {/* summary strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[#E5E5E5]">
+      <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)]">
         <Stat label="Projects" value={s.projects ?? 0} />
         <Stat label="Invoiced" value={inr(s.total_invoiced)} />
-        <Stat label="Collected" value={inr(s.total_paid)} accent="#1D633E" />
-        <Stat label="Outstanding" value={inr(s.outstanding)} accent={s.outstanding > 0 ? "#B22B22" : undefined} />
+        <Stat label="Collected" value={inr(s.total_paid)} accent="#1E6A45" />
+        <Stat label="Outstanding" value={inr(s.outstanding)} accent={s.outstanding > 0 ? "#B3261E" : undefined} />
       </div>
 
       {/* tabs */}
-      <div className="flex gap-1 border-b border-[#E5E5E5]">
+      <div className="flex gap-1 border-b border-[var(--line)]">
         {TABS.filter((t) => t !== "Ledger" || hasPerm("finance.read")).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
-              tab === t ? "border-[#8B7F6A] text-[#76705E]" : "border-transparent text-[#5C5C5C] hover:text-[#0A0A0A]"
+              tab === t ? "border-[var(--accent)] text-[var(--accent-strong)]" : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
             }`}
             data-testid={`client-tab-${t}`}>
             {t}
@@ -149,11 +149,11 @@ export default function ClientDetail() {
           {(c.projects || []).length === 0 && <Empty text="No projects for this client yet." />}
           {(c.projects || []).map((p) => (
             <button key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
-              className="w-full text-left border border-[#E5E5E5] p-4 hover:border-[#0A0A0A] transition flex items-center justify-between"
+              className="w-full text-left border border-[var(--line)] p-4 hover:border-[var(--ink)] transition flex items-center justify-between"
               data-testid={`client-project-${p.id}`}>
               <div>
                 <div className="font-semibold">{p.name}</div>
-                <div className="text-xs text-[#5C5C5C] mt-0.5">{p.project_type} · {p.stage}</div>
+                <div className="text-xs text-[var(--ink-2)] mt-0.5">{p.project_type} · {p.stage}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono text-sm font-semibold">{inr(p.budget)}</span>
@@ -168,10 +168,10 @@ export default function ClientDetail() {
         <div className="space-y-2">
           {(c.invoices || []).length === 0 && <Empty text="No invoices for this client yet." />}
           {(c.invoices || []).map((i) => (
-            <div key={i.id} className="border border-[#E5E5E5] p-4 flex items-center justify-between">
+            <div key={i.id} className="border border-[var(--line)] p-4 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
-                <div className="text-xs text-[#5C5C5C] mt-0.5">{i.doc_type} · {i.project_name || "—"} · Due {formatDate(i.due_date)}</div>
+                <div className="text-xs text-[var(--ink-2)] mt-0.5">{i.doc_type} · {i.project_name || "—"} · Due {formatDate(i.due_date)}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold">{inr(i.total)}</span>
@@ -188,15 +188,15 @@ export default function ClientDetail() {
           {!ledger && !ledgerErr && <div className="overline">LOADING LEDGER…</div>}
           {ledger && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[#E5E5E5]">
+              <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)]">
                 <Stat label="Opening" value={inr(ledger.opening_balance)} />
-                <Stat label="Inflow" value={inr(ledger.inflow)} accent="#1D633E" />
-                <Stat label="Outflow" value={inr(ledger.outflow)} accent="#B22B22" />
+                <Stat label="Inflow" value={inr(ledger.inflow)} accent="#1E6A45" />
+                <Stat label="Outflow" value={inr(ledger.outflow)} accent="#B3261E" />
                 <Stat label="Closing" value={inr(ledger.closing_balance)} />
               </div>
-              <div className="border border-[#E5E5E5] overflow-x-auto">
+              <div className="border border-[var(--line)] overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+                  <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
                     <tr className="text-left">
                       <th className="px-4 py-2.5 overline">Date</th>
                       <th className="px-4 py-2.5 overline">Narration</th>
@@ -207,16 +207,16 @@ export default function ClientDetail() {
                   </thead>
                   <tbody>
                     {(ledger.entries || []).map((e, i) => (
-                      <tr key={i} className="border-b border-[#F0F0F0]">
+                      <tr key={i} className="border-b border-[var(--line-soft)]">
                         <td className="px-4 py-2 font-mono text-xs">{formatDate(e.date)}</td>
                         <td className="px-4 py-2 text-sm">{e.narration || e.memo || "—"}</td>
-                        <td className="px-4 py-2 font-mono text-xs text-right text-[#1D633E]">{e.inflow ? inr(e.inflow) : "—"}</td>
-                        <td className="px-4 py-2 font-mono text-xs text-right text-[#B22B22]">{e.outflow ? inr(e.outflow) : "—"}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-right text-[var(--success)]">{e.inflow ? inr(e.inflow) : "—"}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-right text-[var(--danger)]">{e.outflow ? inr(e.outflow) : "—"}</td>
                         <td className="px-4 py-2 font-mono text-xs text-right font-semibold">{inr(e.balance ?? e.running_balance)}</td>
                       </tr>
                     ))}
                     {(ledger.entries || []).length === 0 && (
-                      <tr><td colSpan="5" className="p-6 text-center text-sm text-[#5C5C5C]">No ledger entries yet.</td></tr>
+                      <tr><td colSpan="5" className="p-6 text-center text-sm text-[var(--ink-2)]">No ledger entries yet.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -237,7 +237,7 @@ export default function ClientDetail() {
       {editOpen && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditOpen(false); }}>
-          <form onSubmit={saveEdit} className="bg-white border border-[#0A0A0A] w-full max-w-lg p-6 space-y-3" data-testid="client-edit-modal">
+          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] w-full max-w-lg p-6 space-y-3" data-testid="client-edit-modal">
             <div className="flex items-center justify-between">
               <div className="overline">EDIT CLIENT</div>
               <button type="button" onClick={() => setEditOpen(false)} className="btn-ghost p-1"><X size={14} /></button>
@@ -254,7 +254,7 @@ export default function ClientDetail() {
             </div>
             <input className="input-flat w-full" placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             <textarea className="input-flat w-full" rows="2" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
+            {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
             <button className="btn-primary w-full" data-testid="edit-client-save">Save changes</button>
           </form>
         </div>
@@ -265,7 +265,7 @@ export default function ClientDetail() {
 
 function Stat({ label, value, accent }) {
   return (
-    <div className="border-r border-b border-[#E5E5E5] p-5">
+    <div className="border-r border-b border-[var(--line)] p-5">
       <div className="overline mb-2">{label}</div>
       <div className="font-display font-bold tracking-tight text-2xl tabular-nums" style={accent ? { color: accent } : undefined}>{value}</div>
     </div>
@@ -273,5 +273,5 @@ function Stat({ label, value, accent }) {
 }
 
 function Empty({ text }) {
-  return <p className="text-[#5C5C5C] text-sm border border-dashed border-[#E5E5E5] p-6 text-center">{text}</p>;
+  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] p-6 text-center">{text}</p>;
 }

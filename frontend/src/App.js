@@ -61,13 +61,13 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
           <h1 className="font-display font-bold tracking-tighter text-5xl mb-4">
             {isRejected ? "Not on the roster." : "You're on the list."}
           </h1>
-          <p className="text-[#5C5C5C] mb-6">
+          <p className="text-[var(--ink-2)] mb-6">
             {isRejected
               ? "Your account has been deactivated by an administrator. Please contact your studio owner to restore access."
               : "Your account is awaiting Admin approval. You'll get access as soon as it's granted."}
           </p>
-          <div className="text-xs font-mono uppercase tracking-wider text-[#6E6A63] mb-6">
-            Signed in as <span className="text-[#0A0A0A]">{user.email}</span>
+          <div className="text-xs font-mono uppercase tracking-wider text-[var(--ink-3)] mb-6">
+            Signed in as <span className="text-[var(--ink)]">{user.email}</span>
           </div>
           <button onClick={logout} className="btn-primary" data-testid="pending-signout-btn">
             Sign out
@@ -79,7 +79,7 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
 
   // Unmount protected screens while locked so previously loaded business data
   // is not left rendered beneath the opaque lock screen.
-  if (pinLocked || user.app_pin_setup_required) return <div className="min-h-screen bg-[#F7F6F2]" aria-hidden="true" />;
+  if (pinLocked || user.app_pin_setup_required) return <div className="min-h-screen bg-[var(--surface-2)]" aria-hidden="true" />;
 
   if (requireSuperAdmin && !isSuperAdmin) {
     return (
@@ -87,7 +87,7 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
         <div className="max-w-lg mx-auto text-center py-24" data-testid="access-denied-sa">
           <div className="overline mb-3">403 · SUPER ADMIN ONLY</div>
           <h1 className="font-display font-bold tracking-tighter text-4xl mb-3">Platform zone.</h1>
-          <p className="text-[#5C5C5C]">This area is reserved for the platform owner.</p>
+          <p className="text-[var(--ink-2)]">This area is reserved for the platform owner.</p>
         </div>
       </Layout>
     );
@@ -99,7 +99,7 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
         <div className="max-w-lg mx-auto text-center py-24" data-testid="access-denied">
           <div className="overline mb-3">403 · ACCESS RESTRICTED</div>
           <h1 className="font-display font-bold tracking-tighter text-4xl mb-3">Not for your eyes.</h1>
-          <p className="text-[#5C5C5C]">Your role doesn&apos;t include the <code className="font-mono text-[#76705E]">{requirePerm}</code> permission. Ask an Admin.</p>
+          <p className="text-[var(--ink-2)]">Your role doesn&apos;t include the <code className="font-mono text-[var(--accent-strong)]">{requirePerm}</code> permission. Ask an Admin.</p>
         </div>
       </Layout>
     );

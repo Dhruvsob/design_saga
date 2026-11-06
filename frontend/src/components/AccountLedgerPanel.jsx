@@ -137,14 +137,14 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" data-testid="account-ledger-backdrop" />
       <div onClick={(e) => e.stopPropagation()} className="relative z-[301] w-full max-w-3xl h-full bg-white shadow-2xl flex flex-col animate-[slide-in-right_0.2s_ease]">
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-[#E5E5E5]">
+        <div className="flex items-start justify-between p-5 border-b border-[var(--line)]">
           <div>
-            <div className="overline text-[#76705E]">ACCOUNT LEDGER</div>
+            <div className="overline text-[var(--accent-strong)]">ACCOUNT LEDGER</div>
             <div className="font-display font-bold text-2xl flex items-center gap-2" data-testid="ledger-account-name">
-              {account.is_bank && <Bank size={18} className="text-[#76705E]" />}
+              {account.is_bank && <Bank size={18} className="text-[var(--accent-strong)]" />}
               {account.name}
             </div>
-            <div className="text-xs text-[#5C5C5C] uppercase tracking-wide mt-0.5">
+            <div className="text-xs text-[var(--ink-2)] uppercase tracking-wide mt-0.5">
               {account.type}{account.code ? ` · ${account.code}` : ""} · {periodLabel(preset, from, to)}
             </div>
           </div>
@@ -156,15 +156,15 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[#E5E5E5] border-b border-[#E5E5E5]">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--line)] border-b border-[var(--line)]">
           <SummaryCell label="Closing balance" value={CURRENCY(data?.closing_balance)} strong testid="ledger-closing" />
           <SummaryCell label="Transactions" value={loading ? "…" : String(rows.length)} testid="ledger-count" />
-          <SummaryCell label="Total in (Dr)" value={CURRENCY(data?.total_debit)} tint="#1D633E" testid="ledger-debit" />
-          <SummaryCell label="Total out (Cr)" value={CURRENCY(data?.total_credit)} tint="#B4001C" testid="ledger-credit" />
+          <SummaryCell label="Total in (Dr)" value={CURRENCY(data?.total_debit)} tint="#1E6A45" testid="ledger-debit" />
+          <SummaryCell label="Total out (Cr)" value={CURRENCY(data?.total_credit)} tint="#B3261E" testid="ledger-credit" />
         </div>
 
         {/* Controls */}
-        <div className="p-4 space-y-3 border-b border-[#E5E5E5]">
+        <div className="p-4 space-y-3 border-b border-[var(--line)]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex flex-wrap gap-1.5" data-testid="ledger-presets">
               {PERIOD_PRESETS.map((p) => (
@@ -174,8 +174,8 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
                   data-testid={`ledger-preset-${p.id}`}
                   className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                     preset === p.id
-                      ? "bg-[#0A0A0A] text-white border-[#0A0A0A]"
-                      : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#8B7F6A]"
+                      ? "bg-[var(--ink)] text-white border-[var(--ink)]"
+                      : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent)]"
                   }`}
                 >
                   {p.label}
@@ -184,7 +184,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
             </div>
             {canQuickAdd && (
               <button onClick={() => setShowAdd((s) => !s)}
-                className={`btn-primary text-xs ${account.type === "income" ? "bg-[#1D633E]" : "bg-[#B4001C]"}`}
+                className={`btn-primary text-xs ${account.type === "income" ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`}
                 data-testid="ledger-quickadd-btn">
                 <Plus size={13} /> {showAdd ? "Cancel" : `Record ${account.type}`}
               </button>
@@ -192,7 +192,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           </div>
 
           {showAdd && canQuickAdd && (
-            <div className="p-3 bg-[#FAFAF7] border border-[#E5E5E5]" data-testid="ledger-quickadd-form">
+            <div className="p-3 bg-[var(--surface-2)] border border-[var(--line)]" data-testid="ledger-quickadd-form">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                 <input type="number" step="0.01" placeholder="Amount" className="input-flat" value={addForm.amount}
                   onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })} data-testid="ledger-add-amount" />
@@ -234,12 +234,12 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           {preset === "custom" && (
             <div className="flex items-center gap-2 text-xs">
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input-flat" data-testid="ledger-from" />
-              <span className="text-[#6E6A63]">→</span>
+              <span className="text-[var(--ink-3)]">→</span>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input-flat" data-testid="ledger-to" />
             </div>
           )}
           <div className="relative">
-            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
+            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -253,7 +253,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
         {/* Ledger table */}
         <div className="flex-1 overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#5C5C5C] z-10">
+            <thead className="sticky top-0 bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)] z-10">
               <tr>
                 <th className="p-3 text-left">Date</th>
                 <th className="p-3 text-left">Description</th>
@@ -266,21 +266,21 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
               {rows.map((r, i) => (
                 <tr key={`${r.journal_id}-${i}`}
                   onClick={() => openTxn(r.journal_id)}
-                  className="border-t border-[#F0F0F0] hover:bg-[#FAFAF7] cursor-pointer"
+                  className="border-t border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer"
                   data-testid={`ledger-row-${r.journal_id}`}>
                   <td className="p-3 font-mono text-xs whitespace-nowrap">{formatDate(r.date)}</td>
                   <td className="p-3">
                     <div>{r.narration || "—"}</div>
-                    {r.reference && <div className="text-[10px] text-[#6E6A63] font-mono">Ref: {r.reference}</div>}
+                    {r.reference && <div className="text-[10px] text-[var(--ink-3)] font-mono">Ref: {r.reference}</div>}
                   </td>
-                  <td className="p-3 text-right font-mono text-[#1D633E]">{r.debit ? CURRENCY(r.debit) : "—"}</td>
-                  <td className="p-3 text-right font-mono text-[#B4001C]">{r.credit ? CURRENCY(r.credit) : "—"}</td>
+                  <td className="p-3 text-right font-mono text-[var(--success)]">{r.debit ? CURRENCY(r.debit) : "—"}</td>
+                  <td className="p-3 text-right font-mono text-[var(--danger)]">{r.credit ? CURRENCY(r.credit) : "—"}</td>
                   <td className="p-3 text-right font-mono font-semibold">{CURRENCY(r.balance)}</td>
                 </tr>
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-[#6E6A63]">
+                  <td colSpan={5} className="p-10 text-center text-[var(--ink-3)]">
                     {txnCount === 0 ? "No transactions in this period." : "No matches for your search."}
                   </td>
                 </tr>
@@ -292,7 +292,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           </table>
         </div>
 
-        <div className="p-3 border-t border-[#E5E5E5] text-[10px] text-[#6E6A63] flex items-center gap-1">
+        <div className="p-3 border-t border-[var(--line)] text-[10px] text-[var(--ink-3)] flex items-center gap-1">
           <ArrowSquareOut size={12} /> Opening balance {CURRENCY(data?.opening_balance)} · click any row to view, edit or reverse it
         </div>
       </div>
@@ -312,7 +312,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
 
 const SummaryCell = ({ label, value, tint, strong, testid }) => (
   <div className="bg-white p-3" data-testid={testid}>
-    <div className="text-[10px] uppercase tracking-wider text-[#6E6A63]">{label}</div>
+    <div className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">{label}</div>
     <div className={`font-mono ${strong ? "font-bold text-lg" : "text-sm font-semibold"}`} style={tint ? { color: tint } : undefined}>
       {value}
     </div>

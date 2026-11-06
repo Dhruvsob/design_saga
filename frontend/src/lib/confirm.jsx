@@ -73,7 +73,7 @@ export function ConfirmHost() {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display text-xl leading-snug">{request.title}</AlertDialogTitle>
             {request.body ? (
-              <AlertDialogDescription className="whitespace-pre-line text-sm text-[#5C5C5C]">{request.body}</AlertDialogDescription>
+              <AlertDialogDescription className="whitespace-pre-line text-sm text-[var(--ink-2)]">{request.body}</AlertDialogDescription>
             ) : (
               <AlertDialogDescription className="sr-only">Please confirm this action.</AlertDialogDescription>
             )}
@@ -82,7 +82,7 @@ export function ConfirmHost() {
             <AlertDialogCancel onClick={() => finish(false)} data-testid="confirm-cancel">{request.cancelLabel || "Cancel"}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => finish(true)}
-              className={request.danger ? "bg-[#B22B22] hover:bg-[#8F1F18] text-white" : ""}
+              className={request.danger ? "bg-[var(--danger)] hover:bg-[#8F1F18] text-white" : ""}
               data-testid="confirm-ok">
               {request.confirmLabel || "Continue"}
             </AlertDialogAction>

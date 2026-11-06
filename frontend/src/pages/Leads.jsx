@@ -14,12 +14,12 @@ const FALLBACK_SOURCES = ["Website", "Instagram", "Referral", "Marketplace", "Wa
 const FALLBACK_TYPES = ["Residential", "Commercial"];
 
 const STAGE_COLORS = {
-  New: "#5C5C5C",
-  Qualified: "#8B7F6A",
-  Proposal: "#8B7F6A",
-  Negotiation: "#FF8C00",
-  Won: "#1D633E",
-  Lost: "#FF2A00",
+  New: "#4A4741",
+  Qualified: "#9C4A28",
+  Proposal: "#9C4A28",
+  Negotiation: "#B45309",
+  Won: "#1E6A45",
+  Lost: "#B3261E",
 };
 
 export default function Leads() {
@@ -170,7 +170,7 @@ export default function Leads() {
     <div className="space-y-8" data-testid="crm-page">
       <PageHero
         eyebrow="CRM / PIPELINE"
-        title="Every lead. Tracked."
+        title="Leads"
         kicker="Drag cards between columns to update stages. Convert qualified leads into projects with one click."
         count={leads.length}
       >
@@ -197,7 +197,7 @@ export default function Leads() {
       )}
 
       {/* Kanban */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 border-t border-l border-[#E5E5E5] stagger">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 border-t border-l border-[var(--line)] stagger">
         {STAGES.map((stage, idx) => {
           const items = leads.filter((l) => l.stage === stage);
           const stageColor = STAGE_COLORS[stage];
@@ -205,18 +205,18 @@ export default function Leads() {
           return (
             <div
               key={stage}
-              className={`fade-up border-r border-b border-[#E5E5E5] min-h-[500px] flex flex-col transition-all ${isOver ? "bg-[#F5F4F0]" : ""}`}
+              className={`fade-up border-r border-b border-[var(--line)] min-h-[500px] flex flex-col transition-all ${isOver ? "bg-[var(--hover)]" : ""}`}
               onDragOver={(e) => { if (canUpdate) { e.preventDefault(); setDragOver(stage); } }}
               onDragLeave={() => setDragOver(null)}
               onDrop={() => canUpdate && drop(stage)}
               data-testid={`col-${stage}`}
             >
-              <div className="p-3 border-b border-[#E5E5E5] bg-[#FAFAFA] flex items-center justify-between">
+              <div className="p-3 border-b border-[var(--line)] bg-[var(--surface-2)] flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ background: stageColor }} />
                   <div className="overline">{stage}</div>
                 </div>
-                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[#E5E5E5]">{items.length}</div>
+                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)]">{items.length}</div>
               </div>
               <div className="p-3 flex-1 space-y-3">
                 {items.map((l) => (
@@ -224,45 +224,45 @@ export default function Leads() {
                     key={l.id}
                     draggable={canUpdate}
                     onDragStart={() => setDragId(l.id)}
-                    className="border border-[#E5E5E5] p-3 bg-white hover:border-[#0A0A0A] hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition-all group"
+                    className="border border-[var(--line)] p-3 bg-white hover:border-[var(--ink)] hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition-all group"
                     data-testid={`lead-${l.id}`}
                   >
                     <div className="flex items-start justify-between mb-1">
                       <div className="font-semibold text-sm leading-snug">{l.name}</div>
-                      <DotsSixVertical size={14} className="text-[#CCCCCC] mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <DotsSixVertical size={14} className="text-[var(--line-strong)] mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <div className="text-xs text-[#5C5C5C] mt-1 flex items-center gap-1.5">
+                    <div className="text-xs text-[var(--ink-2)] mt-1 flex items-center gap-1.5">
                       <span>{l.project_type}</span>
-                      <span className="w-0.5 h-0.5 bg-[#9A9A9A] rounded-full" />
+                      <span className="w-0.5 h-0.5 bg-[var(--ink-3)] rounded-full" />
                       <span>{l.location || "—"}</span>
                     </div>
                     <div className="font-mono text-sm mt-2 tabular-nums font-semibold">₹{(l.budget || 0).toLocaleString("en-IN")}</div>
                     <button
                       onClick={() => startEdit(l)}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs border border-[#E5E5E5] hover:border-[#0A0A0A] hover:bg-[#FAFAFA] py-1.5 transition text-[#5C5C5C] hover:text-[#0A0A0A]"
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs border border-[var(--line)] hover:border-[var(--ink)] hover:bg-[var(--surface-2)] py-1.5 transition text-[var(--ink-2)] hover:text-[var(--ink)]"
                       title="View & add notes"
                       data-testid={`lead-notes-btn-${l.id}`}
                     >
                       <NotePencil size={13} />
                       Notes
                       {(l.notes_log && l.notes_log.filter((n) => !n.deleted).length > 0) && (
-                        <span className="font-mono text-[10px] bg-[#0A0A0A] text-white px-1.5 py-0.5 leading-none">
+                        <span className="font-mono text-[10px] bg-[var(--ink)] text-white px-1.5 py-0.5 leading-none">
                           {l.notes_log.filter((n) => !n.deleted).length}
                         </span>
                       )}
                     </button>
-                    <div className="flex items-center flex-wrap gap-x-2 gap-y-2 mt-3 pt-3 border-t border-[#F0F0F0]">
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-2 mt-3 pt-3 border-t border-[var(--line-soft)]">
                       <span className="overline text-[10px] truncate min-w-0 flex-1">{l.source}</span>
                       <div className="flex items-center gap-2 shrink-0">
                         {canConvert && l.stage !== "Won" && l.stage !== "Lost" && (
-                          <button onClick={() => convert(l.id)} className="text-[#76705E] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
+                          <button onClick={() => convert(l.id)} className="text-[var(--accent-strong)] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
                             <ArrowRight size={12} weight="bold" /> Convert
                           </button>
                         )}
-                        <button onClick={() => startEdit(l)} className="text-[#5C5C5C] hover:text-[#0A0A0A] hover:scale-110 transition shrink-0" title={canUpdate ? "Edit" : "View details"} data-testid={`lead-edit-${l.id}`}>
+                        <button onClick={() => startEdit(l)} className="text-[var(--ink-2)] hover:text-[var(--ink)] hover:scale-110 transition shrink-0" title={canUpdate ? "Edit" : "View details"} data-testid={`lead-edit-${l.id}`}>
                           {canUpdate ? <PencilSimple size={12} /> : <Eye size={12} />}
                         </button>
-                        {canDelete && <button onClick={() => del(l.id)} className="text-[#B4342B] hover:scale-110 transition shrink-0" title="Delete" data-testid={`lead-delete-${l.id}`}>
+                        {canDelete && <button onClick={() => del(l.id)} className="text-[var(--danger)] hover:scale-110 transition shrink-0" title="Delete" data-testid={`lead-delete-${l.id}`}>
                           <Trash size={12} />
                         </button>}
                       </div>
@@ -270,7 +270,7 @@ export default function Leads() {
                   </div>
                 ))}
                 {items.length === 0 && (
-                  <div className="text-center py-8 text-xs text-[#6E6A63]">
+                  <div className="text-center py-8 text-xs text-[var(--ink-3)]">
                     <div className="dotted-bg mx-auto mb-2" style={{ width: 32, height: 32 }} />
                     —
                   </div>
@@ -280,7 +280,7 @@ export default function Leads() {
           );
         })}
       </div>
-      {canUpdate && <p className="text-xs text-[#5C5C5C] font-mono tracking-wider flex items-center gap-2">
+      {canUpdate && <p className="text-xs text-[var(--ink-2)] font-mono tracking-wider flex items-center gap-2">
         <DotsSixVertical size={12} /> DRAG CARDS BETWEEN COLUMNS TO UPDATE STAGES.
       </p>}
 
@@ -288,7 +288,7 @@ export default function Leads() {
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
-          <form onSubmit={saveEdit} className="bg-white border border-[#0A0A0A] w-full max-w-2xl p-6 space-y-3 max-h-[90vh] overflow-y-auto" data-testid="lead-edit-modal">
+          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] w-full max-w-2xl p-6 space-y-3 max-h-[90vh] overflow-y-auto" data-testid="lead-edit-modal">
             <div className="flex items-center justify-between">
               <div className="overline">{canUpdate ? "EDIT LEAD" : "LEAD DETAILS"}</div>
               <button type="button" onClick={() => setEditing(null)} className="btn-ghost p-1"><X size={14} /></button>
@@ -311,10 +311,10 @@ export default function Leads() {
             </fieldset>
 
             {/* Notes & history thread — every note is timestamped and kept in history */}
-            <div className="border-t border-[#E5E5E5] pt-3 space-y-3" data-testid="lead-notes-section">
+            <div className="border-t border-[var(--line)] pt-3 space-y-3" data-testid="lead-notes-section">
               <div className="overline flex items-center gap-2">
                 <NotePencil size={13} /> Notes &amp; History
-                <span className="font-mono text-[10px] bg-[#F5F4F0] px-1.5 py-0.5 border border-[#E5E5E5]" data-testid="lead-notes-count">{notes.length}</span>
+                <span className="font-mono text-[10px] bg-[var(--hover)] px-1.5 py-0.5 border border-[var(--line)]" data-testid="lead-notes-count">{notes.length}</span>
               </div>
 
               {canUpdate && <div className="flex items-start gap-2">
@@ -339,12 +339,12 @@ export default function Leads() {
 
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1" data-testid="lead-notes-list">
                 {notes.length === 0 && (
-                  <div className="text-xs text-[#6E6A63] py-3 text-center border border-dashed border-[#E5E5E5]">
+                  <div className="text-xs text-[var(--ink-3)] py-3 text-center border border-dashed border-[var(--line)]">
                     No notes yet — every note you add is timestamped and kept in history.
                   </div>
                 )}
                 {notes.map((n) => (
-                  <div key={n.id} className="border border-[#E5E5E5] bg-[#FAFAFA] p-3" data-testid={`lead-note-${n.id}`}>
+                  <div key={n.id} className="border border-[var(--line)] bg-[var(--surface-2)] p-3" data-testid={`lead-note-${n.id}`}>
                     {editNoteId === n.id ? (
                       <div className="space-y-2">
                         <textarea
@@ -365,37 +365,37 @@ export default function Leads() {
                       </div>
                     ) : (
                       <>
-                        <div className="text-sm whitespace-pre-wrap leading-snug text-[#0A0A0A]">{n.text}</div>
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#F0F0F0]">
-                          <div className="text-[11px] text-[#5C5C5C] min-w-0 truncate">
+                        <div className="text-sm whitespace-pre-wrap leading-snug text-[var(--ink)]">{n.text}</div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--line-soft)]">
+                          <div className="text-[11px] text-[var(--ink-2)] min-w-0 truncate">
                             <span className="font-semibold">{n.author_name}</span>
                             <span className="mx-1">·</span>
                             <span className="font-mono">{formatDateTime(n.created_at)}</span>
-                            {n.edited_at && <span className="ml-1 italic text-[#6E6A63]">(edited)</span>}
+                            {n.edited_at && <span className="ml-1 italic text-[var(--ink-3)]">(edited)</span>}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {n.history && n.history.length > 0 && (
                               <button type="button" onClick={() => setShowHistory((s) => ({ ...s, [n.id]: !s[n.id] }))}
-                                      className="text-[#5C5C5C] hover:text-[#0A0A0A] transition" title="View edit history"
+                                      className="text-[var(--ink-2)] hover:text-[var(--ink)] transition" title="View edit history"
                                       data-testid={`lead-note-history-toggle-${n.id}`}>
                                 <ClockCounterClockwise size={13} />
                               </button>
                             )}
-                            {canUpdate && <button type="button" onClick={() => startNoteEdit(n)} className="text-[#5C5C5C] hover:text-[#0A0A0A] transition" title="Edit note" data-testid={`lead-note-edit-${n.id}`}>
+                            {canUpdate && <button type="button" onClick={() => startNoteEdit(n)} className="text-[var(--ink-2)] hover:text-[var(--ink)] transition" title="Edit note" data-testid={`lead-note-edit-${n.id}`}>
                               <PencilSimple size={12} />
                             </button>}
-                            {canUpdate && <button type="button" onClick={() => deleteNote(n.id)} className="text-[#B4342B] hover:scale-110 transition" title="Delete note" data-testid={`lead-note-delete-${n.id}`}>
+                            {canUpdate && <button type="button" onClick={() => deleteNote(n.id)} className="text-[var(--danger)] hover:scale-110 transition" title="Delete note" data-testid={`lead-note-delete-${n.id}`}>
                               <Trash size={12} />
                             </button>}
                           </div>
                         </div>
                         {showHistory[n.id] && n.history && n.history.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-dashed border-[#E5E5E5] space-y-1.5" data-testid={`lead-note-history-${n.id}`}>
-                            <div className="overline text-[10px] text-[#6E6A63]">Previous versions</div>
+                          <div className="mt-2 pt-2 border-t border-dashed border-[var(--line)] space-y-1.5" data-testid={`lead-note-history-${n.id}`}>
+                            <div className="overline text-[10px] text-[var(--ink-3)]">Previous versions</div>
                             {n.history.slice().reverse().map((h, i) => (
-                              <div key={i} className="text-[11px] text-[#5C5C5C]">
-                                <div className="whitespace-pre-wrap line-through decoration-[#CCCCCC]">{h.text}</div>
-                                <div className="font-mono text-[10px] text-[#6E6A63]">{h.edited_by} · {formatDateTime(h.edited_at)}</div>
+                              <div key={i} className="text-[11px] text-[var(--ink-2)]">
+                                <div className="whitespace-pre-wrap line-through decoration-[var(--line-strong)]">{h.text}</div>
+                                <div className="font-mono text-[10px] text-[var(--ink-3)]">{h.edited_by} · {formatDateTime(h.edited_at)}</div>
                               </div>
                             ))}
                           </div>

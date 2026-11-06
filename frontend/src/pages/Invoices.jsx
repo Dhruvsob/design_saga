@@ -206,7 +206,7 @@ export default function Invoices({ docType = "invoice" }) {
                   <input className="input-flat col-span-6" placeholder="Description" value={it.description} onChange={(e) => updateItem(i, "description", e.target.value)} />
                   <input type="number" className="input-flat col-span-2" placeholder="Qty" value={it.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value)} />
                   <input type="number" className="input-flat col-span-3" placeholder="Rate" value={it.rate} onChange={(e) => updateItem(i, "rate", e.target.value)} />
-                  <button type="button" onClick={() => removeItem(i)} className="text-[#FF2A00]"><Trash size={14} /></button>
+                  <button type="button" onClick={() => removeItem(i)} className="text-[var(--danger)]"><Trash size={14} /></button>
                 </div>
               ))}
             </div>
@@ -226,14 +226,14 @@ export default function Invoices({ docType = "invoice" }) {
                 <div>DUE · {formatDate(form.due_date)}</div>
               </div>
             </div>
-            <div className="border-t border-b border-[#0A0A0A] py-2 grid grid-cols-12 text-[10px] font-mono tracking-widest uppercase font-semibold">
+            <div className="border-t border-b border-[var(--ink)] py-2 grid grid-cols-12 text-[10px] font-mono tracking-widest uppercase font-semibold">
               <div className="col-span-6">Description</div>
               <div className="col-span-2 text-right">Qty</div>
               <div className="col-span-2 text-right">Rate</div>
               <div className="col-span-2 text-right">Amount</div>
             </div>
             {form.items.map((it, i) => (
-              <div key={i} className="grid grid-cols-12 py-2 border-b border-[#F0F0F0] text-sm">
+              <div key={i} className="grid grid-cols-12 py-2 border-b border-[var(--line-soft)] text-sm">
                 <div className="col-span-6">{it.description || "—"}</div>
                 <div className="col-span-2 text-right font-mono">{it.quantity}</div>
                 <div className="col-span-2 text-right font-mono">{Number(it.rate || 0).toLocaleString("en-IN")}</div>
@@ -243,7 +243,7 @@ export default function Invoices({ docType = "invoice" }) {
             <div className="pt-4 space-y-1 text-sm">
               <Row label="Subtotal" val={subtotal} />
               <Row label={`Tax (${form.tax_rate}%)`} val={tax} />
-              <div className="border-t border-[#0A0A0A] pt-2 mt-2">
+              <div className="border-t border-[var(--ink)] pt-2 mt-2">
                 <Row label="Total" val={total} bold />
               </div>
             </div>
@@ -254,16 +254,16 @@ export default function Invoices({ docType = "invoice" }) {
         </form>
       )}
 
-      <div className="border border-[#E5E5E5] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto">
         <table className="w-full min-w-[640px]">
-          <thead className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
               <Th>Number</Th><Th>Client</Th><Th>Project</Th><Th>Due</Th><Th>Total</Th><Th>Status</Th><Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-b border-[#F0F0F0] hover:bg-[#FAFAFA]" data-testid={`${docType}-row-${r.id}`}>
+              <tr key={r.id} className="border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)]" data-testid={`${docType}-row-${r.id}`}>
                 <Td className="font-mono font-semibold">{r.number}</Td>
                 <Td>{r.client_name || "—"}</Td>
                 <Td>{r.project_name || "—"}</Td>
@@ -279,24 +279,24 @@ export default function Invoices({ docType = "invoice" }) {
                 </Td>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setPreview(r)} className="text-[#76705E]" title="Preview"><Eye size={16} /></button>
-                    <button onClick={() => download(r.id)} className="text-[#76705E]" title="PDF"><FilePdf size={16} /></button>
+                    <button onClick={() => setPreview(r)} className="text-[var(--accent-strong)]" title="Preview"><Eye size={16} /></button>
+                    <button onClick={() => download(r.id)} className="text-[var(--accent-strong)]" title="PDF"><FilePdf size={16} /></button>
                     {canUpdate && (docType === "quotation" ? r.status !== "paid" : r.status === "draft") && (
-                      <button onClick={() => startEdit(r)} className="text-[#5C5C5C] hover:text-[#0A0A0A]" title="Edit" data-testid={`${docType}-edit-${r.id}`}><PencilSimple size={16} /></button>
+                      <button onClick={() => startEdit(r)} className="text-[var(--ink-2)] hover:text-[var(--ink)]" title="Edit" data-testid={`${docType}-edit-${r.id}`}><PencilSimple size={16} /></button>
                     )}
                     {docType === "invoice" && canRecordPayment && ["sent", "overdue", "partially_paid"].includes(r.status) && accounts.length > 0 && (
-                      <button onClick={() => openPayment(r)} className="text-[#1D633E]" title="Record payment" data-testid={`invoice-pay-${r.id}`}><Money size={16} /></button>
+                      <button onClick={() => openPayment(r)} className="text-[var(--success)]" title="Record payment" data-testid={`invoice-pay-${r.id}`}><Money size={16} /></button>
                     )}
                     {docType === "invoice" && canCorrectPayment && ["paid", "partially_paid"].includes(r.status) && r.journal_id && (
-                      <button onClick={() => reverseLatestPayment(r)} className="text-[#B4001C]" title="Delete latest payment with reversal"><ArrowCounterClockwise size={16} /></button>
+                      <button onClick={() => reverseLatestPayment(r)} className="text-[var(--danger)]" title="Delete latest payment with reversal"><ArrowCounterClockwise size={16} /></button>
                     )}
-                    {canDelete && <button onClick={() => del(r.id, ["paid", "partially_paid"].includes(r.status))} className="text-[#FF2A00]" title="Delete"><Trash size={16} /></button>}
+                    {canDelete && <button onClick={() => del(r.id, ["paid", "partially_paid"].includes(r.status))} className="text-[var(--danger)]" title="Delete"><Trash size={16} /></button>}
                   </div>
                 </Td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan="7" className="p-6 text-center text-[#5C5C5C]">No {docType}s yet.</td></tr>
+              <tr><td colSpan="7" className="p-6 text-center text-[var(--ink-2)]">No {docType}s yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -308,8 +308,8 @@ export default function Invoices({ docType = "invoice" }) {
       )}
       {paying && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <form onSubmit={recordPayment} className="bg-white border border-[#E5E5E5] w-full max-w-xl p-5 space-y-4">
-            <div className="flex items-start justify-between gap-3"><div><div className="overline">RECORD PAYMENT</div><h2 className="font-display font-bold text-2xl">{paying.number}</h2><div className="text-xs text-[#5C5C5C]">Outstanding ₹{roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0))).toLocaleString("en-IN")}</div></div><button type="button" className="btn-ghost" onClick={() => setPaying(null)}><X size={16}/></button></div>
+          <form onSubmit={recordPayment} className="bg-white border border-[var(--line)] w-full max-w-xl p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3"><div><div className="overline">RECORD PAYMENT</div><h2 className="font-display font-bold text-2xl">{paying.number}</h2><div className="text-xs text-[var(--ink-2)]">Outstanding ₹{roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0))).toLocaleString("en-IN")}</div></div><button type="button" className="btn-ghost" onClick={() => setPaying(null)}><X size={16}/></button></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs">Amount<input required min="0.01" max={roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0)))} step="0.01" type="number" className="input-flat mt-1 w-full" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label>
               <label className="text-xs">Payment date<input required type="date" className="input-flat mt-1 w-full" value={payment.date} onChange={(e) => setPayment({ ...payment, date: e.target.value })}/></label>
@@ -329,7 +329,7 @@ const Th = ({ children }) => <th className="px-4 py-3 overline">{children}</th>;
 const Td = ({ children, className = "" }) => <td className={`px-4 py-3 text-sm ${className}`}>{children}</td>;
 const Row = ({ label, val, bold }) => (
   <div className="flex items-center justify-between">
-    <div className={`${bold ? "font-display font-bold text-lg" : "text-[#5C5C5C]"}`}>{label}</div>
+    <div className={`${bold ? "font-display font-bold text-lg" : "text-[var(--ink-2)]"}`}>{label}</div>
     <div className={`font-mono ${bold ? "font-display font-bold text-lg" : ""}`}>₹{Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</div>
   </div>
 );

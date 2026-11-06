@@ -7,11 +7,11 @@ import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 
 const KINDS = [
-  { id: "national", label: "National", color: "#B22B22" },
+  { id: "national", label: "National", color: "#B3261E" },
   { id: "festival", label: "Festival", color: "#B87F00" },
   { id: "optional", label: "Optional", color: "#6B7280" },
-  { id: "company",  label: "Company",  color: "#8B7F6A" },
-  { id: "regional", label: "Regional", color: "#1D633E" },
+  { id: "company",  label: "Company",  color: "#9C4A28" },
+  { id: "regional", label: "Regional", color: "#1E6A45" },
 ];
 
 const kindMeta = (id) => KINDS.find((k) => k.id === id) || KINDS[3];
@@ -82,7 +82,7 @@ export default function Holidays() {
           <h1 className="text-2xl font-semibold flex items-center gap-2">
             <Calendar size={22} weight="fill" /> Holiday Calendar
           </h1>
-          <div className="text-sm text-[#5C5C5C]">
+          <div className="text-sm text-[var(--ink-2)]">
             Company holidays, weekly offs, and festival days. Applied
             automatically to attendance and payroll.
           </div>
@@ -93,7 +93,7 @@ export default function Holidays() {
             type="number" value={year} aria-label="Year"
             data-testid="holiday-year-input"
             onChange={(e) => setYear(Number(e.target.value) || currentYear)}
-            className="border border-[#E5E5E5] w-24 text-sm px-2 py-1"
+            className="border border-[var(--line)] w-24 text-sm px-2 py-1"
           />
           <button className="btn-ghost text-xs" onClick={load} data-testid="holiday-refresh">
             <ArrowsClockwise size={14} /> Refresh
@@ -156,7 +156,7 @@ export default function Holidays() {
                 {grouped[m].sort((a, b) => a.date.localeCompare(b.date)).map((h) => {
                   const meta = kindMeta(h.kind);
                   return (
-                    <tr key={h.id + h.date} className="border-b border-[#F5F5F5]" data-testid="holiday-row">
+                    <tr key={h.id + h.date} className="border-b border-[var(--hover)]" data-testid="holiday-row">
                       <td className="py-1.5 font-mono text-xs w-16">{h.date.slice(-2)}</td>
                       <td className="py-1.5">
                         <div className="font-medium">{h.name}</div>
@@ -165,7 +165,7 @@ export default function Holidays() {
                       <td className="py-1.5 text-right">
                         {canDelete && !h.materialized_from_recurring && (
                           <button
-                            className="text-[#B22B22] hover:opacity-70"
+                            className="text-[var(--danger)] hover:opacity-70"
                             data-testid={`holiday-delete-${h.id}`}
                             onClick={() => del(h.id)}
                           >
@@ -181,7 +181,7 @@ export default function Holidays() {
           </div>
         ))}
         {rows.length === 0 && !loading && (
-          <div className="col-span-full text-sm text-[#6E6A63] italic">
+          <div className="col-span-full text-sm text-[var(--ink-3)] italic">
             No holidays configured for {year}. Add company + festival days above.
           </div>
         )}
@@ -190,7 +190,7 @@ export default function Holidays() {
       {offs.length > 0 && (
         <div className="card-flat">
           <div className="overline mb-2">WEEKLY-OFF SUMMARY ({offs.length} DAYS IN {year})</div>
-          <div className="text-xs text-[#5C5C5C]">
+          <div className="text-xs text-[var(--ink-2)]">
             Based on the attendance policy (Sunday by default). Adjust weekly-off days from Attendance → Policy.
           </div>
         </div>

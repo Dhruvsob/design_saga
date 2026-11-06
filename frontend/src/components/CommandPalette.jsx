@@ -107,29 +107,29 @@ export default function CommandPalette({ open, setOpen }) {
       onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
       data-testid="command-palette-overlay"
     >
-      <div className="w-full max-w-xl bg-white border border-[#0A0A0A] shadow-2xl" data-testid="command-palette">
+      <div className="w-full max-w-xl bg-white border border-[var(--ink)] shadow-2xl" data-testid="command-palette">
         {/* input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#E5E5E5]">
-          <MagnifyingGlass size={16} className="text-[#5C5C5C]" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--line)]">
+          <MagnifyingGlass size={16} className="text-[var(--ink-2)]" />
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onInputKey}
             placeholder="Search projects, quotations, events, amounts…"
-            className="flex-1 outline-none text-sm placeholder-[#9A9A9A] bg-transparent"
+            className="flex-1 outline-none text-sm placeholder-[var(--ink-3)] bg-transparent"
             data-testid="command-palette-input"
           />
-          <kbd className="px-1.5 py-0.5 bg-[#FAFAFA] border border-[#E5E5E5] font-mono text-[10px] text-[#5C5C5C]">ESC</kbd>
+          <kbd className="px-1.5 py-0.5 bg-[var(--surface-2)] border border-[var(--line)] font-mono text-[10px] text-[var(--ink-2)]">ESC</kbd>
         </div>
 
         {/* results */}
         <div className="max-h-[420px] overflow-y-auto">
           {loading && (
-            <div className="px-4 py-3 text-xs font-mono uppercase tracking-wider text-[#6E6A63]">Searching…</div>
+            <div className="px-4 py-3 text-xs font-mono uppercase tracking-wider text-[var(--ink-3)]">Searching…</div>
           )}
           {!loading && q.trim().length >= 2 && results.length === 0 && (
-            <div className="px-4 py-4 text-sm text-[#5C5C5C]" data-testid="palette-no-results">
+            <div className="px-4 py-4 text-sm text-[var(--ink-2)]" data-testid="palette-no-results">
               No records match “{q.trim()}”.
             </div>
           )}
@@ -146,19 +146,19 @@ export default function CommandPalette({ open, setOpen }) {
                     onClick={() => go(r)}
                     onMouseEnter={() => setActive(idx)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${
-                      active === idx ? "bg-[#F5F4F0]" : "hover:bg-[#FAFAFA]"
+                      active === idx ? "bg-[var(--hover)]" : "hover:bg-[var(--surface-2)]"
                     }`}
                     data-testid={`palette-result-${r.type}-${r.id}`}
                   >
-                    <meta.Icon size={15} className="text-[#5C5C5C] shrink-0" />
+                    <meta.Icon size={15} className="text-[var(--ink-2)] shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{r.title}</div>
-                      {r.subtitle && <div className="text-xs text-[#5C5C5C] truncate">{r.subtitle}</div>}
+                      {r.subtitle && <div className="text-xs text-[var(--ink-2)] truncate">{r.subtitle}</div>}
                     </div>
-                    <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-[#F5F5F5] text-[#5C5C5C]">
+                    <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-2)]">
                       {meta.label}
                     </span>
-                    {active === idx && <ArrowRight size={12} className="text-[#76705E]" />}
+                    {active === idx && <ArrowRight size={12} className="text-[var(--accent-strong)]" />}
                   </button>
                 );
               })}
@@ -166,7 +166,7 @@ export default function CommandPalette({ open, setOpen }) {
           )}
 
           {filteredActions.length > 0 && (
-            <div className="py-1 border-t border-[#F0F0F0]">
+            <div className="py-1 border-t border-[var(--line-soft)]">
               <div className="overline px-4 pt-2 pb-1">QUICK ACTIONS</div>
               {filteredActions.map((a, i) => {
                 const idx = results.length + i;
@@ -176,16 +176,16 @@ export default function CommandPalette({ open, setOpen }) {
                     onClick={() => go(a)}
                     onMouseEnter={() => setActive(idx)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${
-                      active === idx ? "bg-[#F5F4F0]" : "hover:bg-[#FAFAFA]"
+                      active === idx ? "bg-[var(--hover)]" : "hover:bg-[var(--surface-2)]"
                     }`}
                     data-testid={`palette-action-${a.id}`}
                   >
-                    <Plus size={14} className="text-[#76705E] shrink-0" />
+                    <Plus size={14} className="text-[var(--accent-strong)] shrink-0" />
                     <div className="flex-1">
                       <span className="text-sm font-semibold">{a.label}</span>
-                      <span className="text-xs text-[#6E6A63] ml-2">{a.hint}</span>
+                      <span className="text-xs text-[var(--ink-3)] ml-2">{a.hint}</span>
                     </div>
-                    {active === idx && <ArrowRight size={12} className="text-[#76705E]" />}
+                    {active === idx && <ArrowRight size={12} className="text-[var(--accent-strong)]" />}
                   </button>
                 );
               })}
@@ -193,7 +193,7 @@ export default function CommandPalette({ open, setOpen }) {
           )}
         </div>
 
-        <div className="px-4 py-2 border-t border-[#E5E5E5] flex items-center gap-4 text-[10px] font-mono uppercase tracking-wider text-[#6E6A63]">
+        <div className="px-4 py-2 border-t border-[var(--line)] flex items-center gap-4 text-[10px] font-mono uppercase tracking-wider text-[var(--ink-3)]">
           <span>↑↓ Navigate</span><span>↵ Open</span><span>ESC Close</span>
         </div>
       </div>

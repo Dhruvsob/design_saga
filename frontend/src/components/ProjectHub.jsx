@@ -19,8 +19,8 @@ export function ProjectFacts({ p }) {
     <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-4" data-testid="project-facts">
       {facts.map(([k, v]) => (
         <div key={k} className="min-w-0">
-          <dt className="text-[10px] uppercase tracking-[0.18em] text-[#6E6A63]">{k}</dt>
-          <dd className={`font-display text-lg leading-snug mt-1 break-words ${v ? "" : "text-[#B8B3A8]"}`}>{v || "Not set"}</dd>
+          <dt className="text-[10px] uppercase tracking-[0.18em] text-[var(--ink-3)]">{k}</dt>
+          <dd className={`font-display text-lg leading-snug mt-1 break-words ${v ? "" : "text-[var(--ink-4)]"}`}>{v || "Not set"}</dd>
         </div>
       ))}
     </dl>
@@ -48,20 +48,20 @@ export default function ProjectAttention({ p, visibleTabs, onOpen, canSeeFinanci
 
   return (
     <section aria-labelledby="attention-title" data-testid="project-attention">
-      <h2 id="attention-title" className="text-xs uppercase tracking-[0.18em] text-[#6E6A63] mb-2">Needs attention</h2>
+      <h2 id="attention-title" className="text-xs uppercase tracking-[0.18em] text-[var(--ink-3)] mb-2">Needs attention</h2>
       {items.length === 0 ? (
-        <p className="flex items-center gap-2 text-sm text-[#1D633E]">
+        <p className="flex items-center gap-2 text-sm text-[var(--success)]">
           <CheckCircle size={16} weight="fill" /> Nothing overdue on this project.
         </p>
       ) : (
-        <ul className="divide-y divide-[#F0EEE9] border-y border-[#F0EEE9]">
+        <ul className="divide-y divide-[var(--line-soft)] border-y border-[var(--line-soft)]">
           {items.map((i) => (
             <li key={i.text} className="flex items-center justify-between gap-3 py-2.5">
               <span className="flex items-center gap-2 text-sm">
-                <WarningCircle size={16} className="text-[#B4541C] shrink-0" /> {i.text}
+                <WarningCircle size={16} className="text-[var(--warning)] shrink-0" /> {i.text}
               </span>
               {i.tab && (
-                <button type="button" className="text-xs font-semibold text-[#76705E] hover:text-[#1A1A1A] inline-flex items-center gap-1 shrink-0"
+                <button type="button" className="text-xs font-semibold text-[var(--accent-strong)] hover:text-[var(--ink)] inline-flex items-center gap-1 shrink-0"
                         onClick={() => onOpen(i.tab)} data-testid={`attention-${i.tab}`}>
                   {i.action} <CaretRight size={11} />
                 </button>

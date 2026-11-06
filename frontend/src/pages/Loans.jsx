@@ -52,7 +52,7 @@ export default function Loans() {
     <div className="space-y-8" data-testid="loans-page">
       <PageHero
         eyebrow="FINANCE / LOANS & EMI"
-        title="Debt, on autopilot."
+        title="Loans & EMI"
         kicker="Track every loan, auto-post EMIs, prepay smart — all reconciled with Accounting."
         count={loans.length}
       >
@@ -63,15 +63,15 @@ export default function Loans() {
         )}
       </PageHero>
 
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] p-3 text-sm text-[#B22B22]"><Warning size={13} className="inline mr-1"/>{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]"><Warning size={13} className="inline mr-1"/>{err}</div>}
 
       {/* Summary KPIs */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPI icon={Bank} label="ACTIVE LOANS" value={summary.active_loans} tone="#8B7F6A" />
-          <KPI icon={CurrencyInr} label="TOTAL OUTSTANDING" display={fmtMoney(summary.total_outstanding)} tone="#B22B22" />
-          <KPI icon={CalendarBlank} label="NEXT EMI DUE" display={formatDate(summary.next_emi_due_date)} tone="#B87500" />
-          <KPI icon={ChartLineUp} label="NEXT EMI AMOUNT" display={fmtMoney(summary.next_emi_amount)} tone="#1D633E" />
+          <KPI icon={Bank} label="ACTIVE LOANS" value={summary.active_loans} tone="#9C4A28" />
+          <KPI icon={CurrencyInr} label="TOTAL OUTSTANDING" display={fmtMoney(summary.total_outstanding)} tone="#B3261E" />
+          <KPI icon={CalendarBlank} label="NEXT EMI DUE" display={formatDate(summary.next_emi_due_date)} tone="#85570F" />
+          <KPI icon={ChartLineUp} label="NEXT EMI AMOUNT" display={fmtMoney(summary.next_emi_amount)} tone="#1E6A45" />
         </div>
       )}
 
@@ -79,36 +79,36 @@ export default function Loans() {
         <div className="p-6 pb-4"><div className="overline">LOAN LEDGER · {loans.length}</div></div>
         <div className="overflow-x-auto">
         <div className="overflow-x-auto"><table className="w-full min-w-[900px]" data-testid="loans-table">
-          <thead className="bg-[#FAFAFA] border-y border-[#E5E5E5]"><tr className="text-left">
+          <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]"><tr className="text-left">
             <Th>Lender</Th><Th>Type</Th><Th>Principal</Th><Th>Rate</Th>
             <Th>Tenure</Th><Th>EMI</Th><Th>Outstanding</Th><Th>Next Due</Th><Th>Status</Th>
           </tr></thead>
           <tbody>
             {loans.map((l) => (
-              <tr key={l.id} className="row-hover border-b border-[#F0F0F0] cursor-pointer"
+              <tr key={l.id} className="row-hover border-b border-[var(--line-soft)] cursor-pointer"
                   onClick={() => setDetail(l.id)} data-testid={`loan-row-${l.id}`}>
                 <Td>
                   <div className="font-semibold text-sm">{l.lender_name}</div>
-                  <div className="text-xs text-[#5C5C5C]">{l.account_number || "—"}</div>
+                  <div className="text-xs text-[var(--ink-2)]">{l.account_number || "—"}</div>
                 </Td>
-                <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#F5F4F0] text-[#76705E]">{l.loan_type}</span></Td>
+                <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[var(--accent-strong)]">{l.loan_type}</span></Td>
                 <Td className="font-mono text-sm">{fmtMoney(l.principal)}</Td>
                 <Td className="font-mono text-sm">{l.interest_rate_pa}%</Td>
                 <Td className="font-mono text-sm">{l.tenure_months}mo</Td>
                 <Td className="font-mono text-sm accent-blue">{fmtMoney(l.emi_amount)}</Td>
-                <Td className="font-mono text-sm text-[#B22B22]">{fmtMoney(l.outstanding)}</Td>
+                <Td className="font-mono text-sm text-[var(--danger)]">{fmtMoney(l.outstanding)}</Td>
                 <Td className="font-mono text-xs">{fmtDate(l.next_due_date)}</Td>
                 <Td>
                   {l.status === "closed" ? (
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EFF7EF] text-[#1D633E]">closed</span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--success-soft)] text-[var(--success)]">closed</span>
                   ) : (
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FFF4E5] text-[#7A4E1A]">active</span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--warning-soft)] text-[var(--warning)]">active</span>
                   )}
                 </Td>
               </tr>
             ))}
             {loans.length === 0 && (
-              <tr><td colSpan={9} className="p-12 text-center text-[#5C5C5C]">
+              <tr><td colSpan={9} className="p-12 text-center text-[var(--ink-2)]">
                 {canCreate ? <>No loans yet. Click <em>Add loan</em> to record one.</> : "No loans available."}
               </td></tr>
             )}
@@ -134,7 +134,7 @@ function KPI({ icon: Icon, label, value, display, tone }) {
     <div className="card-flat p-5 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: tone }} />
       <Icon size={20} style={{ color: tone }} weight="duotone" />
-      <div className="overline text-[10px] text-[#5C5C5C] mt-2">{label}</div>
+      <div className="overline text-[10px] text-[var(--ink-2)] mt-2">{label}</div>
       <div className="font-display font-bold tracking-tighter text-2xl tabular-nums">{display ?? value ?? "—"}</div>
     </div>
   );
@@ -193,17 +193,17 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
           </F>
           <F label="Loan account #"><input className="input-flat w-full font-mono" value={f.account_number} onChange={(e) => setF({...f, account_number: e.target.value})} /></F>
         </div>
-        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#E5E5E5]">
-          <div className="p-3 bg-[#F5F5F5]">
+        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[var(--line)]">
+          <div className="p-3 bg-[var(--hover)]">
             <div className="overline text-[10px] mb-1">CALCULATED EMI</div>
             <div className="font-mono font-bold text-2xl accent-blue" data-testid="l-emi-preview">{fmtMoney(emiPreview.toFixed(2))}</div>
           </div>
-          <div className="p-3 bg-[#F5F5F5]">
+          <div className="p-3 bg-[var(--hover)]">
             <div className="overline text-[10px] mb-1">TOTAL PAYABLE</div>
             <div className="font-mono font-bold text-2xl">{fmtMoney((emiPreview * f.tenure_months).toFixed(2))}</div>
           </div>
         </div>
-        {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2">{err}</div>}
+        {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end pt-2">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
           <button disabled={busy || !f.lender_name || !f.disbursement_account_id} className="btn-primary" data-testid="l-submit">
@@ -281,14 +281,14 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
   return (
     <Modal onClose={onClose} title={loan.lender_name}
            eyebrow={`LOAN · ${loan.loan_type?.toUpperCase()} · ${loan.status?.toUpperCase()}`} wide>
-      {err && <div className="border border-[#B22B22] bg-[#FCEEEC] text-[#B22B22] text-xs px-3 py-2 mb-3">{err}</div>}
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 mb-3">{err}</div>}
 
       <div className="flex gap-2 mb-4">
         {canEdit && <button type="button" className="btn-ghost text-xs" onClick={startEdit}><PencilSimple size={12}/> Edit details</button>}
-        {canDelete && loan.status !== "archived" && <button type="button" className="btn-ghost text-xs text-[#B22B22]" onClick={archiveLoan}><Archive size={12}/> Archive loan</button>}
+        {canDelete && loan.status !== "archived" && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={archiveLoan}><Archive size={12}/> Archive loan</button>}
       </div>
       {editing && (
-        <form onSubmit={saveEdit} className="border border-[#E5E5E5] bg-[#FAFAFA] p-3 mb-4 space-y-3">
+        <form onSubmit={saveEdit} className="border border-[var(--line)] bg-[var(--surface-2)] p-3 mb-4 space-y-3">
           <div className="overline">EDIT NON-FINANCIAL DETAILS</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <input className="input-flat" placeholder="Lender contact" value={editForm.lender_contact} onChange={(e) => setEditForm({...editForm, lender_contact: e.target.value})}/>
@@ -297,7 +297,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
             <input type="number" min="1" max="31" className="input-flat" placeholder="EMI day" value={editForm.emi_day} onChange={(e) => setEditForm({...editForm, emi_day: Number(e.target.value)})}/>
             <input className="input-flat md:col-span-2" placeholder="Notes" value={editForm.notes} onChange={(e) => setEditForm({...editForm, notes: e.target.value})}/>
           </div>
-          <div className="text-xs text-[#5C5C5C]">Principal, rate and posted schedule amounts remain immutable. Correct financial mistakes by reversal and a new loan.</div>
+          <div className="text-xs text-[var(--ink-2)]">Principal, rate and posted schedule amounts remain immutable. Correct financial mistakes by reversal and a new loan.</div>
           <div className="flex gap-2"><button className="btn-primary text-xs">Save</button><button type="button" className="btn-ghost text-xs" onClick={() => setEditing(false)}>Cancel</button></div>
         </form>
       )}
@@ -306,19 +306,19 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
         <MiniStat label="Principal" value={fmtMoney(loan.principal)} />
         <MiniStat label="Rate" value={`${loan.interest_rate_pa}% p.a.`} />
         <MiniStat label="Tenure" value={`${loan.tenure_months}mo`} />
-        <MiniStat label="EMI" value={fmtMoney(loan.emi_amount)} tone="#8B7F6A"/>
-        <MiniStat label="Outstanding" value={fmtMoney(loan.outstanding)} tone="#B22B22"/>
+        <MiniStat label="EMI" value={fmtMoney(loan.emi_amount)} tone="#9C4A28"/>
+        <MiniStat label="Outstanding" value={fmtMoney(loan.outstanding)} tone="#B3261E"/>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 text-xs">
-        <div className="border border-[#E5E5E5] p-2">Principal paid: <b className="font-mono">{fmtMoney(t.principal_paid)}</b></div>
-        <div className="border border-[#E5E5E5] p-2">Interest paid: <b className="font-mono">{fmtMoney(t.interest_paid)}</b></div>
-        <div className="border border-[#E5E5E5] p-2">Principal pending: <b className="font-mono">{fmtMoney(t.principal_pending)}</b></div>
-        <div className="border border-[#E5E5E5] p-2">Interest pending: <b className="font-mono">{fmtMoney(t.interest_pending)}</b></div>
+        <div className="border border-[var(--line)] p-2">Principal paid: <b className="font-mono">{fmtMoney(t.principal_paid)}</b></div>
+        <div className="border border-[var(--line)] p-2">Interest paid: <b className="font-mono">{fmtMoney(t.interest_paid)}</b></div>
+        <div className="border border-[var(--line)] p-2">Principal pending: <b className="font-mono">{fmtMoney(t.principal_pending)}</b></div>
+        <div className="border border-[var(--line)] p-2">Interest pending: <b className="font-mono">{fmtMoney(t.interest_pending)}</b></div>
       </div>
 
       {/* Pay controls */}
-      {canTransact && <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[#FAFAFA] border border-[#E5E5E5]">
+      {canTransact && <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[var(--surface-2)] border border-[var(--line)]">
         <div className="flex-1 min-w-[220px]">
           <label className="overline text-[10px] mb-1 block">Pay from</label>
           <select aria-label="Pay from" className="input-flat w-full" value={payFrom} onChange={(e) => setPayFrom(e.target.value)}>
@@ -340,9 +340,9 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
 
       {/* Schedule */}
       <div className="overline mb-2">AMORTIZATION SCHEDULE</div>
-      <div className="max-h-[420px] overflow-y-auto border border-[#E5E5E5]">
+      <div className="max-h-[420px] overflow-y-auto border border-[var(--line)]">
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="bg-[#FAFAFA] sticky top-0 border-b border-[#E5E5E5]">
+          <thead className="bg-[var(--surface-2)] sticky top-0 border-b border-[var(--line)]">
             <tr className="text-left">
               <Th>#</Th><Th>Due date</Th><Th>Principal</Th><Th>Interest</Th>
               <Th>EMI</Th><Th>Balance</Th><Th>Status</Th><Th className="text-right">Action</Th>
@@ -350,21 +350,21 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
           </thead>
           <tbody>
             {(loan.schedule || []).map((row) => (
-              <tr key={row.index} className={`border-b border-[#F0F0F0] ${row.paid ? "opacity-60" : ""}`}
+              <tr key={row.index} className={`border-b border-[var(--line-soft)] ${row.paid ? "opacity-60" : ""}`}
                   data-testid={`schedule-row-${row.index}`}>
                 <Td className="font-mono text-xs">{row.index + 1}</Td>
                 <Td className="font-mono text-xs">{formatDate(row.due_date)}</Td>
                 <Td className="font-mono">{fmtMoney(row.principal)}</Td>
-                <Td className="font-mono text-[#B22B22]">{fmtMoney(row.interest)}</Td>
+                <Td className="font-mono text-[var(--danger)]">{fmtMoney(row.interest)}</Td>
                 <Td className="font-mono font-semibold">{fmtMoney(row.emi)}</Td>
                 <Td className="font-mono text-xs">{fmtMoney(row.balance_after)}</Td>
                 <Td>
                   {row.paid ? (
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#EFF7EF] text-[#1D633E]">
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--success-soft)] text-[var(--success)]">
                       <Check size={9} className="inline"/> paid {fmtDate(row.paid_on)}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[#FFF4E5] text-[#7A4E1A]">due</span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--warning-soft)] text-[var(--warning)]">due</span>
                   )}
                 </Td>
                 <Td className="text-right">
@@ -389,11 +389,11 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
 }
 
 function F({ label, children }) {
-  return <label className="block"><div className="text-xs text-[#5C5C5C] mb-1">{label}</div>{children}</label>;
+  return <label className="block"><div className="text-xs text-[var(--ink-2)] mb-1">{label}</div>{children}</label>;
 }
-function MiniStat({ label, value, tone = "#0A0A0A" }) {
+function MiniStat({ label, value, tone = "#18181B" }) {
   return (
-    <div className="border border-[#E5E5E5] p-3">
+    <div className="border border-[var(--line)] p-3">
       <div className="overline text-[10px] mb-1">{label}</div>
       <div className="font-mono font-bold text-base" style={{ color: tone }}>{value}</div>
     </div>
@@ -403,7 +403,7 @@ function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-           className={`bg-white p-6 w-full border border-[#E5E5E5] max-h-[92vh] overflow-y-auto ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
+           className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>
             {eyebrow && <div className="overline mb-1">{eyebrow}</div>}
