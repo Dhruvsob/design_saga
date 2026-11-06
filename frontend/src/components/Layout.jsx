@@ -81,7 +81,20 @@ function NavItem({ to, label, Icon }) {
 const fmtClock = (d) => formatTime(d);
 
 export default function Layout({ children }) {
-  const { user, logout, hasPerm, currentOrg, isSuperAdmin } = useAuth();
+  const { user, logout, hasPerm, currentOrg, isSuperAdmin, lockNow } = useAuth();
+  const pinEnabled = Boolean(user?.app_pin_enabled);
+  const lockApp = () => (pinEnabled ? lockNow() : setPinSettingsOpen(true));
+  useEffect(() => {
+    // Ctrl/Cmd + Shift + L locks the app from anywhere
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "L" || e.key === "l") && pinEnabled) {
+        e.preventDefault();
+        lockNow();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pinEnabled, lockNow]);
   const navigate = useNavigate();
   const location = useLocation();
   const [now, setNow] = useState(new Date());
@@ -234,14 +247,12 @@ export default function Layout({ children }) {
                 {user?.role || "employee"}
               </div>
             </div>
+            <button type="button" onClick={() => setPinSettingsOpen(true)} className="btn-icon shrink-0"
+                    aria-label="App PIN and security settings" title="App PIN settings"
+                    data-testid="sidebar-app-lock-btn">
+              <ShieldCheck size={16} />
+            </button>
           </div>
-          <button
-            onClick={() => setPinSettingsOpen(true)}
-            data-testid="sidebar-app-lock-btn"
-            className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-2.5 mb-2 rounded-xl border border-[#E8E6E1] bg-white text-[#6B6B6B] hover:text-[#1A1A1A] hover:border-[#8B7F6A] transition"
-          >
-            <LockKey size={14} /> {user?.app_pin_enabled ? "App lock" : "Set app PIN"}
-          </button>
           <button
             onClick={logout}
             data-testid="sidebar-logout-btn"
@@ -308,6 +319,16 @@ export default function Layout({ children }) {
               {isFullscreen ? <ArrowsIn size={18} /> : <ArrowsOut size={18} />}
             </button>
             <NotificationBell />
+            <button
+              type="button"
+              onClick={lockApp}
+              className="btn-icon"
+              aria-label={pinEnabled ? "Lock the app now" : "Set up app lock"}
+              title={pinEnabled ? "Lock now (Ctrl+Shift+L)" : "Set up app lock"}
+              data-testid="header-lock-btn"
+            >
+              <LockKey size={18} weight={pinEnabled ? "regular" : "duotone"} />
+            </button>
           </div>
         </header>
 

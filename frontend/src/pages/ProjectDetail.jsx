@@ -7,6 +7,7 @@ import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import ProjectPhases from "../components/ProjectPhases";
+import ProjectHub, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import {
@@ -306,7 +307,11 @@ export default function ProjectDetail() {
       </div>
 
       {tab === "Overview" && (
-        <div className="space-y-6">
+        <div className="space-y-8">
+          <ProjectFacts p={p} />
+          <ProjectHub p={p} visibleTabs={visibleTabs} canSeeFinancials={canSeeFinancials}
+                      onOpen={(t) => { setTab(t); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                      onCopyPortal={hasPerm("projects.update") && p.share_token ? copyShare : null} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[#E5E5E5]" data-testid="project-financials">

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
-import { Plus, ArrowRight, CaretRight } from "@phosphor-icons/react";
+import { Plus, ArrowRight, CaretRight, MagnifyingGlass, SquaresFour, ListBullets } from "@phosphor-icons/react";
 import PageHero from "../components/PageHero";
 import { formatINR, empName } from "../lib/format";
 import SearchSelect from "../components/SearchSelect";
@@ -31,6 +31,16 @@ export default function Projects() {
     project_manager_id: "", team_ids: [],
   });
   const [err, setErr] = useState("");
+  const [query, setQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [sort, setSort] = useState("recent");
+  const [view, setViewState] = useState(() => {
+    try { return localStorage.getItem("ds_projects_view") || "grid"; } catch { return "grid"; }
+  });
+  const setView = (v) => {
+    setViewState(v);
+    try { localStorage.setItem("ds_projects_view", v); } catch { /* storage unavailable */ }
+  };
   const navigate = useNavigate();
 
   const load = async () => {
@@ -72,11 +82,19 @@ export default function Projects() {
     }
   };
 
+  const term = query.trim().toLowerCase();
+  const shown = projects
+    .filter((p) => stageFilter === "all" || (p.stage || "Requirement") === stageFilter)
+    .filter((p) => !term || `${p.name} ${p.client_name || ""} ${p.project_type || ""}`.toLowerCase().includes(term))
+    .sort((a, b) => (sort === "name" ? (a.name || "").localeCompare(b.name || "")
+      : sort === "stage" ? STAGES.indexOf(a.stage || "Requirement") - STAGES.indexOf(b.stage || "Requirement")
+        : String(b.created_at || "").localeCompare(String(a.created_at || ""))));
+
   return (
     <div className="space-y-8" data-testid="projects-page">
       <PageHero
         eyebrow="STUDIO / PROJECTS"
-        title="Active work."
+        title="Projects"
         kicker="Track every brief from concept to handover. Click any tile to dive in."
         count={projects.length}
       >
@@ -162,8 +180,68 @@ export default function Projects() {
         </form>
       )}
 
+      <div className="flex flex-col gap-3" data-testid="projects-toolbar">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6A63]" />
+            <input className="input-flat w-full !pl-9" value={query} onChange={(e) => setQuery(e.target.value)}
+                   placeholder="Search projects, clients or type" aria-label="Search projects" data-testid="projects-search" />
+          </div>
+          <select aria-label="Sort projects" className="input-flat !w-auto" value={sort} onChange={(e) => setSort(e.target.value)}
+                  data-testid="projects-sort">
+            <option value="recent">Newest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="stage">By stage</option>
+          </select>
+          <div className="ml-auto flex rounded-lg border border-[#E8E6E1] bg-white p-0.5" role="group" aria-label="Layout">
+            {[["grid", SquaresFour, "Grid view"], ["list", ListBullets, "List view"]].map(([v, Icon, label]) => (
+              <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v} aria-label={label} title={label}
+                      className={`p-1.5 rounded-md transition ${view === v ? "bg-[#EFEDE6] text-[#1A1A1A]" : "text-[#6E6A63] hover:text-[#1A1A1A]"}`}
+                      data-testid={`projects-view-${v}`}>
+                <Icon size={16} />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by stage">
+          {[["all", "All", projects.length], ...STAGES.map((st) => [st, st, projects.filter((x) => (x.stage || "Requirement") === st).length])]
+            .filter(([id, , n]) => id === "all" || n > 0)
+            .map(([id, label, n]) => (
+              <button key={id} type="button" role="tab" aria-selected={stageFilter === id} onClick={() => setStageFilter(id)}
+                      className={`px-3 py-1.5 text-xs rounded-full border transition ${stageFilter === id
+                        ? "bg-[#1A1A1A] text-white border-[#1A1A1A]" : "bg-white text-[#5C5C5C] border-[#E5E5E5] hover:border-[#76705E]"}`}
+                      data-testid={`projects-stage-${id}`}>
+                {label} <span className={stageFilter === id ? "text-white/70" : "text-[#6E6A63]"}>{n}</span>
+              </button>
+            ))}
+        </div>
+      </div>
+
+      {view === "list" && shown.length > 0 && (
+        <div className="border border-[#E8E6E1] rounded-xl overflow-x-auto bg-white" data-testid="projects-list">
+          <table className="w-full text-sm">
+            <thead className="bg-[#FAF9F6] text-[10px] uppercase tracking-wider text-[#5C5C5C]">
+              <tr><th className="p-3 text-left">Project</th><th className="p-3 text-left">Client</th>
+                <th className="p-3 text-left">Stage</th><th className="p-3 text-right">Budget</th><th className="p-3" /></tr>
+            </thead>
+            <tbody>
+              {shown.map((p) => (
+                <tr key={p.id} className="border-t border-[#F0EEE9] hover:bg-[#FAFAF7] cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
+                  <td className="p-3"><div className="font-semibold">{p.name}</div><div className="text-xs text-[#6E6A63]">{p.project_type}{p.engagement_type ? ` · ${p.engagement_type}` : ""}</div></td>
+                  <td className="p-3">{p.client_name || "—"}</td>
+                  <td className="p-3"><span className="status-chip chip-medium">{p.stage || "Requirement"}</span></td>
+                  <td className="p-3 text-right font-mono">{formatINR(p.budget)}</td>
+                  <td className="p-3 text-right"><CaretRight size={14} className="inline text-[#B8B3A8]" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(view === "grid" || shown.length === 0) && (
       <div className="border-t border-l border-[#E5E5E5] grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 stagger">
-        {projects.map((p, i) => {
+        {shown.map((p, i) => {
           const idx = STAGES.indexOf(p.stage || "Requirement");
           const pct = Math.round(((idx + 1) / STAGES.length) * 100);
           return (
@@ -214,7 +292,13 @@ export default function Projects() {
         {projects.length === 0 && (
           <EmptyState />
         )}
+        {projects.length > 0 && shown.length === 0 && (
+          <div className="border-r border-b border-[#E5E5E5] p-10 col-span-full text-center text-sm text-[#5C5C5C]">
+            No projects match. <button type="button" className="underline" onClick={() => { setQuery(""); setStageFilter("all"); }}>Clear filters</button>
+          </div>
+        )}
       </div>
+      )}
     </div>
   );
 }

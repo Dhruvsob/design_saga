@@ -81,3 +81,15 @@ test("employees never see maternity/paternity or the HR leave table", async () =
   expect((await json(admin.get("/api/attendance/meta"))).leave_types).toContain("maternity");
   await admin.dispose();
 });
+
+test("lock sits beside the bell; project hub tiles open their section", async ({ page }) => {
+  const ctx = await api("admin");
+  const proj = await json(ctx.post("/api/projects", { data: { name: `Hub ${uid()}`, engagement_type: "consultancy" } }));
+  await ctx.dispose();
+  await page.goto(`/projects/${proj.id}`);
+  await expect(page.getByTestId("header-lock-btn")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^App lock$/ })).toHaveCount(0);
+  await expect(page.getByTestId("project-hub")).toBeVisible();
+  await page.getByTestId("hub-Tasks").click();
+  await expect(page.getByTestId("tab-Tasks")).toHaveClass(/border-\[#8B7F6A\]/);
+});

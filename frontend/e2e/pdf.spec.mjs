@@ -75,3 +75,37 @@ test("logo and company details appear on every PDF type", async () => {
   await pdfOf(ctx, `/api/vendors/${vendor.id}/commission-statement.pdf`, "commission-statement");
   await ctx.dispose();
 });
+
+test("invoice preview loads inside the app under production security headers", async ({ browser }) => {
+  const { authFile, baseURL } = await import("./helpers.mjs");
+  const ctx = await api("admin");
+  const client = await json(ctx.post("/api/clients", { data: { name: `Preview ${uid()}` } }));
+  const inv = await json(ctx.post("/api/invoices", { data: {
+    client_id: client.id, doc_type: "invoice", status: "draft", tax_rate: 0,
+    items: [{ description: "Concept design", quantity: 1, rate: 1000 }],
+  } }));
+  await ctx.dispose();
+
+  // Same headers gamaa.in sends (Caddy + nginx), so a blocked frame fails here too.
+  const csp = fs.readFileSync(fileURLToPath(new URL("../../deploy/nginx.conf", import.meta.url)), "utf8")
+    .match(/Content-Security-Policy "([^"]+)"/)[1];
+  const context = await browser.newContext({ baseURL, storageState: authFile("admin") });
+  await context.route("**/*", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, headers: { ...response.headers(),
+      "content-security-policy": csp, "x-frame-options": "DENY" } });
+  });
+  const page = await context.newPage();
+  const violations = [];
+  page.on("console", (msg) => { if (/Content Security Policy|Refused to (frame|display)/i.test(msg.text())) violations.push(msg.text()); });
+  await page.goto("/invoices");
+  await page.getByRole("row", { name: new RegExp(inv.number) }).getByTitle("Preview").click();
+  const frame = page.getByTestId("pdf-frame");
+  await expect(frame).toBeVisible();
+  expect(await frame.getAttribute("src")).toMatch(/^blob:/);
+  await page.waitForTimeout(1500);
+  expect(violations, violations.join("\n")).toEqual([]);
+  await page.getByTestId("pdf-preview-close").click();
+  await expect(page.getByTestId("pdf-preview")).toHaveCount(0);
+  await context.close();
+});

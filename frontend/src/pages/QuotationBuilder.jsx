@@ -10,6 +10,7 @@ import {
 import { ProposalDetails, ProposalFees } from "../components/ConsultancyProposal";
 import { confirmAction } from "../lib/confirm";
 import useUnsavedWarning from "../lib/useUnsavedWarning";
+import { PdfFrame } from "../components/PdfPreview";
 
 const TABS = ["Overview", "BOQ Builder", "Rooms", "Materials", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
 const CONSULT_TABS = ["Overview", "Fee Schedule", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
@@ -846,7 +847,7 @@ function Versions({ q }) {
 function Preview({ qid }) {
   return (
     <div className="border border-[#E5E5E5]" style={{ height: "85vh" }} data-testid="tab-preview">
-      <iframe title="Quotation Preview" src={`${API}/quotations-adv/${qid}/pdf`} className="w-full h-full" />
+      <PdfFrame path={`/quotations-adv/${qid}/pdf`} title="Quotation preview" />
     </div>
   );
 }

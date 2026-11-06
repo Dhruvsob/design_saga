@@ -11,6 +11,14 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-092: Live PDF preview fix, header lock, project hub, projects toolbar
+
+- Bug (production): invoice "Preview" and quotation Preview tab showed the browser's blocked-frame icon. Cause: every response carries `X-Frame-Options: DENY` (VPS Caddy) and `frame-ancestors 'none'`, so `<iframe src=/api/..pdf>` is refused. Fix: shared `components/PdfPreview.jsx` fetches the PDF with the session and shows it from a `blob:` URL (loading, error, Open in new tab, Download, Esc to close); `deploy/nginx.conf` CSP adds `frame-src 'self' blob:` and `object-src 'self' blob:`. Anti-clickjacking headers unchanged; Caddyfile untouched. Also moved the inline PerformanceServerTiming shim from index.html into the bundle (it was blocked by `script-src 'self'` on every page load).
+- App lock moved from the sidebar footer to a lock icon beside the notification bell (one click locks; opens PIN setup when no PIN; Ctrl/Cmd+Shift+L). PIN settings remain as a small shield icon in the user row.
+- Project home (reference: Work Hand): key facts strip (client, type, area, location, started, stage, team avatars) and "In this project" tiles with live counts (phases, tasks open/done/overdue, payment milestones to collect, vendors POs/bills, files, invoices outstanding, activity, client portal link). Financial tiles follow project financial visibility.
+- Projects list: search, sort (newest/name/stage), stage chips with counts, grid/list toggle (remembered), "no match" state; title "Projects".
+- Verified: `e2e/pdf.spec.mjs` preview test injects the production CSP + X-Frame-Options and asserts a blob: frame with no CSP violations; `e2e/ux.spec.mjs` lock/hub test; regression smoke/navigation/phases/a11y/pdf/proposal 30 passed, ux 8 passed.
+
 ### DS-091: Employee advances - give, recover through payroll, reverse (mandate 08, T06)
 
 - Gap: "Advance recovered" only lowered net pay; nothing recorded the advance, salary expense was booked at net (understated by the recovery) and there was no outstanding balance.

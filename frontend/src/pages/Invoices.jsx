@@ -7,6 +7,7 @@ import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwis
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import PdfPreviewModal from "../components/PdfPreview";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -302,15 +303,8 @@ export default function Invoices({ docType = "invoice" }) {
       </div>
 
       {preview && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
-          <div className="bg-white max-w-3xl w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-            <iframe
-              title="preview"
-              src={`${API}/invoices/${preview.id}/pdf`}
-              className="w-full h-[90vh]"
-            />
-          </div>
-        </div>
+        <PdfPreviewModal path={`/invoices/${preview.id}/pdf`} title={`Invoice ${preview.number || ""}`.trim()}
+                         filename={`${preview.number || "invoice"}.pdf`} onClose={() => setPreview(null)} />
       )}
       {paying && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
