@@ -6,16 +6,11 @@ Last updated: 06/11/2026 (Asia/Kolkata).
 ## Where things stand
 
 - Branch `codex/repair-release`; see `git log -5 --oneline` for the exact head.
-- Production runtime is `8d17a12` (deployed 05/11/2026 18:40 UTC via git bundle;
+- Production runtime is `fbe0311` (deployed 06/11/2026 07:45 UTC via git bundle;
   the VPS cannot reach github.com). Scheduled backups fixed and verified.
 - Deploy recipe: `git bundle create x.bundle <prod-head>..codex/repair-release`,
   `scp` to `root@srv2020574.hstgr.cloud` (IPv6), then on the VPS run in a
   transient unit: `git fetch /root/x.bundle codex/repair-release:refs/remotes/origin/codex/repair-release && git merge --ff-only origin/codex/repair-release`.
-- Branch head `fbe0311` is pushed and ready but NOT deployed (production `8d17a12`).
-  Pending release: DS-082 money footing, DS-083 accessibility, DS-084 form safety
-  and setup checklist. Verified bundle already on the VPS:
-  `/root/ds-release-fbe0311.bundle` (SHA-256 `e077212c...5c0f`). The deploy step
-  was blocked by the agent permission policy; it needs the owner's go-ahead.
 - Last completed: DS-084, after DS-083, DS-082, DS-081, DS-080, DS-076..DS-079.
 - Gates at checkpoint: backend mandatory list 330 passed; Playwright E2E full run
   (navigation 16 re-run after PIN-unlock fix; forms, money, pdf, smoke, a11y
@@ -25,10 +20,9 @@ Last updated: 06/11/2026 (Asia/Kolkata).
 
 ## Next executable tasks (in order)
 
-1. Deploy `fbe0311` (owner approval) and live-verify.
-2. PRJ-01: per-tenant architecture phase templates (smallest slice).
-3. A11Y-01 remainder: modal focus traps, tablet visual QA, screen-reader pass.
-4. UX: styled confirmation dialog (47 native confirms), unsaved-change warnings.
+1. PRJ-01: per-tenant architecture phase templates (smallest slice).
+2. A11Y-01 remainder: modal focus traps, tablet visual QA, screen-reader pass.
+3. UX: styled confirmation dialog (47 native confirms), unsaved-change warnings.
 
 ## Waiting on the owner
 

@@ -11,6 +11,14 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DEPLOY-2026-11-06: Release `fbe0311` deployed to production
+
+- Contents: DS-082 (money footing), DS-083 (WCAG 2.1 A/AA pass), DS-084 (double-submit guard, toasts, setup checklist). Owner approved the deploy in chat on 06/11.
+- Method: git bundle `8d17a12..fbe0311` (SHA-256 `e077212c...5c0f`, matched on both ends, verified) fetched on the VPS and fast-forwarded inside a transient systemd unit; post-merge hook ran `deploy/update-production.sh`.
+- Result: pre-deploy backup `/opt/design-saga-backups/20261106T074528Z`; backend and web rebuilt and healthy; "Design Saga deployment completed: fbe0311".
+- Live checks: `/healthz` ok; `/api/auth/me` 401; integrity endpoint 401; new main bundle contains the submit guard and AA palette; CSP header served; 0 backend exceptions and 0 5xx in the first minutes; daily backup timer scheduled 18:25 UTC.
+- Not yet verified by a signed-in owner: Getting started checklist content, logo on PDFs, Data checks on real data.
+
 ### DEPLOY-2026-11-05: Repair release `8d17a12` deployed to production
 
 - Target verified before deploy: hostname `srv2020574`, eth0 `187.52.124.46`, `/opt/design-saga-git` on GitHub remote `Dhruvsob/design_saga`, previous runtime `3b15e23`, only the protected Caddy files modified locally (untouched), 14 GB disk free, all five containers healthy.
