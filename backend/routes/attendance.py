@@ -210,7 +210,8 @@ async def _release_review_claim(collection, record_id: str, token: str) -> None:
 
 async def _get_attendance_policy() -> dict:
     p = await sdb.attendance_policies.find_one({}, {"_id": 0})
-    return {**DEFAULT_POLICY, **(p or {})}
+    # stored nulls must not override defaults (e.g. paid leave allowance = 1)
+    return {**DEFAULT_POLICY, **{k: v for k, v in (p or {}).items() if v is not None}}
 
 
 async def _is_holiday(date_str: str):

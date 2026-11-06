@@ -11,6 +11,13 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-098: One paid leave per month for every employee; taupe sidebar; logo tile
+
+- Owner: "1 leave in one month to all the employees". Verified the payroll engine already applies a company-wide monthly paid-leave allowance (default 1; first approved casual/sick/earned leave in a month is paid, further ordinary leave is unpaid at the per-day rate; "unpaid" always deducted; maternity/paternity/comp-off not counted). Live DESIGN SAGA policy has no stored value, so the default 1 already applies (read-only check 06/11).
+- Gaps fixed: the setting was buried under Attendance > "Geo & Policy" between GPS fields. Tab renamed "Office & Leave Policy"; a "Leave policy" section now sits at the top ("Every employee gets [1] paid leave per month", rules, worked example for a Rs. 24,000 salary) with its own Save. Hardened: a stored null/empty allowance now means the default 1 (engine and policy merge) instead of 0; the save sends a clamped 0-31 integer.
+- Sidebar (owner: "sidebar colour same as button", "remove collapse of dropdown"): background = primary button taupe #76705E with tokens re-scoped (white text 5.1:1; active/hover use a deeper taupe overlay so white text stays above 4.5:1); group headings are plain labels (no collapsible dropdowns); icon-rail Collapse kept. Logo and initials sit on an off-white tile so the black mark reads on taupe.
+- Verified: `tests/test_monthly_leave_allowance.py` (6) incl. 1st leave free, 2nd leave Rs. 1,000 deducted at 26,000/26, stored null = 1; backend gate 386 passed; axe colour-contrast clean.
+
 ### DS-097: Calendar Studio/Project scopes, Work board views, Google context, three-dot menus
 
 - Calendar: one feed, two scopes. Every feed item now carries `project_id`, `scope` (project if linked to a project, else studio) and `project_name`; the page has All / Studio / Projects tabs with counts and a project filter. The event form gained the missing Project field (empty = studio event). Server now refuses linking an event to a project the user cannot see (404) — before, any project id was accepted.

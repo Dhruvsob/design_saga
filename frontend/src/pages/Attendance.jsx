@@ -265,7 +265,7 @@ export default function Attendance() {
         {isHR && <TabBtn id="payroll" tab={tab} setTab={setTab} label="Payroll" />}
         {isHR && <TabBtn id="requests" tab={tab} setTab={setTab} label="Requests" />}
         {isHRWrite && <TabBtn id="setup" tab={tab} setTab={setTab} label="Shift & Salary Setup" />}
-        {isAdmin && <TabBtn id="geo" tab={tab} setTab={setTab} label="Geo & Policy" />}
+        {isAdmin && <TabBtn id="geo" tab={tab} setTab={setTab} label="Office & Leave Policy" />}
       </div>
 
       {tab === "me" && noProfile && (
@@ -1568,7 +1568,8 @@ function GeoPolicyTab({ projects }) {
         ...policy,
         office_start: policy.office_start, office_end: policy.office_end,
         grace_minutes: Number(policy.grace_minutes) || 0,
-        monthly_paid_leave_allowance: Math.max(0, Number(policy.monthly_paid_leave_allowance ?? 1)),
+        monthly_paid_leave_allowance: policy.monthly_paid_leave_allowance === "" || policy.monthly_paid_leave_allowance == null
+          ? 1 : Math.min(31, Math.max(0, Math.round(Number(policy.monthly_paid_leave_allowance)))),
         half_day_min_hours: Number(policy.half_day_min_hours) || 4,
         full_day_min_hours: Number(policy.full_day_min_hours) || 8,
         weekly_off_days: policy.weekly_off_days || [6],
@@ -1639,6 +1640,18 @@ function GeoPolicyTab({ projects }) {
 
   return (
     <div className="space-y-6" data-testid="geo-policy-tab">
+      {/* -------- Leave policy (most used setting first) -------- */}
+      <div className="space-y-2">
+        <LeaveAllowance value={policy.monthly_paid_leave_allowance ?? 1}
+                        onChange={(v) => setP({ monthly_paid_leave_allowance: v })} />
+        <div className="flex items-center justify-end gap-2">
+          {savedAt && <span className="text-xs text-[var(--success)] font-mono">SAVED</span>}
+          <button onClick={savePolicy} disabled={saving} className="btn-primary text-xs" data-testid="save-leave-policy-btn">
+            {saving ? "Saving…" : "Save leave policy"}
+          </button>
+        </div>
+      </div>
+
       {/* -------- Interactive geofence map -------- */}
       <div className="card-flat">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -1691,14 +1704,6 @@ function GeoPolicyTab({ projects }) {
             <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Grace (minutes)</label>
             <input type="number" className="input-flat w-full" value={policy.grace_minutes ?? 15}
                    onChange={(e) => setP({ grace_minutes: e.target.value })} data-testid="policy-grace" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Paid leave / month</label>
-            <input type="number" min="0" max="31" step="1" className="input-flat w-full"
-                   value={policy.monthly_paid_leave_allowance ?? 1}
-                   onChange={(e) => setP({ monthly_paid_leave_allowance: e.target.value })}
-                   data-testid="policy-paid-leave-allowance" />
-            <p className="text-[10px] text-[var(--ink-3)] mt-1">Approved ordinary leave above this allowance is deducted from salary.</p>
           </div>
           <div>
             <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Max GPS accuracy (m)</label>
@@ -1874,5 +1879,47 @@ function MyLeaveBalance({ employeeId, year }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Company-wide monthly paid leave, with a worked salary example. */
+function LeaveAllowance({ value, onChange }) {
+  const n = value === "" ? "" : Number(value);
+  const allowance = n === "" ? 1 : Math.max(0, n);
+  const perDay = 24000 / 26;
+  const money = (x) => `₹${x.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <section className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-4 space-y-3" data-testid="leave-policy">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h3 className="font-display font-bold text-lg mr-auto">Leave policy</h3>
+        <label className="flex items-center gap-2 text-sm">
+          Every employee gets
+          <input type="number" min="0" max="31" step="1" className="input-flat !w-16 text-center font-semibold"
+                 value={value} onChange={(e) => onChange(e.target.value)} aria-label="Paid leaves per month"
+                 data-testid="policy-paid-leave-allowance" />
+          paid leave{allowance === 1 ? "" : "s"} per month
+        </label>
+      </div>
+      <ul className="text-xs text-[var(--ink-2)] space-y-1 list-disc ml-4">
+        <li>Counts approved casual, sick and earned leave. The allowance resets every month and does not carry forward.</li>
+        <li>Leave beyond {allowance} in the same month is unpaid and deducted at the employee&apos;s per-day rate.</li>
+        <li>Leave marked &quot;unpaid&quot; is always deducted. Maternity, paternity and comp-off are not counted against this allowance.</li>
+      </ul>
+      <div className="text-xs bg-white border border-[var(--line)] rounded-lg p-3" data-testid="leave-policy-example">
+        <div className="font-semibold text-[var(--ink)] mb-1">Example: ₹24,000 monthly salary, 26-day basis ({money(perDay)} per day)</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[var(--ink-2)]">
+          {[1, 2, 3].map((k) => {
+            const unpaid = Math.max(0, k - allowance);
+            return (
+              <div key={k}>
+                {k} leave{k > 1 ? "s" : ""}: {unpaid === 0
+                  ? <span className="text-[var(--success)] font-semibold">no deduction</span>
+                  : <span className="text-[var(--danger)] font-semibold">{money(perDay * unpaid)} deducted</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }

@@ -81,6 +81,7 @@ jobs:
           tests/test_leave_privacy.py
           tests/test_subscription_readonly.py
           tests/test_calendar_scope.py
+          tests/test_monthly_leave_allowance.py
 
   frontend:
     runs-on: ubuntu-latest

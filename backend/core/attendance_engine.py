@@ -108,7 +108,8 @@ async def monthly_summary(emp: dict, year: int, month: int,
     late_fine_total = 0.0
     short_leave_hours_total = 0.0
     paid_leave_used = 0
-    paid_leave_allowance = max(0, int(policy.get("monthly_paid_leave_allowance", 1) or 0))
+    raw_allowance = policy.get("monthly_paid_leave_allowance")
+    paid_leave_allowance = 1 if raw_allowance in (None, "") else max(0, int(raw_allowance))
     today = now_ist().date()
 
     for dnum in range(1, days_in_month + 1):

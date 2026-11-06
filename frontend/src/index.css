@@ -41,6 +41,7 @@
   --accent-soft: #F3EFE9;
   --accent-ring: rgba(139, 127, 106, 0.18);
   --logo-brown: #8B7A55;   /* logo brown-gold */
+  --logo-brown-ink: #6E6043; /* brown-gold text on cream (AA) */
 
   /* semantic (unchanged from the original screens) */
   --success: #1D633E;  --success-soft: #EFF7EF;
@@ -488,3 +489,27 @@ main > div:last-child { animation: page-in 260ms var(--ease) both; }
 /* sidebar group open/close */
 .nav-group-items { animation: group-in 180ms var(--ease) both; }
 @keyframes group-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+/* ============================================================
+   TAUPE SIDEBAR — same colour as the primary button (#76705E).
+   Tokens are re-scoped so every child adapts; white text = 5.1:1.
+============================================================ */
+.sidebar-taupe {
+  background: #76705E;   /* = primary button fill */
+  --ink: #FFFFFF;
+  --ink-2: #FFFFFF;
+  --ink-3: #FFFFFF;
+  --ink-4: rgba(255, 255, 255, 0.75);
+  --line: rgba(255, 255, 255, 0.16);
+  --surface: rgba(0, 0, 0, 0.20);      /* active: deeper taupe, white text ~6.5:1 */
+  --sidebar-2: rgba(0, 0, 0, 0.10);
+  --hover: rgba(0, 0, 0, 0.10);
+  --accent: #FAF9F6;
+  --accent-strong: #FFFFFF;
+  color: #FFFFFF;
+}
+.sidebar-taupe [data-testid^="nav-group-"] { opacity: 1; }
+.sidebar-taupe .btn-icon { color: #FFFFFF; }
+.sidebar-taupe .btn-icon:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.2); }
+.sidebar-taupe ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-color: var(--accent-strong); }
+.sidebar-taupe .nav-active-bar { background: #FAF9F6; }

@@ -5,7 +5,7 @@ import {
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard, CalendarCheck,
   Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn,
-  Scroll, LockKey, CaretDown, CaretDoubleLeft, CaretDoubleRight,
+  Scroll, LockKey, CaretDoubleLeft, CaretDoubleRight,
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
@@ -65,7 +65,7 @@ function NavItem({ to, label, Icon, rail }) {
           rail ? "justify-center px-0" : "px-3"
         } ${
           isActive
-            ? "bg-[rgba(139,127,106,0.14)] text-[var(--ink)] font-semibold"
+            ? "bg-[var(--surface)] text-[var(--ink)] font-semibold"
             : "text-[var(--ink-2)] hover:bg-[var(--sidebar-2)] hover:text-[var(--ink)]"
         }`
       }
@@ -115,13 +115,7 @@ export default function Layout({ children }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pinSettingsOpen, setPinSettingsOpen] = useState(false);
   const [rail, setRail] = useState(() => readPref("ds_sidebar_rail", false));
-  const [closedGroups, setClosedGroups] = useState(() => readPref("ds_sidebar_closed", []));
   const toggleRail = () => setRail((r) => { writePref("ds_sidebar_rail", !r); return !r; });
-  const toggleGroup = (id) => setClosedGroups((list) => {
-    const next = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
-    writePref("ds_sidebar_closed", next);
-    return next;
-  });
 
   // Close the mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -173,11 +167,11 @@ export default function Layout({ children }) {
       )}
       {/* ============== SIDEBAR ============== */}
       <aside
-        className={`shrink-0 flex flex-col text-[var(--ink-2)] z-40 w-64 ${rail ? "lg:w-[76px]" : "lg:w-64"}
+        className={`sidebar-taupe shrink-0 flex flex-col text-[var(--ink-2)] z-40 w-64 ${rail ? "lg:w-[76px]" : "lg:w-64"}
           fixed inset-y-0 left-0 h-full transform transition-[transform,width] duration-200 ease-out
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen`}
-        style={{ background: "var(--sidebar)", borderRight: "1px solid var(--line)" }}
+        style={{ borderRight: "1px solid var(--line)" }}
         data-testid="app-sidebar"
       >
         {/* brand */}
@@ -189,11 +183,13 @@ export default function Layout({ children }) {
           data-testid="sidebar-logo-btn"
         >
           {brandLogo ? (
-            <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
-                 className="h-11 w-auto max-w-[56px] shrink-0 object-contain transition-transform duration-200 group-hover:scale-[1.03]" />
+            <span className="h-12 min-w-[48px] max-w-[64px] px-1.5 rounded-xl bg-[#FAF9F6] flex items-center justify-center shrink-0 shadow-sm">
+              <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
+                   className="h-10 w-auto max-w-[56px] object-contain transition-transform duration-200 group-hover:scale-[1.04]" />
+            </span>
           ) : (
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[var(--logo-brown)] shadow-sm">
-              <span className="text-white font-display font-bold text-[20px] leading-none">{brandInitials}</span>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#FAF9F6] shadow-sm">
+              <span className="text-[var(--logo-brown-ink)] font-display font-bold text-[20px] leading-none">{brandInitials}</span>
             </div>
           )}
           <div className={`min-w-0 ${rail ? "lg:hidden" : ""}`}>
@@ -222,28 +218,21 @@ export default function Layout({ children }) {
             </div>
           )}
           {groups.map((g) => {
-            const hasCurrent = g.items.some((n) => location.pathname.startsWith(n.to));
-            const open = rail || !g.label || hasCurrent || !closedGroups.includes(g.id);
             return (
               <div key={g.id} className={g.label ? "mt-3" : ""} role="group" aria-labelledby={g.label ? `nav-group-${g.id}` : undefined}>
                 {g.label && (rail ? (
                   <div className="hidden lg:block mx-3 my-2 border-t border-[var(--line)]" aria-hidden="true" />
                 ) : null)}
                 {g.label && (
-                  <button type="button" id={`nav-group-${g.id}`} onClick={() => toggleGroup(g.id)}
-                          aria-expanded={open}
-                          className={`w-full flex items-center justify-between px-3 h-7 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-3)] hover:text-[var(--ink-2)] transition-colors ${rail ? "lg:hidden" : ""}`}
-                          data-testid={`nav-group-${g.id}`}>
+                  <div id={`nav-group-${g.id}`}
+                       className={`px-3 pt-1 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-[var(--ink-3)] ${rail ? "lg:hidden" : ""}`}
+                       data-testid={`nav-group-${g.id}`}>
                     {g.label}
-                    <CaretDown size={10} weight="bold" aria-hidden="true"
-                               className={`transition-transform duration-200 ${open ? "" : "-rotate-90"}`} />
-                  </button>
-                )}
-                {open && (
-                  <div className="space-y-0.5 mt-0.5 nav-group-items">
-                    {g.items.map((item) => <NavItem key={item.to} {...item} rail={rail} />)}
                   </div>
                 )}
+                <div className="space-y-0.5">
+                  {g.items.map((item) => <NavItem key={item.to} {...item} rail={rail} />)}
+                </div>
               </div>
             );
           })}
@@ -255,7 +244,7 @@ export default function Layout({ children }) {
             {user?.picture ? (
               <img src={user.picture} alt="" className="w-9 h-9 rounded-lg object-cover ring-1 ring-[var(--line)] shrink-0" />
             ) : (
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display font-bold text-sm bg-[var(--accent-strong)] text-white shrink-0"
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center font-display font-bold text-sm bg-[#FAF9F6] text-[#5F5A4B] shrink-0"
                    title={rail ? user?.name : undefined}>
                 {(user?.name || "?").slice(0, 1).toUpperCase()}
               </div>
