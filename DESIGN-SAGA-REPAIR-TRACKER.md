@@ -11,6 +11,13 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-105: ⋮ menus on every remaining table row; hidden crash in Collections fixed
+
+- Owner screenshot: rows still had inline "Edit | Delete" buttons. Searched every page and component for inline row actions and moved them all into the shared ⋮ RowActions menu: vendor bills, vendor payments (Reverse), expected commissions, commission receipts; Accounting collections (expected) and Chart of Accounts (Edit / Deactivate-Restore); employee documents, warnings, rewards; recurring rules (Post now / Pause / Edit / Delete); bank-import batches (Download CSV / Delete); project files; work board cards and list rows; master-data values (Rename / Hide / Delete). Up/down ordering arrows and visible "Open" links stay as they are. All test ids kept on the menu items.
+- Bug found while doing this: Accounting > Collections Due rendered `<Trash>` without importing it, so any manual expected collection with nothing received yet would crash that screen. Fixed (import) and covered by an e2e test that also listens for page errors.
+- Guard: ESLint here has no React plugin, so undefined JSX tags slip through. New `frontend/scripts/check-jsx-undef.mjs` fails CI when a JSX component is used but never imported/declared (clean now; it flags the old Accounting file). Added to the quality workflow.
+- Verified: ESLint clean, JSX check clean, build OK; e2e ux/money/smoke/a11y/phases 39 passed incl. new test (collection row has no inline buttons, ⋮ shows "Cancel this collection", no page errors; employee warning edit through ⋮).
+
 ### DS-104: Clickable breadcrumbs; pinned headers on long tables
 
 - U8: top-bar breadcrumb was plain text. Company name now links to the Dashboard; on a detail page (e.g. one project) the list name links back to the list and the last crumb reads "Details". On the list itself it stays a plain label.

@@ -12,6 +12,7 @@ import {
 import TaskCalendar from "../components/TaskCalendar";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const LANES = [
   { id: "todo", label: "To do", color: "#5C5C5C" },
@@ -517,10 +518,11 @@ function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd
                           <span className="ml-2 text-[var(--ink)]">· {t.task_type === "vendor" ? t.vendor_contact?.vendor_name : t.assignee_name}</span>
                         )}
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }}
-                        className="text-[var(--danger)] hover:scale-110 transition" data-testid={`delete-${t.id}`}>
-                        <Trash size={12} />
-                      </button>
+                      <span onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+                        <RowActions label={t.title} testid={`task-actions-${t.id}`} actions={[
+                          { label: "Delete task", icon: Trash, danger: true, onSelect: () => onDelete(t.id), testid: `delete-${t.id}` },
+                        ]} />
+                      </span>
                     </div>
                   </div>
                 );
@@ -612,9 +614,9 @@ function TableView({ tasks, meta, areas, categories, selected, setSelected, onIn
                 <td className={`p-2 text-xs font-mono ${overdue ? "text-[var(--danger)] font-semibold" : ""}`}>{formatDate(t.due_date)}</td>
                 <td className="p-2 text-xs text-[var(--ink-2)] max-w-[200px] truncate" title={t.remarks || ""}>{t.remarks || "—"}</td>
                 <td className="p-2">
-                  <button onClick={() => onDelete(t.id)} className="text-[var(--danger)] hover:scale-110" data-testid={`row-del-${t.id}`}>
-                    <Trash size={12} />
-                  </button>
+                  <RowActions label={t.title} testid={`task-row-actions-${t.id}`} actions={[
+                    { label: "Delete task", icon: Trash, danger: true, onSelect: () => onDelete(t.id), testid: `row-del-${t.id}` },
+                  ]} />
                 </td>
               </tr>
             );

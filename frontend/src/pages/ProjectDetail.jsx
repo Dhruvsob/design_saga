@@ -15,6 +15,7 @@ import {
   X, Warning, Trash, UsersThree, CaretRight,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
 const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Invoices", "Activity"];
@@ -519,9 +520,9 @@ export default function ProjectDetail() {
                   </label>
                 )}
                 {safeFileUrl(f.url) ? <a href={safeFileUrl(f.url)} target="_blank" rel="noreferrer" className="overline">OPEN →</a> : <span className="overline text-[var(--ink-3)]">UNAVAILABLE</span>}
-                <button onClick={() => deleteFile(f.id)} className="btn-ghost p-1 text-[var(--danger)] opacity-0 group-hover:opacity-100 transition" title="Remove" data-testid={`file-delete-${f.id}`}>
-                  <Trash size={12} />
-                </button>
+                <RowActions label={f.name || "file"} testid={`file-actions-${f.id}`} actions={[
+                  { label: "Remove file", icon: Trash, danger: true, onSelect: () => deleteFile(f.id), testid: `file-delete-${f.id}` },
+                ]} />
               </div>
             </div>
           ))}

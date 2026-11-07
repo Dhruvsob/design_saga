@@ -101,6 +101,8 @@ jobs:
       - name: Audit Node production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm test -- --max-warnings=0
+      - name: Every JSX component is imported
+        run: node scripts/check-jsx-undef.mjs src
       - name: Frontend logic unit tests
         run: node --test src/lib/frontend-logic.test.mjs
       - run: npm run build

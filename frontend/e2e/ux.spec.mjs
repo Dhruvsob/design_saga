@@ -309,3 +309,34 @@ test("breadcrumbs link back to the list and the Daybook header stays pinned", as
   await expect(th).toBeVisible();
   expect(await th.evaluate((el) => getComputedStyle(el).position)).toBe("sticky");
 });
+
+test("row actions use the ⋮ menu: expected collection (was a crash) and employee warning", async ({ page }) => {
+  const ctx = await api("admin");
+  const { rows } = await accounts(ctx);
+  const income = rows.find((a) => a.type === "income");
+  const name = `Expected fee ${uid()}`;
+  await json(ctx.post("/api/accounting/receivables", { data: { name, amount: 1200, due_date: today(), income_account_id: income.id } }));
+  const emp = await json(ctx.post("/api/employees", { data: { first_name: "Menu", last_name: `T${uid()}`, salary: { basic: 20000 } } }));
+  await json(ctx.post(`/api/employees/${emp.id}/warnings`, { data: { reason: "Late submission" } }));
+  await ctx.dispose();
+
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/accounting");
+  await openCollections(page);
+  await page.getByTestId("collections-search").fill(name);
+  const row = page.getByRole("row", { name: new RegExp(name) });
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("button", { name: /^(Edit|Cancel)$/ })).toHaveCount(0);
+  await row.getByRole("button", { name: `Actions for ${name}` }).click();
+  await expect(page.getByRole("menuitem", { name: "Cancel this collection" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(errors).toEqual([]);
+
+  await page.goto(`/employees/${emp.id}`);
+  await page.getByRole("button", { name: "Performance", exact: true }).click();
+  await page.getByRole("button", { name: "Actions for warning" }).first().click();
+  await page.getByRole("menuitem", { name: "Edit warning" }).click();
+  await expect(page.getByTestId("form-field-reason")).toHaveValue("Late submission");
+  await page.getByTestId("confirm-cancel").click();
+});

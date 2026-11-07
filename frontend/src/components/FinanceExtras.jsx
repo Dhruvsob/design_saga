@@ -8,6 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import SearchSelect from "./SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "./RowActions";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const FREQ = [
@@ -139,20 +140,13 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
                   </td>
                   <td className="p-3 text-xs">{r.run_count || 0}</td>
                   <td className="p-3 text-right">
-                    <div className="inline-flex items-center gap-1">
-                      <button onClick={() => runNow(r.id)} className="btn-ghost text-[11px]" title="Post now" data-testid={`rec-run-${r.id}`}>
-                        <Play size={11} />
-                      </button>
-                      <button onClick={() => togglePause(r)} className="btn-ghost text-[11px]" title={r.active ? "Pause" : "Resume"}>
-                        <Pause size={11} />
-                      </button>
-                      <button onClick={() => { setEditing(r); setShowForm(true); }} className="btn-ghost text-[11px]" title="Edit">
-                        <PencilSimple size={11} />
-                      </button>
-                      <button onClick={() => doDelete(r.id)} className="btn-ghost text-[11px] text-[var(--danger)]" title="Delete">
-                        <Trash size={11} />
-                      </button>
-                    </div>
+                    <RowActions label={r.name || "recurring rule"} testid={`rec-actions-${r.id}`} actions={[
+                      { label: "Post now", icon: Play, onSelect: () => runNow(r.id), testid: `rec-run-${r.id}` },
+                      { label: r.active ? "Pause" : "Resume", icon: Pause, onSelect: () => togglePause(r) },
+                      { label: "Edit", icon: PencilSimple, onSelect: () => { setEditing(r); setShowForm(true); } },
+                      { divider: true },
+                      { label: "Delete rule", icon: Trash, danger: true, onSelect: () => doDelete(r.id) },
+                    ]} />
                   </td>
                 </tr>
               );
@@ -475,14 +469,11 @@ export const BankReconciliation = ({ accounts = [] }) => {
                       <td className="p-3 text-right font-mono text-xs text-[var(--success)]">{live.reconciled ?? 0}</td>
                       <td className="p-3 text-right font-mono text-xs text-[var(--ink-2)]">{live.total ?? 0}</td>
                       <td className="p-3 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <button onClick={() => downloadBatch(b)} className="btn-ghost text-[11px]" title="Re-download original CSV" data-testid={`import-download-${b.id}`}>
-                            <DownloadSimple size={12} /> CSV
-                          </button>
-                          <button onClick={() => deleteBatch(b)} className="btn-ghost text-[11px] text-[var(--danger)]" title="Delete this import" data-testid={`import-delete-${b.id}`}>
-                            <Trash size={12} />
-                          </button>
-                        </div>
+                        <RowActions label="import" testid={`import-actions-${b.id}`} actions={[
+                          { label: "Download original CSV", icon: DownloadSimple, onSelect: () => downloadBatch(b), testid: `import-download-${b.id}` },
+                          { divider: true },
+                          { label: "Delete this import", icon: Trash, danger: true, onSelect: () => deleteBatch(b), testid: `import-delete-${b.id}` },
+                        ]} />
                       </td>
                     </tr>
                   );

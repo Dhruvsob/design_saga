@@ -14,10 +14,11 @@ import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
   Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
-  HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle,
+  HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle, Trash,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -1196,10 +1197,13 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
                   {row.vendor_id ? <a href={`/vendors/${row.vendor_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
                     : row.project_id ? <a href={`/projects/${row.project_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
                     : null}
-                  {row.origin === "manual_expected" && row.received_amount <= 0 && <>
-                    <button type="button" className="btn-ghost text-xs" onClick={() => editPlan(row)}><PencilSimple size={12} /> Edit</button>
-                    <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => cancelPlan(row)}><Trash size={12} /> Cancel</button>
-                  </>}
+                  {row.origin === "manual_expected" && row.received_amount <= 0 && (
+                    <RowActions label={row.name || "collection"} testid={`collection-actions-${row.id}`} actions={[
+                      { label: "Edit", icon: PencilSimple, onSelect: () => editPlan(row) },
+                      { divider: true },
+                      { label: "Cancel this collection", icon: Trash, danger: true, onSelect: () => cancelPlan(row) },
+                    ]} />
+                  )}
                 </td>
               </tr>
             ))}
@@ -1572,15 +1576,11 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
                     <td className="p-2 text-right w-32">
                       <span className="inline-flex items-center justify-end gap-1">
                         {a.is_bank && <Bank size={12} className="text-[var(--accent-strong)] mr-1" />}
-                        <button type="button" className="btn-ghost p-1.5" title="Edit account"
-                          onClick={(event) => startEdit(a, event)} data-testid={`account-edit-${a.id}`}>
-                          <PencilSimple size={12} />
-                        </button>
-                        <button type="button" className="btn-ghost p-1.5"
-                          title={a.active === false ? "Restore account" : "Deactivate account"}
-                          onClick={(event) => toggleActive(a, event)} data-testid={`account-active-${a.id}`}>
-                          {a.active === false ? <ArrowCounterClockwise size={12} /> : <Archive size={12} />}
-                        </button>
+                        <RowActions label={a.name} testid={`account-actions-${a.id}`} actions={[
+                          { label: "Edit account", icon: PencilSimple, onSelect: () => startEdit(a, { stopPropagation() {}, preventDefault() {} }), testid: `account-edit-${a.id}` },
+                          { label: a.active === false ? "Restore account" : "Deactivate account", icon: a.active === false ? ArrowCounterClockwise : Archive,
+                            danger: a.active !== false, onSelect: () => toggleActive(a, { stopPropagation() {}, preventDefault() {} }), testid: `account-active-${a.id}` },
+                        ]} />
                         <CaretRight size={12} className="text-[var(--ink-3)]" />
                       </span>
                     </td>

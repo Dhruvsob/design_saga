@@ -15,6 +15,7 @@ import {
 import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
 import useUnsavedWarning from "../lib/useUnsavedWarning";
+import RowActions from "../components/RowActions";
 
 const TABS = ["Overview", "Employment", "Salary & Bank", "Documents", "Performance", "ERP Access"];
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -507,14 +508,11 @@ export default function EmployeeDetail() {
                       </a>
                     )}
                     {canEdit && (
-                      <>
-                        <button onClick={() => editDocument(d)} className="hover:scale-110 transition p-2" aria-label="Edit document">
-                          <PencilSimple size={14} />
-                        </button>
-                        <button onClick={() => removeDocument(d.id)} className="text-[var(--danger)] hover:scale-110 transition p-2" aria-label="Remove document">
-                          <Trash size={14} />
-                        </button>
-                      </>
+                      <RowActions label={d.label || "document"} testid={`doc-actions-${d.id}`} actions={[
+                        { label: "Edit document", icon: PencilSimple, onSelect: () => editDocument(d) },
+                        { divider: true },
+                        { label: "Remove document", icon: Trash, danger: true, onSelect: () => removeDocument(d.id) },
+                      ]} />
                     )}
                   </div>
                 </div>
@@ -554,10 +552,11 @@ export default function EmployeeDetail() {
                   <div key={w.id} className="border-l-2 border-[var(--danger)] pl-3 py-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-semibold text-sm">{w.reason}</div>
-                      {canEdit && <div className="flex gap-1 shrink-0">
-                        <button type="button" className="btn-ghost p-1" onClick={() => editWarning(w)} aria-label="Edit warning"><PencilSimple size={12} /></button>
-                        <button type="button" className="btn-ghost p-1 text-[var(--danger)]" onClick={() => deleteWarning(w)} aria-label="Delete warning"><Trash size={12} /></button>
-                      </div>}
+                      {canEdit && <RowActions label="warning" testid={`warning-actions-${w.id}`} actions={[
+                        { label: "Edit warning", icon: PencilSimple, onSelect: () => editWarning(w) },
+                        { divider: true },
+                        { label: "Delete warning", icon: Trash, danger: true, onSelect: () => deleteWarning(w) },
+                      ]} />}
                     </div>
                     {w.note && <p className="text-xs text-[var(--ink-2)] mt-1">{w.note}</p>}
                     <div className="text-[10px] font-mono tracking-widest uppercase text-[var(--ink-3)] mt-1">
@@ -579,10 +578,11 @@ export default function EmployeeDetail() {
                   <div key={r.id} className="border-l-2 border-[var(--success)] pl-3 py-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-semibold text-sm">{r.title}</div>
-                      {canEdit && <div className="flex gap-1 shrink-0">
-                        <button type="button" className="btn-ghost p-1" onClick={() => editReward(r)} aria-label="Edit reward"><PencilSimple size={12} /></button>
-                        <button type="button" className="btn-ghost p-1 text-[var(--danger)]" onClick={() => deleteReward(r)} aria-label="Delete reward"><Trash size={12} /></button>
-                      </div>}
+                      {canEdit && <RowActions label="reward" testid={`reward-actions-${r.id}`} actions={[
+                        { label: "Edit reward", icon: PencilSimple, onSelect: () => editReward(r) },
+                        { divider: true },
+                        { label: "Delete reward", icon: Trash, danger: true, onSelect: () => deleteReward(r) },
+                      ]} />}
                     </div>
                     {r.note && <p className="text-xs text-[var(--ink-2)] mt-1">{r.note}</p>}
                     <div className="text-[10px] font-mono tracking-widest uppercase text-[var(--ink-3)] mt-1">

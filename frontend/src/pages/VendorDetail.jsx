@@ -15,6 +15,7 @@ import {
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const INR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
@@ -677,10 +678,14 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
                 <Td className="text-right font-mono">{INR_D(b.total)}</Td>
                 <Td className="text-right font-mono text-[var(--success)]">{INR_D(b.paid_amount || 0)}</Td>
                 <Td className="text-right font-mono text-[var(--danger)]">{INR_D(b.outstanding || 0)}</Td>
-                <Td><div className="flex gap-1">
-                  {canEdit && b.status !== "cancelled" && <button type="button" className="btn-ghost text-xs" onClick={() => setEditing({ ...b })}><PencilSimple size={12} /> Edit</button>}
-                  {canDelete && b.status !== "cancelled" && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDelete(b)}><Trash size={12} /> {b.status === "draft" ? "Delete" : "Cancel"}</button>}
-                </div></Td>
+                <Td className="text-right">
+                  <RowActions label={`bill ${b.bill_number || ""}`} testid={`bill-actions-${b.id}`} actions={[
+                    { label: "Edit bill", icon: PencilSimple, onSelect: () => setEditing({ ...b }), hidden: !(canEdit && b.status !== "cancelled") },
+                    { divider: true },
+                    { label: b.status === "draft" ? "Delete bill" : "Cancel bill", icon: Trash, danger: true, onSelect: () => onDelete(b),
+                      hidden: !(canDelete && b.status !== "cancelled"), testid: `bill-delete-${b.id}` },
+                  ]} />
+                </Td>
               </tr>
             ))}
           </tbody>
@@ -846,10 +851,15 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
                 <Td className="text-xs font-mono">
                   {(p.bill_ids || []).length ? p.bill_ids.length + " bill(s)" : "on-account"}
                 </Td>
-                <Td>{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[var(--ink-3)]">Reversed</span> : <div className="flex flex-wrap gap-1">
-                  {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => { setEditing(p); setEditForm({ reference: p.reference || "", notes: p.notes || "" }); }}><PencilSimple size={12} /> Edit</button>}
-                  {canDelete && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDelete(p)}><ArrowCounterClockwise size={12} /> Reverse</button>}
-                </div>}</Td>
+                <Td className="text-right">{p.status === "reversed" ? <span className="text-[10px] font-mono uppercase text-[var(--ink-3)]">Reversed</span> : (
+                  <RowActions label="payment" testid={`payment-actions-${p.id}`} actions={[
+                    { label: "Edit reference / notes", icon: PencilSimple, hidden: !canEdit,
+                      onSelect: () => { setEditing(p); setEditForm({ reference: p.reference || "", notes: p.notes || "" }); } },
+                    { divider: true },
+                    { label: "Reverse payment", icon: ArrowCounterClockwise, danger: true, hidden: !canDelete, onSelect: () => onDelete(p),
+                      testid: `payment-reverse-${p.id}` },
+                  ]} />
+                )}</Td>
               </tr>
             ))}
           </tbody>
@@ -1334,7 +1344,11 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                 <Td className="text-right font-mono">{INR_D(r.amount)}</Td>
                 <Td className="text-right font-mono text-[var(--success)]">{INR_D(r.received_amount || 0)}</Td>
                 <Td><CommissionStatus s={r.status} /></Td>
-                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <div className="flex gap-1">{canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => openPlan(r)}><PencilSimple size={12} /> Edit</button>}{canDelete && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDeletePlan(r)}><Trash size={12} /> Cancel</button>}</div> : r.bill_id ? <span className="text-[10px] text-[var(--ink-3)]">Correct from bill</span> : "—"}</Td>
+                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <RowActions label="expected commission" testid={`commission-actions-${r.id}`} actions={[
+                  { label: "Edit", icon: PencilSimple, hidden: !canEdit, onSelect: () => openPlan(r) },
+                  { divider: true },
+                  { label: "Cancel expected commission", icon: Trash, danger: true, hidden: !canDelete, onSelect: () => onDeletePlan(r) },
+                ]} /> : r.bill_id ? <span className="text-[10px] text-[var(--ink-3)]">Correct from bill</span> : "—"}</Td>
               </tr>
             ))}
           </tbody>
@@ -1361,10 +1375,15 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                   </Td>
                   <Td className="text-right font-mono text-[var(--success)]">{INR_D(receipt.amount)}</Td>
                   <Td className="text-right font-mono">{INR_D(receipt.unallocated || 0)}</Td>
-                  <Td><div className="flex flex-wrap gap-1">
-                    {canEdit && <button type="button" className="btn-ghost text-xs" onClick={() => { setEditingReceipt(receipt); setReceiptEdit({ reference: receipt.reference || "", notes: receipt.notes || "" }); }}><PencilSimple size={12} /> Edit</button>}
-                    {canDelete && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={() => onDeleteReceipt(receipt)}><Trash size={12} /> Delete</button>}
-                  </div></Td>
+                  <Td className="text-right">
+                    <RowActions label="receipt" testid={`receipt-actions-${receipt.id}`} actions={[
+                      { label: "Edit reference / notes", icon: PencilSimple, hidden: !canEdit,
+                        onSelect: () => { setEditingReceipt(receipt); setReceiptEdit({ reference: receipt.reference || "", notes: receipt.notes || "" }); } },
+                      { divider: true },
+                      { label: "Delete receipt", icon: Trash, danger: true, hidden: !canDelete, onSelect: () => onDeleteReceipt(receipt),
+                        testid: `receipt-delete-${receipt.id}` },
+                    ]} />
+                  </Td>
                 </tr>
               ))}
             </tbody>

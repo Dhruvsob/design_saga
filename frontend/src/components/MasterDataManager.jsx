@@ -5,6 +5,7 @@ import {
   Plus, PencilSimple, Trash, Eye, EyeSlash, CaretUp, CaretDown, Check, X, Warning,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "./RowActions";
 
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
@@ -187,16 +188,13 @@ export default function MasterDataManager() {
                         className="btn-ghost p-1 disabled:opacity-30"><CaretUp size={12} /></button>
                       <button onClick={() => move(item, 1)} disabled={i === rows.length - 1 || busy} title="Move down"
                         className="btn-ghost p-1 disabled:opacity-30"><CaretDown size={12} /></button>
-                      <button onClick={() => { setEditingId(item.id); setEditLabel(item.label); }} title="Rename"
-                        className="btn-ghost p-1" data-testid={`md-rename-${item.id}`}><PencilSimple size={12} /></button>
-                      <button onClick={() => toggle(item)} title={item.is_active ? "Deactivate" : "Activate"}
-                        className="btn-ghost p-1" data-testid={`md-toggle-${item.id}`}>
-                        {item.is_active ? <EyeSlash size={12} /> : <Eye size={12} />}
-                      </button>
-                      {!item.is_system && (
-                        <button onClick={() => remove(item)} title="Delete"
-                          className="btn-ghost p-1 text-[var(--danger)]" data-testid={`md-delete-${item.id}`}><Trash size={12} /></button>
-                      )}
+                      <RowActions label={item.label} testid={`md-actions-${item.id}`} actions={[
+                        { label: "Rename", icon: PencilSimple, onSelect: () => { setEditingId(item.id); setEditLabel(item.label); }, testid: `md-rename-${item.id}` },
+                        { label: item.is_active ? "Hide from lists" : "Show in lists", icon: item.is_active ? EyeSlash : Eye,
+                          onSelect: () => toggle(item), testid: `md-toggle-${item.id}` },
+                        { divider: true },
+                        { label: "Delete", icon: Trash, danger: true, hidden: item.is_system, onSelect: () => remove(item), testid: `md-delete-${item.id}` },
+                      ]} />
                     </div>
                   </td>
                 </tr>
