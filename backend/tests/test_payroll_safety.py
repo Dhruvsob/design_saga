@@ -88,4 +88,4 @@ def test_salary_reversal_balances_journal_and_reopens_period(monkeypatch):
     assert result["status"] == "reversed"
     assert run["status"] == "reversed"
     assert run["original_period_key"] == "org_a:emp_1:2026-10"
-    assert "period_key" not in run
+    assert run["period_key"] == "org_a:emp_1:2026-10#reversed-run_1"   # never unset (legacy index)

@@ -114,7 +114,7 @@ def test_editing_a_paid_salary_replaces_it_and_hides_the_old_one(monkeypatch):
     assert new["breakdown"]["additions"] == 3000 and new["breakdown"]["gross"] == 15000
     assert new["extras"]["bonus"] == 3000
     old = next(r for r in runs if r["id"] == "run_1")
-    assert old["status"] == "corrected" and "period_key" not in old
+    assert old["status"] == "corrected" and old["period_key"] == f"org_a:emp_1:2026-10#corrected-run_1"
     assert old["corrected_to_run_id"] == new["id"]
     (posted,) = calls["posted"]
     assert posted["date"] == "2026-10-31" and posted["source"] == "payroll"

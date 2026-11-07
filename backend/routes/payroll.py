@@ -58,6 +58,16 @@ def _payroll_period_key(org_id: str, employee_id: str, year: int, month: int) ->
     return f"{org_id}:{employee_id}:{year:04d}-{month:02d}"
 
 
+def _archived_period_key(period_key: str, run_id: str, why: str) -> str:
+    """Unique key for a run that no longer holds its month.
+
+    Never unset period_key: production still carries a legacy unique index on
+    (org_id, period_key), under which a missing key counts as null and only one
+    such run per company is allowed.
+    """
+    return f"{period_key}#{why}-{run_id}"
+
+
 async def _assert_payroll_reviews_resolved(employee_id: str, year: int, month: int) -> None:
     start = _date(year, month, 1).isoformat()
     end = _date(year + (1 if month == 12 else 0),
@@ -455,8 +465,9 @@ async def reverse_salary_payment(run_id: str, request: Request,
             {"id": run_id, "status": "paid"},
             {"$set": {"status": "reversed", "reversed_at": changed_at,
                       "reversed_by": user["user_id"], "reversal_journal_id": reversal["id"],
-                      "original_period_key": run.get("period_key")},
-             "$unset": {"period_key": ""}},
+                      "original_period_key": run.get("period_key"),
+                      "period_key": _archived_period_key(
+                          run.get("period_key") or run_id, run_id, "reversed")}},
         )
         if result.modified_count != 1:
             raise HTTPException(status_code=409, detail="Payroll run changed; refresh and retry")
@@ -563,6 +574,8 @@ async def correct_salary_payment(run_id: str, payload: SalaryCorrectionIn, reque
             "payment_date": payload.payment_date, "payment_method": payload.payment_method,
             "reference": payload.reference, "notes": payload.notes,
             "journal_id": None, "status": "processing", "corrected_from_run_id": run_id,
+            "period_key": _archived_period_key(
+                (run.get("original_period_key") or run.get("period_key") or run_id).split("#")[0], new_run_id, "pending"),
             "created_at": iso_now(), "paid_by": user["user_id"], "paid_by_name": user.get("name"),
         }
         await sdb.payroll_runs.insert_one(dict(new_run))
@@ -585,13 +598,13 @@ async def correct_salary_payment(run_id: str, payload: SalaryCorrectionIn, reque
             await _reverse_journal_entry(user, journal, action="payroll_correction",
                                          reversal_date=journal.get("date"), hide_from_books=True)
         changed_at = iso_now()
-        period_key = run.get("period_key") or run.get("original_period_key") or _payroll_period_key(
+        period_key = (run.get("original_period_key") or run.get("period_key") or "").split("#")[0] or _payroll_period_key(
             user.get("org_id") or "org_default", run["employee_id"], run["year"], run["month"])
         await sdb.payroll_runs.update_one(
             {"id": run_id},
             {"$set": {"status": "corrected", "corrected_at": changed_at, "corrected_by": user["user_id"],
-                      "corrected_to_run_id": new_run_id, "original_period_key": period_key},
-             "$unset": {"period_key": ""}},
+                      "corrected_to_run_id": new_run_id, "original_period_key": period_key,
+                      "period_key": _archived_period_key(period_key, run_id, "corrected")}},
         )
         await sdb.payroll_runs.update_one(
             {"id": new_run_id},
