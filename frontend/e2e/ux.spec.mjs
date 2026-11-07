@@ -258,3 +258,18 @@ test("accounting sections are grouped by what you are doing", async ({ page }, t
   await page.getByTestId("tab-balance").click();
   await expect(page.getByTestId("tab-balance")).toHaveAttribute("aria-current", "page");
 });
+
+test("geofence map loads keyless colour tiles and a drawn pin", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "one layout is enough for the map");
+  const blocked = [];
+  page.on("request", (r) => { if (r.url().includes("cartocdn")) blocked.push(r.url()); });
+  await page.goto("/attendance");
+  await page.getByTestId("tab-geo").click();
+  const map = page.getByTestId("geofence-map");
+  await expect(map).toBeVisible();
+  await map.click({ position: { x: 200, y: 150 } });                     // drop the pin
+  await expect(map.locator(".geofence-pin svg")).toBeVisible();
+  await expect(map.locator("img.leaflet-marker-icon")).toHaveCount(0);   // no broken PNG marker
+  await expect.poll(() => map.locator('img.leaflet-tile[src*="tile.openstreetmap.org"]').count()).toBeGreaterThan(0);
+  expect(blocked).toEqual([]);
+});

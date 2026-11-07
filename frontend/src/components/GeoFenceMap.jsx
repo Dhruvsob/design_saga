@@ -2,6 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+// Drawn pin (no image files): Leaflet's default marker PNGs are not bundled by Vite
+// and showed as a broken image.
+const PIN_ICON = L.divIcon({
+  className: "geofence-pin",
+  html: '<svg width="30" height="42" viewBox="0 0 30 42" aria-hidden="true">'
+    + '<path d="M15 1C7.3 1 1 7.2 1 14.9 1 25.4 15 41 15 41s14-15.6 14-26.1C29 7.2 22.7 1 15 1z" fill="#1D633E" stroke="#fff" stroke-width="2"/>'
+    + '<circle cx="15" cy="15" r="5.5" fill="#fff"/></svg>',
+  iconSize: [30, 42],
+  iconAnchor: [15, 41],
+  popupAnchor: [0, -36],
+});
+
 /**
  * Interactive geofence map.
  * - Shows a draggable pin + radius circle for the selected fence.
@@ -26,9 +38,10 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
       .setView(center, hasPoint ? 16 : 5);
     map.attributionControl.setPrefix(false);
     // Colourful street map (default) + satellite imagery to see the actual building.
-    const streets = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20, subdomains: "abcd",
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    // Both providers work without an API key (CARTO now refuses unregistered domains).
+    const streets = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19, referrerPolicy: "strict-origin-when-cross-origin",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
     }).addTo(map);
     const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 19, attribution: "Imagery &copy; Esri",
@@ -59,7 +72,7 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
     }
     const pos = [Number(lat), Number(lng)];
     if (!markerRef.current) {
-      markerRef.current = L.marker(pos, { draggable: true }).addTo(map);
+      markerRef.current = L.marker(pos, { draggable: true, icon: PIN_ICON, title: "Office location", alt: "Office location" }).addTo(map);
       markerRef.current.on("dragend", () => {
         const p = markerRef.current.getLatLng();
         if (onPick) onPick(Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6)));

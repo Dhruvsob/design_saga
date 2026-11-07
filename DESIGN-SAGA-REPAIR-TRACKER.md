@@ -11,6 +11,12 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-102: Geofence map showed "API KEY REQUIRED" and a broken pin on gamaa.in
+
+- Owner screenshot: CARTO Voyager tiles (DS-099) work on localhost but CARTO now refuses unregistered domains, so production showed "API KEY REQUIRED" watermarks. The default Leaflet marker PNG is not bundled by Vite, so the pin showed as a broken image.
+- Fix: street layer switched to OpenStreetMap standard tiles (keyless, colour, attribution linked, origin-only referrer); Esri satellite kept (keyless). Pin is now a drawn green SVG (divIcon), no image files.
+- Verified: both tile servers return real tiles with a gamaa.in Referer; new e2e test checks OSM tiles load, the drawn pin shows, no broken marker image and no CARTO requests.
+
 ### DS-101: Accounting sections grouped by task
 
 - The 14 Accounting sections were one flat grid of equal buttons. Now grouped under plain headings: Overview (Dashboard, Health check), Money in (Income, Collections Due, Commissions), Money out (Expense, Recurring), Books (Daybook, Ledgers, Bank Reconciliation), Reports (P&L · Trial Balance, Balance Sheet, Cash Flow), Setup (Chart of Accounts). Mobile select uses the same groups (optgroups).
