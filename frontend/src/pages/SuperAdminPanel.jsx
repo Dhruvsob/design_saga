@@ -255,7 +255,7 @@ export default function SuperAdminPanel() {
                       <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[var(--line)] bg-white" />
                     ) : (
                       <div className="w-8 h-8 flex items-center justify-center text-white font-display font-bold text-xs"
-                           style={{ backgroundColor: o.branding?.primary_color || "#8B7F6A" }}>
+                           style={{ backgroundColor: (!o.branding?.primary_color || o.branding.primary_color.toUpperCase() === "#002FA7") ? "#76705E" : o.branding.primary_color }}>
                         {(o.name || "?").slice(0, 2).toUpperCase()}
                       </div>
                     )}

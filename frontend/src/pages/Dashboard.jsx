@@ -143,7 +143,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="space-y-3 mt-6">
-            {pipeline.map((s, i) => (
+            {totalLeads > 0 && pipeline.map((s, i) => (
               <div key={s.stage} className="flex items-center gap-4 group">
                 <div className="w-28 flex items-center gap-2">
                   <span className="font-mono text-[10px] text-[var(--ink-3)]">0{i + 1}</span>
@@ -169,7 +169,7 @@ export default function Dashboard() {
               </div>
             ))}
             {totalLeads === 0 && (
-              <p className="text-sm text-[var(--ink-2)] py-6 text-center">No leads yet. Tap "New lead" to start your pipeline.</p>
+              <p className="text-sm text-[var(--ink-2)] py-4 text-center">No leads yet. Add your first enquiry with "New lead" to see the pipeline here.</p>
             )}
           </div>
         </div>
@@ -264,32 +264,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ============== MARQUEE FOOTER ============== */}
-      <div className="fade-up border-t border-[var(--line)] pt-6 marquee">
-        <div className="marquee-track text-[var(--ink-2)]">
-          {Array.from({ length: 2 }).map((_, k) => (
-            <div key={k} className="flex items-center gap-12">
-              <span className="overline">DESIGN SAGA STUDIO OS</span>
-              <span className="overline">·  CRM</span>
-              <span className="overline">·  PROJECTS</span>
-              <span className="overline">·  TASKS</span>
-              <span className="overline">·  CLIENTS</span>
-              <span className="overline">·  INVOICES</span>
-              <span className="overline">·  QUOTATIONS</span>
-              <span className="overline">·  AI ASSISTANT</span>
-              <span className="overline">·  CLIENT PORTAL</span>
-              <span className="overline">·  PDF EXPORTS</span>
-              <span className="overline">·  GOOGLE AUTH</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
 
 /* ============== KPI Card with sparkline ============== */
-function Kpi({ label, value, sub, Icon, accent, trend, sparkData, testid, onClick }) {
+function Kpi({ label, value, sub: rawSub, Icon, accent, trend, sparkData, testid, onClick }) {
+  const sub = rawSub && String(rawSub) !== String(value) ? rawSub : null;
   const max = sparkData ? Math.max(...sparkData, 1) : 0;
   return (
     <div

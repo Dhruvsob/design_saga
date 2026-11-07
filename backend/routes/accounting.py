@@ -2099,6 +2099,17 @@ async def finance_dashboard(request: Request,
     # Upcoming payments (next 30 days)
     horizon = (business_today() + timedelta(days=30)).isoformat()
     upcoming = [m for m in ms if today <= (m.get("due_date") or "") <= horizon]
+    # These are client fee instalments still to collect: show the project and what is left.
+    pids = sorted({m["project_id"] for m in upcoming if m.get("project_id")})
+    names = {}
+    if pids:
+        names = {p["id"]: p.get("name") for p in await sdb.projects.find(
+            {"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}).to_list(None)}
+    upcoming = sorted(({
+        **m,
+        "project_name": names.get(m.get("project_id")),
+        "outstanding": round(max(0.0, float(m.get("amount") or 0) - float(m.get("paid_amount") or 0)), 2),
+    } for m in upcoming), key=lambda m: m.get("due_date") or "")
 
     # Recent transactions
     recent = await sdb.journal_entries.find(

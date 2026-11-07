@@ -3,6 +3,7 @@ import { ArrowClockwise, CheckCircle, DownloadSimple, MagnifyingGlass, ShieldChe
 import { toast } from "sonner";
 import api from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import PageHero from "../components/PageHero";
 
 const humanize = (value) => (value || "Activity").replace(/[._-]+/g, " ")
   .replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -64,12 +65,8 @@ export default function AuditLog() {
 
   return (
     <div className="max-w-7xl mx-auto" data-testid="audit-log-page">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
-        <div>
-          <div className="overline mb-2">ADMINISTRATION</div>
-          <h1 className="font-display font-bold tracking-tight text-3xl">Audit Log</h1>
-          <p className="text-sm text-[var(--ink-2)] mt-1">{rows.length} recent tenant activities</p>
-        </div>
+      <div className="mb-6"><PageHero title="Audit log" count={rows.length}
+        kicker="Every create, change and delete in your studio, tamper-checked.">
         <div className="flex items-center gap-2">
           <button className="btn-secondary" onClick={load} disabled={loading} data-testid="audit-refresh">
             <ArrowClockwise size={15} /> Refresh
@@ -81,7 +78,7 @@ export default function AuditLog() {
             <ShieldCheck size={15} /> Verify integrity
           </button>
         </div>
-      </div>
+      </PageHero></div>
 
       {verification && (
         <div className={`mb-4 px-4 py-3 border flex items-center gap-3 ${verification.ok

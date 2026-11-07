@@ -163,10 +163,13 @@ code, .font-mono {
   100% { transform: translateX(-50%); }
 }
 
-.fade-up { animation: fade-up 400ms cubic-bezier(0.16, 1, 0.3, 1) both; }
-.fade-in { animation: fade-in 300ms ease-out both; }
-.scale-in { animation: scale-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both; }
-.slide-in-right { animation: slide-in-right 300ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* Fill mode "backwards" (not "both"): once an entry animation ends it must leave no
+   transform/opacity behind. A lingering one turns the element into its own layer, which
+   traps every fixed dialog inside it below the sticky header (PDF preview Close hidden). */
+.fade-up { animation: fade-up 400ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.fade-in { animation: fade-in 300ms ease-out backwards; }
+.scale-in { animation: scale-in 250ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.slide-in-right { animation: slide-in-right 300ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 
 /* Stagger helper – up to 12 items */
 .stagger > *:nth-child(1)  { animation-delay: 0ms; }
@@ -493,25 +496,14 @@ main > div:last-child { animation: page-in 260ms var(--ease) both; }
    TAUPE SIDEBAR — same colour as the primary button (#76705E).
    Tokens are re-scoped so every child adapts; white text = 5.1:1.
 ============================================================ */
-.sidebar-taupe {
-  background: #76705E;   /* = primary button fill */
-  --ink: #FFFFFF;
-  --ink-2: #FFFFFF;
-  --ink-3: #FFFFFF;
-  --ink-4: rgba(255, 255, 255, 0.75);
-  --line: rgba(255, 255, 255, 0.16);
-  --surface: rgba(0, 0, 0, 0.20);      /* active: deeper taupe, white text ~6.5:1 */
-  --sidebar-2: rgba(0, 0, 0, 0.10);
-  --hover: rgba(0, 0, 0, 0.10);
-  --accent: #FAF9F6;
-  --accent-strong: #FFFFFF;
-  color: #FFFFFF;
+/* Sidebar: plain white (owner request 07/11), warm-tint active row with the taupe bar. */
+.sidebar-white {
+  background: #FFFFFF;
+  --surface: #F3EFE9;        /* active row: warm tint, charcoal text */
+  --sidebar-2: #F7F6F3;      /* hover */
+  color: var(--ink);
 }
-.sidebar-taupe [data-testid^="nav-group-"] { opacity: 1; }
-.sidebar-taupe .btn-icon { color: #FFFFFF; }
-.sidebar-taupe .btn-icon:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.2); }
-.sidebar-taupe ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-color: var(--accent-strong); }
-.sidebar-taupe .nav-active-bar { background: #FAF9F6; }
+.sidebar-white .nav-active-bar { background: var(--accent-strong); }
 
 /* Long tables (Daybook, monthly attendance): on tablet/desktop the table scrolls inside
    its own box so the column headings stay pinned while reading down. */

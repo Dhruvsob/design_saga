@@ -12,6 +12,7 @@ import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
 import { Receipt } from "@phosphor-icons/react";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
+import PageHero from "../components/PageHero";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -177,17 +178,12 @@ export default function Invoices({ docType = "invoice" }) {
 
   return (
     <div className="space-y-6" data-testid={`${docType}s-page`}>
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="overline mb-1">FINANCE / {docType.toUpperCase()}S</div>
-          <h1 className="font-display font-bold tracking-tight text-4xl">
-            {docType === "quotation" ? "Proposals, polished." : "Send. Track. Collect."}
-          </h1>
-        </div>
+      <PageHero title={docType === "quotation" ? "Quotations" : "Invoices"} count={loaded ? rows.length : undefined}
+        kicker={docType === "quotation" ? undefined : "Bill clients, record payments and track what is still to collect. Payments post to Accounting automatically."}>
         {canCreate && <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(initialForm(docType)); }} className="btn-primary" data-testid={`new-${docType}-btn`}>
           <Plus size={14} /> {showForm ? "Cancel" : `New ${docType}`}
         </button>}
-      </div>
+      </PageHero>
 
       {showForm && (
         <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="invoice-form">

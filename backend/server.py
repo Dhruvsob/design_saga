@@ -44,6 +44,7 @@ db = client[db_name]
 # Tenant-scoped proxy — use `sdb.<coll>.` in place of `db.<coll>.` for
 # any business collection so reads/writes auto-filter by org_id.
 from core.limits import MAX_LIST_ROWS
+from core.pdf_brand import BRAND_ACCENT, BRAND_PRIMARY, brand_primary_hex
 from core.scoped_db import sdb  # noqa: E402
 from core.audit import audit as audit_log  # noqa: E402
 from core.downloads import content_disposition  # noqa: E402
@@ -3853,7 +3854,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
     branding = org.get("branding") or {}
     org_name = org.get("display_name") or org.get("name") or "Design Saga"
     org_tagline = branding.get("tagline") or "Architecture & Interior Design"
-    klein = _hex_to_rgb(branding.get("primary_color") or "#002FA7")
+    klein = _hex_to_rgb(brand_primary_hex(branding))
     ink = (10, 10, 10)
     grey = (92, 92, 92)
     line = (220, 220, 220)
@@ -5426,8 +5427,8 @@ async def _bootstrap_default_org():
             "plan": "enterprise",
             "address": {"country": "India"},
             "branding": {
-                "primary_color": "#002FA7",
-                "accent_color": "#0A0A0A",
+                "primary_color": BRAND_PRIMARY,
+                "accent_color": BRAND_ACCENT,
                 "tagline": "Studio OS · v0.2",
                 "logo_url": None,
             },

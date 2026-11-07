@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
@@ -79,22 +79,29 @@ export default function Attendance() {
   // no personal attendance. Each personal call fails on its own so admin/HR
   // data (meta, policy, projects) still loads, and the page explains why.
   const [noProfile, setNoProfile] = useState(false);
-  const personal = (request, empty) => request.catch((error) => {
-    const detail = String(error?.response?.data?.detail || "");
-    if (error?.response?.status === 400 && /employee profile/i.test(detail)) setNoProfile(true);
-    return { data: empty };
-  });
+  const noProfileRef = useRef(false);   // once known, stop asking (each ask is a failing 400)
+  const personal = (request, empty) => {
+    if (noProfileRef.current) return Promise.resolve({ data: empty });
+    return request().catch((error) => {
+      const detail = String(error?.response?.data?.detail || "");
+      if (error?.response?.status === 400 && /employee profile/i.test(detail)) {
+        noProfileRef.current = true;
+        setNoProfile(true);
+      }
+      return { data: empty };
+    });
+  };
 
   const loadMe = async () => {
     const [t, s, l, m, p, pol, sal, corr] = await Promise.all([
-      personal(api.get("/attendance/me/today"), null),
-      personal(api.get(`/attendance/me/summary?year=${ym.y}&month=${ym.m}`), null),
-      personal(api.get("/leaves?mine=true"), []),
+      personal(() => api.get("/attendance/me/today"), null),
+      personal(() => api.get(`/attendance/me/summary?year=${ym.y}&month=${ym.m}`), null),
+      personal(() => api.get("/leaves?mine=true"), []),
       api.get("/attendance/meta"),
       api.get("/attendance/project-options").catch(() => ({ data: [] })),
       api.get("/attendance/policy").catch(() => ({ data: null })),
       api.get(`/attendance/my-salary?year=${ym.y}&month=${ym.m}`).catch(() => ({ data: null })),
-      api.get("/attendance/corrections?mine=true").catch(() => ({ data: [] })),
+      personal(() => api.get("/attendance/corrections?mine=true"), []),
     ]);
     setToday(t.data); setSummary(s.data); setLeaves(l.data); setMeta(m.data);
     setProjects(p.data); setPolicy(pol.data); setMySalary(sal.data);
@@ -104,7 +111,13 @@ export default function Attendance() {
     const { data } = await api.get(`/attendance/monthly?year=${ym.y}&month=${ym.m}`);
     setMonthly(data);
   };
-  useEffect(() => { loadMe(); if (isHR && tab === "monthly") loadMonthly(); }, [ym, tab]);
+  // Personal data reloads with the month, not on every tab switch.
+  useEffect(() => { loadMe(); }, [ym]);
+  useEffect(() => { if (isHR && tab === "monthly") loadMonthly(); }, [ym, tab]);
+  // An owner/admin with no employee profile has no "My" data: open the team view instead.
+  useEffect(() => {
+    if (noProfile && isHR && (tab === "me" || tab === "leaves")) setTab("dashboard");
+  }, [noProfile, isHR, tab]);
   useEffect(() => {
     if (siteVisit && projects.length === 1 && !siteForm.project_id) {
       setSiteForm((current) => ({ ...current, project_id: projects[0].id }));
@@ -256,9 +269,9 @@ export default function Attendance() {
       />
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--line)] overflow-x-auto">
-        <TabBtn id="me" tab={tab} setTab={setTab} label="My Attendance" />
-        <TabBtn id="leaves" tab={tab} setTab={setTab} label="My Leaves" />
+      <div className="flex flex-wrap items-center gap-x-1 border-b border-[var(--line)]">
+        {!(noProfile && isHR) && <TabBtn id="me" tab={tab} setTab={setTab} label="My Attendance" />}
+        {!(noProfile && isHR) && <TabBtn id="leaves" tab={tab} setTab={setTab} label="My Leaves" />}
         {isHR && <TabBtn id="dashboard" tab={tab} setTab={setTab} label="Team Dashboard" />}
         {isHR && <TabBtn id="live" tab={tab} setTab={setTab} label="Live Board" />}
         {isHR && <TabBtn id="monthly" tab={tab} setTab={setTab} label="Monthly Sheet" />}

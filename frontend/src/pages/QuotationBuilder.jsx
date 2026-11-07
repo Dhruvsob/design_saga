@@ -4,8 +4,8 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import {
-  ArrowLeft, FloppyDisk, FilePdf, Sparkle, Plus, Trash, ArrowRight,
-  CheckCircle, X, Clock,
+  ArrowLeft, FloppyDisk, FilePdf, Plus, Trash, ArrowRight,
+  CheckCircle, Clock,
 } from "@phosphor-icons/react";
 import { ProposalDetails, ProposalFees } from "../components/ConsultancyProposal";
 import { askForm, confirmAction } from "../lib/confirm";
@@ -30,7 +30,6 @@ export default function QuotationBuilder() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   useUnsavedWarning(dirty);
-  const [aiPanel, setAiPanel] = useState({ open: false, focus: "missing_items", loading: false, response: "" });
 
   const load = useCallback(async () => {
     const [qr, tr] = await Promise.all([
@@ -100,16 +99,6 @@ export default function QuotationBuilder() {
       navigate(`/projects/${data.project_id}`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to convert");
-    }
-  };
-
-  const askAI = async (focus) => {
-    setAiPanel({ open: true, focus, loading: true, response: "" });
-    try {
-      const { data } = await api.post(`/quotations-adv/${id}/ai-suggest`, { focus });
-      setAiPanel({ open: true, focus, loading: false, response: data.response });
-    } catch {
-      setAiPanel((p) => ({ ...p, loading: false, response: "AI unavailable. Please try again." }));
     }
   };
 
@@ -207,11 +196,6 @@ export default function QuotationBuilder() {
         {canConvert && ["approved", "sent", "under_review"].includes(q.status) && <button onClick={convert} className="btn-ghost">
           <ArrowRight size={14} /> Convert to project
         </button>}
-        {canUpdate && <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => askAI("missing_items")} className="btn-ghost text-xs"><Sparkle size={12} /> AI: missing items</button>
-          <button onClick={() => askAI("cost_optimisation")} className="btn-ghost text-xs"><Sparkle size={12} /> AI: optimise cost</button>
-          <button onClick={() => askAI("premium_upgrades")} className="btn-ghost text-xs"><Sparkle size={12} /> AI: premium upgrades</button>
-        </div>}
       </div>
 
       {/* Tabs */}
@@ -245,29 +229,6 @@ export default function QuotationBuilder() {
         {activeTab === "Versions" && <Versions q={q} />}
         {activeTab === "Preview" && <Preview qid={id} />}
       </div>
-
-      {/* AI panel drawer */}
-      {aiPanel.open && (
-        <div className="fixed inset-y-0 right-0 w-[480px] max-w-[100vw] bg-white border-l border-[var(--line)] z-50 flex flex-col" style={{ boxShadow: "-20px 0 60px rgba(0,0,0,0.10)" }}>
-          <div className="p-4 border-b border-[var(--line)] flex items-center justify-between bg-[var(--accent)] text-white">
-            <div className="flex items-center gap-2">
-              <Sparkle size={18} weight="fill" />
-              <div>
-                <div className="font-display font-bold text-sm tracking-tight">SAGA AI · QUOTATION AUDIT</div>
-                <div className="text-[10px] font-mono tracking-widest opacity-80">{aiPanel.focus.toUpperCase()}</div>
-              </div>
-            </div>
-            <button onClick={() => setAiPanel((p) => ({ ...p, open: false }))}><X size={18} /></button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-5">
-            {aiPanel.loading ? (
-              <div className="overline">ANALYSING…</div>
-            ) : (
-              <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">{aiPanel.response}</pre>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
+import PageHero from "../components/PageHero";
 
 const AGENCY_LABELS = {
   vendor: "Vendor", agency: "Agency", contractor: "Contractor",
@@ -92,17 +93,8 @@ export default function Vendors() {
 
   return (
     <div className="space-y-6" data-testid="vendors-page">
-      {/* HERO */}
-      <div className="flex items-end justify-between gap-6 flex-wrap">
-        <div>
-          <div className="overline mb-1">DIRECTORY / VENDORS &amp; AGENCIES</div>
-          <h1 className="font-display font-bold tracking-tight text-4xl">
-            Every hand that builds. In one place.
-          </h1>
-          <p className="text-[var(--ink-2)] mt-2 max-w-xl">
-            Master data for contractors, agencies and suppliers — with live bills, running ledger and performance signals.
-          </p>
-        </div>
+      <PageHero title="Vendors" count={loaded ? rows.length : undefined}
+        kicker="Contractors, agencies and suppliers, with their bills, payments, commissions and ratings.">
         {canCreate && (
           <button
             onClick={() => setShowForm(!showForm)}
@@ -112,7 +104,7 @@ export default function Vendors() {
             <Plus size={14} /> {showForm ? "Cancel" : "New vendor"}
           </button>
         )}
-      </div>
+      </PageHero>
 
       {/* KPI STRIP */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

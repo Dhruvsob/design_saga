@@ -16,6 +16,7 @@ import calendar
 from fpdf import FPDF
 from pymongo.errors import DuplicateKeyError
 
+from core.pdf_brand import brand_primary_hex
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, now_utc, iso_now, new_id
@@ -720,7 +721,7 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
     """Salary-impact payslip built from the attendance engine summary
     (works before payment — Jewellers 'my payslip' style)."""
     branding = (org or {}).get("branding") or {}
-    primary = _hex_to_rgb(branding.get("primary_color") or "#002FA7")
+    primary = _hex_to_rgb(brand_primary_hex(branding))
 
     emp = s["employee"]
     summ = s["summary"]

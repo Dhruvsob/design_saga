@@ -112,6 +112,7 @@ export default function Layout({ children }) {
   const [now, setNow] = useState(new Date());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoFailed, setLogoFailed] = useState("");      // url that failed to load -> show initials
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pinSettingsOpen, setPinSettingsOpen] = useState(false);
   const [rail, setRail] = useState(() => readPref("ds_sidebar_rail", false));
@@ -154,7 +155,6 @@ export default function Layout({ children }) {
   }
   const brandName = currentOrg?.display_name || currentOrg?.name || "DESIGN SAGA";
   const brandTagline = currentOrg?.branding?.tagline || "STUDIO MANAGEMENT";
-  const brandColor = currentOrg?.branding?.primary_color || "#8B7F6A";
   const brandLogo = currentOrg?.branding?.logo_url;
   const brandInitials = (brandName || "DS").split(/\s+/).slice(0, 2)
     .map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -167,7 +167,7 @@ export default function Layout({ children }) {
       )}
       {/* ============== SIDEBAR ============== */}
       <aside
-        className={`sidebar-taupe shrink-0 flex flex-col text-[var(--ink-2)] z-40 w-64 ${rail ? "lg:w-[76px]" : "lg:w-64"}
+        className={`sidebar-white shrink-0 flex flex-col text-[var(--ink-2)] z-40 w-64 ${rail ? "lg:w-[76px]" : "lg:w-64"}
           fixed inset-y-0 left-0 h-full transform transition-[transform,width] duration-200 ease-out
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen`}
@@ -182,13 +182,13 @@ export default function Layout({ children }) {
           title={rail ? brandName : undefined}
           data-testid="sidebar-logo-btn"
         >
-          {brandLogo ? (
-            <span className="h-12 min-w-[48px] max-w-[64px] px-1.5 rounded-xl bg-[#FAF9F6] flex items-center justify-center shrink-0 shadow-sm">
-              <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo"
+          {brandLogo && logoFailed !== brandLogo ? (
+            <span className="h-12 min-w-[48px] max-w-[64px] px-1.5 rounded-xl bg-[#FAF9F6] ring-1 ring-[var(--line)] flex items-center justify-center shrink-0">
+              <img src={brandLogo} alt="" aria-hidden="true" data-testid="sidebar-logo" onError={() => setLogoFailed(brandLogo)}
                    className="h-10 w-auto max-w-[56px] object-contain transition-transform duration-200 group-hover:scale-[1.04]" />
             </span>
           ) : (
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#FAF9F6] shadow-sm">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#FAF9F6] ring-1 ring-[var(--line)]">
               <span className="text-[var(--logo-brown-ink)] font-display font-bold text-[20px] leading-none">{brandInitials}</span>
             </div>
           )}
@@ -225,7 +225,7 @@ export default function Layout({ children }) {
                 ) : null)}
                 {g.label && (
                   <div id={`nav-group-${g.id}`}
-                       className={`px-3 pt-1 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-[var(--ink-3)] ${rail ? "lg:hidden" : ""}`}
+                       className={`px-3 pt-2 pb-1.5 font-display text-[15px] font-semibold tracking-tight text-[var(--ink)] ${rail ? "lg:hidden" : ""}`}
                        data-testid={`nav-group-${g.id}`}>
                     {g.label}
                   </div>

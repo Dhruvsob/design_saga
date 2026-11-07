@@ -41,7 +41,23 @@ def safe_text(value) -> str:
     return s.encode("latin-1", "replace").decode("latin-1")
 
 
-def hex_to_rgb(value: Optional[str], default=(0, 47, 167)):
+# Design Saga brand taupe (primary button colour) — readable on white paper.
+BRAND_PRIMARY = "#76705E"
+BRAND_ACCENT = "#2C2C2C"
+# Every company used to be created with this blue by default. Nobody chose it, so
+# treat it as "not set" and print the brand colour instead.
+LEGACY_DEFAULT_PRIMARY = "#002FA7"
+
+
+def brand_primary_hex(branding: Optional[dict]) -> str:
+    """The PDF accent colour for a company: its own choice, else the brand taupe."""
+    value = ((branding or {}).get("primary_color") or "").strip()
+    if not value or value.upper() == LEGACY_DEFAULT_PRIMARY:
+        return BRAND_PRIMARY
+    return value
+
+
+def hex_to_rgb(value: Optional[str], default=(118, 112, 94)):
     try:
         h = (value or "").lstrip("#")
         if len(h) == 3:
@@ -109,7 +125,7 @@ class Brand:
         self.org = org
         self.name = org.get("display_name") or org.get("name") or "Company"
         self.tagline = branding.get("tagline") or org.get("industry") or ""
-        self.primary = hex_to_rgb(branding.get("primary_color"))
+        self.primary = hex_to_rgb(brand_primary_hex(branding))
         addr = org.get("address") or {}
         city_line = ", ".join(x for x in [addr.get("city"), addr.get("state")] if x)
         if addr.get("pincode"):

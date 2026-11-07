@@ -8,6 +8,9 @@ import {
   ListChecks,
 } from "@phosphor-icons/react";
 
+const BRAND_PDF_COLOUR = "#76705E";   // matches backend core.pdf_brand.BRAND_PRIMARY
+const LEGACY_PDF_BLUE = "#002FA7";
+
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
   if (typeof d === "string") return d;
@@ -21,12 +24,18 @@ export default function CompanySettings() {
   const [org, setOrg] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);   // show initials if the image cannot load
   const [err, setErr] = useState("");
   const fileRef = useRef(null);
 
   useEffect(() => { setOrg(currentOrg); }, [currentOrg]);
+  useEffect(() => { setLogoBroken(false); }, [org?.branding?.logo_url]);
 
-  const setBranding = (patch) =>
+  const setBranding = (patch) => {
+    if ("logo_url" in patch) setLogoBroken(false);
+    return setBrandingRaw(patch);
+  };
+  const setBrandingRaw = (patch) =>
     setOrg((o) => ({ ...o, branding: { ...(o?.branding || {}), ...patch } }));
   const setField = (k, v) => setOrg((o) => ({ ...o, [k]: v }));
   const setAddress = (patch) => setOrg((o) => ({ ...o, address: { ...(o?.address || {}), ...patch } }));
@@ -78,6 +87,10 @@ export default function CompanySettings() {
   }
 
   const branding = org.branding || {};
+  // PDFs print in the brand taupe unless the studio picked its own colour; the old
+  // blue default (#002FA7) was never chosen by anyone, so it counts as "not set".
+  const pdfColour = (!branding.primary_color || branding.primary_color.toUpperCase() === LEGACY_PDF_BLUE)
+    ? BRAND_PDF_COLOUR : branding.primary_color;
 
   return (
     <div className="space-y-8" data-testid="company-settings-page">
@@ -128,11 +141,11 @@ export default function CompanySettings() {
             <div className="card-flat">
               <div className="overline mb-4"><ImageSquare size={11} className="inline mr-1"/> LOGO</div>
               <div className="flex items-center gap-4">
-                {branding.logo_url ? (
-                  <img src={branding.logo_url} alt="Current logo" className="w-28 h-28 object-contain ring-1 ring-[var(--line)] bg-white p-2 rounded-lg" data-testid="logo-preview" />
+                {branding.logo_url && !logoBroken ? (
+                  <img src={branding.logo_url} alt="Current logo" onError={() => setLogoBroken(true)} className="w-28 h-28 object-contain ring-1 ring-[var(--line)] bg-white p-2 rounded-lg" data-testid="logo-preview" />
                 ) : (
                   <div className="w-20 h-20 flex items-center justify-center text-white font-display font-bold text-lg ring-1 ring-[var(--line)]"
-                       style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
+                       style={{ backgroundColor: pdfColour }}>
                     {(org.name || "DS").slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -160,10 +173,17 @@ export default function CompanySettings() {
             <div className="card-flat">
               <div className="overline mb-4"><PaintBrush size={11} className="inline mr-1"/> COLOURS</div>
               <div className="grid grid-cols-2 gap-4">
-                <ColorField label="Primary" value={branding.primary_color || "#8B7F6A"}
+                <ColorField label="PDF colour" value={pdfColour}
                             onChange={(v) => setBranding({ primary_color: v })} testid="color-primary" />
-                <ColorField label="Accent" value={branding.accent_color || "#0A0A0A"}
-                            onChange={(v) => setBranding({ accent_color: v })} testid="color-accent" />
+                <div className="self-end text-xs text-[var(--ink-2)] leading-relaxed">
+                  Headings and rules on invoices, quotations, proposals and payslips. The app itself keeps the Design Saga palette.
+                  {pdfColour.toUpperCase() !== BRAND_PDF_COLOUR && (
+                    <button type="button" className="block mt-2 underline underline-offset-4 text-[var(--ink)]"
+                            onClick={() => setBranding({ primary_color: BRAND_PDF_COLOUR })} data-testid="color-reset">
+                      Use Design Saga colour
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="mt-4">
                 <label className="block text-xs text-[var(--ink-2)] mb-1">Tagline (shown in sidebar)</label>
@@ -186,11 +206,11 @@ export default function CompanySettings() {
               <div className="overline mb-3">LIVE PREVIEW</div>
               {/* Sidebar preview */}
               <div className="border border-[var(--line)] p-4 flex items-center gap-3 mb-4">
-                {branding.logo_url ? (
-                  <img src={branding.logo_url} alt="" className="h-10 w-auto max-w-[64px] object-contain" />
+                {branding.logo_url && !logoBroken ? (
+                  <img src={branding.logo_url} alt="" onError={() => setLogoBroken(true)} className="h-10 w-auto max-w-[64px] object-contain" />
                 ) : (
                   <div className="w-9 h-9 flex items-center justify-center text-white font-display font-bold text-sm"
-                       style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
+                       style={{ backgroundColor: pdfColour }}>
                     {(org.name || "DS").slice(0, 2).toUpperCase()}
                   </div>
                 )}
@@ -203,21 +223,13 @@ export default function CompanySettings() {
                   </div>
                 </div>
               </div>
-              {/* Button preview */}
-              <div className="mb-4">
-                <div className="overline mb-2 text-[9px]">BUTTON</div>
-                <button className="text-white text-xs font-semibold px-4 py-2 w-full"
-                        style={{ backgroundColor: branding.primary_color || "#8B7F6A" }}>
-                  Continue
-                </button>
-              </div>
               {/* Invoice header preview */}
               <div>
                 <div className="overline mb-2 text-[9px]">INVOICE HEADER</div>
                 <div className="border border-[var(--line)] p-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="text-sm font-display font-bold" style={{ color: branding.primary_color || "#8B7F6A" }}>
+                      <div className="text-sm font-display font-bold" style={{ color: pdfColour }}>
                         {org.display_name || org.name}
                       </div>
                       <div className="text-[10px] text-[var(--ink-2)] font-mono">
@@ -228,7 +240,7 @@ export default function CompanySettings() {
                       <img src={branding.logo_url} alt="" className="w-10 h-10 object-contain" />
                     )}
                   </div>
-                  <div className="mt-2 h-[3px]" style={{ background: branding.primary_color || "#8B7F6A" }} />
+                  <div className="mt-2 h-[3px]" style={{ background: pdfColour }} />
                 </div>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowSquareOut, DownloadSimple, FilePdf, X } from "@phosphor-icons/react";
 import api, { API } from "../lib/api";
 
@@ -62,7 +63,8 @@ export default function PdfPreviewModal({ path, title, filename, onClose }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // Rendered on <body> so no page wrapper (animation, transform) can trap it under the header.
+  return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-2 sm:p-6"
          onClick={onClose} role="dialog" aria-modal="true" aria-label={title} data-testid="pdf-preview">
       <div className="bg-white w-full max-w-4xl h-[94vh] flex flex-col rounded-xl overflow-hidden shadow-2xl"
@@ -86,6 +88,7 @@ export default function PdfPreviewModal({ path, title, filename, onClose }) {
         </div>
         <PdfFrame path={path} title={title} className="w-full flex-1" />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

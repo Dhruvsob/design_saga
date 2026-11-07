@@ -16,6 +16,7 @@ from fastapi.responses import Response as FastAPIResponse
 from typing import Optional
 import logging
 
+from core.pdf_brand import BRAND_ACCENT, BRAND_PRIMARY
 from core.db import db
 from core.helpers import iso_now, new_id
 from core.deps import require_user
@@ -33,8 +34,8 @@ _log = logging.getLogger("org")
 
 
 DEFAULT_BRANDING = {
-    "primary_color": "#002FA7",
-    "accent_color": "#0A0A0A",
+    "primary_color": BRAND_PRIMARY,
+    "accent_color": BRAND_ACCENT,
     "tagline": "Studio OS · v0.2",
     "logo_url": None,
 }

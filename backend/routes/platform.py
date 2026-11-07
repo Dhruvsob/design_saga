@@ -15,6 +15,7 @@ from pydantic import BaseModel
 import uuid
 import re
 
+from core.pdf_brand import BRAND_ACCENT, BRAND_PRIMARY
 from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.helpers import iso_now, now_utc, new_id
@@ -167,7 +168,7 @@ async def create_org(payload: OrgCreateIn, request: Request,
         "plan": payload.plan or "starter",
         "address": payload.address.dict() if payload.address else {},
         "branding": (payload.branding.dict() if payload.branding
-                     else {"primary_color": "#002FA7", "accent_color": "#0A0A0A"}),
+                     else {"primary_color": BRAND_PRIMARY, "accent_color": BRAND_ACCENT}),
         "billing": payload.billing.dict() if payload.billing else {},
         "features": {
             "modules": features_for_mode(payload.business_mode),

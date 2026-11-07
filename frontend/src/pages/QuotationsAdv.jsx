@@ -10,6 +10,7 @@ import RowActions from "../components/RowActions";
 import { FilePdf } from "@phosphor-icons/react";
 import { API } from "../lib/api";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
+import PageHero from "../components/PageHero";
 
 const TYPE_LABELS = {
   turnkey: "Turnkey",
@@ -85,18 +86,14 @@ export default function QuotationsAdv() {
 
   return (
     <div className="space-y-6" data-testid="quotations-adv-page">
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <div className="overline mb-1">FINANCE / QUOTATIONS</div>
-          <h1 className="font-display font-bold tracking-tight text-3xl sm:text-4xl">Quotations</h1>
-          <p className="text-[var(--ink-2)] mt-2 max-w-xl">Design consultancy proposals and turnkey quotations, with versions, approval and a branded PDF.</p>
-        </div>
+      <PageHero title="Quotations" count={loaded ? rows.length : undefined}
+        kicker="Design proposals and turnkey quotations, with versions, approval and a branded PDF.">
         <div className="flex items-center gap-3">
           {hasPerm("quotations.create") && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-quotation-btn">
             <Plus size={14} /> {showForm ? "Cancel" : "New quotation"}
           </button>}
         </div>
-      </div>
+      </PageHero>
 
       {showForm && (
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="new-quotation-form">

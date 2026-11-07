@@ -6,6 +6,7 @@ import { dateForInput } from "../lib/format";
 import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
+import PageHero from "../components/PageHero";
 
 const KINDS = [
   { id: "national", label: "National", color: "#B22B22" },
@@ -78,16 +79,7 @@ export default function Holidays() {
 
   return (
     <div className="space-y-6" data-testid="holidays-page">
-      <header className="flex items-baseline justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <Calendar size={22} weight="fill" /> Holiday Calendar
-          </h1>
-          <div className="text-sm text-[var(--ink-2)]">
-            Company holidays, weekly offs, and festival days. Applied
-            automatically to attendance and payroll.
-          </div>
-        </div>
+      <PageHero title="Holidays" kicker="Company holidays, weekly offs and festival days. Applied automatically to attendance and payroll.">
         <div className="flex items-center gap-2">
           <label className="overline">YEAR</label>
           <input
@@ -100,7 +92,7 @@ export default function Holidays() {
             <ArrowsClockwise size={14} /> Refresh
           </button>
         </div>
-      </header>
+      </PageHero>
 
       {canCreate && <div className="card-flat" data-testid="holiday-add">
         <div className="overline mb-2">ADD HOLIDAY</div>

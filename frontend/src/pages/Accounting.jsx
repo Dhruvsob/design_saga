@@ -20,7 +20,27 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
-const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+// Journal "source" codes in plain words for the dashboard.
+const SOURCE_LABELS = {
+  invoice_issue: "Invoice raised", invoice_payment: "Invoice payment", milestone_payment: "Fee instalment received",
+  other_receivable_income: "Collection received", commission_income: "Vendor commission", payroll: "Salary",
+  payroll_reversal: "Salary reversed", employee_advance: "Staff advance", recurring_expense: "Recurring expense",
+  vendor_payment: "Vendor payment", vendor_bill: "Vendor bill", expense: "Expense", income: "Income",
+  expense_reimbursement: "Expense claim paid", loan_emi: "Loan EMI", loan_disbursement: "Loan received",
+  capital: "Capital", owner_withdrawal: "Owner withdrawal", transfer: "Transfer", manual: "Manual entry",
+};
+const sourceLabel = (code) => {
+  if (!code) return "—";
+  const key = String(code).toLowerCase();
+  if (SOURCE_LABELS[key]) return SOURCE_LABELS[key];
+  const words = key.replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+const CURRENCY = (n) => {
+  const v = Number(n) || 0;   // negatives read "−₹5,000", not "₹-5,000"
+  return `${v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+};
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", Icon: ChartLine, group: "overview" },
@@ -862,15 +882,17 @@ function Dashboard({ d, onRefresh }) {
         </div>
 
         <div className="card-flat">
-          <div className="overline mb-3">UPCOMING PAYMENTS · next 30d</div>
-          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[var(--ink-3)]">All clear.</div>}
+          <div className="overline mb-3">DUE TO COLLECT · next 30 days</div>
+          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[var(--ink-3)]">Nothing due from clients in the next 30 days.</div>}
           {d.upcoming_payments.slice(0, 8).map((m, i) => (
-            <div key={m.id ?? i} className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
-              <div>
-                <div className="font-semibold">{m.name}</div>
-                <div className="text-xs font-mono text-[var(--ink-2)]">DUE · {formatDate(m.due_date)}</div>
+            <div key={m.id ?? i} className="flex items-center justify-between gap-3 border-b border-[var(--line-soft)] py-2 text-sm">
+              <div className="min-w-0">
+                <div className="font-semibold truncate">{m.name}</div>
+                <div className="text-xs text-[var(--ink-2)] truncate">
+                  {m.project_name ? `${m.project_name} · ` : ""}due {formatDate(m.due_date)}
+                </div>
               </div>
-              <span className="font-mono font-semibold">{CURRENCY(m.amount)}</span>
+              <span className="font-mono font-semibold text-[var(--success)] shrink-0">{CURRENCY(m.outstanding ?? m.amount)}</span>
             </div>
           ))}
         </div>
@@ -887,7 +909,7 @@ function Dashboard({ d, onRefresh }) {
               <tr key={t.id ?? i} className="border-t border-[var(--line-soft)]" data-testid={`recent-${t.id}`}>
                 <td className="p-2 font-mono text-xs">{formatDate(t.date)}</td>
                 <td className="p-2">{t.narration}</td>
-                <td className="p-2 text-xs uppercase">{t.source}</td>
+                <td className="p-2 text-xs text-[var(--ink-2)]">{sourceLabel(t.source)}</td>
                 <td className="p-2 text-right font-mono font-semibold">{CURRENCY(t.total)}</td>
               </tr>
             ))}

@@ -83,6 +83,7 @@ jobs:
           tests/test_calendar_scope.py
           tests/test_monthly_leave_allowance.py
           tests/test_row_limits.py
+          tests/test_pdf_brand_colour.py
 
   frontend:
     runs-on: ubuntu-latest

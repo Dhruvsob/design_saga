@@ -47,8 +47,8 @@ def features_for_mode(mode: str) -> dict:
 class OrgBranding(BaseModel):
     logo_url: Optional[str] = None
     favicon_url: Optional[str] = None
-    primary_color: Optional[str] = "#002FA7"      # Klein Blue default
-    accent_color: Optional[str] = "#0A0A0A"
+    primary_color: Optional[str] = "#76705E"      # Design Saga taupe (see core.pdf_brand)
+    accent_color: Optional[str] = "#2C2C2C"
     tagline: Optional[str] = None
     email_header: Optional[str] = None
     pdf_footer: Optional[str] = None
