@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -13,6 +13,8 @@ import { usePaged } from "../components/Pager";
 import { Receipt } from "@phosphor-icons/react";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
 import PageHero from "../components/PageHero";
+import { MoneyInTabs, useReminderFlow } from "../components/MoneyIn";
+import { BellRinging } from "@phosphor-icons/react";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -21,9 +23,21 @@ export default function Invoices({ docType = "invoice" }) {
   const canDelete = hasPerm("invoices.delete");
   const canRecordPayment = hasPerm("finance.create");
   const canCorrectPayment = hasPerm("finance.delete");
+  const canRemind = hasPerm("finance.read") && (hasPerm("finance.create") || canUpdate);
   const [rows, setRows] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const { pageRows: rowsPage, pager: rowsPager } = usePaged(rows, { key: "invoices" });
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const due = (r) => roundPaise(Math.max(0, Number(r.total || 0) - Number(r.paid_amount || 0)));
+  const visibleRows = useMemo(() => rows.filter((r) => {
+    if (statusFilter === "unpaid" && !["sent", "overdue", "partially_paid"].includes(r.status)) return false;
+    if (statusFilter !== "all" && statusFilter !== "unpaid" && r.status !== statusFilter) return false;
+    const t = search.trim().toLowerCase();
+    return !t || `${r.number} ${r.client_name || ""} ${r.project_name || ""}`.toLowerCase().includes(t);
+  }), [rows, search, statusFilter]);
+  const { pageRows: rowsPage, pager: rowsPager } = usePaged(visibleRows, { key: "invoices" });
+  const [startReminder, reminderModal] = useReminderFlow();
+  const [milestones, setMilestones] = useState([]);
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -43,9 +57,28 @@ export default function Invoices({ docType = "invoice" }) {
       client_id: "", project_id: "",
       items: [{ description: "", quantity: 1, rate: "", amount: 0 }],
       tax_rate: 18, notes: "Payment due within 15 days.",
-      due_date: "", status: "draft", doc_type: dt,
+      due_date: "", status: "draft", doc_type: dt, milestone_id: "",
     };
   }
+
+  // Bill a project milestone: the invoice then carries that money in Collections (counted once).
+  useEffect(() => {
+    if (docType !== "invoice" || !form.project_id) { setMilestones([]); return; }
+    api.get(`/projects/${form.project_id}/milestones`)
+      .then(({ data }) => setMilestones((data || []).filter((m) => m.status !== "paid")))
+      .catch(() => setMilestones([]));
+  }, [form.project_id, docType]);
+
+  const pickMilestone = (id) => {
+    const ms = milestones.find((m) => m.id === id);
+    const blank = form.items.length === 1 && !form.items[0].description && !Number(form.items[0].rate);
+    const left = ms ? roundPaise(Number(ms.amount || 0) - Number(ms.paid_amount || 0)) : 0;
+    setForm({
+      ...form, milestone_id: id,
+      due_date: form.due_date || ms?.due_date || "",
+      items: ms && blank ? [{ description: ms.name, quantity: 1, rate: left, amount: left }] : form.items,
+    });
+  };
 
   const load = async () => {
     const [inv, cl, pr, acc] = await Promise.all([
@@ -81,6 +114,7 @@ export default function Invoices({ docType = "invoice" }) {
     e.preventDefault();
     const payload = {
       ...form,
+      milestone_id: form.milestone_id || undefined,
       tax_rate: Number(form.tax_rate),
       items: form.items.map((it) => ({
         description: it.description,
@@ -107,7 +141,7 @@ export default function Invoices({ docType = "invoice" }) {
       client_id: r.client_id || "", project_id: r.project_id || "",
       items: (r.items || []).map((it) => ({ ...it })),
       tax_rate: r.tax_rate ?? 18, notes: r.notes || "",
-      due_date: r.due_date || "", status: r.status, doc_type: r.doc_type,
+      due_date: r.due_date || "", status: r.status, doc_type: r.doc_type, milestone_id: r.milestone_id || "",
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -179,11 +213,12 @@ export default function Invoices({ docType = "invoice" }) {
   return (
     <div className="space-y-6" data-testid={`${docType}s-page`}>
       <PageHero title={docType === "quotation" ? "Quotations" : "Invoices"} count={loaded ? rows.length : undefined}
-        kicker={docType === "quotation" ? undefined : "Bill clients, record payments and track what is still to collect. Payments post to Accounting automatically."}>
+        kicker={docType === "quotation" ? undefined : "Invoices are documents. Money is booked only when you record a payment, for the amount actually received."}>
         {canCreate && <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(initialForm(docType)); }} className="btn-primary" data-testid={`new-${docType}-btn`}>
           <Plus size={14} /> {showForm ? "Cancel" : `New ${docType}`}
         </button>}
       </PageHero>
+      {docType === "invoice" && <MoneyInTabs />}
 
       {showForm && (
         <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="invoice-form">
@@ -198,7 +233,18 @@ export default function Invoices({ docType = "invoice" }) {
                 <option value="">Select project</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </SearchSelect>
-              <input type="date" className="input-flat" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+              {docType === "invoice" && form.project_id && milestones.length > 0 && (
+                <select aria-label="Bill a milestone" className="input-flat col-span-2" value={form.milestone_id}
+                  onChange={(e) => pickMilestone(e.target.value)} data-testid="invoice-milestone">
+                  <option value="">Not for a specific milestone</option>
+                  {milestones.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} · ₹{Number(m.amount || 0).toLocaleString("en-IN")}{m.percent ? ` (${m.percent}% of project value)` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <input type="date" aria-label="Due date" className="input-flat" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
               <input type="number" className="input-flat" placeholder="Tax %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
             </div>
 
@@ -257,11 +303,24 @@ export default function Invoices({ docType = "invoice" }) {
         </form>
       )}
 
+      {docType === "invoice" && (
+        <div className="flex flex-wrap items-center gap-2">
+          {[["all", "All"], ["unpaid", "To collect"], ["partially_paid", "Part paid"], ["paid", "Paid"], ["draft", "Draft"], ["cancelled", "Cancelled"]].map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setStatusFilter(id)} data-testid={`invoice-filter-${id}`}
+              className={`px-3 py-1.5 text-xs border rounded-full ${statusFilter === id ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "bg-white text-[var(--ink-2)] border-[var(--line)]"}`}>
+              {label}
+            </button>
+          ))}
+          <input className="input-flat ml-auto min-w-[240px]" placeholder="Search number, client or project" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      )}
       <div className="border border-[var(--line)] overflow-x-auto">
         <table className="w-full min-w-[640px]">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
-              <Th>Number</Th><Th>Client</Th><Th>Project</Th><Th>Due</Th><Th>Total</Th><Th>Status</Th><Th>Actions</Th>
+              <Th>Number</Th><Th>Client</Th><Th>Project</Th><Th>Due</Th><Th>Total</Th>
+              {docType === "invoice" && <><Th>Received</Th><Th>Still due</Th></>}
+              <Th>Status</Th><Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
@@ -272,6 +331,10 @@ export default function Invoices({ docType = "invoice" }) {
                 <Td>{r.project_name || "—"}</Td>
                 <Td className="font-mono text-xs">{formatDate(r.due_date)}</Td>
                 <Td className="font-mono font-semibold">₹{(r.total || 0).toLocaleString("en-IN")}</Td>
+                {docType === "invoice" && <>
+                  <Td className="font-mono text-[var(--success)]">{Number(r.paid_amount || 0) > 0 ? `₹${Number(r.paid_amount).toLocaleString("en-IN")}` : "—"}</Td>
+                  <Td className="font-mono font-semibold">{["draft", "cancelled"].includes(r.status) ? "—" : `₹${due(r).toLocaleString("en-IN")}`}</Td>
+                </>}
                 <Td>
                   {canUpdate && !["paid", "partially_paid"].includes(r.status) ? <select aria-label="Status" className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
                     <option value="draft">draft</option>
@@ -288,6 +351,10 @@ export default function Invoices({ docType = "invoice" }) {
                     )}
                     <RowActions label={`${docType} ${r.number}`} testid={`${docType}-actions-${r.id}`} actions={[
                       { label: "Download PDF", icon: FilePdf, onSelect: () => download(r.id) },
+                      { label: "Send payment reminder", icon: BellRinging, testid: `invoice-remind-${r.id}`,
+                        hidden: !(docType === "invoice" && canRemind && ["sent", "overdue", "partially_paid"].includes(r.status) && due(r) > 0),
+                        onSelect: () => startReminder({ source_type: "invoice", source_id: r.id, party: r.client_name, outstanding: due(r),
+                                                        due_by: r.due_date && r.due_date > dateForInput(new Date()) ? r.due_date : undefined }) },
                       { label: "Edit", icon: PencilSimple, onSelect: () => startEdit(r), testid: `${docType}-edit-${r.id}`,
                         hidden: !(canUpdate && (docType === "quotation" ? r.status !== "paid" : r.status === "draft")) },
                       { divider: true },
@@ -300,10 +367,10 @@ export default function Invoices({ docType = "invoice" }) {
                 </Td>
               </tr>
             ))}
-            {!loaded && <SkeletonRows cols={7} />}
+            {!loaded && <SkeletonRows cols={docType === "invoice" ? 9 : 7} />}
             {loaded && rows.length === 0 && (
-              <EmptyRow cols={7} icon={Receipt} title={`No ${docType}s yet`}
-                hint={docType === "invoice" ? "Bill a client for a project milestone or fee. Payments you record here post to Accounting automatically." : "Create one to send to a client."}
+              <EmptyRow cols={docType === "invoice" ? 9 : 7} icon={Receipt} title={`No ${docType}s yet`}
+                hint={docType === "invoice" ? "Bill a client for a project milestone or fee. Money is booked only when you record a payment." : "Create one to send to a client."}
                 actionLabel={canCreate ? `New ${docType}` : undefined}
                 onAction={() => { setShowForm(true); setEditingId(null); setForm(initialForm(docType)); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
             )}
@@ -311,6 +378,10 @@ export default function Invoices({ docType = "invoice" }) {
         </table>{rowsPager}
       </div>
 
+      {reminderModal}
+      {loaded && rows.length > 0 && visibleRows.length === 0 && (
+        <p className="text-sm text-[var(--ink-3)] text-center">No invoices match this view.</p>
+      )}
       {preview && (
         <PdfPreviewModal path={`/invoices/${preview.id}/pdf`} title={`Invoice ${preview.number || ""}`.trim()}
                          filename={`${preview.number || "invoice"}.pdf`} onClose={() => setPreview(null)} />

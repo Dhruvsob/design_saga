@@ -218,6 +218,7 @@ def test_project_detail_separates_invoice_procurement_and_vendor_cost_access(mon
         payment_milestones=_Collection([{"id": "milestone_1", "amount": 500}]),
         purchase_orders=_Collection([{"id": "po_1", "grand_total": 600}]),
         vendor_bills=_Collection([{"id": "bill_1", "total": 400, "status": "received"}]),
+        journal_entries=_Collection(),
     )
 
     async def visible_project(_user, _project_id):
@@ -306,6 +307,10 @@ def test_invoice_issue_and_draft_transitions_post_and_reverse_accrual(monkeypatc
     monkeypatch.setattr(server, "audit_log", noop)
     monkeypatch.setattr(accounting, "post_invoice_accrual_je", post_accrual)
     monkeypatch.setattr(accounting, "reverse_invoice_accrual_je", reverse_accrual)
+
+    async def accrual():
+        return "accrual"
+    monkeypatch.setattr(accounting, "org_accounting_basis", accrual)
 
     issued = asyncio.run(server._update_invoice_status_locked(
         {"user_id": "admin"}, "inv_1", server.InvoiceStatusUpdate(status="sent")))

@@ -50,6 +50,7 @@ export default function CompanySettings() {
         gstin: org.gstin, pan: org.pan,
         branding: org.branding, address: org.address,
         bank_details: org.bank_details,
+        accounting_basis: org.accounting_basis || "cash",
       };
       await api.patch("/org/current", payload);
       await refreshOrg();
@@ -283,6 +284,22 @@ export default function CompanySettings() {
               <Field label="Account number" value={org.bank_details?.account || ""} onChange={(v) => setBank({ account: v })} testid="cs-bank-account" />
               <Field label="IFSC code" value={org.bank_details?.ifsc || ""} onChange={(v) => setBank({ ifsc: v })} testid="cs-bank-ifsc" />
               <Field label="UPI ID" value={org.bank_details?.upi || ""} onChange={(v) => setBank({ upi: v })} testid="cs-bank-upi" />
+            </div>
+          </div>
+          <div className="card-flat">
+            <div className="overline mb-4">WHEN IS INCOME BOOKED?</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="Accounting basis">
+              {[["cash", "When money is received (recommended)",
+                 "An invoice or reminder books nothing. Income is recorded only when you record a payment, for the amount actually received."],
+                ["accrual", "When the invoice is sent",
+                 "Sending an invoice books its full value as income owed; payments then settle it. Use only if your CA asks for it."]].map(([id, title, body]) => (
+                <label key={id} className={`border rounded-lg p-3 cursor-pointer ${(org.accounting_basis || "cash") === id ? "border-[var(--accent-strong)] bg-[var(--surface-2)]" : "border-[var(--line)]"}`}>
+                  <input type="radio" name="accounting_basis" className="mr-2" checked={(org.accounting_basis || "cash") === id}
+                         onChange={() => setOrg((o) => ({ ...o, accounting_basis: id }))} data-testid={`cs-basis-${id}`} />
+                  <span className="font-semibold text-sm">{title}</span>
+                  <p className="text-xs text-[var(--ink-2)] mt-1">{body}</p>
+                </label>
+              ))}
             </div>
           </div>
         </div>

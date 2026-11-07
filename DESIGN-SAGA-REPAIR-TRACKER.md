@@ -11,6 +11,18 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-108: Invoices, payment reminders, collections and accounting kept apart (₹6 lakh fix)
+
+- Root cause: issuing an invoice booked its full value as income (Dr Receivable / Cr Income). sample(Demo) INV-1004 for ₹6,00,000 with ₹51,000 received showed ₹6,00,000 Consultancy Income. Also: PATCH milestone status "paid" auto-posted a full receipt (no date/account; duplicate on part-paid milestones).
+- Company setting `accounting_basis` (default **cash**): sending/issuing an invoice posts nothing; Record Payment books only the amount received (Dr Cash/Bank, Cr Income, with output GST split in the invoice's proportion). `accrual` keeps the previous behaviour; invoices already recognised under accrual keep settling their receivable.
+- A "paid" label is never a payment: invoice (already) and milestone status changes to paid are refused (409) — Record Payment only, idempotent.
+- Invoices can bill a project milestone (`milestone_id`): one live invoice per milestone, Collections Due lists it once (as the invoice), paying the invoice updates the milestone; paying the milestone directly is refused.
+- Percentage milestones follow the project value until billed or received. Project detail shows Project value / Scheduled / Invoiced / Received / Still to receive.
+- New `routes/money_in.py`: numbered Payment Reminders (PR-0001) with branded PDF and WhatsApp link (wa.me, India code added), no journal; Received Payments register (cash/bank receipts only).
+- UI: Invoices | Payment Reminders | Collections Due | Received Payments tabs; invoice Received / Still due columns, filters, "Send payment reminder"; Remind button in Collections Due; accounting-basis choice in Company Settings; fixed or % milestones.
+- Historical data untouched: sample(Demo) INV-1004 still carries its accrual entry; correct only with owner approval.
+- Tests: `tests/test_money_in.py`, e2e `collections.spec.mjs` (₹6L + ₹10k, GST split, duplicate key, reminder PDF/WhatsApp/no journal, staff 403, % milestone, invoice-milestone single count, screens).
+
 ### DS-107: Edit a paid salary; cancelled salaries leave the books; opening balance for accounts with activity
 
 - Owner report: reversing a salary left "minus" reversal lines in the Daybook and employee sheet; a wrong salary amount could not simply be edited. Janvi's October run still said "paid" although its journal had been reversed from the Daybook (books and payroll out of step).

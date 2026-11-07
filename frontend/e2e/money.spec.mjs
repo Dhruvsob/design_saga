@@ -22,9 +22,9 @@ test("invoice: issue, partial + full collection, idempotent retry, Cash/Bank gua
   expect([inv.subtotal, inv.tax, inv.total]).toEqual([100.01, 18, 118.01]);
 
   await json(ctx.patch(`/api/invoices/${inv.id}/status`, { data: { status: "sent" } }));
+  // Cash basis (default): sending an invoice is a document event, not money.
   const issue = await journals(ctx, { source: "invoice_issue", client_id: client.id });
-  expect(issue).toHaveLength(1);
-  expect(balanced(issue[0])).toBe(true);
+  expect(issue, "sending posts no journal").toHaveLength(0);
 
   // A "bank transfer" must never be booked into the Cash ledger.
   const wrong = await ctx.post("/api/accounting/collections/receive", { data: {

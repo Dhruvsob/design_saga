@@ -461,6 +461,7 @@ class InvoiceIn(FiniteModel):
     due_date: Optional[str] = None
     status: Optional[Literal["draft", "sent", "paid", "overdue", "cancelled"]] = "draft"
     doc_type: Optional[Literal["invoice", "quotation"]] = "invoice"
+    milestone_id: Optional[str] = None       # bill a project milestone (counted once in Collections)
 
 
 class InvoiceStatusUpdate(FiniteModel):
@@ -470,6 +471,7 @@ class InvoiceStatusUpdate(FiniteModel):
 class InvoiceUpdate(FiniteModel):
     client_id: Optional[str] = None
     project_id: Optional[str] = None
+    milestone_id: Optional[str] = None
     items: Optional[List[InvoiceItem]] = None
     tax_rate: Optional[float] = Field(default=None, ge=0, le=100)
     notes: Optional[str] = None
@@ -1517,6 +1519,26 @@ async def get_project(project_id: str, request: Request,
         {"project_id": project_id}, {"_id": 0}).to_list(MAX_LIST_ROWS) if can_invoice else [])
     p["milestones"] = (await sdb.payment_milestones.find(
         {"project_id": project_id}, {"_id": 0}).to_list(MAX_LIST_ROWS) if can_invoice else [])
+    if can_invoice:
+        received = 0.0
+        for je in await sdb.journal_entries.find(
+                {"project_id": project_id, "voided_from_view": {"$ne": True},
+                 "source": {"$in": ["income", "invoice_payment", "milestone_payment",
+                                    "other_receivable_income"]}},
+                {"_id": 0, "lines": 1}).to_list(MAX_LIST_ROWS):
+            # cash actually received = debits to cash/bank lines of money-in entries
+            received += sum(float(l.get("debit") or 0) for l in je.get("lines") or []
+                            if l.get("account_type") == "asset"
+                            and l.get("account_name") != "Accounts Receivable")
+        for je in await sdb.journal_entries.find(
+                {"project_id": project_id, "voided_from_view": {"$ne": True},
+                 "source": {"$in": ["income_reversal", "invoice_payment_reversal",
+                                    "milestone_payment_reversal", "other_receivable_income_reversal"]}},
+                {"_id": 0, "lines": 1}).to_list(MAX_LIST_ROWS):
+            received -= sum(float(l.get("credit") or 0) for l in je.get("lines") or []
+                            if l.get("account_type") == "asset"
+                            and l.get("account_name") != "Accounts Receivable")
+        p["money"] = _project_money(p, p["invoices"], p["milestones"], received)
     p["purchase_orders"] = (await sdb.purchase_orders.find(
         {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
         if can_procurement else [])
@@ -1634,6 +1656,41 @@ async def delete_project(project_id: str, request: Request,
     return {"ok": True}
 
 
+async def _rescale_percent_milestones(project_id: str, budget: float) -> None:
+    """Percentage fees move with the project value until money is received or billed."""
+    if budget <= 0:
+        return
+    async for ms in sdb.payment_milestones.find(
+            {"project_id": project_id, "percent": {"$gt": 0}}, {"_id": 0}):
+        if float(ms.get("paid_amount") or 0) > 0 or ms.get("status") == "paid":
+            continue
+        if await sdb.invoices.find_one({"milestone_id": ms["id"], "status": {"$ne": "cancelled"}},
+                                       {"_id": 0, "id": 1}):
+            continue
+        amount = round(budget * float(ms["percent"]) / 100.0, 2)
+        if amount != float(ms.get("amount") or 0):
+            await sdb.payment_milestones.update_one(
+                {"id": ms["id"]}, {"$set": {"amount": amount, "updated_at": iso(now_utc())}})
+
+
+def _project_money(project: dict, invoices: list, milestones: list, received: float) -> dict:
+    """Keep contract value, billing, receivable and cash received apart."""
+    value = round(float(project.get("budget") or 0), 2)
+    live = [i for i in invoices if i.get("doc_type", "invoice") == "invoice"
+            and i.get("status") not in ("draft", "cancelled")]
+    invoiced = round(sum(float(i.get("total") or 0) for i in live), 2)
+    invoice_received = round(sum(float(i.get("paid_amount") or 0) for i in live), 2)
+    return {
+        "project_value": value,
+        "scheduled": round(sum(float(m.get("amount") or 0) for m in milestones
+                               if m.get("status") != "cancelled"), 2),
+        "invoiced": invoiced,
+        "billed_unpaid": round(max(0.0, invoiced - invoice_received), 2),
+        "received": round(received, 2),
+        "still_to_receive": round(max(0.0, value - received), 2) if value else None,
+    }
+
+
 @api.patch("/projects/{project_id}")
 async def update_project(project_id: str, payload: ProjectUpdate, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
@@ -1656,6 +1713,8 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
     res = await sdb.projects.update_one({"id": project_id}, {"$set": upd})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
+    if "budget" in upd:
+        await _rescale_percent_milestones(project_id, float(upd.get("budget") or 0))
     await audit_log(user, "project.update", target=project_id, target_type="project",
                     meta={"fields": [k for k in upd if k != "updated_at"]})
     return await sdb.projects.find_one({"id": project_id}, {"_id": 0})
@@ -1913,6 +1972,24 @@ def compute_invoice_totals(doc: dict) -> dict:
     return doc
 
 
+async def _check_invoice_milestone(doc: dict, invoice_id: Optional[str]) -> None:
+    """A milestone may be billed by one live invoice, in its own project."""
+    ms = await sdb.payment_milestones.find_one({"id": doc["milestone_id"]}, {"_id": 0})
+    if not ms:
+        raise HTTPException(status_code=400, detail="Milestone not found")
+    if doc.get("project_id") and doc["project_id"] != ms.get("project_id"):
+        raise HTTPException(status_code=400, detail="The milestone belongs to a different project")
+    doc["project_id"] = ms.get("project_id")
+    if ms.get("status") == "paid":
+        raise HTTPException(status_code=409, detail="This milestone is already fully received")
+    other = await sdb.invoices.find_one(
+        {"milestone_id": doc["milestone_id"], "status": {"$ne": "cancelled"},
+         "id": {"$ne": invoice_id}}, {"_id": 0, "number": 1})
+    if other:
+        raise HTTPException(status_code=409,
+                            detail=f"This milestone is already billed on invoice {other.get('number')}")
+
+
 def _invoice_client_snapshot(client_doc: Optional[dict]) -> dict:
     """Copy only invoice-facing client fields; later profile edits stay isolated."""
     if not client_doc:
@@ -1976,6 +2053,8 @@ async def create_invoice(payload: InvoiceIn, request: Request,
             raise HTTPException(status_code=400, detail="Client not found")
         doc["client_name"] = doc.get("client_name") or c.get("name")
         doc["client_details"] = _invoice_client_snapshot(c)
+    if doc.get("milestone_id"):
+        await _check_invoice_milestone(doc, None)
     if doc.get("project_id"):
         p = await sdb.projects.find_one({"id": doc["project_id"]}, {"_id": 0})
         if not p:
@@ -2045,6 +2124,11 @@ async def update_invoice(invoice_id: str, payload: InvoiceUpdate, request: Reque
     upd = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
+    if upd.get("milestone_id"):
+        probe = {"milestone_id": upd["milestone_id"],
+                 "project_id": upd.get("project_id") or doc.get("project_id")}
+        await _check_invoice_milestone(probe, invoice_id)
+        upd["project_id"] = probe["project_id"]
     if "items" in upd:
         upd["items"] = [i if isinstance(i, dict) else i for i in upd["items"]]
     if upd.get("client_id"):
@@ -2068,7 +2152,7 @@ async def update_invoice(invoice_id: str, payload: InvoiceUpdate, request: Reque
                                          "_lock": {"$exists": False}}, {"$set": {
         k: merged[k] for k in
     ("client_id", "client_name", "client_details", "project_id", "project_name", "items",
-         "tax_rate", "notes", "due_date", "subtotal", "tax", "total", "updated_at")
+         "tax_rate", "notes", "due_date", "subtotal", "tax", "total", "updated_at", "milestone_id")
         if k in merged
     }})
     if res.matched_count != 1:
@@ -2139,7 +2223,9 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
             and not has_permission(user, "finance.update"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.update")
     created_accrual = None
-    if is_invoice and target_is_issued:
+    from routes.accounting import org_accounting_basis
+    accrual_basis = await org_accounting_basis() == "accrual"
+    if is_invoice and target_is_issued and accrual_basis:
         prior_accrual = await sdb.journal_entries.find_one(
             {"source": "invoice_issue", "source_id": invoice_id,
              "reversed": {"$ne": True}}, {"_id": 0, "id": 1})
@@ -5381,6 +5467,7 @@ from routes.comments import router as comments_router  # noqa: E402
 from routes.calendar import router as calendar_router  # noqa: E402
 from routes.google_calendar import router as google_calendar_router  # noqa: E402
 from routes.finance_extras import router as finance_extras_router  # noqa: E402
+from routes.money_in import router as money_in_router  # noqa: E402
 api.include_router(tasks_router)
 api.include_router(phases_router)
 api.include_router(attendance_router)
@@ -5404,6 +5491,7 @@ api.include_router(comments_router)
 api.include_router(calendar_router)
 api.include_router(google_calendar_router)
 api.include_router(finance_extras_router)
+api.include_router(money_in_router)
 
 app.include_router(api)
 

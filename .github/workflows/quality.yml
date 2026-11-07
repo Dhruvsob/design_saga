@@ -47,6 +47,7 @@ jobs:
           tests/test_payroll_correction.py
           tests/test_former_staff.py
           tests/test_staff_visibility.py
+          tests/test_money_in.py
           tests/test_financial_read_permissions.py
           tests/test_invoice_pdf_format.py
           tests/test_employee_corrections.py

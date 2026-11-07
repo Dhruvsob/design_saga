@@ -134,6 +134,8 @@ class BrandingUpdateIn(BaseModel):
     invoice_prefix: Optional[str] = None
     quotation_prefix: Optional[str] = None
     bank_details: Optional[dict] = None            # {bank, account, ifsc, upi}
+    # cash: income only when money is received (default) · accrual: invoices book revenue when issued
+    accounting_basis: Optional[Literal["cash", "accrual"]] = None
     signature_url: Optional[str] = None
     stamp_url: Optional[str] = None
 

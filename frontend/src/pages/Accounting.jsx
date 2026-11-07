@@ -19,6 +19,8 @@ import {
 import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
+import { MoneyInTabs, useReminderFlow } from "../components/MoneyIn";
+import { BellRinging } from "@phosphor-icons/react";
 
 // Journal "source" codes in plain words for the dashboard.
 const SOURCE_LABELS = {
@@ -72,7 +74,11 @@ const TAB_GROUPS = [
 
 export default function Accounting() {
   const { hasPerm } = useAuth();
-  const [tab, setTab] = useState("dashboard");
+  // Deep links such as /accounting?tab=receivables (from Invoices > Collections Due).
+  const [tab, setTab] = useState(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    return TABS.some((t) => t.id === wanted) ? wanted : "dashboard";
+  });
   const [dashboard, setDashboard] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [clients, setClients] = useState([]);
@@ -956,6 +962,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
     income_account_id: "", reference: "", reminder_date: "", notes: "",
   };
   const [data, setData] = useState(null);
+  const [startReminder, reminderModal] = useReminderFlow();
   const [filter, setFilter] = useState("active");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -1105,6 +1112,8 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 
   return (
     <div className="space-y-4" data-testid="collections-due-tab">
+      <MoneyInTabs />
+      {reminderModal}
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <div className="overline">MONEY IN / COLLECTIONS DUE</div>
@@ -1223,6 +1232,15 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
                     onClick={() => openReceipt(row)} disabled={!banks.length || !incomeAccounts.length}>
                     <Money size={12} /> Receive
                   </button>}
+                  {row.outstanding > 0 && (
+                    <button type="button" className="btn-ghost text-xs mr-2" data-testid={`collection-remind-${row.id}`}
+                      title="Payment reminder PDF + WhatsApp (posts nothing)"
+                      onClick={() => startReminder({ source_type: row.source_type, source_id: row.id,
+                        party: row.vendor_name || row.client_name, outstanding: row.outstanding,
+                        due_by: row.due_date && row.status !== "overdue" ? row.due_date : undefined })}>
+                      <BellRinging size={12} /> Remind
+                    </button>
+                  )}
                   {row.vendor_id ? <a href={`/vendors/${row.vendor_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
                     : row.project_id ? <a href={`/projects/${row.project_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
                     : null}

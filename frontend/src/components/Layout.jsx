@@ -91,6 +91,9 @@ function writePref(key, value) {
 
 const fmtClock = (d) => formatTime(d);
 
+// Named sub-pages under a sidebar item (anything else under it is a record's details).
+const SUB_PAGES = { "/invoices/reminders": "Payment Reminders", "/invoices/received": "Received Payments" };
+
 export default function Layout({ children }) {
   const { user, logout, hasPerm, currentOrg, isSuperAdmin, lockNow } = useAuth();
   const pinEnabled = Boolean(user?.app_pin_enabled);
@@ -302,7 +305,7 @@ export default function Layout({ children }) {
                 {/* on a detail page the list name links back to the list */}
                 <NavLink to={currentNav.to} end className="hover:text-[var(--ink)] hover:underline underline-offset-4" data-testid="crumb-list">{currentNav.label}</NavLink>
                 <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
-                <span className="text-[var(--ink)] font-semibold" aria-current="page">Details</span>
+                <span className="text-[var(--ink)] font-semibold" aria-current="page">{SUB_PAGES[location.pathname] || "Details"}</span>
               </>
             ) : (
               <span className="text-[var(--ink)] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>

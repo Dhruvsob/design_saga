@@ -21,6 +21,8 @@ const Accounting = lazy(() => import("./pages/Accounting"));
 const Clients = lazy(() => import("./pages/Clients"));
 const ClientDetail = lazy(() => import("./pages/ClientDetail"));
 const Invoices = lazy(() => import("./pages/Invoices"));
+const PaymentReminders = lazy(() => import("./pages/PaymentReminders"));
+const ReceivedPayments = lazy(() => import("./pages/ReceivedPayments"));
 const QuotationsAdv = lazy(() => import("./pages/QuotationsAdv"));
 const QuotationBuilder = lazy(() => import("./pages/QuotationBuilder"));
 const RBACAdmin = lazy(() => import("./pages/RBACAdmin"));
@@ -127,6 +129,8 @@ function AppRouter() {
       <Route path="/clients" element={<ProtectedShell requirePerm="clients.read"><Clients /></ProtectedShell>} />
       <Route path="/clients/:id" element={<ProtectedShell requirePerm="clients.read"><ClientDetail /></ProtectedShell>} />
       <Route path="/invoices" element={<ProtectedShell requirePerm="invoices.read"><Invoices docType="invoice" /></ProtectedShell>} />
+      <Route path="/invoices/reminders" element={<ProtectedShell requirePerm="finance.read"><PaymentReminders /></ProtectedShell>} />
+      <Route path="/invoices/received" element={<ProtectedShell requirePerm="finance.read"><ReceivedPayments /></ProtectedShell>} />
       <Route path="/quotations" element={<ProtectedShell requirePerm="quotations.read"><QuotationsAdv /></ProtectedShell>} />
       <Route path="/quotations/:id" element={<ProtectedShell requirePerm="quotations.read"><QuotationBuilder /></ProtectedShell>} />
       <Route path="/employees" element={<ProtectedShell requirePerm="employees.read"><Employees /></ProtectedShell>} />

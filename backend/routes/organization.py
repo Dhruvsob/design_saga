@@ -171,6 +171,11 @@ async def update_current_org(payload: BrandingUpdateIn, request: Request,
     up["updated_at"] = iso_now()
     up["updated_by"] = user["user_id"]
     await db.organizations.update_one({"org_id": oid}, {"$set": up}, upsert=True)
+    if "accounting_basis" in up and up["accounting_basis"] != (org.get("accounting_basis") or "cash"):
+        from core.audit import audit
+        await audit(user, "org.accounting_basis", target=oid, target_type="organization",
+                    meta={"from": org.get("accounting_basis") or "cash", "to": up["accounting_basis"]},
+                    org_id=oid)
     return _pack_org(await get_org(oid))
 
 

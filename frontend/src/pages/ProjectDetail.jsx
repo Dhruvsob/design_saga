@@ -40,7 +40,7 @@ export default function ProjectDetail() {
   const [form, setForm] = useState({});
   const [employees, setEmployees] = useState([]);
   const [teamForm, setTeamForm] = useState({ project_manager_id: "", team_ids: [] });
-  const [msForm, setMsForm] = useState({ name: "", amount: "", due_date: "" });
+  const [msForm, setMsForm] = useState({ name: "", amount: "", due_date: "", kind: "amount" });
   const [showMsForm, setShowMsForm] = useState(false);
   const [err, setErr] = useState("");
 
@@ -193,11 +193,16 @@ export default function ProjectDetail() {
 
   const addMilestone = async (e) => {
     e.preventDefault();
-    await api.post(`/projects/${id}/milestones`, {
-      project_id: id, name: msForm.name,
-      amount: Number(msForm.amount || 0), due_date: msForm.due_date || undefined,
-    });
-    setMsForm({ name: "", amount: "", due_date: "" });
+    try {
+      await api.post(`/projects/${id}/milestones`, {
+        project_id: id, name: msForm.name, due_date: msForm.due_date || undefined,
+        ...(msForm.kind === "percent" ? { percent: Number(msForm.amount || 0) } : { amount: Number(msForm.amount || 0) }),
+      });
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not add milestone");
+      return;
+    }
+    setMsForm({ name: "", amount: "", due_date: "", kind: "amount" });
     setShowMsForm(false);
     load();
   };
@@ -421,21 +426,45 @@ export default function ProjectDetail() {
           {showMsForm && (
             <form onSubmit={addMilestone} className="card-flat grid grid-cols-1 md:grid-cols-4 gap-3">
               <input className="input-flat" placeholder="Milestone name" required value={msForm.name} onChange={(e) => setMsForm({ ...msForm, name: e.target.value })} data-testid="ms-name" />
-              <input className="input-flat" type="number" placeholder="Enter amount (₹)" required value={msForm.amount} onChange={(e) => setMsForm({ ...msForm, amount: e.target.value })} data-testid="ms-amount" />
+              <div className="flex gap-2">
+                <select aria-label="Fee type" className="input-flat w-28" value={msForm.kind} onChange={(e) => setMsForm({ ...msForm, kind: e.target.value })} data-testid="ms-kind">
+                  <option value="amount">₹ fixed</option>
+                  <option value="percent">% of value</option>
+                </select>
+                <input className="input-flat flex-1" type="number" step="0.01" min="0.01" max={msForm.kind === "percent" ? 100 : undefined}
+                  placeholder={msForm.kind === "percent" ? "e.g. 10 (%)" : "Amount (₹)"} required value={msForm.amount}
+                  onChange={(e) => setMsForm({ ...msForm, amount: e.target.value })} data-testid="ms-amount" />
+              </div>
               <input className="input-flat" type="date" value={msForm.due_date} onChange={(e) => setMsForm({ ...msForm, due_date: e.target.value })} />
               <button className="btn-primary" data-testid="ms-submit">Save</button>
             </form>
+          )}
+          {p.money && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2" data-testid="project-money">
+              {[["Project value", p.money.project_value, "Agreed fee / contract value"],
+                ["Scheduled", p.money.scheduled, "Total of milestones"],
+                ["Invoiced", p.money.invoiced, "Invoices sent (documents)"],
+                ["Received", p.money.received, "Money actually in Cash/Bank"],
+                ["Still to receive", p.money.still_to_receive ?? p.money.billed_unpaid, p.money.project_value ? "Project value − received" : "Invoiced − received"],
+              ].map(([label, value, hint]) => (
+                <div key={label} className="border border-[var(--line)] rounded-lg p-3">
+                  <div className="overline">{label}</div>
+                  <div className={`font-display font-bold text-lg tabular-nums ${label === "Received" ? "text-[var(--success)]" : ""}`}>{inr(value)}</div>
+                  <div className="text-[10px] text-[var(--ink-3)]">{hint}</div>
+                </div>
+              ))}
+            </div>
           )}
           {(p.milestones || []).length === 0 && <Empty text="No payment milestones yet." />}
           {(p.milestones || []).map((m) => (
             <div key={m.id} className="border border-[var(--line)] p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
               <div>
                 <div className="font-semibold text-sm">{m.name}</div>
-                <div className="text-xs text-[var(--ink-2)]">Due {formatDate(m.due_date)}</div>
+                <div className="text-xs text-[var(--ink-2)]">Due {formatDate(m.due_date)}{m.percent ? ` · ${m.percent}% of project value` : ""}{Number(m.paid_amount || 0) > 0 && m.status !== "paid" ? ` · ${inr(m.paid_amount)} received` : ""}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold">{inr(m.amount)}</span>
-                <span className={`status-chip chip-${m.status || "pending"}`}>{m.status || "pending"}</span>
+                <span className={`status-chip chip-${m.status || "pending"}`}>{m.status === "paid" ? "received" : Number(m.paid_amount || 0) > 0 ? "part received" : m.invoice_id ? "invoiced" : "due"}</span>
               </div>
             </div>
           ))}

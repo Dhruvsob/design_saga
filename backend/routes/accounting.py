@@ -413,6 +413,32 @@ async def default_receipt_accounts():
     return bank, income
 
 
+async def org_accounting_basis() -> str:
+    """'cash' (default): income is booked only when money is received.
+    'accrual': issuing an invoice books revenue and a receivable."""
+    org = await db.organizations.find_one(
+        {"org_id": current_org_id() or "org_default"}, {"_id": 0, "accounting_basis": 1})
+    return "accrual" if (org or {}).get("accounting_basis") == "accrual" else "cash"
+
+
+async def _sync_invoice_milestone(invoice_id: str) -> None:
+    """An invoice raised for a milestone carries its money: mirror what was received."""
+    invoice = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice or not invoice.get("milestone_id"):
+        return
+    milestone = await sdb.payment_milestones.find_one({"id": invoice["milestone_id"]}, {"_id": 0})
+    if not milestone:
+        return
+    amount = float(milestone.get("amount") or 0)
+    received = round(min(float(invoice.get("paid_amount") or 0), amount or float("inf")), 2)
+    status = "paid" if amount > 0 and received + 0.01 >= amount else "invoiced"
+    await sdb.payment_milestones.update_one(
+        {"id": milestone["id"]},
+        {"$set": {"status": status, "paid_amount": received, "invoice_id": invoice_id,
+                  "paid_at": iso_now() if received > 0 else None, "updated_at": iso_now()}},
+    )
+
+
 async def _invoice_accrual_accounts():
     """Resolve the control accounts used when an invoice is issued."""
     await _seed_coa_if_empty()
@@ -582,6 +608,7 @@ async def _reset_source_after_reversal(source: str, source_id: str):
                       "journal_id": active[-1]["id"] if active else None,
                       "updated_at": iso_now()}},
         )
+        await _sync_invoice_milestone(source_id)
     elif source == "milestone_payment":
         milestone = await sdb.payment_milestones.find_one({"id": source_id}, {"_id": 0})
         if not milestone:
@@ -1524,6 +1551,13 @@ async def create_income(payload: IncomeIn, request: Request,
             raise HTTPException(status_code=404, detail="Milestone not found")
         if linked.get("status") == "paid":
             raise HTTPException(status_code=409, detail="Milestone is already paid")
+        live_invoice = await sdb.invoices.find_one(
+            {"milestone_id": payload.milestone_id,
+             "status": {"$nin": ["draft", "cancelled"]}}, {"_id": 0, "number": 1})
+        if live_invoice:
+            raise HTTPException(status_code=409, detail=(
+                f"This milestone is billed on invoice {live_invoice.get('number')}. "
+                "Record the payment on that invoice so it is counted once."))
         expected = max(0.0, float(linked.get("amount") or 0)
                        - float(linked.get("paid_amount") or 0))
         if payload.amount > expected + 0.01:
@@ -1582,29 +1616,55 @@ async def create_income(payload: IncomeIn, request: Request,
                     {"id": existing["id"]}, {"_id": 0})
             raise HTTPException(status_code=409, detail="This linked payment has already been posted")
     created_accrual = None
+    prior_accrual = None
+    cash_basis_invoice = False
     if payload.invoice_id:
         prior_accrual = await sdb.journal_entries.find_one(
             {"source": "invoice_issue", "source_id": payload.invoice_id,
              "reversed": {"$ne": True}}, {"_id": 0, "id": 1})
-        if not prior_accrual:
-            created_accrual = await post_invoice_accrual_je(user, linked)
-        receivable = await sdb.accounts.find_one(
-            {"name": "Accounts Receivable", "type": "asset",
-             "active": {"$ne": False}}, {"_id": 0})
-        if not receivable:
-            if created_accrual:
-                await reverse_invoice_accrual_je(user, linked)
-            raise HTTPException(status_code=409, detail="Accounts Receivable account is unavailable")
-        income = receivable
+        # Cash basis: only the money actually received is income. An invoice
+        # already recognised under accrual keeps settling its receivable.
+        cash_basis_invoice = not prior_accrual and await org_accounting_basis() == "cash"
+        if not cash_basis_invoice:
+            if not prior_accrual:
+                created_accrual = await post_invoice_accrual_je(user, linked)
+            receivable = await sdb.accounts.find_one(
+                {"name": "Accounts Receivable", "type": "asset",
+                 "active": {"$ne": False}}, {"_id": 0})
+            if not receivable:
+                if created_accrual:
+                    await reverse_invoice_accrual_je(user, linked)
+                raise HTTPException(status_code=409, detail="Accounts Receivable account is unavailable")
+            income = receivable
 
     narration = payload.notes or f"Payment received via {payload.payment_method}"
-    lines = [
-        {"account_id": payload.bank_account_id, "debit": payload.amount, "credit": 0,
-         "description": "Received"},
-        {"account_id": income["id"] if payload.invoice_id else payload.income_account_id,
-         "debit": 0, "credit": payload.amount,
-         "description": "Accounts receivable settled" if payload.invoice_id else "Revenue"},
-    ]
+    if cash_basis_invoice:
+        # Split the receipt between revenue and the GST it contains, in the
+        # invoice's own proportion, so GST on money received is not booked as income.
+        total = float(linked.get("total") or 0)
+        tax = float(linked.get("tax") or 0)
+        gst_part = round(payload.amount * tax / total, 2) if total > 0 and tax > 0 else 0.0
+        lines = [
+            {"account_id": payload.bank_account_id, "debit": payload.amount, "credit": 0,
+             "description": "Received"},
+            {"account_id": payload.income_account_id, "debit": 0,
+             "credit": round(payload.amount - gst_part, 2), "description": "Revenue (received)"},
+        ]
+        if gst_part > 0:
+            gst_payable = await sdb.accounts.find_one(
+                {"name": "GST Payable", "type": "liability", "active": {"$ne": False}}, {"_id": 0})
+            if not gst_payable:
+                raise HTTPException(status_code=409, detail="GST Payable account is unavailable")
+            lines.append({"account_id": gst_payable["id"], "debit": 0, "credit": gst_part,
+                          "description": "Output GST on amount received"})
+    else:
+        lines = [
+            {"account_id": payload.bank_account_id, "debit": payload.amount, "credit": 0,
+             "description": "Received"},
+            {"account_id": income["id"] if payload.invoice_id else payload.income_account_id,
+             "debit": 0, "credit": payload.amount,
+             "description": "Accounts receivable settled" if payload.invoice_id else "Revenue"},
+        ]
     try:
         je = await _post_journal(
             user, payload.date, narration, lines,
@@ -1643,6 +1703,7 @@ async def create_income(payload: IncomeIn, request: Request,
                           or linked.get("accrual_journal_id"),
                       "updated_at": iso_now()}}
         )
+        await _sync_invoice_milestone(payload.invoice_id)
     return je
 
 
@@ -2459,7 +2520,11 @@ async def project_receivables(request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+    return await collection_rows()
 
+
+async def collection_rows() -> dict:
+    """Every expected Money In item for the current tenant (no journal side effects)."""
     today = business_today()
     horizon = today + timedelta(days=30)
     milestones = await sdb.payment_milestones.find(
@@ -2518,15 +2583,22 @@ async def project_receivables(request: Request,
             "reminder_date": reminder_date,
         })
 
+    billed_milestones = {row.get("milestone_id") for row in invoices if row.get("milestone_id")}
+    milestone_names = {row["id"]: row.get("name") for row in milestones}
     for row in milestones:
+        if row["id"] in billed_milestones:
+            continue   # its live invoice below carries this money
         append_row(source_type="milestone", source_id=row["id"],
                    name=row.get("name") or "Project milestone",
                    amount=row.get("amount") or 0, received=row.get("paid_amount") or 0,
                    due_date=row.get("due_date"), project_id=row.get("project_id"))
     for row in invoices:
         received = row.get("paid_amount") or (row.get("total") if row.get("status") == "paid" else 0)
+        label = f"Invoice {row.get('number') or row['id']}"
+        if milestone_names.get(row.get("milestone_id")):
+            label += f" · {milestone_names[row['milestone_id']]}"
         append_row(source_type="invoice", source_id=row["id"],
-                   name=f"Invoice {row.get('number') or row['id']}",
+                   name=label,
                    amount=row.get("total") or 0, received=received,
                    due_date=row.get("due_date"), project_id=row.get("project_id"),
                    client_id=row.get("client_id"), reference=row.get("number"))
@@ -3520,9 +3592,13 @@ async def update_milestone(ms_id: str, payload: MilestoneUpdate, request: Reques
                 detail="Cannot calculate this percentage without a positive project budget",
             )
         upd["amount"] = amount
-    if upd.get("status") == "paid" and existing_ms.get("status") != "paid" \
-            and not has_permission(user, "finance.create"):
-        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    if upd.get("status") == "paid" and existing_ms.get("status") != "paid":
+        # A "paid" label is not proof of receipt: money comes in only through
+        # Record Payment (amount, date, Cash/Bank account, reference), once.
+        raise HTTPException(
+            status_code=409,
+            detail="Use Record Payment in Collections Due so the amount, date and Cash/Bank account are captured",
+        )
     if upd.get("status") and upd["status"] != "paid" and existing_ms.get("status") == "paid" \
             and not has_permission(user, "finance.update"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.update")
