@@ -36,10 +36,13 @@ export default function VendorDetail() {
   // Hybrid gets everything so all workflows stay reachable during transitions.
   const canFinanceRead = hasPerm("finance.read");
   const financeTabs = new Set(["commercial", "ledger", "bills", "payments", "commissions"]);
+  // Contact details (the Overview) are for people who manage vendors, not staff lookups.
+  const canSeeContacts = canFinanceRead || hasPerm("vendors.update");
   const TABS = (businessMode === "consultancy" ? CONSULTANCY_TABS : TURNKEY_TABS)
-    .filter((name) => canFinanceRead || !financeTabs.has(name));
+    .filter((name) => canFinanceRead || !financeTabs.has(name))
+    .filter((name) => canSeeContacts || name !== "overview");
   const [v, setV] = useState(null);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(canSeeContacts ? "overview" : "projects");
   const [ledger, setLedger] = useState(null);
   const [perf, setPerf] = useState(null);
   const [commissionLedger, setCommissionLedger] = useState(null);

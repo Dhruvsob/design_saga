@@ -77,6 +77,18 @@ _VENDOR_FINANCIAL_FIELDS = {
 }
 
 
+# Contact/overview details: only people who manage vendors (owner request
+# 07/11/2026: staff who just look vendors up for tasks must not see them).
+_VENDOR_CONTACT_FIELDS = {
+    "contact_person", "phone", "email", "address", "city", "state", "pincode",
+    "gstin", "notes", "alt_phone", "whatsapp", "website", "contacts",
+}
+
+
+def _can_read_vendor_contacts(user: dict) -> bool:
+    return has_permission(user, "vendors.update") or has_permission(user, "finance.read")
+
+
 def _can_read_vendor_financials(user: dict) -> bool:
     return has_permission(user, "finance.read")
 
@@ -88,6 +100,9 @@ def _vendor_for_user(vendor: dict, user: dict) -> dict:
             out.pop(field, None)
         if not has_permission(user, "vendors.update"):
             out.pop("documents", None)
+    if not _can_read_vendor_contacts(user):
+        for field in _VENDOR_CONTACT_FIELDS:
+            out.pop(field, None)
     return out
 
 
@@ -324,8 +339,9 @@ async def list_vendors(
         query["active"] = {"$ne": False}
     if q:
         rx = {"$regex": q, "$options": "i"}
-        query["$or"] = [{"name": rx}, {"company": rx}, {"phone": rx},
-                        {"email": rx}, {"gstin": rx}, {"contact_person": rx}]
+        query["$or"] = [{"name": rx}, {"company": rx}]
+        if _can_read_vendor_contacts(user):   # searching by phone would reveal it
+            query["$or"] += [{"phone": rx}, {"email": rx}, {"gstin": rx}, {"contact_person": rx}]
 
     rows = await sdb.vendors_acc.find(query, {"_id": 0}).sort("name", 1).to_list(None)
 

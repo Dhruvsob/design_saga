@@ -865,7 +865,12 @@ function Dashboard({ d, onRefresh }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <SubKPI label="Income (month)" value={CURRENCY(k.income_month)} tint="#1D633E" />
         <SubKPI label="Expense (month)" value={CURRENCY(k.expense_month)} tint="#B22B22" />
-        <SubKPI label="Salary (month)" value={CURRENCY(k.salary_month)} tint="#2B5299" />
+        {k.salary_period ? (
+          <SubKPI label={`Salary · ${k.salary_period.label}`} value={CURRENCY(k.salary_period.total)} tint="#2B5299"
+            sub={`${k.salary_period.count} ${k.salary_period.count === 1 ? "person" : "people"} paid`} testid="kpi-salary-period" />
+        ) : (
+          <SubKPI label="Salary (month)" value={CURRENCY(k.salary_month)} tint="#2B5299" />
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -934,11 +939,12 @@ function KPI({ label, value, Icon, tint, testid }) {
   );
 }
 
-function SubKPI({ label, value, tint }) {
+function SubKPI({ label, value, tint, sub, testid }) {
   return (
-    <div className="card-flat">
+    <div className="card-flat" data-testid={testid}>
       <div className="overline">{label}</div>
       <div className="font-display font-bold text-2xl mt-1" style={{ color: tint }}>{value}</div>
+      {sub && <div className="text-xs text-[var(--ink-3)] mt-1">{sub}</div>}
     </div>
   );
 }

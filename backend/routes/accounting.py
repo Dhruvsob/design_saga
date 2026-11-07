@@ -2108,6 +2108,29 @@ async def trial_balance(request: Request, as_of: Optional[str] = None,
 # ==================================================
 # Finance Dashboard
 # ==================================================
+async def _latest_salary_period(current_month: str) -> Optional[dict]:
+    """Totals for the most recent payroll month (up to this month) with paid salaries."""
+    totals: dict = {}
+    async for run in sdb.payroll_runs.find({"status": "paid"},
+                                           {"_id": 0, "year": 1, "month": 1, "net": 1}):
+        try:
+            key = f"{int(run['year']):04d}-{int(run['month']):02d}"
+        except (KeyError, TypeError, ValueError):
+            continue
+        if key > current_month:
+            continue
+        bucket = totals.setdefault(key, {"total": 0.0, "count": 0})
+        bucket["total"] += float(run.get("net") or 0)
+        bucket["count"] += 1
+    if not totals:
+        return None
+    key = max(totals)
+    import calendar as _calendar
+    year, month = int(key[:4]), int(key[5:])
+    return {"key": key, "label": f"{_calendar.month_name[month]} {year}",
+            "total": round(totals[key]["total"], 2), "count": totals[key]["count"]}
+
+
 @router.get("/accounting/dashboard")
 async def finance_dashboard(request: Request,
                             session_token: Optional[str] = Cookie(default=None),
@@ -2157,6 +2180,10 @@ async def finance_dashboard(request: Request,
                 expense_month += l["debit"] - l["credit"]
                 if l["account_name"] == "Employee Salary":
                     salary_month += l["debit"] - l["credit"]
+
+    # Salary card: the latest salary month that has payments, whatever day each
+    # was paid (an October salary paid on 31 Oct or on 5 Nov is still October).
+    salary_period = await _latest_salary_period(month_start[:7])
 
     # Outstanding = unpaid invoices + pending milestones (single consistent
     # definition used everywhere: dashboard, clients, projects, accounting).
@@ -2208,6 +2235,7 @@ async def finance_dashboard(request: Request,
             "expense_month": round(expense_month, 2),
             "profit_month": round(income_month - expense_month, 2),
             "salary_month": round(salary_month, 2),
+            "salary_period": salary_period,
             "outstanding": outstanding,
             "overdue": overdue,
             "today_collections": round(today_collections, 2),

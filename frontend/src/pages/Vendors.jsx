@@ -78,6 +78,7 @@ export default function Vendors() {
   const canCreate = hasPerm("vendors.create");
   const canEdit = hasPerm("vendors.update");
   const canArchive = hasPerm("vendors.delete");
+  const canSeeContacts = canEdit || hasPerm("finance.read");   // staff lookups don't see phone/email
 
   const archiveVendor = async (vendor, event) => {
     event.stopPropagation();
@@ -121,7 +122,7 @@ export default function Vendors() {
           <input
             data-testid="vendor-search"
             className="bg-transparent flex-1 outline-none text-sm placeholder-[var(--ink-3)]"
-            placeholder="Search name, phone, GSTIN, contact…"
+            placeholder={canSeeContacts ? "Search name, phone, GSTIN, contact…" : "Search vendor name"}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && load()}
@@ -220,16 +221,16 @@ export default function Vendors() {
         <div className="overflow-x-auto"><table className="w-full">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
-              <Th>Vendor</Th><Th>Type</Th><Th>Contact</Th><Th>Category</Th>
+              <Th>Vendor</Th><Th>Type</Th>{canSeeContacts && <Th>Contact</Th>}<Th>Category</Th>
               <Th>Rating</Th><Th className="text-right">Outstanding</Th><Th />
             </tr>
           </thead>
           <tbody>
-            {!loaded && <SkeletonRows cols={7} />}
+            {!loaded && <SkeletonRows cols={canSeeContacts ? 7 : 6} />}
             {loaded && rows.length === 0 && (q || filterType ? (
-              <EmptyRow cols={7} icon={HardHat} title="No vendors match" hint="Try a different search or agency type." />
+              <EmptyRow cols={canSeeContacts ? 7 : 6} icon={HardHat} title="No vendors match" hint="Try a different search or agency type." />
             ) : (
-              <EmptyRow cols={7} icon={HardHat} title="No vendors yet"
+              <EmptyRow cols={canSeeContacts ? 7 : 6} icon={HardHat} title="No vendors yet"
                 hint="Add the contractors, agencies and suppliers you work with to track their bills, payments and ratings."
                 actionLabel={canCreate ? "Add vendor" : undefined}
                 onAction={() => { setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
@@ -251,13 +252,13 @@ export default function Vendors() {
                   {v.company && <div className="text-xs text-[var(--ink-3)]">{v.company}</div>}
                 </Td>
                 <Td><TypePill type={v.agency_type} /></Td>
-                <Td>
+                {canSeeContacts && <Td>
                   <div className="text-xs space-y-0.5">
                     {v.phone && <div className="flex items-center gap-1.5"><Phone size={11} /> <span className="font-mono">{v.phone}</span></div>}
                     {v.email && <div className="flex items-center gap-1.5"><Envelope size={11} /> {v.email}</div>}
                     {!v.phone && !v.email && "—"}
                   </div>
-                </Td>
+                </Td>}
                 <Td>{v.category || "—"}</Td>
                 <Td>
                   <div className="flex items-center gap-1">
