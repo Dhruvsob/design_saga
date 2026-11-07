@@ -104,6 +104,16 @@ def test_loan_schedule_principal_reconciles_and_rows_foot():
     assert rows[-1]["balance_after"] == 0
 
 
-def test_payroll_net_is_exact_to_the_paisa():
+def test_payroll_net_is_whole_rupees_and_foots_through_round_off():
+    # Owner rule (07/11/2026): salary paid is a round figure; the slip shows the round-off.
     out = payroll._compute_net({"basic": 0.1, "hra": 0.2, "tds": 0.3}, {"bonus": 0.7})
-    assert out["gross"] == 1.0 and out["deductions_total"] == 0.3 and out["net"] == 0.7
+    assert out["gross"] == 1.0 and out["deductions_total"] == 0.3 and out["net"] == 1.0
+    assert out["round_off"] == 0.3
+    assert round(out["gross"] - out["deductions_total"] + out["round_off"], 2) == out["net"]
+    lop = payroll._compute_net({"basic": 25000}, {"other_deductions": 1923.08})
+    assert lop["net"] == 23077.0
+
+
+def test_attendance_deductions_round_half_up_to_rupees():
+    from core.attendance_engine import rupee
+    assert rupee(961.54) == 962 and rupee(1923.08) == 1923 and rupee(480.5) == 481 and rupee(0) == 0

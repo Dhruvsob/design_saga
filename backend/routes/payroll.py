@@ -119,7 +119,7 @@ def _compute_net(salary: dict, extras: dict) -> dict:
 
     gross = basic + hra + conveyance + medical + special + other_earning + additions
     deductions_total = pf + esi + pt + tds + other_deduction_std + deductions_extra
-    net = round(gross - deductions_total, 2)
+    net = engine.rupee(gross - deductions_total)
 
     return {
         "basic": basic, "hra": hra, "conveyance": conveyance,
@@ -130,6 +130,7 @@ def _compute_net(salary: dict, extras: dict) -> dict:
         "other_deduction": other_deduction_std,
         "extra_deductions": round(deductions_extra, 2),
         "deductions_total": round(deductions_total, 2),
+        "round_off": round(net - (gross - deductions_total), 2),
         "net": net,
     }
 
@@ -171,21 +172,23 @@ async def _apply_attendance_deductions(emp: dict, breakdown: dict,
         status = d.get("status")
         if status in ("absent", "unpaid_leave"):
             lines.append({"date": d.get("date"), "reason": "Absent" if status == "absent" else "Unpaid leave",
-                          "kind": "lop", "days": 1, "amount": round(per_day, 2)})
+                          "kind": "lop", "days": 1, "amount": engine.rupee(per_day)})
         elif status == "half_day":
             lines.append({"date": d.get("date"), "reason": "Half day", "kind": "lop", "days": 0.5,
-                          "amount": round(per_day / 2, 2)})
+                          "amount": engine.rupee(per_day / 2)})
         fine = float(d.get("late_fine_amount") or 0)
         if fine > 0 and not d.get("late_fine_waived"):
             lines.append({"date": d.get("date"), "kind": "late",
-                          "reason": f"Late by {d.get('late_minutes') or 0} min", "amount": round(fine, 2)})
+                          "reason": f"Late by {d.get('late_minutes') or 0} min", "amount": engine.rupee(fine)})
         if float(d.get("short_leave_hours") or 0) > 0:
             lines.append({"date": d.get("date"), "kind": "short_leave",
                           "reason": f"Short leave {d['short_leave_hours']:g} h",
-                          "amount": round(float(s.get("hourly_rate") or 0) * float(d["short_leave_hours"]), 2)})
+                          "amount": engine.rupee(float(s.get("hourly_rate") or 0) * float(d["short_leave_hours"]))})
     breakdown["deduction_lines"] = lines[:93]
     breakdown["deductions_total"] = round(breakdown["deductions_total"] + att_ded, 2)
-    breakdown["net"] = round(breakdown["gross"] - breakdown["deductions_total"], 2)
+    exact = breakdown["gross"] - breakdown["deductions_total"]
+    breakdown["net"] = engine.rupee(exact)
+    breakdown["round_off"] = round(breakdown["net"] - exact, 2)
     return breakdown
 
 
@@ -703,6 +706,11 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
     extra_ded = breakdown.get("extra_deductions") or 0
     if extra_ded:
         ded_rows.append(("Advances / Recovery", extra_ded))
+    round_off = float(breakdown.get("round_off") or 0)
+    if round_off > 0:
+        earn_rows.append(("Round off", round_off))
+    elif round_off < 0:
+        ded_rows.append(("Round off", -round_off))
     # Attendance-engine deductions (Jewellers logic)
     if breakdown.get("lop_deduction"):
         ded_rows.append((f"Loss of Pay ({breakdown.get('lop_days', 0)} d)", breakdown.get("lop_deduction")))

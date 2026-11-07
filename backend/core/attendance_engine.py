@@ -38,6 +38,12 @@ DEFAULT_LATE_CATEGORIES = [
 ]
 
 
+
+def rupee(value) -> float:
+    """Round money to whole rupees, halves up (961.54 -> 962, 1923.08 -> 1923)."""
+    from decimal import Decimal, ROUND_HALF_UP
+    return float(Decimal(str(float(value or 0))).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
 def now_ist() -> datetime:
     return datetime.now(IST)
 
@@ -223,10 +229,12 @@ async def monthly_summary(emp: dict, year: int, month: int,
     daily_hours = float(emp.get("full_day_min_minutes")
                         or (policy.get("full_day_min_hours") or 8) * 60) / 60.0
     hourly_rate = (per_day / daily_hours) if daily_hours else 0
-    short_leave_deduction = round(hourly_rate * short_leave_hours_total, 2)
-    lop_deduction = round(per_day * lop, 2)
-    total_deduction = round(lop_deduction + late_fine_total + short_leave_deduction, 2)
-    net_payable = round(max(monthly - total_deduction, 0), 2)
+    # Owner rule: every deduction and the salary paid are whole rupees (half up).
+    short_leave_deduction = rupee(hourly_rate * short_leave_hours_total)
+    lop_deduction = rupee(per_day * lop)
+    late_fine_total = rupee(late_fine_total)
+    total_deduction = lop_deduction + late_fine_total + short_leave_deduction
+    net_payable = rupee(max(monthly - total_deduction, 0))
 
     return {
         "employee": {
@@ -247,7 +255,7 @@ async def monthly_summary(emp: dict, year: int, month: int,
         "salary_configured": monthly > 0,
         "late_rejection_penalty": policy.get("late_rejection_penalty") or "half_day",
         "late_fine_enabled": fine_enabled,
-        "late_fine": round(late_fine_total, 2),
+        "late_fine": late_fine_total,
         "short_leave_hours": round(short_leave_hours_total, 2),
         "hourly_rate": round(hourly_rate, 2),
         "short_leave_deduction": short_leave_deduction,
