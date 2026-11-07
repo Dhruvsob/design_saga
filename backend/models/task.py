@@ -4,7 +4,7 @@ Designed forward-compatible for procurement / PO / inventory / vendor
 payments integration (added task doc fields never mutate: `procurement_link`,
 `po_id`, `inventory_id`, `vendor_payment_status`).
 """
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 
 from core.url_security import external_http_url
@@ -122,7 +122,7 @@ class TaskIn(BaseModel):
     area: Optional[str] = None
     category: Optional[str] = None
     item_description: Optional[str] = None
-    quantity: Optional[float] = None
+    quantity: Optional[float] = Field(default=None, ge=0)
     priority: Optional[str] = "medium"
     status: Optional[str] = "todo"          # kanban lane (auto-derived if status_detail set)
     status_detail: Optional[str] = None     # granular
@@ -153,7 +153,7 @@ class TaskUpdate(BaseModel):
     area: Optional[str] = None
     category: Optional[str] = None
     item_description: Optional[str] = None
-    quantity: Optional[float] = None
+    quantity: Optional[float] = Field(default=None, ge=0)
     priority: Optional[str] = None
     status: Optional[str] = None
     status_detail: Optional[str] = None

@@ -6,7 +6,7 @@ balanced journal entry (DR Employee Salary  CR Cash/Bank) via
 `accounting._post_journal`. Idempotent per (employee_id, year, month) — a
 `payroll_runs` doc guards against double payment.
 """
-from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Query
 from fastapi.responses import StreamingResponse
 from typing import Literal, Optional
 from pydantic import BaseModel
@@ -413,7 +413,7 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
 
 @router.get("/payroll/runs")
 async def list_runs(request: Request, employee_id: Optional[str] = None,
-                    year: Optional[int] = None, month: Optional[int] = None,
+                    year: Optional[int] = Query(None, ge=2000, le=2100), month: Optional[int] = Query(None, ge=1, le=12),
                     session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
@@ -672,29 +672,39 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
     # === Employee block ===
     emp_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip() or emp.get("employee_id") or ""
     _kv(pdf, "Employee Name", emp_name, "Employee ID", emp.get("employee_id") or "-")
-    _kv(pdf, "Department", emp.get("department") or "-", "Designation", emp.get("designation") or "-")
-    _kv(pdf, "Date of Joining", (emp.get("joining_date") or "-"),
+    _kv(pdf, "Department", emp.get("department") or "-", "Designation",
+        emp.get("designation") or emp.get("role_title") or "-")
+    _kv(pdf, "Date of Joining", _display_date(emp.get("joining_date")) if emp.get("joining_date") else "-",
          "Pay Period", f"{month_label} {run['year']}")
     _kv(pdf, "Bank A/C", _mask_account((emp.get("bank") or {}).get("account_number")),
          "PAN", emp.get("pan") or "-")
     pdf.ln(2)
 
-    # === Attendance summary ===
+    # === Attendance summary (same figures the salary was calculated from) ===
+    boxes = [
+        ("Days in month", calendar.monthrange(run["year"], run["month"])[1]),
+        ("Present", attendance.get("present", 0)),
+        ("Offs & holidays", attendance.get("offs", 0)),
+        ("Paid leave", attendance.get("paid_leave", 0)),
+        ("Unpaid leave", attendance.get("unpaid_leave", 0)),
+        ("Absent", attendance.get("absent", 0)),
+        ("Half days", attendance.get("half_day", 0)),
+    ]
+    width = 180 / len(boxes)
     pdf.set_fill_color(240, 240, 240)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(36, 7, "Working Days", 1, 0, "C", fill=True)
-    pdf.cell(36, 7, "Present", 1, 0, "C", fill=True)
-    pdf.cell(36, 7, "Leaves", 1, 0, "C", fill=True)
-    pdf.cell(36, 7, "Absent", 1, 0, "C", fill=True)
-    pdf.cell(36, 7, "Half-days", 1, 1, "C", fill=True)
+    pdf.set_font("Helvetica", "B", 8)
+    for i, (label, _v) in enumerate(boxes):
+        pdf.cell(width, 7, label, 1, 1 if i == len(boxes) - 1 else 0, "C", fill=True)
     pdf.set_font("Helvetica", "", 10)
-    working_days = calendar.monthrange(run["year"], run["month"])[1]
-    pdf.cell(36, 7, str(working_days), 1, 0, "C")
-    pdf.cell(36, 7, str(attendance.get("present", 0)), 1, 0, "C")
-    pdf.cell(36, 7, str(attendance.get("leave", 0)), 1, 0, "C")
-    pdf.cell(36, 7, str(attendance.get("absent", 0)), 1, 0, "C")
-    pdf.cell(36, 7, str(attendance.get("half_day", 0)), 1, 1, "C")
-    pdf.ln(3)
+    for i, (_label, value) in enumerate(boxes):
+        pdf.cell(width, 7, _count(value), 1, 1 if i == len(boxes) - 1 else 0, "C")
+    if attendance.get("paid_days") is not None:
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(90, 90, 90)
+        pdf.cell(0, 5, _safe(f"Paid days {_count(attendance['paid_days'])} · loss of pay "
+                             f"{_count(attendance.get('lop_days', 0))} day(s)"), 0, 1, "R")
+        pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
 
     # === Earnings / Deductions tables (side by side) ===
     breakdown = run.get("breakdown") or {}
@@ -726,11 +736,12 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
         ded_rows.append(("Round off", -round_off))
     # Attendance-engine deductions (Jewellers logic)
     if breakdown.get("lop_deduction"):
-        ded_rows.append((f"Loss of Pay ({breakdown.get('lop_days', 0)} d)", breakdown.get("lop_deduction")))
+        lop = _count(breakdown.get("lop_days", 0))
+        ded_rows.append((f"Loss of Pay ({lop} day{'' if lop == '1' else 's'})", breakdown.get("lop_deduction")))
     if breakdown.get("late_fine"):
         ded_rows.append(("Late Fine", breakdown.get("late_fine")))
     if breakdown.get("short_leave_deduction"):
-        ded_rows.append((f"Short Leave ({breakdown.get('short_leave_hours', 0)}h)", breakdown.get("short_leave_deduction")))
+        ded_rows.append((f"Short Leave ({_count(breakdown.get('short_leave_hours', 0))} h)", breakdown.get("short_leave_deduction")))
 
     # header row
     pdf.set_fill_color(*primary)
@@ -746,9 +757,9 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
         e = earn_rows[i] if i < len(earn_rows) else ("", 0)
         d = ded_rows[i] if i < len(ded_rows) else ("", 0)
         pdf.cell(60, 6, _safe(e[0]), 1, 0, "L")
-        pdf.cell(30, 6, _fmt_amt(e[1]), 1, 0, "R")
+        pdf.cell(30, 6, _fmt_amt(e[1]) if e[0] else "", 1, 0, "R")   # empty filler rows stay blank
         pdf.cell(60, 6, _safe(d[0]), 1, 0, "L")
-        pdf.cell(30, 6, _fmt_amt(d[1]), 1, 1, "R")
+        pdf.cell(30, 6, _fmt_amt(d[1]) if d[0] else "", 1, 1, "R")
 
     # Totals row
     pdf.set_font("Helvetica", "B", 10)
@@ -799,6 +810,30 @@ def _display_date(value) -> str:
         return raw or "-"
 
 
+def _count(value) -> str:
+    """1.0 -> '1', 2.5 -> '2.5' (half days)."""
+    try:
+        v = float(value or 0)
+    except (TypeError, ValueError):
+        return "0"
+    return str(int(v)) if v.is_integer() else f"{v:g}"
+
+
+def _slip_attendance(summary: dict, breakdown: dict) -> dict:
+    """Engine summary -> slip boxes. Days with no punch are absent, late counts as present."""
+    s = summary or {}
+    return {
+        "present": float(s.get("present") or 0) + float(s.get("late") or 0) + float(s.get("site_visit") or 0),
+        "offs": float(s.get("week_off") or 0) + float(s.get("holidays") or 0),
+        "paid_leave": s.get("paid_leave") or 0,
+        "unpaid_leave": s.get("unpaid_leave") or 0,
+        "absent": s.get("absent") or 0,
+        "half_day": s.get("half_day") or 0,
+        "paid_days": breakdown.get("payable_days"),
+        "lop_days": breakdown.get("lop_days") or 0,
+    }
+
+
 def _kv(pdf, k1, v1, k2, v2):
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(32, 6, _safe(k1) + ":", 0, 0, "L")
@@ -827,17 +862,17 @@ async def salary_slip_pdf(run_id: str, request: Request,
     if not is_self and not has_permission(user, "payroll.read"):
         raise HTTPException(403, "Missing permission: payroll.read")
 
-    # Attendance snapshot for that month
-    ym_start = _date(run["year"], run["month"], 1).isoformat()
-    ym_end = (_date(run["year"] + (1 if run["month"] == 12 else 0),
-                    1 if run["month"] == 12 else run["month"] + 1, 1)).isoformat()
-    counts = {"present": 0, "half_day": 0, "leave": 0, "absent": 0,
-              "holiday": 0, "week_off": 0}
-    async for rec in sdb.attendance.find(
-            {"employee_id": run["employee_id"], "date": {"$gte": ym_start, "$lt": ym_end}},
-            {"_id": 0}):
-        s = rec.get("status") or "absent"
-        counts[s] = counts.get(s, 0) + 1
+    # Attendance boxes: the summary saved when the salary was paid (what the
+    # deductions were calculated from); older runs fall back to the engine now.
+    breakdown = run.get("breakdown") or {}
+    summary = breakdown.get("attendance_summary")
+    if not summary:
+        policy = await _get_attendance_policy()
+        calc = await engine.monthly_summary(emp, run["year"], run["month"], policy)
+        summary = calc["summary"]
+        breakdown = {**breakdown, "payable_days": breakdown.get("payable_days", calc.get("payable_days")),
+                     "lop_days": breakdown.get("lop_days", calc.get("lop_days"))}
+    counts = _slip_attendance(summary, breakdown)
 
     # Org branding
     org = await db.organizations.find_one(

@@ -4,7 +4,7 @@
 - HR/Admin: monthly sheet, override, leave approval, leave rule config
 - Data shape kept payroll-friendly: `attendance` docs keyed by (employee_id, date).
 """
-from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Query
 from typing import Optional
 from datetime import date as _date, datetime, timezone, timedelta
 
@@ -112,7 +112,7 @@ def _validate_correction_request(date_str: str, check_in: Optional[str],
             continue
         dt = _parse_correction_datetime(value, label)
         if dt.astimezone(engine.IST).date() != requested_date:
-            raise HTTPException(400, f"Corrected {label} must be on {date_str}")
+            raise HTTPException(400, f"Corrected {label} must be on {_date.fromisoformat(date_str).strftime('%d/%m/%Y') if len(date_str) == 10 else date_str}")
         parsed.append(dt)
     if parsed[0] and parsed[1] and parsed[1] <= parsed[0]:
         raise HTTPException(400, "Corrected check-out must be after check-in")
@@ -153,7 +153,7 @@ def _validate_manual_attendance(date_str: str, check_in: Optional[str],
             continue
         dt = _parse_correction_datetime(value, label)
         if dt.astimezone(engine.IST).date() != requested_date:
-            raise HTTPException(400, f"Manual {label} must be on {date_str}")
+            raise HTTPException(400, f"Manual {label} must be on {_date.fromisoformat(date_str).strftime('%d/%m/%Y') if len(date_str) == 10 else date_str}")
         parsed.append(dt)
     if parsed[0] and parsed[1] and parsed[1] <= parsed[0]:
         raise HTTPException(400, "Manual check-out must be after check-in")
@@ -932,7 +932,7 @@ async def my_today(request: Request,
 
 
 @router.get("/attendance/me/summary")
-async def my_summary(request: Request, year: Optional[int] = None, month: Optional[int] = None,
+async def my_summary(request: Request, year: Optional[int] = Query(None, ge=2000, le=2100), month: Optional[int] = Query(None, ge=1, le=12),
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
@@ -955,7 +955,7 @@ async def my_summary(request: Request, year: Optional[int] = None, month: Option
 # Monthly sheet (Admin/HR — payroll-ready)
 # ==================================================
 @router.get("/attendance/monthly")
-async def monthly_sheet(request: Request, year: Optional[int] = None, month: Optional[int] = None,
+async def monthly_sheet(request: Request, year: Optional[int] = Query(None, ge=2000, le=2100), month: Optional[int] = Query(None, ge=1, le=12),
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
@@ -1243,7 +1243,7 @@ async def act_on_leave(leave_id: str, payload: LeaveActionIn, request: Request,
 
 
 @router.get("/leaves/balance/{employee_id}")
-async def leave_balance(employee_id: str, year: Optional[int] = None,
+async def leave_balance(employee_id: str, year: Optional[int] = Query(None, ge=2000, le=2100),
                         request: Request = None,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
@@ -1376,7 +1376,7 @@ async def approve_attendance(att_id: str, payload: ApproveAttendanceIn, request:
 # ---------- Monthly summary (daily grid + payable/LOP days) ----------
 @router.get("/attendance/summary")
 async def attendance_summary(request: Request, employee_id: str,
-                             year: Optional[int] = None, month: Optional[int] = None,
+                             year: Optional[int] = Query(None, ge=2000, le=2100), month: Optional[int] = Query(None, ge=1, le=12),
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
@@ -1405,7 +1405,7 @@ async def attendance_summary(request: Request, employee_id: str,
 
 # ---------- Salary impact view (self-service) ----------
 @router.get("/attendance/my-salary")
-async def my_salary(request: Request, year: Optional[int] = None, month: Optional[int] = None,
+async def my_salary(request: Request, year: Optional[int] = Query(None, ge=2000, le=2100), month: Optional[int] = Query(None, ge=1, le=12),
                     session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)

@@ -18,7 +18,7 @@ import re
 from core.pdf_brand import BRAND_ACCENT, BRAND_PRIMARY
 from core.limits import MAX_LIST_ROWS
 from core.db import db
-from core.helpers import iso_now, now_utc, new_id
+from core.helpers import business_today, iso_now, now_utc, new_id
 from core.tenancy import (
     require_super_admin, get_org, DEFAULT_ORG_ID, DEFAULT_ORG_SLUG,
     SUPER_ADMIN_EMAILS,
@@ -303,7 +303,7 @@ async def set_org_subscription(org_id: str, payload: OrgSubscriptionIn, request:
     sub = {"status": payload.status, "trial_ends_on": payload.trial_ends_on if payload.status == "trial" else None,
            "updated_at": iso_now(), "updated_by": sa["user_id"]}
     if payload.status == "expired":
-        sub["ended_on"] = iso_now()[:10]
+        sub["ended_on"] = business_today().isoformat()
     await db.organizations.update_one({"org_id": org_id}, {"$set": {"subscription": sub, "updated_at": iso_now()}})
     await audit(sa, "org.subscription", target=org_id, target_type="org",
                 meta={"status": payload.status, "trial_ends_on": sub["trial_ends_on"]})

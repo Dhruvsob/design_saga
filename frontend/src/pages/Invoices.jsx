@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { dateForInput, formatDate, roundPaise } from "../lib/format";
+import { dateForInput, formatDate, roundPaise, statusLabel } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import SearchSelect from "../components/SearchSelect";
@@ -245,7 +245,7 @@ export default function Invoices({ docType = "invoice" }) {
                 </select>
               )}
               <input type="date" aria-label="Due date" className="input-flat" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-              <input type="number" className="input-flat" placeholder="Tax %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
+              <input type="number" min="0" className="input-flat" placeholder="Tax %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
             </div>
 
             <div className="overline">LINE ITEMS</div>
@@ -253,8 +253,8 @@ export default function Invoices({ docType = "invoice" }) {
               {form.items.map((it, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
                   <input className="input-flat col-span-6" placeholder="Description" value={it.description} onChange={(e) => updateItem(i, "description", e.target.value)} />
-                  <input type="number" className="input-flat col-span-2" placeholder="Qty" value={it.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value)} />
-                  <input type="number" className="input-flat col-span-3" placeholder="Rate" value={it.rate} onChange={(e) => updateItem(i, "rate", e.target.value)} />
+                  <input type="number" min="0" className="input-flat col-span-2" placeholder="Qty" value={it.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value)} />
+                  <input type="number" min="0" className="input-flat col-span-3" placeholder="Rate" value={it.rate} onChange={(e) => updateItem(i, "rate", e.target.value)} />
                   <button type="button" onClick={() => removeItem(i)} className="text-[var(--danger)]"><Trash size={14} /></button>
                 </div>
               ))}
@@ -341,7 +341,7 @@ export default function Invoices({ docType = "invoice" }) {
                     <option value="sent">sent</option>
                     <option value="overdue">overdue</option>
                     <option value="cancelled">cancelled</option>
-                  </select> : <span className={`status-chip chip-${r.status}`}>{r.status}</span>}
+                  </select> : <span className={`status-chip chip-${r.status}`}>{statusLabel(r.status)}</span>}
                 </Td>
                 <Td>
                   <div className="flex items-center gap-2">

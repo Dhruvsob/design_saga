@@ -129,6 +129,7 @@ function AppRouter() {
       <Route path="/clients" element={<ProtectedShell requirePerm="clients.read"><Clients /></ProtectedShell>} />
       <Route path="/clients/:id" element={<ProtectedShell requirePerm="clients.read"><ClientDetail /></ProtectedShell>} />
       <Route path="/invoices" element={<ProtectedShell requirePerm="invoices.read"><Invoices docType="invoice" /></ProtectedShell>} />
+      <Route path="/invoices/:id" element={<Navigate to="/invoices" replace />} />
       <Route path="/invoices/reminders" element={<ProtectedShell requirePerm="finance.read"><PaymentReminders /></ProtectedShell>} />
       <Route path="/invoices/received" element={<ProtectedShell requirePerm="finance.read"><ReceivedPayments /></ProtectedShell>} />
       <Route path="/quotations" element={<ProtectedShell requirePerm="quotations.read"><QuotationsAdv /></ProtectedShell>} />

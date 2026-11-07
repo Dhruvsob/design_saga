@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import { PERIOD_PRESETS, computeRange, periodLabel } from "../lib/period";
 import { downloadFile } from "../lib/download";
-import { dateForInput, formatDate } from "../lib/format";
+import { dateForInput, formatDate, formatINR } from "../lib/format";
 import { TransactionDetail } from "./TransactionDetail";
 import {
   X, MagnifyingGlass, Bank, ArrowSquareOut, DownloadSimple, Printer, Plus,
@@ -12,7 +12,7 @@ import {
 import SearchSelect from "./SearchSelect";
 
 const CURRENCY = (n) =>
-  `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  formatINR(n);
 
 const today = () => dateForInput(new Date());
 
@@ -194,7 +194,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           {showAdd && canQuickAdd && (
             <div className="p-3 bg-[var(--surface-2)] border border-[var(--line)]" data-testid="ledger-quickadd-form">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                <input type="number" step="0.01" placeholder="Amount" className="input-flat" value={addForm.amount}
+                <input type="number" min="0" step="0.01" placeholder="Amount" className="input-flat" value={addForm.amount}
                   onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })} data-testid="ledger-add-amount" />
                 <input type="date" className="input-flat" value={addForm.date}
                   onChange={(e) => setAddForm({ ...addForm, date: e.target.value })} data-testid="ledger-add-date" />

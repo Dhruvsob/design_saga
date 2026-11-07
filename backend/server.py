@@ -295,7 +295,7 @@ class LeadIn(BaseModel):
     phone: Optional[str] = None
     source: Optional[str] = "Website"
     project_type: Optional[str] = "Residential"
-    budget: Optional[float] = 0
+    budget: Optional[float] = Field(default=0, ge=0)
     location: Optional[str] = None
     timeline: Optional[str] = None
     stage: Optional[str] = "New"
@@ -312,7 +312,7 @@ class LeadUpdate(BaseModel):
     phone: Optional[str] = None
     source: Optional[str] = None
     project_type: Optional[str] = None
-    budget: Optional[float] = None
+    budget: Optional[float] = Field(default=None, ge=0)
     location: Optional[str] = None
     timeline: Optional[str] = None
     notes: Optional[str] = None
@@ -347,7 +347,7 @@ class ProjectIn(BaseModel):
     client_id: Optional[str] = None
     project_type: Optional[str] = "Residential"        # Residential | Commercial | Retail ...
     engagement_type: Optional[str] = None              # consultancy | turnkey  (Hybrid-org only)
-    budget: Optional[float] = 0
+    budget: Optional[float] = Field(default=0, ge=0)
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     stage: Optional[str] = "Requirement"
@@ -365,7 +365,7 @@ class ProjectUpdate(BaseModel):
     client_id: Optional[str] = None
     project_type: Optional[str] = None
     engagement_type: Optional[str] = None
-    budget: Optional[float] = None
+    budget: Optional[float] = Field(default=None, ge=0)
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     description: Optional[str] = None
@@ -408,7 +408,7 @@ class TaskIn(BaseModel):
     area: Optional[str] = None
     category: Optional[str] = None
     item_description: Optional[str] = None
-    quantity: Optional[float] = None
+    quantity: Optional[float] = Field(default=None, ge=0)
     status_detail: Optional[str] = None
     remarks: Optional[str] = None
     vendor_contact: Optional[VendorContact] = None
@@ -428,7 +428,7 @@ class TaskUpdate(BaseModel):
     area: Optional[str] = None
     category: Optional[str] = None
     item_description: Optional[str] = None
-    quantity: Optional[float] = None
+    quantity: Optional[float] = Field(default=None, ge=0)
     status_detail: Optional[str] = None
     remarks: Optional[str] = None
     vendor_contact: Optional[VendorContact] = None
@@ -1325,9 +1325,7 @@ async def get_client(client_id: str, request: Request,
     c["invoices"] = (await sdb.invoices.find(
         {"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
         if _can_read_invoices(user) else [])
-    invoiced = sum(i.get("total", 0) or 0 for i in c["invoices"] if i.get("doc_type") != "quotation")
-    paid = sum(i.get("total", 0) or 0 for i in c["invoices"]
-               if i.get("doc_type") != "quotation" and i.get("status") == "paid")
+    invoiced, paid = _invoice_money(c["invoices"])
     c["summary"] = {
         "projects": len(c["projects"]),
         "total_invoiced": round(invoiced, 2),
@@ -1564,11 +1562,10 @@ async def get_project(project_id: str, request: Request,
         p["project_manager"] = None
         p["team"] = []
     # --- financial snapshot (invoices + milestones + vendor cost) ---
-    inv_total = sum(i.get("total", 0) or 0 for i in p["invoices"] if i.get("doc_type") != "quotation")
-    inv_paid = sum(i.get("total", 0) or 0 for i in p["invoices"]
-                   if i.get("doc_type") != "quotation" and i.get("status") == "paid")
+    inv_total, inv_paid = _invoice_money(p["invoices"])
     ms_total = sum(m.get("amount", 0) or 0 for m in p["milestones"])
-    ms_paid = sum(m.get("amount", 0) or 0 for m in p["milestones"] if m.get("status") == "paid")
+    ms_paid = sum(float(m.get("paid_amount") or (m.get("amount") if m.get("status") == "paid" else 0) or 0)
+                  for m in p["milestones"])
     if can_invoice:
         financials = {
             "budget": p.get("budget", 0) or 0,
@@ -1988,6 +1985,20 @@ async def _check_invoice_milestone(doc: dict, invoice_id: Optional[str]) -> None
     if other:
         raise HTTPException(status_code=409,
                             detail=f"This milestone is already billed on invoice {other.get('number')}")
+
+
+def _invoice_money(invoices: list) -> tuple:
+    """(billed, received) over live invoices: drafts, cancelled and quotations are not bills;
+    a part-paid invoice counts what was actually received."""
+    billed = received = 0.0
+    for inv in invoices or []:
+        if inv.get("doc_type") == "quotation" or inv.get("status") in ("draft", "cancelled"):
+            continue
+        total = float(inv.get("total") or 0)
+        billed += total
+        received += total if inv.get("status") == "paid" and not inv.get("paid_amount") \
+            else min(total, float(inv.get("paid_amount") or 0))
+    return round(billed, 2), round(received, 2)
 
 
 def _invoice_client_snapshot(client_doc: Optional[dict]) -> dict:
@@ -2626,7 +2637,7 @@ async def invoice_pdf(invoice_id: str, request: Request,
         project, org_id = await _public_project_by_token(token)
         doc = await db.invoices.find_one({
             "id": invoice_id, "project_id": project["id"], "org_id": org_id,
-            "status": {"$in": ["sent", "paid", "overdue"]},
+            "status": {"$in": ["sent", "partially_paid", "paid", "overdue"]},
         }, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
@@ -2679,7 +2690,7 @@ async def portal_view(token: str):
     files = await db.files.find(
         {**owned_project, "client_visible": True}, {"_id": 0}).to_list(MAX_LIST_ROWS)
     invoices = await db.invoices.find(
-        {**owned_project, "status": {"$in": ["sent", "paid", "overdue"]}},
+        {**owned_project, "status": {"$in": ["sent", "partially_paid", "paid", "overdue"]}},
         {"_id": 0}).to_list(MAX_LIST_ROWS)
     milestones = await db.payment_milestones.find(owned_project, {"_id": 0}).to_list(MAX_LIST_ROWS)
 
@@ -3865,8 +3876,10 @@ async def adv_cost_vs_actual(qid: str, request: Request, session_token: Optional
         async for inv in sdb.invoices.find({"project_id": pid, "doc_type": "invoice"}, {"_id": 0}):
             if inv.get("status") == "paid":
                 paid += float(inv.get("total", 0))
-            elif inv.get("status") in ("sent", "overdue"):
-                sent += float(inv.get("total", 0))
+            elif inv.get("status") in ("sent", "overdue", "partially_paid"):
+                received = float(inv.get("paid_amount") or 0)   # part-paid: split received / still due
+                paid += received
+                sent += max(0.0, float(inv.get("total", 0)) - received)
     actual = paid + sent
     margin = quoted - actual
     margin_pct = round((margin / quoted * 100.0), 2) if quoted else 0
@@ -4432,15 +4445,15 @@ DEPARTMENTS_DEFAULT = [
 
 
 class SalaryStructure(BaseModel):
-    basic: float = 0
-    hra: float = 0
-    conveyance: float = 0
-    medical: float = 0
-    other_allowances: float = 0
-    pf_employee: float = 0
-    esi_employee: float = 0
-    professional_tax: float = 0
-    tds: float = 0
+    basic: float = Field(default=0, ge=0)
+    hra: float = Field(default=0, ge=0)
+    conveyance: float = Field(default=0, ge=0)
+    medical: float = Field(default=0, ge=0)
+    other_allowances: float = Field(default=0, ge=0)
+    pf_employee: float = Field(default=0, ge=0)
+    esi_employee: float = Field(default=0, ge=0)
+    professional_tax: float = Field(default=0, ge=0)
+    tds: float = Field(default=0, ge=0)
 
 
 class BankInfo(BaseModel):
@@ -4493,7 +4506,7 @@ class EmployeeIn(BaseModel):
     geofence_ids: Optional[List[str]] = None       # allowed fences; None/[] = all
     half_day_min_minutes: Optional[int] = None
     full_day_min_minutes: Optional[int] = None
-    monthly_salary: Optional[float] = None         # flat fallback (no structure)
+    monthly_salary: Optional[float] = Field(default=None, ge=0)         # flat fallback (no structure)
     payroll_basis_days: Optional[int] = 30
 
 
@@ -4534,7 +4547,7 @@ class EmployeeUpdate(BaseModel):
     geofence_ids: Optional[List[str]] = None
     half_day_min_minutes: Optional[int] = None
     full_day_min_minutes: Optional[int] = None
-    monthly_salary: Optional[float] = None
+    monthly_salary: Optional[float] = Field(default=None, ge=0)
     payroll_basis_days: Optional[int] = None
 
 

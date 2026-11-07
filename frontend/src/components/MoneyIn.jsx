@@ -6,10 +6,10 @@ import { FilePdf, WhatsappLogo, X } from "@phosphor-icons/react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { askForm } from "../lib/confirm";
-import { formatDate } from "../lib/format";
+import { formatDate, formatINR } from "../lib/format";
 import PdfPreviewModal from "./PdfPreview";
 
-export const inr = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+export const inr = (n) => formatINR(n);
 
 /**
  * Invoices | Payment Reminders | Collections Due | Received Payments.

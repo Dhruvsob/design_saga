@@ -63,7 +63,7 @@ export default function Projects() {
     ]);
     setProjects(p.data);
     setClients(c.data);
-    setEmployees(Array.isArray(e.data) ? e.data : e.data?.employees || []);
+    setEmployees((Array.isArray(e.data) ? e.data : e.data?.employees || []).filter((x) => x.employment_status !== "terminated"));
   };
   useEffect(() => { load(); }, []);
   useEffect(() => { setForm((f) => ({ ...f, engagement_type: defaultEng })); }, [defaultEng]);
@@ -170,7 +170,7 @@ export default function Projects() {
               </div>
             </label>
           )}
-          <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="project-budget" />
+          <input className="input-flat" type="number" min="0" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="project-budget" />
           <input className="input-flat" placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
 
           {/* Project Team — controls who can see this project's tasks */}

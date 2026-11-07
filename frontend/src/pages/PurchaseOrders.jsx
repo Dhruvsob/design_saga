@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
-import { formatDate, roundPaise } from "../lib/format";
+import { formatDate, roundPaise, formatINR, statusLabel } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import {
   Package, Plus, Warning, CheckSquare, PaperPlaneTilt, X, ArrowsClockwise, Truck, ClipboardText,
@@ -10,7 +10,7 @@ import {
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
-const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const fmtMoney = (n) => formatINR(n);
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
   if (typeof d === "string") return d;
@@ -82,7 +82,7 @@ export default function PurchaseOrders() {
                   <Td className="font-mono text-xs">{formatDate(po.order_date)}</Td>
                   <Td className="font-mono text-xs">{po.expected_delivery || "—"}</Td>
                   <Td className="font-mono text-sm">{fmtMoney(po.grand_total)}</Td>
-                  <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[po.status] || "bg-[var(--line-soft)]"}`}>{po.status}</span></Td>
+                  <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[po.status] || "bg-[var(--line-soft)]"}`}>{statusLabel(po.status)}</span></Td>
                 </tr>
               ))}
               {pos.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[var(--ink-2)]">No purchase orders yet.</td></tr>}
@@ -145,10 +145,10 @@ function CreatePO({ vendors, onClose, onCreated }) {
           {f.lines.map((l, i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`po-line-${i}`}>
               <input required placeholder="Item" className="input-flat col-span-4" value={l.item_name} onChange={(e) => upLine(i, {item_name: e.target.value})} />
-              <input type="number" placeholder="Qty" step="0.01" className="input-flat col-span-2 font-mono" value={l.quantity} onChange={(e) => upLine(i, {quantity: e.target.value === "" ? "" : Number(e.target.value)})} />
+              <input type="number" min="0" placeholder="Qty" step="0.01" className="input-flat col-span-2 font-mono" value={l.quantity} onChange={(e) => upLine(i, {quantity: e.target.value === "" ? "" : Number(e.target.value)})} />
               <input placeholder="Unit" className="input-flat col-span-1" value={l.unit} onChange={(e) => upLine(i, {unit: e.target.value})} />
-              <input type="number" placeholder="Price" step="0.01" className="input-flat col-span-2 font-mono" value={l.unit_price} onChange={(e) => upLine(i, {unit_price: e.target.value === "" ? "" : Number(e.target.value)})} />
-              <input type="number" placeholder="Tax %" className="input-flat col-span-1 font-mono" value={l.tax_rate} onChange={(e) => upLine(i, {tax_rate: e.target.value === "" ? "" : Number(e.target.value)})} />
+              <input type="number" min="0" placeholder="Price" step="0.01" className="input-flat col-span-2 font-mono" value={l.unit_price} onChange={(e) => upLine(i, {unit_price: e.target.value === "" ? "" : Number(e.target.value)})} />
+              <input type="number" min="0" placeholder="Tax %" className="input-flat col-span-1 font-mono" value={l.tax_rate} onChange={(e) => upLine(i, {tax_rate: e.target.value === "" ? "" : Number(e.target.value)})} />
               <div className="col-span-1 font-mono text-xs text-right">{fmtMoney((Number(l.quantity) || 0) * (Number(l.unit_price) || 0))}</div>
               <button type="button" onClick={() => delLine(i)} className="btn-ghost col-span-1 text-[var(--danger)]"><X size={12}/></button>
             </div>
@@ -235,7 +235,7 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
       {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 mb-3">{err}</div>}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <span className={`text-[10px] font-mono uppercase px-3 py-1 ${STATUS_TONE[po.status]}`}>{po.status}</span>
+        <span className={`text-[10px] font-mono uppercase px-3 py-1 ${STATUS_TONE[po.status]}`}>{statusLabel(po.status)}</span>
         <span className="text-sm text-[var(--ink-2)]">Order: {formatDate(po.order_date)}</span>
         <span className="text-sm text-[var(--ink-2)]">Expected: {po.expected_delivery || "—"}</span>
         <span className="font-mono font-bold text-lg ml-auto accent-blue">{fmtMoney(po.grand_total)}</span>
@@ -386,8 +386,8 @@ function RecordGRN({ po, onClose, onSaved }) {
                   <Td>{l.item_name}</Td>
                   <Td className="font-mono text-xs">{l.ordered}</Td>
                   <Td className="font-mono text-xs">{l.already}</Td>
-                  <Td><input type="number" step="0.01" className="input-flat w-24 font-mono" value={l.received_qty} onChange={(e) => setLines((s) => s.map((x, j) => j === i ? {...x, received_qty: Number(e.target.value)} : x))} data-testid={`grn-recv-${i}`} /></Td>
-                  <Td><input type="number" step="0.01" className="input-flat w-20 font-mono" value={l.rejected_qty} onChange={(e) => setLines((s) => s.map((x, j) => j === i ? {...x, rejected_qty: Number(e.target.value)} : x))} /></Td>
+                  <Td><input type="number" min="0" step="0.01" className="input-flat w-24 font-mono" value={l.received_qty} onChange={(e) => setLines((s) => s.map((x, j) => j === i ? {...x, received_qty: Number(e.target.value)} : x))} data-testid={`grn-recv-${i}`} /></Td>
+                  <Td><input type="number" min="0" step="0.01" className="input-flat w-20 font-mono" value={l.rejected_qty} onChange={(e) => setLines((s) => s.map((x, j) => j === i ? {...x, rejected_qty: Number(e.target.value)} : x))} /></Td>
                   <Td><input className="input-flat w-full" value={l.remarks} onChange={(e) => setLines((s) => s.map((x, j) => j === i ? {...x, remarks: e.target.value} : x))} /></Td>
                 </tr>
               ))}

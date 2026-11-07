@@ -4,7 +4,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../lib/api";
 import { safeExternalUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
-import { dateForInput, formatDate } from "../lib/format";
+import { dateForInput, formatDate, formatINR, statusLabel } from "../lib/format";
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import EmployeeAdvances from "../components/EmployeeAdvances";
 import {
@@ -18,7 +18,7 @@ import useUnsavedWarning from "../lib/useUnsavedWarning";
 import RowActions from "../components/RowActions";
 
 const TABS = ["Overview", "Employment", "Salary & Bank", "Documents", "Performance", "ERP Access"];
-const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+const fmt = (n) => formatINR(n, { decimals: 0 });
 const STATUS_CHIP = {
   active: "chip-paid", probation: "chip-medium",
   notice: "chip-overdue", terminated: "chip-draft",
@@ -234,7 +234,7 @@ export default function EmployeeDetail() {
           <div className="min-w-0">
             <div className="overline mb-2 flex items-center gap-3 flex-wrap">
               {emp.employee_id}
-              <span className={`status-chip ${STATUS_CHIP[emp.employment_status] || "chip-draft"}`}>{emp.employment_status}</span>
+              <span className={`status-chip ${STATUS_CHIP[emp.employment_status] || "chip-draft"}`}>{statusLabel(emp.employment_status)}</span>
               <span className="status-chip chip-medium no-dot">{emp.employment_type?.replace("_", " ")}</span>
             </div>
             <h1 className="font-display font-bold tracking-tighter text-3xl">
@@ -421,10 +421,10 @@ export default function EmployeeDetail() {
                 <input disabled={!canEdit} type="date" className="input-flat" value={emp.probation_end_date || ""} onChange={(e) => patch(() => ({ probation_end_date: e.target.value }))} />
               </Row>
               <Row label="Notice period (days)">
-                <input disabled={!canEdit} type="number" className="input-flat" placeholder="Enter days" value={emp.notice_period_days ?? ""} onChange={(e) => patch(() => ({ notice_period_days: e.target.value === "" ? "" : Number(e.target.value) }))} />
+                <input disabled={!canEdit} type="number" min="0" className="input-flat" placeholder="Enter days" value={emp.notice_period_days ?? ""} onChange={(e) => patch(() => ({ notice_period_days: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
               <Row label="Weekly hours">
-                <input disabled={!canEdit} type="number" className="input-flat" placeholder="Enter hours" value={emp.weekly_hours ?? ""} onChange={(e) => patch(() => ({ weekly_hours: e.target.value === "" ? "" : Number(e.target.value) }))} />
+                <input disabled={!canEdit} type="number" min="0" className="input-flat" placeholder="Enter hours" value={emp.weekly_hours ?? ""} onChange={(e) => patch(() => ({ weekly_hours: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
               <Row label="Shift start">
                 <input disabled={!canEdit} type="time" className="input-flat" value={emp.shift_start || ""} onChange={(e) => patch(() => ({ shift_start: e.target.value }))} />
@@ -443,7 +443,7 @@ export default function EmployeeDetail() {
           <Card title="EARNINGS (MONTHLY)" testid="salary-earnings">
             {["basic", "hra", "conveyance", "medical", "other_allowances"].map((k) => (
               <Row key={k} label={k.replace("_", " ").toUpperCase()}>
-                <input disabled={!canPayrollWrite} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
+                <input disabled={!canPayrollWrite} type="number" min="0" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
             <div className="border-t border-[var(--ink)] mt-2 pt-3 flex items-center justify-between">
@@ -455,7 +455,7 @@ export default function EmployeeDetail() {
           <Card title="DEDUCTIONS (MONTHLY)" testid="salary-deductions">
             {["pf_employee", "esi_employee", "professional_tax", "tds"].map((k) => (
               <Row key={k} label={k.replace("_", " ").toUpperCase()}>
-                <input disabled={!canPayrollWrite} type="number" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
+                <input disabled={!canPayrollWrite} type="number" min="0" className="input-flat text-right font-mono" placeholder="Enter amount" value={s[k] ?? ""} onChange={(e) => patchSalary(k, e.target.value)} />
               </Row>
             ))}
             <div className="border-t border-[var(--ink)] mt-2 pt-3 flex items-center justify-between">
@@ -706,7 +706,7 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
         <label className="text-xs">
           <div className="overline mb-1">Year</div>
-          <input type="number" className="input-flat w-full" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+          <input type="number" min="2000" max="2100" className="input-flat w-full" value={year} onChange={(e) => setYear(Number(e.target.value))} />
         </label>
         <label className="text-xs">
           <div className="overline mb-1">Month</div>
@@ -717,7 +717,7 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
         {["bonus","incentives","overtime","advances_recovered","other_deductions"].map((k) => (
           <label key={k} className="text-xs">
             <div className="overline mb-1">{k.replace(/_/g, " ")}</div>
-            <input type="number" className="input-flat w-full text-right font-mono" value={extras[k]} onChange={(e) => setExtras({ ...extras, [k]: Number(e.target.value) || 0 })} data-testid={`extra-${k}`} />
+            <input type="number" min="0" className="input-flat w-full text-right font-mono" value={extras[k]} onChange={(e) => setExtras({ ...extras, [k]: Number(e.target.value) || 0 })} data-testid={`extra-${k}`} />
             {k === "advances_recovered" && (
               advance.outstanding > 0 ? (
                 <button type="button" className="mt-1 text-[11px] text-[var(--accent-strong)] underline"
@@ -1096,7 +1096,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
             {EARN_KEYS.map((k) => (
               <label key={k} className="text-xs">
                 <div className="overline mb-1">{k.replace(/_/g, " ")}</div>
-                <input type="number" className="input-flat w-full text-right font-mono" value={form.salary[k] ?? 0}
+                <input type="number" min="0" className="input-flat w-full text-right font-mono" value={form.salary[k] ?? 0}
                        onChange={(e) => setAmt(k, e.target.value)} data-testid={`salary-revision-${k}`} />
               </label>
             ))}
@@ -1105,7 +1105,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
             {DED_KEYS.map((k) => (
               <label key={k} className="text-xs">
                 <div className="overline mb-1">{k.replace(/_/g, " ")}</div>
-                <input type="number" className="input-flat w-full text-right font-mono" value={form.salary[k] ?? 0}
+                <input type="number" min="0" className="input-flat w-full text-right font-mono" value={form.salary[k] ?? 0}
                        onChange={(e) => setAmt(k, e.target.value)} data-testid={`salary-revision-${k}`} />
               </label>
             ))}
@@ -1325,7 +1325,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
 function SalaryWorking({ b }) {
   const sum = b.attendance_summary || {};
   const lines = b.deduction_lines || [];
-  const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (n) => formatINR(n, { decimals: 2 });
   const counts = [
     ["Present", sum.present], ["Late", sum.late], ["Half day", sum.half_day], ["Paid leave", sum.paid_leave],
     ["Unpaid leave", sum.unpaid_leave], ["Absent", sum.absent], ["Weekly off", sum.week_off], ["Holiday", sum.holidays],

@@ -3,19 +3,22 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import GettingStarted from "../components/GettingStarted";
-import { formatDate } from "../lib/format";
+import { formatDate, formatINR, statusLabel } from "../lib/format";
 import {
   ArrowUpRight, TrendUp, Warning, Clock, Money, Briefcase, Sparkle,
   CaretRight, ChartBar, Lightning,
 } from "@phosphor-icons/react";
 
-const fmtMoney = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
-const compactMoney = (n) => {
+const fmtMoney = (n) => formatINR(n);
+const compactMoney = (value) => {
+  const n = Number(value) || 0;
   if (!n) return "₹0";
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)}Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(2)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
-  return `₹${Math.round(n)}`;
+  const sign = n < 0 ? "−" : "";   // a loss reads −₹2.00L, not ₹-200000
+  const a = Math.abs(n);
+  if (a >= 10000000) return `${sign}₹${(a / 10000000).toFixed(2)}Cr`;
+  if (a >= 100000) return `${sign}₹${(a / 100000).toFixed(2)}L`;
+  if (a >= 1000) return `${sign}₹${(a / 1000).toFixed(1)}K`;
+  return `${sign}₹${Math.round(a)}`;
 };
 
 export default function Dashboard() {
@@ -254,7 +257,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3">
               {sources.map((s) => (
                 <div key={s.source} className="border border-[var(--line)] p-4 hover:border-[var(--ink)] hover:-translate-y-0.5 transition cursor-pointer">
-                  <div className="overline">{s.source}</div>
+                  <div className="overline">{statusLabel(s.source)}</div>
                   <div className="font-display font-bold text-3xl tracking-tighter mt-1">{s.count}</div>
                   <div className="mt-2 h-0.5 bg-[var(--accent)]" style={{ width: `${Math.min(100, s.count * 25)}%` }} />
                 </div>

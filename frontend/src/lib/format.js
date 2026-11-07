@@ -119,7 +119,7 @@ export function formatINR(amount, { decimals } = {}) {
   const opts = decimals != null
     ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals }
     : { maximumFractionDigits: 2 };
-  return `₹${n.toLocaleString("en-IN", opts)}`;
+  return `${n < 0 ? "−" : ""}₹${Math.abs(n).toLocaleString("en-IN", opts)}`;   // −₹5,000, never ₹-5,000
 }
 
 // Employee display name from either `name` or first/last parts (defensive).
@@ -151,4 +151,23 @@ export function roundPaise(value) {
   if (!Number.isFinite(n)) return 0;
   const sign = n < 0 ? -1 : 1;
   return sign * Number(`${Math.round(Number(`${Math.abs(n)}e2`))}e-2`);
+}
+
+
+// Codes stored in the database ("partially_paid", "pending_l1", "ProjectManager")
+// shown as words people use. Unknown codes are humanised, never shown raw.
+const STATUS_WORDS = {
+  partially_paid: "Part paid", partially_received: "Part received", pending_l1: "Awaiting manager",
+  pending_l2: "Awaiting finance", receipt_required: "Receipt needed", pending_approval: "Awaiting approval",
+  in_progress: "In progress", on_hold: "On hold", bank_transfer: "Bank transfer", walk_in: "Walk-in",
+  site_visit: "Site visit", week_off: "Week off", half_day: "Half day", paid_leave: "Paid leave",
+  unpaid_leave: "Unpaid leave", comp_off: "Comp off", ProjectManager: "Project Manager",
+  SuperAdmin: "Super Admin", full_time: "Full time", part_time: "Part time",
+};
+export function statusLabel(code) {
+  if (code === null || code === undefined || code === "") return "—";
+  const key = String(code);
+  if (STATUS_WORDS[key]) return STATUS_WORDS[key];
+  const words = key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim().toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

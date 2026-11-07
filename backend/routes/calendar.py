@@ -457,7 +457,8 @@ async def calendar_feed(start: str, end: str, request: Request,
     if has_permission(user, "finance.read") or has_permission(user, "invoices.read"):
         invs = await sdb.invoices.find(
             {"due_date": {"$gte": start, "$lte": end_hi},
-             "status": {"$nin": ["paid", "cancelled"]}},
+             "doc_type": {"$ne": "quotation"},
+             "status": {"$in": ["sent", "overdue", "partially_paid"]}},   # drafts are not due
             {"_id": 0, "id": 1, "number": 1, "client_name": 1, "due_date": 1, "total": 1, "status": 1},
         ).to_list(MAX_LIST_ROWS)
         for inv in invs:

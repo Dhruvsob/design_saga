@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { formatINR } from "../lib/format";
 import { toast } from "sonner";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { API } from "../lib/api";
@@ -18,7 +19,7 @@ const CONSULT_TABS = ["Overview", "Fee Schedule", "Costing", "Payment Plan", "Ti
 const PROPOSAL_TABS = ["Proposal", "Fees & schedule", "Terms", "Versions", "Preview"];
 const TYPE_LABELS = { turnkey: "Turnkey", consultancy: "Consultancy", execution: "Execution Only", hybrid: "Hybrid" };
 const SELECTABLE_TYPE_LABELS = { turnkey: TYPE_LABELS.turnkey, consultancy: TYPE_LABELS.consultancy };
-const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+const fmt = (n) => formatINR(n, { decimals: 0 });
 
 export default function QuotationBuilder() {
   const { hasPerm } = useAuth();
@@ -300,7 +301,7 @@ function Overview({ q, update, isConsult }) {
               ["revision_limit", "Revision limit"],
             ].map(([k, l]) => (
               <Field key={k} label={l}>
-                <input type="number" className="input-flat" value={q.deliverables?.[k] ?? 0} onChange={(e) => setDel(k, e.target.value)} />
+                <input type="number" min="0" className="input-flat" value={q.deliverables?.[k] ?? 0} onChange={(e) => setDel(k, e.target.value)} />
               </Field>
             ))}
           </div>
@@ -316,7 +317,7 @@ function Overview({ q, update, isConsult }) {
             <input className="input-flat" value={q.project_location || ""} onChange={(e) => update({ project_location: e.target.value })} />
           </Field>
           <Field label="Area (sq.ft)">
-            <input type="number" className="input-flat" placeholder="Enter area (sq ft)" value={q.area_sqft ?? ""} onChange={(e) => update({ area_sqft: e.target.value === "" ? "" : Number(e.target.value) })} />
+            <input type="number" min="0" className="input-flat" placeholder="Enter area (sq ft)" value={q.area_sqft ?? ""} onChange={(e) => update({ area_sqft: e.target.value === "" ? "" : Number(e.target.value) })} />
           </Field>
         </Card>
       </div>
@@ -428,9 +429,9 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
                       <td><input className="input-flat" style={{ padding: "6px 8px" }} value={it.code || ""} onChange={(e) => updateItem(ci, ii, "code", e.target.value)} /></td>
                       <td><input className="input-flat" style={{ padding: "6px 8px" }} value={it.description || ""} onChange={(e) => updateItem(ci, ii, "description", e.target.value)} /></td>
                       <td><input className="input-flat" style={{ padding: "6px 8px", width: 70 }} value={it.unit || ""} onChange={(e) => updateItem(ci, ii, "unit", e.target.value)} /></td>
-                      <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} value={it.quantity} onChange={(e) => updateItem(ci, ii, "quantity", Number(e.target.value) || 0)} /></td>
-                      <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 100 }} value={it.rate} onChange={(e) => updateItem(ci, ii, "rate", Number(e.target.value) || 0)} /></td>
-                      {!isConsult && <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 70 }} value={it.margin_pct} onChange={(e) => updateItem(ci, ii, "margin_pct", Number(e.target.value) || 0)} /></td>}
+                      <td><input type="number" min="0" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} value={it.quantity} onChange={(e) => updateItem(ci, ii, "quantity", Number(e.target.value) || 0)} /></td>
+                      <td><input type="number" min="0" className="input-flat text-right" style={{ padding: "6px 8px", width: 100 }} value={it.rate} onChange={(e) => updateItem(ci, ii, "rate", Number(e.target.value) || 0)} /></td>
+                      {!isConsult && <td><input type="number" min="0" className="input-flat text-right" style={{ padding: "6px 8px", width: 70 }} value={it.margin_pct} onChange={(e) => updateItem(ci, ii, "margin_pct", Number(e.target.value) || 0)} /></td>}
                       <td className="font-mono text-right">{fmt(amt)}</td>
                       {!isConsult && (
                       <td>
@@ -584,9 +585,9 @@ function Costing({ q, update }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="tab-costing">
       <Card title="ADJUST COMMERCIALS">
-        <Field label="Discount %"><input type="number" className="input-flat" placeholder="Enter discount %" value={c.discount_pct ?? ""} onChange={(e) => setC("discount_pct", e.target.value)} /></Field>
-        <Field label="Contingency %"><input type="number" className="input-flat" placeholder="Enter contingency %" value={c.contingency_pct ?? ""} onChange={(e) => setC("contingency_pct", e.target.value)} /></Field>
-        <Field label="GST %"><input type="number" className="input-flat" value={c.tax_pct || 18} onChange={(e) => setC("tax_pct", e.target.value)} /></Field>
+        <Field label="Discount %"><input type="number" min="0" className="input-flat" placeholder="Enter discount %" value={c.discount_pct ?? ""} onChange={(e) => setC("discount_pct", e.target.value)} /></Field>
+        <Field label="Contingency %"><input type="number" min="0" className="input-flat" placeholder="Enter contingency %" value={c.contingency_pct ?? ""} onChange={(e) => setC("contingency_pct", e.target.value)} /></Field>
+        <Field label="GST %"><input type="number" min="0" className="input-flat" value={c.tax_pct || 18} onChange={(e) => setC("tax_pct", e.target.value)} /></Field>
         <p className="text-xs text-[var(--ink-2)] mt-2">Save to recompute totals on the server.</p>
       </Card>
 
@@ -664,8 +665,8 @@ function PaymentPlan({ q, update, tpl }) {
                     <option value="custom">custom</option>
                   </select>
                 </td>
-                <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} value={p.percentage} onChange={(e) => setRow(i, "percentage", e.target.value)} /></td>
-                <td><input type="number" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} placeholder="Days" value={p.due_after_days ?? ""} onChange={(e) => setRow(i, "due_after_days", e.target.value)} /></td>
+                <td><input type="number" min="0" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} value={p.percentage} onChange={(e) => setRow(i, "percentage", e.target.value)} /></td>
+                <td><input type="number" min="0" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} placeholder="Days" value={p.due_after_days ?? ""} onChange={(e) => setRow(i, "due_after_days", e.target.value)} /></td>
                 <td className="font-mono text-right">{fmt(p.amount)}</td>
                 <td><input className="input-flat" style={{ padding: "6px 8px" }} value={p.notes || ""} onChange={(e) => setRow(i, "notes", e.target.value)} /></td>
                 <td><button onClick={() => removeRow(i)} className="text-[var(--danger)]"><Trash size={14} /></button></td>
@@ -711,8 +712,8 @@ function Timeline({ q, update, tpl }) {
         {(q.timeline || []).map((p, i) => (
           <div key={i} className="grid grid-cols-12 gap-3 items-center">
             <input className="input-flat col-span-5" value={p.phase || ""} onChange={(e) => setRow(i, "phase", e.target.value)} placeholder="Phase name" />
-            <div className="col-span-2"><input type="number" className="input-flat" value={p.start_offset_weeks || 0} onChange={(e) => setRow(i, "start_offset_weeks", e.target.value)} placeholder="Start (wk)" /></div>
-            <div className="col-span-2"><input type="number" className="input-flat" value={p.duration_weeks || 0} onChange={(e) => setRow(i, "duration_weeks", e.target.value)} placeholder="Duration" /></div>
+            <div className="col-span-2"><input type="number" min="0" className="input-flat" value={p.start_offset_weeks || 0} onChange={(e) => setRow(i, "start_offset_weeks", e.target.value)} placeholder="Start (wk)" /></div>
+            <div className="col-span-2"><input type="number" min="0" className="input-flat" value={p.duration_weeks || 0} onChange={(e) => setRow(i, "duration_weeks", e.target.value)} placeholder="Duration" /></div>
             <div className="col-span-2 h-6 bg-[var(--line-soft)] relative">
               <div className="absolute top-0 h-6 bg-[var(--accent)]" style={{ left: `${(p.start_offset_weeks / Math.max(total, 1)) * 100}%`, width: `${(p.duration_weeks / Math.max(total, 1)) * 100}%` }} />
             </div>

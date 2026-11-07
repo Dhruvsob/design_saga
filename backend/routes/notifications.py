@@ -61,6 +61,12 @@ def notification_owner_filter(user: dict, **extra) -> dict:
 # ==================================================
 # List / count / mark read / dismiss
 # ==================================================
+
+def _dmy(value: str) -> str:
+    """2026-11-07 -> 07/11/2026 (the ERP's date format)."""
+    v = str(value or "")[:10]
+    return f"{v[8:10]}/{v[5:7]}/{v[0:4]}" if len(v) == 10 else v
+
 @router.get("/notifications/preferences")
 async def get_notification_preferences(
         request: Request,
@@ -186,7 +192,7 @@ async def run_scan(caller_org):
             counts["vendor_bill_overdue"] += await emit_finance(
                 "vendor_bill_overdue",
                 f"Vendor bill overdue · {vendor_name}",
-                f"₹{outstanding:,.0f} · {b.get('bill_number','')} · due {due}",
+                f"₹{outstanding:,.0f} · {b.get('bill_number','')} · due {_dmy(due)}",
                 link=f"/vendors/{b['vendor_id']}",
                 priority="high",
                 meta={"bill_id": b["id"], "amount": outstanding},
@@ -224,8 +230,8 @@ async def run_scan(caller_org):
             counts["invoice_overdue"] += await emit_finance(
                 "invoice_overdue",
                 f"Invoice overdue · {client_name}",
-                f"₹{amt:,.0f} · {inv.get('number','')} · due {due}",
-                link=f"/invoices/{inv['id']}",
+                f"₹{amt:,.0f} · {inv.get('number','')} · due {_dmy(due)}",
+                link="/invoices",
                 priority="high",
                 meta={"invoice_id": inv["id"], "amount": amt},
                 dedup_key=k,
@@ -237,7 +243,7 @@ async def run_scan(caller_org):
                 "invoice_due",
                 f"Invoice due today · {client_name}",
                 f"₹{amt:,.0f} · {inv.get('number','')}",
-                link=f"/invoices/{inv['id']}",
+                link="/invoices",
                 meta={"invoice_id": inv["id"], "amount": amt},
                 dedup_key=k,
                 org_id=caller_org,
@@ -260,7 +266,7 @@ async def run_scan(caller_org):
             counts["milestone_overdue"] += await emit_finance(
                 "milestone_overdue",
                 f"Milestone overdue · {m.get('title','Payment')}",
-                f"₹{amt:,.0f} · due {due}",
+                f"₹{amt:,.0f} · due {_dmy(due)}",
                 link=f"/projects/{proj}" if proj else "/accounting",
                 priority="high",
                 meta={"milestone_id": m.get("id"), "amount": amt},
@@ -301,7 +307,7 @@ async def run_scan(caller_org):
                 counts["collection_reminder"] += await emit_finance(
                     "collection_reminder",
                     f"Collection reminder · {party}",
-                    f"₹{amount:,.0f}" + (f" · due {due}" if due else ""),
+                    f"₹{amount:,.0f}" + (f" · due {_dmy(due)}" if due else ""),
                     link="/accounting",
                     meta={"source_type": source_type, "source_id": row["id"],
                           "amount": amount},
@@ -312,7 +318,7 @@ async def run_scan(caller_org):
                 counts["collection_overdue"] += await emit_finance(
                     "collection_overdue",
                     f"Collection overdue · {party}",
-                    f"₹{amount:,.0f} · due {due}",
+                    f"₹{amount:,.0f} · due {_dmy(due)}",
                     link="/accounting", priority="high",
                     meta={"source_type": source_type, "source_id": row["id"],
                           "amount": amount},

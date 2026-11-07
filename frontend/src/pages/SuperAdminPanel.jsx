@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
-import { formatDate } from "../lib/format";
+import { dateForInput, formatDate, statusLabel } from "../lib/format";
 import {
   Crown, Plus, Buildings, Users, Briefcase, CurrencyInr,
   Trash, ShieldCheck, PauseCircle, PlayCircle, Warning, Check,
@@ -596,13 +596,13 @@ function EditOrgModal({ org, onClose, onSaved }) {
             </label>
             <label className="block">
               <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Amount charged (₹)</span>
-              <input className="input-flat w-full" type="number" placeholder="Enter amount"
+              <input className="input-flat w-full" type="number" min="0" placeholder="Enter amount"
                      value={billing.amount_charged} onChange={(e) => setB("amount_charged", e.target.value)}
                      data-testid="billing-amount" />
             </label>
             <label className="block">
               <span className="text-[11px] text-[var(--ink-2)] mb-1 block">Maintenance / AMC (₹)</span>
-              <input className="input-flat w-full" type="number" placeholder="Enter charge"
+              <input className="input-flat w-full" type="number" min="0" placeholder="Enter charge"
                      value={billing.maintenance_charge} onChange={(e) => setB("maintenance_charge", e.target.value)}
                      data-testid="billing-maintenance" />
             </label>
@@ -701,7 +701,7 @@ function OrgAdminsModal({ org, onClose }) {
             <tr key={u.user_id} className="border-b border-[var(--line-soft)]">
               <Td className="font-semibold text-sm">{u.name}</Td>
               <Td className="font-mono text-xs">{u.email}</Td>
-              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">{u.role}</span></Td>
+              <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">{statusLabel(u.role)}</span></Td>
               <Td className="text-right">
                 <button onClick={() => setResetting(u.user_id)} className="btn-ghost text-xs">
                   <Key size={11} /> Reset password
@@ -920,7 +920,7 @@ function SubscriptionControl({ org, onSaved }) {
   const [status, setStatus] = useState(sub.status || "");
   const [trialEnd, setTrialEnd] = useState(sub.trial_ends_on || "");
   const [busy, setBusy] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateForInput(new Date());
   const readOnly = sub.status === "expired" || (sub.status === "trial" && sub.trial_ends_on && sub.trial_ends_on < today);
   const save = async (nextStatus, nextEnd) => {
     if (nextStatus === "trial" && !nextEnd) return;

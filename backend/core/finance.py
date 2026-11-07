@@ -56,12 +56,24 @@ def resolve_period(fy: Optional[str] = None,
 
     Returns (from_date, to_date, label).
     """
+    from fastapi import HTTPException
+    for name, value in (("from_date", from_date), ("to_date", to_date), ("as_of", as_of)):
+        if value:
+            try:
+                date.fromisoformat(str(value)[:10])
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"{name.replace('_', ' ')} must be a date like 2026-11-30")
+    if from_date and to_date and str(from_date)[:10] > str(to_date)[:10]:
+        raise HTTPException(status_code=400, detail="The start date is after the end date")
     if from_date or to_date:
         return from_date, to_date, "Custom"
     if fy:
         if fy.strip().lower() in {"all", "all-time", "all_time"}:
             return None, None, "All time"
-        s, e = fy_range(fy)
+        try:
+            s, e = fy_range(fy)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Financial year must look like 2026-27")
         return s, e, f"FY {fy}"
     if as_of:
         return None, as_of, f"As of {as_of}"

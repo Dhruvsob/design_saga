@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { statusLabel } from "../lib/format";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -134,7 +135,7 @@ export default function QuotationsAdv() {
             <option value="">Link project (optional)</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </SearchSelect>
-          <input className="input-flat" type="number" placeholder="Enter area (sq ft)" value={form.area_sqft} onChange={(e) => setForm({ ...form, area_sqft: e.target.value })} />
+          <input className="input-flat" type="number" min="0" placeholder="Enter area (sq ft)" value={form.area_sqft} onChange={(e) => setForm({ ...form, area_sqft: e.target.value })} />
           <input className="input-flat md:col-span-2" placeholder="Project location" value={form.project_location} onChange={(e) => setForm({ ...form, project_location: e.target.value })} />
           <button className="btn-primary md:col-span-3" disabled={creating} data-testid="q-submit">
             {creating ? "Creating…" : "Create quotation"}
@@ -163,7 +164,7 @@ export default function QuotationsAdv() {
                 </Td>
                 <Td className="font-mono" onClick={() => navigate(`/quotations/${r.id}`)}>{r.version_label}</Td>
                 <Td className="font-mono font-semibold text-right" onClick={() => navigate(`/quotations/${r.id}`)}>₹{(r.grand_total || 0).toLocaleString("en-IN")}</Td>
-                <Td onClick={() => navigate(`/quotations/${r.id}`)}><span className={`status-chip ${STATUS_COLORS[r.status] || "chip-draft"}`}>{r.status}</span></Td>
+                <Td onClick={() => navigate(`/quotations/${r.id}`)}><span className={`status-chip ${STATUS_COLORS[r.status] || "chip-draft"}`}>{statusLabel(r.status)}</span></Td>
                 <Td>
                   <div className="flex items-center gap-2">
                     <RowActions label={`Quotation ${r.number}`} testid={`q-actions-${r.id}`} actions={[

@@ -3,14 +3,14 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
-import { formatDate } from "../lib/format";
+import { formatDate, formatINR } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import {
   X, ArrowSquareOut, PencilSimple, ArrowUUpLeft, FloppyDisk, Warning, Trash,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (n) =>
-  `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  formatINR(n);
 
 // Shared transaction detail — used by the Daybook and every Account Ledger.
 // "Simple outside, professional underneath": shows the full double-entry, and
@@ -225,7 +225,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider text-[var(--ink-3)]">Amount</label>
-              <input type="number" step="0.01" className="input-flat w-full" value={form.amount}
+              <input type="number" min="0" step="0.01" className="input-flat w-full" value={form.amount}
                 disabled={!canEditAmount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="txn-edit-amount" />
               {!canCorrect && (

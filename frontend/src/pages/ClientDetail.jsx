@@ -5,14 +5,14 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
-import { formatDate } from "../lib/format";
+import { formatDate, formatINR, statusLabel } from "../lib/format";
 import {
   ArrowLeft, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X, Warning,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 
 const TABS = ["Projects", "Invoices", "Ledger", "Activity"];
-const inr = (n) => `\u20b9${(n || 0).toLocaleString("en-IN")}`;
+const inr = (n) => formatINR(n);
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -175,7 +175,7 @@ export default function ClientDetail() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold">{inr(i.total)}</span>
-                <span className={`status-chip chip-${i.status}`}>{i.status}</span>
+                <span className={`status-chip chip-${i.status}`}>{statusLabel(i.status)}</span>
               </div>
             </div>
           ))}

@@ -9,7 +9,7 @@ import {
   DownloadSimple, Clock, ArrowsClockwise,
 } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
-import { dateForInput, formatDate, formatDateTime } from "../lib/format";
+import { dateForInput, formatDate, formatDateTime, formatINR } from "../lib/format";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
@@ -23,7 +23,7 @@ const WEEKDAYS = [
   { v: 0, l: "Mon" }, { v: 1, l: "Tue" }, { v: 2, l: "Wed" }, { v: 3, l: "Thu" },
   { v: 4, l: "Fri" }, { v: 5, l: "Sat" }, { v: 6, l: "Sun" },
 ];
-const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const inr = (n) => formatINR(n);
 const capWords = (s) => (s || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 // Render a stored UTC ISO timestamp as HH:MM in IST
 const fmtT = (iso) => {
@@ -93,14 +93,20 @@ export default function Attendance() {
   };
 
   const loadMe = async () => {
-    const [t, s, l, m, p, pol, sal, corr] = await Promise.all([
+    // Ask once whether this login has an employee profile (200 either way) before
+    // calling the personal endpoints, which refuse accounts without one.
+    const sal = await api.get(`/attendance/my-salary?year=${ym.y}&month=${ym.m}`).catch(() => ({ data: null }));
+    if (sal.data && sal.data.has_employee === false) {
+      noProfileRef.current = true;
+      setNoProfile(true);
+    }
+    const [t, s, l, m, p, pol, corr] = await Promise.all([
       personal(() => api.get("/attendance/me/today"), null),
       personal(() => api.get(`/attendance/me/summary?year=${ym.y}&month=${ym.m}`), null),
       personal(() => api.get("/leaves?mine=true"), []),
       api.get("/attendance/meta"),
       api.get("/attendance/project-options").catch(() => ({ data: [] })),
       api.get("/attendance/policy").catch(() => ({ data: null })),
-      api.get(`/attendance/my-salary?year=${ym.y}&month=${ym.m}`).catch(() => ({ data: null })),
       personal(() => api.get("/attendance/corrections?mine=true"), []),
     ]);
     setToday(t.data); setSummary(s.data); setLeaves(l.data); setMeta(m.data);
@@ -1259,7 +1265,7 @@ function EmployeeSetupCard() {
   const [savedAt, setSavedAt] = useState(null);
 
   useEffect(() => {
-    api.get("/employees").then((r) => setEmps(r.data)).catch(() => {});
+    api.get("/employees").then((r) => setEmps((r.data || []).filter((e) => e.employment_status !== "terminated"))).catch(() => {});
   }, []);
   useEffect(() => {
     if (!sel) { setCfg(null); return; }
@@ -1321,9 +1327,9 @@ function EmployeeSetupCard() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Shift start"><input type="time" className="input-flat w-full" value={cfg.shift_start} onChange={(e) => setCfg({ ...cfg, shift_start: e.target.value })} data-testid="setup-shift-start" /></Field>
             <Field label="Shift end"><input type="time" className="input-flat w-full" value={cfg.shift_end} onChange={(e) => setCfg({ ...cfg, shift_end: e.target.value })} /></Field>
-            <Field label="Grace (min · blank = policy)"><input type="number" className="input-flat w-full" value={cfg.grace_minutes} onChange={(e) => setCfg({ ...cfg, grace_minutes: e.target.value })} data-testid="setup-grace" /></Field>
-            {canPayroll && <Field label="Payroll basis days"><input type="number" className="input-flat w-full" value={cfg.payroll_basis_days} onChange={(e) => setCfg({ ...cfg, payroll_basis_days: e.target.value })} data-testid="setup-basis" /></Field>}
-            {canPayroll && <Field label="Flat monthly salary (₹)"><input type="number" className="input-flat w-full" value={cfg.monthly_salary} onChange={(e) => setCfg({ ...cfg, monthly_salary: e.target.value })} data-testid="setup-monthly-salary" /></Field>}
+            <Field label="Grace (min · blank = policy)"><input type="number" min="0" className="input-flat w-full" value={cfg.grace_minutes} onChange={(e) => setCfg({ ...cfg, grace_minutes: e.target.value })} data-testid="setup-grace" /></Field>
+            {canPayroll && <Field label="Payroll basis days"><input type="number" min="0" className="input-flat w-full" value={cfg.payroll_basis_days} onChange={(e) => setCfg({ ...cfg, payroll_basis_days: e.target.value })} data-testid="setup-basis" /></Field>}
+            {canPayroll && <Field label="Flat monthly salary (₹)"><input type="number" min="0" className="input-flat w-full" value={cfg.monthly_salary} onChange={(e) => setCfg({ ...cfg, monthly_salary: e.target.value })} data-testid="setup-monthly-salary" /></Field>}
             {canPayroll && <Field label="Effective salary used">
               <div className="input-flat w-full bg-[var(--surface-2)] font-mono text-sm">{inr(cfg.net_monthly_structure > 0 ? cfg.net_monthly_structure : cfg.monthly_salary)}</div>
             </Field>}
@@ -1363,7 +1369,7 @@ function ShortLeaveCard() {
   const [form, setForm] = useState({ employee_id: "", date: "", hours: 1, reason: "" });
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
-  useEffect(() => { api.get("/employees").then((r) => setEmps(r.data)).catch(() => {}); }, []);
+  useEffect(() => { api.get("/employees").then((r) => setEmps((r.data || []).filter((e) => e.employment_status !== "terminated"))).catch(() => {}); }, []);
   const save = async () => {
     if (!form.employee_id) { toast.error("Select an employee"); return; }
     if (!form.date) { toast.error("Pick a date"); return; }
@@ -1499,7 +1505,7 @@ function ManualAttendanceCard() {
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
   useEffect(() => {
-    api.get("/employees").then((r) => setEmps(r.data)).catch(() => {});
+    api.get("/employees").then((r) => setEmps((r.data || []).filter((e) => e.employment_status !== "terminated"))).catch(() => {});
     api.get("/attendance/meta").then((r) => setMeta(r.data)).catch(() => {});
   }, []);
   const save = async () => {
@@ -1722,12 +1728,12 @@ function GeoPolicyTab({ projects }) {
           </div>
           <div>
             <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Grace (minutes)</label>
-            <input type="number" className="input-flat w-full" value={policy.grace_minutes ?? 15}
+            <input type="number" min="0" className="input-flat w-full" value={policy.grace_minutes ?? 15}
                    onChange={(e) => setP({ grace_minutes: e.target.value })} data-testid="policy-grace" />
           </div>
           <div>
             <label className="block text-[10px] font-mono uppercase text-[var(--ink-2)] mb-1">Max GPS accuracy (m)</label>
-            <input type="number" className="input-flat w-full" value={policy.max_gps_accuracy_m ?? 100}
+            <input type="number" min="0" className="input-flat w-full" value={policy.max_gps_accuracy_m ?? 100}
                    onChange={(e) => setP({ max_gps_accuracy_m: e.target.value })} data-testid="policy-accuracy" />
           </div>
         </div>
@@ -1751,15 +1757,15 @@ function GeoPolicyTab({ projects }) {
         <div className="border-t border-[var(--line-soft)] pt-3">
           <div className="overline mb-2">DEFAULT OFFICE FENCE (fallback)</div>
           <div className="grid grid-cols-3 gap-2">
-            <input type="number" step="any" className="input-flat" placeholder="Latitude"
+            <input type="number" min="0" step="any" className="input-flat" placeholder="Latitude"
                    value={policy.default_office_lat ?? ""}
                    onChange={(e) => setP({ default_office_lat: e.target.value === "" ? "" : Number(e.target.value) })}
                    data-testid="policy-office-lat" />
-            <input type="number" step="any" className="input-flat" placeholder="Longitude"
+            <input type="number" min="0" step="any" className="input-flat" placeholder="Longitude"
                    value={policy.default_office_lng ?? ""}
                    onChange={(e) => setP({ default_office_lng: e.target.value === "" ? "" : Number(e.target.value) })}
                    data-testid="policy-office-lng" />
-            <input type="number" className="input-flat" placeholder="Radius m"
+            <input type="number" min="0" className="input-flat" placeholder="Radius m"
                    value={policy.default_office_radius_m ?? 150}
                    onChange={(e) => setP({ default_office_radius_m: e.target.value })} />
           </div>
@@ -1781,11 +1787,11 @@ function GeoPolicyTab({ projects }) {
                     onChange={(e) => setLocForm({ ...locForm, kind: e.target.value })} data-testid="loc-kind">
               {Object.entries(KIND_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
-            <input type="number" step="any" className="input-flat" placeholder="Latitude" value={locForm.lat}
+            <input type="number" min="0" step="any" className="input-flat" placeholder="Latitude" value={locForm.lat}
                    onChange={(e) => setLocForm({ ...locForm, lat: e.target.value })} data-testid="loc-lat" />
-            <input type="number" step="any" className="input-flat" placeholder="Longitude" value={locForm.lng}
+            <input type="number" min="0" step="any" className="input-flat" placeholder="Longitude" value={locForm.lng}
                    onChange={(e) => setLocForm({ ...locForm, lng: e.target.value })} data-testid="loc-lng" />
-            <input type="number" className="input-flat" placeholder="Radius (m)" value={locForm.radius_m}
+            <input type="number" min="0" className="input-flat" placeholder="Radius (m)" value={locForm.radius_m}
                    onChange={(e) => setLocForm({ ...locForm, radius_m: e.target.value })} data-testid="loc-radius" />
             {locForm.kind === "site" && (
               <SearchSelect className="input-flat" value={locForm.project_id}
@@ -1861,7 +1867,7 @@ function MonthPicker({ ym, setYm }) {
       <select aria-label="M" className="input-flat" value={ym.m} onChange={(e) => setYm({ ...ym, m: Number(e.target.value) })}>
         {months.map((mn, i) => <option key={mn} value={i+1}>{mn}</option>)}
       </select>
-      <input type="number" className="input-flat w-24" value={ym.y} onChange={(e) => setYm({ ...ym, y: Number(e.target.value) })} />
+      <input type="number" min="2000" max="2100" className="input-flat w-24" value={ym.y} onChange={(e) => setYm({ ...ym, y: Number(e.target.value) })} />
     </div>
   );
 }

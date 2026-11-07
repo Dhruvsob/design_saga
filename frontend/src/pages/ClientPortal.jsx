@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api, { API } from "../lib/api";
 import { safeFileUrl } from "../lib/url";
-import { formatDate } from "../lib/format";
+import { formatDate, statusLabel } from "../lib/format";
 
 export default function ClientPortal() {
   const { token } = useParams();
@@ -159,7 +159,7 @@ export default function ClientPortal() {
               </div>
               <div className="flex items-center gap-4">
                 <div className="font-mono font-semibold">₹{(i.total || 0).toLocaleString("en-IN")}</div>
-                <span className={`status-chip chip-${i.status}`}>{i.status}</span>
+                <span className={`status-chip chip-${i.status}`}>{statusLabel(i.status)}</span>
                 <a href={`${API}/invoices/${i.id}/pdf?token=${token}`} target="_blank" rel="noreferrer" className="text-xs text-[var(--accent-strong)] underline">PDF</a>
               </div>
             </div>

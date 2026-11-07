@@ -1334,7 +1334,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
       {showForm && showForm.kind === kind && (
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3" data-testid={`${kind}-form`}>
           <input type="date" required className="input-flat" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-          <input type="number" required step="0.01" className="input-flat" placeholder="Amount"
+          <input type="number" min="0" required step="0.01" className="input-flat" placeholder="Amount"
             value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid={`${kind}-amount`} />
           <SearchSelect className="input-flat" value={kind === "income" ? form.income_account_id : form.expense_account_id}
             onChange={(e) => setForm({ ...form, [kind === "income" ? "income_account_id" : "expense_account_id"]: e.target.value })}
@@ -1401,7 +1401,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
                 <option value="">— Employee (optional) —</option>
                 {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{empName(emp)}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
               </SearchSelect>
-              <input type="number" step="0.01" className="input-flat" placeholder="GST amount (optional)" value={form.gst || ""} onChange={(e) => setForm({ ...form, gst: e.target.value })} />
+              <input type="number" min="0" step="0.01" className="input-flat" placeholder="GST amount (optional)" value={form.gst || ""} onChange={(e) => setForm({ ...form, gst: e.target.value })} />
             </>
           )}
 
@@ -1676,9 +1676,9 @@ function Reports({ pl, tb, onReload, onDownload, periodQs }) {
   if (!pl || !tb) return <div className="text-center py-16 overline">LOADING…</div>;
   return (
     <div className="space-y-6" data-testid="reports-tab">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-2">
         <div className="overline">FINANCIAL REPORTS</div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => onDownload(`/accounting/reports/pl.csv${periodQs}`, "profit-loss.csv")} className="btn-ghost text-xs" data-testid="dl-pl-csv">
             <DownloadSimple size={12} /> P&amp;L
           </button>

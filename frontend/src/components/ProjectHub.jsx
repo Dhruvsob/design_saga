@@ -1,5 +1,5 @@
 import { CaretRight, CheckCircle, WarningCircle } from "@phosphor-icons/react";
-import { formatDate, formatINR } from "../lib/format";
+import { dateForInput, formatDate, formatINR } from "../lib/format";
 
 /**
  * Project overview without repetition: the tab bar is the navigation, the
@@ -28,7 +28,7 @@ export function ProjectFacts({ p }) {
 }
 
 export default function ProjectAttention({ p, visibleTabs, onOpen, canSeeFinancials }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateForInput(new Date());
   const tasks = p.tasks || [];
   const overdue = tasks.filter((t) => t.status !== "done" && t.due_date && t.due_date < today).length;
   const milestones = p.milestones || [];

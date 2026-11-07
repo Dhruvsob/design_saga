@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { PERIOD_PRESETS, computeRange, periodLabel } from "../lib/period";
 import { downloadFile } from "../lib/download";
-import { empName, formatDate } from "../lib/format";
+import { empName, formatDate, formatINR } from "../lib/format";
 import { TransactionDetail } from "./TransactionDetail";
 import {
   MagnifyingGlass, ArrowDown, ArrowUp, ArrowsLeftRight,
@@ -11,7 +11,7 @@ import {
 import SearchSelect from "./SearchSelect";
 
 const CURRENCY = (n) =>
-  `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  formatINR(n);
 
 const PAGE_SIZE = 100;
 

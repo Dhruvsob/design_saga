@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
-import { dateForInput, formatDate, roundPaise } from "../lib/format";
+import { dateForInput, formatDate, roundPaise, formatINR } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -18,9 +18,9 @@ import { askForm, confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
 const INR = (n) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
+  formatINR(n, { decimals: 0 });
 const INR_D = (n) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(Number(n || 0));
+  formatINR(n);
 
 // Tabs available per business mode. Consultancy stays commission-focused;
 // Turnkey unlocks the procurement side (bills + payments + full A/P ledger).
@@ -309,7 +309,7 @@ export default function VendorDetail() {
             <h1 className="font-display font-bold tracking-tight text-4xl">{v.name}</h1>
             {v.company && <div className="text-[var(--ink-2)] mt-1">{v.company}</div>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {canEditVendor && <button type="button" className="btn-ghost" onClick={openVendorEdit}><PencilSimple size={13}/> Edit</button>}
             {canDeleteVendor && <button type="button" className="btn-ghost text-[var(--danger)]" onClick={archiveVendor}><Archive size={13}/> Archive</button>}
             <div className="px-3 py-2 border border-[var(--line)]">
@@ -577,9 +577,9 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
               onChange={(e) => setF({ ...f, bill_date: e.target.value })} data-testid="bf-date" />
             <input type="date" className="input-flat" placeholder="Due date" value={f.due_date}
               onChange={(e) => setF({ ...f, due_date: e.target.value })} />
-            <input type="number" step="0.01" className="input-flat" placeholder="GST %" value={f.tax_rate}
+            <input type="number" min="0" step="0.01" className="input-flat" placeholder="GST %" value={f.tax_rate}
               onChange={(e) => setF({ ...f, tax_rate: parseFloat(e.target.value) || 0 })} />
-            <input type="number" step="0.01" className="input-flat" placeholder="TDS %" value={f.tds_rate}
+            <input type="number" min="0" step="0.01" className="input-flat" placeholder="TDS %" value={f.tds_rate}
               onChange={(e) => setF({ ...f, tds_rate: parseFloat(e.target.value) || 0 })} />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -619,9 +619,9 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
               <div key={i} className="grid grid-cols-12 gap-2">
                 <input required className="input-flat col-span-6" placeholder="Item description"
                   value={it.description} onChange={(e) => updateItem(f, setF, i, "description", e.target.value)} />
-                <input required type="number" step="0.01" className="input-flat col-span-2" placeholder="Qty"
+                <input required type="number" min="0" step="0.01" className="input-flat col-span-2" placeholder="Qty"
                   value={it.quantity} onChange={(e) => updateItem(f, setF, i, "quantity", parseFloat(e.target.value) || 0)} />
-                <input required type="number" step="0.01" className="input-flat col-span-3" placeholder="Rate"
+                <input required type="number" min="0" step="0.01" className="input-flat col-span-3" placeholder="Rate"
                   value={it.rate} onChange={(e) => updateItem(f, setF, i, "rate", parseFloat(e.target.value) || 0)} />
                 <button type="button" onClick={() => removeItem(f, setF, i)} className="btn-ghost col-span-1" aria-label="remove">
                   <Trash size={12} />
@@ -764,7 +764,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
           }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <input required type="number" step="0.01" className="input-flat" placeholder="Amount *"
+            <input required type="number" min="0" step="0.01" className="input-flat" placeholder="Amount *"
               value={f.amount} onChange={(e) => setF({ ...f, amount: parseFloat(e.target.value) || 0 })} data-testid="pf-amount" />
             <input required type="date" className="input-flat" value={f.payment_date}
               onChange={(e) => setF({ ...f, payment_date: e.target.value })} />
@@ -1098,13 +1098,13 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
                 <div className="overline mb-2">SLABS</div>
                 {f.slabs.map((s, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 mb-2">
-                    <input type="number" step="0.01" className="input-flat col-span-4"
+                    <input type="number" min="0" step="0.01" className="input-flat col-span-4"
                       placeholder="From (₹)" value={s.min_purchase}
                       onChange={(e) => setSlab(i, "min_purchase", parseFloat(e.target.value) || 0)} />
-                    <input type="number" step="0.01" className="input-flat col-span-4"
+                    <input type="number" min="0" step="0.01" className="input-flat col-span-4"
                       placeholder="To (₹) — blank = ∞" value={s.max_purchase ?? ""}
                       onChange={(e) => setSlab(i, "max_purchase", e.target.value === "" ? null : parseFloat(e.target.value))} />
-                    <input type="number" step="0.01" className="input-flat col-span-3"
+                    <input type="number" min="0" step="0.01" className="input-flat col-span-3"
                       placeholder="Rate %" value={s.percentage}
                       onChange={(e) => setSlab(i, "percentage", parseFloat(e.target.value) || 0)} />
                     <button type="button" onClick={() => rmSlab(i)} className="btn-ghost col-span-1"><Trash size={12} /></button>
@@ -1264,7 +1264,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
           onSubmit={(e) => { e.preventDefault(); onReceive(f); setOpen(false); setF({ ...f, amount: 0, reference: "", notes: "", commission_ids: [] }); }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <input required type="number" step="0.01" className="input-flat" placeholder="Amount *"
+            <input required type="number" min="0" step="0.01" className="input-flat" placeholder="Amount *"
               data-testid="rcm-amount"
               value={f.amount} onChange={(e) => setF({ ...f, amount: parseFloat(e.target.value) || 0 })} />
             <input required type="date" className="input-flat" value={f.received_date}

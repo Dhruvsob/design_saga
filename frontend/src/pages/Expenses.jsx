@@ -3,7 +3,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { safeExternalUrl } from "../lib/url";
-import { formatDate } from "../lib/format";
+import { formatDate, formatINR, statusLabel } from "../lib/format";
 import {
   Receipt, Plus, Warning, Check, X, ArrowsClockwise, CurrencyInr, ThumbsUp, ThumbsDown, Wallet,
   PencilSimple, Trash,
@@ -11,7 +11,7 @@ import {
 import { confirmAction } from "../lib/confirm";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
 
-const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const fmtMoney = (n) => formatINR(n);
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
   if (typeof d === "string") return d;
@@ -115,7 +115,7 @@ export default function Expenses() {
                   <Td className="font-semibold text-sm">{e.title}</Td>
                   <Td className="text-xs">{e.claimant_name}</Td>
                   <Td className="font-mono">{fmtMoney(e.total)}</Td>
-                  <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[e.status]}`}>{e.status}</span></Td>
+                  <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[e.status]}`}>{statusLabel(e.status)}</span></Td>
                   <Td className="text-xs">{e.pending_approver_role || "—"}</Td>
                   <Td className="font-mono text-xs">{formatDate(e.created_at)}</Td>
                 </tr>
@@ -311,7 +311,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 mb-3">{err}</div>}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <span className={`text-[10px] font-mono uppercase px-3 py-1 ${STATUS_TONE[exp.status]}`}>{exp.status}</span>
+        <span className={`text-[10px] font-mono uppercase px-3 py-1 ${STATUS_TONE[exp.status]}`}>{statusLabel(exp.status)}</span>
         {exp.pending_approver_role && <span className="text-xs text-[var(--ink-2)]">Awaiting: <b>{exp.pending_approver_role}</b></span>}
         <span className="font-mono font-bold text-lg ml-auto accent-blue">{fmtMoney(exp.total)}</span>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatINR } from "../lib/format";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -20,7 +21,7 @@ const AGENCY_LABELS = {
 };
 
 const INR = (n) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
+  formatINR(n, { decimals: 0 });
 
 export default function Vendors() {
   const { hasPerm } = useAuth();
@@ -183,7 +184,7 @@ export default function Vendors() {
                 onChange={(e) => setForm({ ...form, tds_applicable: e.target.checked })} />
               TDS applicable
             </label>
-            <input className="input-flat" placeholder="TDS %" type="number" step="0.01"
+            <input className="input-flat" placeholder="TDS %" type="number" min="0" step="0.01"
               disabled={!form.tds_applicable}
               value={form.tds_rate} onChange={(e) => setForm({ ...form, tds_rate: parseFloat(e.target.value) || 0 })} />
           </div>

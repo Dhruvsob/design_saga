@@ -8,7 +8,7 @@ import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import ProjectPhases from "../components/ProjectPhases";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
-import { empName, formatDate } from "../lib/format";
+import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
@@ -19,7 +19,7 @@ import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
 const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Invoices", "Activity"];
-const inr = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
+const inr = (n) => formatINR(n);
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -56,7 +56,7 @@ export default function ProjectDetail() {
   const loadEmployees = async () => {
     try {
       const { data } = await api.get("/employees");
-      setEmployees(Array.isArray(data) ? data : data.employees || []);
+      setEmployees((Array.isArray(data) ? data : data.employees || []).filter((x) => x.employment_status !== "terminated"));   // no former staff in pickers
     } catch { setEmployees([]); }
   };
 
@@ -406,7 +406,7 @@ export default function ProjectDetail() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
-                <span className={`status-chip chip-${t.priority}`}>{t.priority}</span>
+                <span className={`status-chip chip-${t.priority}`}>{statusLabel(t.priority)}</span>
                 <CaretRight size={12} className="text-[var(--ink-3)]" />
               </div>
             </button>
@@ -486,7 +486,7 @@ export default function ProjectDetail() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-semibold">{inr(po.total)}</span>
-                    <span className={`status-chip chip-${po.status}`}>{po.status}</span>
+                    <span className={`status-chip chip-${po.status}`}>{statusLabel(po.status)}</span>
                   </div>
                 </button>
               ))}
@@ -505,7 +505,7 @@ export default function ProjectDetail() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-semibold">{inr(b.total)}</span>
-                    <span className={`status-chip chip-${b.status}`}>{b.status}</span>
+                    <span className={`status-chip chip-${b.status}`}>{statusLabel(b.status)}</span>
                   </div>
                 </button>
               ))}
@@ -517,9 +517,9 @@ export default function ProjectDetail() {
       {tab === "Files" && (
         <div className="space-y-3">
           <div className="flex justify-end">
-            <button onClick={() => setShowFileForm(!showFileForm)} className="btn-primary" data-testid="add-file-btn">
+            {hasPerm("files.create") && <button onClick={() => setShowFileForm(!showFileForm)} className="btn-primary" data-testid="add-file-btn">
               <Plus size={14} /> Add file
-            </button>
+            </button>}
           </div>
           {showFileForm && (
             <form onSubmit={addFile} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -569,7 +569,7 @@ export default function ProjectDetail() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="font-mono font-semibold">{inr(i.total)}</div>
-                <span className={`status-chip chip-${i.status}`}>{i.status}</span>
+                <span className={`status-chip chip-${i.status}`}>{statusLabel(i.status)}</span>
               </div>
             </div>
           ))}
@@ -597,7 +597,7 @@ export default function ProjectDetail() {
               <select aria-label="Project type" className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
                 {TYPES.map((t) => <option key={t}>{t}</option>)}
               </select>
-              <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="edit-project-budget" />
+              <input className="input-flat" type="number" min="0" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="edit-project-budget" />
               <label className="text-xs text-[var(--ink-2)]">Start date
                 <input className="input-flat w-full mt-1" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
               </label>
@@ -606,7 +606,7 @@ export default function ProjectDetail() {
               </label>
             </div>
             <input className="input-flat w-full" placeholder="Site address" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
-            <input className="input-flat w-full" type="number" placeholder="Enter site area (sq ft)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} />
+            <input className="input-flat w-full" type="number" min="0" placeholder="Enter site area (sq ft)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} />
             <textarea className="input-flat w-full" rows="2" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
             <button className="btn-primary w-full" data-testid="edit-project-save">Save changes</button>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import api from "../lib/api";
-import { dateForInput, formatDate, formatDateTime } from "../lib/format";
+import { dateForInput, formatDate, formatDateTime, formatINR } from "../lib/format";
 import {
   Plus, X, PencilSimple, Trash, Play, ClockCounterClockwise, Warning, Pause,
   DownloadSimple, ClockClockwise, CaretDown, CaretRight,
@@ -10,7 +10,7 @@ import SearchSelect from "./SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "./RowActions";
 
-const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const CURRENCY = (n) => formatINR(n);
 const FREQ = [
   { id: "weekly", label: "Every week" },
   { id: "monthly", label: "Every month" },
@@ -213,7 +213,7 @@ const RuleForm = ({ initial, expenseAccs, banks, vendors, projects, clients, onC
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <input required className="input-flat" placeholder="Name (e.g. Office Rent)" value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="rec-name" />
-        <input required type="number" step="0.01" className="input-flat" placeholder="Amount"
+        <input required type="number" min="0" step="0.01" className="input-flat" placeholder="Amount"
           value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="rec-amount" />
         <select aria-label="Frequency" className="input-flat" value={form.frequency}
           onChange={(e) => setForm({ ...form, frequency: e.target.value })} data-testid="rec-frequency">
@@ -245,7 +245,7 @@ const RuleForm = ({ initial, expenseAccs, banks, vendors, projects, clients, onC
           onChange={(e) => setForm({ ...form, start_date: e.target.value })} placeholder="Start date" />
         <input type="date" className="input-flat" value={form.end_date}
           onChange={(e) => setForm({ ...form, end_date: e.target.value })} placeholder="End date (optional)" />
-        <input type="number" step="0.01" className="input-flat" placeholder="GST amount (optional)"
+        <input type="number" min="0" step="0.01" className="input-flat" placeholder="GST amount (optional)"
           value={form.gst} onChange={(e) => setForm({ ...form, gst: e.target.value })} />
         <SearchSelect className="input-flat" value={form.vendor_id}
           onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>

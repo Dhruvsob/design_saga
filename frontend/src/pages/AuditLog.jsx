@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowClockwise, CheckCircle, DownloadSimple, MagnifyingGlass, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../lib/api";
-import { formatDateTime } from "../lib/format";
+import { dateForInput, formatDateTime } from "../lib/format";
 import PageHero from "../components/PageHero";
 
 const humanize = (value) => (value || "Activity").replace(/[._-]+/g, " ")
@@ -47,7 +47,7 @@ export default function AuditLog() {
       const url = URL.createObjectURL(data);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.download = `audit-log-${dateForInput(new Date())}.csv`;
       anchor.click();
       URL.revokeObjectURL(url);
       toast.success("Audit evidence exported");

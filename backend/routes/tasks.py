@@ -8,6 +8,7 @@ backward-compatible fields.
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Depends
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
+import re
 
 from core.limits import MAX_LIST_ROWS
 from core.db import db
@@ -152,7 +153,7 @@ async def list_tasks(request: Request,
         if due_before: d["$lte"] = due_before
         q["due_date"] = d
     if search:
-        rx = {"$regex": search, "$options": "i"}
+        rx = {"$regex": re.escape(search.strip()), "$options": "i"}   # typed text, not a pattern
         q["$or"] = q.get("$or", []) + [
             {"title": rx}, {"description": rx},
             {"item_description": rx}, {"remarks": rx},

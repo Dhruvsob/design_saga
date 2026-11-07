@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import { Plus, ArrowRight, Trash, DotsSixVertical, PencilSimple, Eye, X, Check, ClockCounterClockwise, NotePencil } from "@phosphor-icons/react";
 import PageHero from "../components/PageHero";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, statusLabel } from "../lib/format";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
@@ -191,7 +191,7 @@ export default function Leads() {
           <select aria-label="Project type" className="input-flat" value={form.project_type} onChange={(e) => setForm({ ...form, project_type: e.target.value })}>
             {TYPES.map((s) => <option key={s}>{s}</option>)}
           </select>
-          <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+          <input className="input-flat" type="number" min="0" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
           <input className="input-flat md:col-span-2" placeholder="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
           <button className="btn-primary" type="submit" data-testid="lead-submit">Save lead</button>
         </form>
@@ -253,7 +253,7 @@ export default function Leads() {
                       )}
                     </button>
                     <div className="flex items-center flex-wrap gap-x-2 gap-y-2 mt-3 pt-3 border-t border-[var(--line-soft)]">
-                      <span className="overline text-[10px] truncate min-w-0 flex-1">{l.source}</span>
+                      <span className="overline text-[10px] truncate min-w-0 flex-1">{statusLabel(l.source)}</span>
                       <div className="flex items-center gap-2 shrink-0">
                         {canConvert && l.stage !== "Won" && l.stage !== "Lost" && (
                           <button onClick={() => convert(l.id)} className="text-[var(--accent-strong)] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
@@ -306,7 +306,7 @@ export default function Leads() {
               <select aria-label="Project type" className="input-flat" value={editing.project_type || ""} onChange={(e) => setEditing({ ...editing, project_type: e.target.value })}>
                 {TYPES.map((s) => <option key={s}>{s}</option>)}
               </select>
-              <input className="input-flat" type="number" placeholder="Enter Budget (₹)" value={editing.budget ?? ""} onChange={(e) => setEditing({ ...editing, budget: e.target.value })} data-testid="edit-lead-budget" />
+              <input className="input-flat" type="number" min="0" placeholder="Enter Budget (₹)" value={editing.budget ?? ""} onChange={(e) => setEditing({ ...editing, budget: e.target.value })} data-testid="edit-lead-budget" />
               <input className="input-flat" placeholder="Location" value={editing.location || ""} onChange={(e) => setEditing({ ...editing, location: e.target.value })} />
             </div>
             <textarea className="input-flat w-full" rows="2" placeholder="Notes" value={editing.notes || ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />

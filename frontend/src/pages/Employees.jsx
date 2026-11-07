@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
-import { dateForInput, formatDate } from "../lib/format";
+import { dateForInput, formatDate, statusLabel } from "../lib/format";
 import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
@@ -76,7 +76,9 @@ export default function Employees() {
     const q = filter.q.trim().toLowerCase();
     return rows.filter((r) => {
       if (filter.department && r.department !== filter.department) return false;
-      if (filter.status && r.employment_status !== filter.status) return false;
+      // Default view is current staff; former staff appear under "Former staff" or by status.
+      if (!filter.status && r.employment_status === "terminated") return false;
+      if (filter.status && filter.status !== "all" && r.employment_status !== filter.status) return false;
       if (q) {
         const hay = `${r.first_name} ${r.last_name} ${r.email} ${r.employee_id} ${r.designation}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -119,7 +121,7 @@ export default function Employees() {
             {meta.employment_types.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
           </select>
           <select aria-label="Employment status" className="input-flat" value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })}>
-            {meta.employment_statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+            {meta.employment_statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
           <input required className="input-flat" type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} />
           <button disabled={saving} className="btn-primary md:col-span-3" type="submit" data-testid="emp-submit">
@@ -145,8 +147,9 @@ export default function Employees() {
           {meta.departments.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
         <select aria-label="Status" className="input-flat max-w-[200px]" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
-          <option value="">All statuses</option>
-          {meta.employment_statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="">Current staff</option>
+          <option value="all">Everyone (incl. former)</option>
+          {meta.employment_statuses.map((s) => <option key={s} value={s}>{s === "terminated" ? "Former staff" : statusLabel(s)}</option>)}
         </select>
       </div>
 
@@ -197,7 +200,7 @@ export default function Employees() {
                   <Td className="text-sm">{r.department}</Td>
                   <Td className="text-sm">{r.designation || "—"}</Td>
                   {canPayrollRead && <Td className="font-mono text-right font-semibold">₹{(r.salary?.net_monthly || 0).toLocaleString("en-IN")}</Td>}
-                  <Td><span className={`status-chip ${STATUS_CHIP[r.employment_status] || "chip-draft"}`}>{r.employment_status}</span></Td>
+                  <Td><span className={`status-chip ${STATUS_CHIP[r.employment_status] || "chip-draft"}`}>{statusLabel(r.employment_status)}</span></Td>
                   <Td className="font-mono text-xs">{formatDate(r.joining_date)}</Td>
                   <Td>
                     <div className="flex items-center gap-2 justify-end">

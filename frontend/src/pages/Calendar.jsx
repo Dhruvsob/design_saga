@@ -48,7 +48,8 @@ const fmtNice = (s) => {
 
 export default function CalendarPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasPerm } = useAuth();
+  const canAddEvent = hasPerm("calendar.read");   // the server lets calendar readers add their own events
   const [view, setView] = useState("month");            // month | week | agenda
   const [cursor, setCursor] = useState(istTodayDate);
   const [items, setItems] = useState([]);
@@ -215,10 +216,10 @@ export default function CalendarPage() {
         title="Calendar"
         kicker="Studio events (meetings, office, holidays) and project work (tasks, deadlines, site visits) in one calendar."
       >
-        <button className="btn-primary" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: selectedDay || todayStr, project_id: scope !== "studio" ? projectFilter : "" } })}
+        {canAddEvent && <button className="btn-primary" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: selectedDay || todayStr, project_id: scope !== "studio" ? projectFilter : "" } })}
                 data-testid="new-event-btn">
           <Plus size={14} /> New event
-        </button>
+        </button>}
       </PageHero>
 
       {google?.can_manage && (
@@ -366,8 +367,8 @@ export default function CalendarPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="overline">{fmtNice(selectedDay).toUpperCase()} · {(byDate[selectedDay] || []).length} items</div>
                 <div className="flex items-center gap-2">
-                  <button className="btn-ghost text-xs" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: selectedDay } })}
-                          data-testid="day-add-event"><Plus size={12} /> Add event</button>
+                  {canAddEvent && <button className="btn-ghost text-xs" onClick={() => setModal({ mode: "create", data: { kind: "meeting", date: selectedDay } })}
+                          data-testid="day-add-event"><Plus size={12} /> Add event</button>}
                   <button className="btn-ghost text-xs" onClick={() => setSelectedDay(null)}><X size={12} /></button>
                 </div>
               </div>

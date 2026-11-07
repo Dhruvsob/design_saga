@@ -334,7 +334,7 @@ async def add_opening_adjustment(acc_id: str, payload: OpeningAdjustmentIn, requ
                 date = (_date.fromisoformat(first[0]["date"][:10]) - timedelta(days=1)).isoformat()
             except (TypeError, ValueError, KeyError):
                 date = ""
-        date = date or _date.today().isoformat()
+        date = date or business_today().isoformat()
     # Assets/expenses grow on the debit side, everything else on the credit side.
     debit_natural = account.get("type") in {"asset", "expense"}
     grows = amount > 0
@@ -962,7 +962,7 @@ async def list_journal(request: Request,
     if q:
         needle = q.strip()
         if needle:
-            regex = {"$regex": needle, "$options": "i"}
+            regex = {"$regex": re.escape(needle), "$options": "i"}   # typed text, not a pattern
             # Match narration, reference, or any line's account_name/description
             _or = [
                 {"narration": regex}, {"reference": regex},
@@ -2200,7 +2200,7 @@ async def finance_dashboard(request: Request,
     if not has_permission(user, "finance.read"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     today = business_today().isoformat()
-    month_start = f"{now_utc().year}-{now_utc().month:02d}-01"
+    month_start = business_today().replace(day=1).isoformat()   # India date, not server UTC
 
     # Cash / Bank balances (asset accounts flagged as is_bank OR Cash)
     accs = await sdb.accounts.find({"$or": [{"is_bank": True}, {"name": "Cash"}, {"name": "Petty Cash"}]},
@@ -2249,24 +2249,31 @@ async def finance_dashboard(request: Request,
     # Outstanding = unpaid invoices + pending milestones (single consistent
     # definition used everywhere: dashboard, clients, projects, accounting).
     outstanding_invoices = 0.0
+    overdue_invoices = 0.0
+    billed_milestones = set()
     async for inv in sdb.invoices.find(
         {"status": {"$in": ["sent", "overdue", "partially_paid"]},
          "doc_type": {"$ne": "quotation"}},
-        {"_id": 0, "total": 1, "paid_amount": 1, "due_date": 1, "status": 1},
+        {"_id": 0, "total": 1, "paid_amount": 1, "due_date": 1, "status": 1, "milestone_id": 1},
     ):
-        outstanding_invoices += max(0.0, float(inv.get("total") or 0)
-                                    - float(inv.get("paid_amount") or 0))
+        left = max(0.0, float(inv.get("total") or 0) - float(inv.get("paid_amount") or 0))
+        outstanding_invoices += left
+        if inv.get("due_date") and inv["due_date"] < today:
+            overdue_invoices += left
+        if inv.get("milestone_id"):
+            billed_milestones.add(inv["milestone_id"])
     ms = await sdb.payment_milestones.find(
-        {"status": {"$ne": "paid"}},
-        {"_id": 0, "amount": 1, "paid_amount": 1, "due_date": 1,
+        {"status": {"$nin": ["paid", "cancelled"]}},
+        {"_id": 0, "id": 1, "amount": 1, "paid_amount": 1, "due_date": 1,
          "status": 1, "project_id": 1, "name": 1},
     ).to_list(None)
+    ms = [m for m in ms if m.get("id") not in billed_milestones]   # its invoice already counts it
     outstanding_ms = sum(max(0.0, float(m.get("amount") or 0)
                              - float(m.get("paid_amount") or 0)) for m in ms)
     outstanding = round(outstanding_invoices + outstanding_ms, 2)
-    overdue = round(sum(max(0.0, float(m.get("amount") or 0)
+    overdue = round(overdue_invoices + sum(max(0.0, float(m.get("amount") or 0)
                                 - float(m.get("paid_amount") or 0)) for m in ms
-                       if (m.get("due_date") or "") < today), 2)
+                       if (m.get("due_date") or "") and (m.get("due_date") or "") < today), 2)
 
     # Upcoming payments (next 30 days)
     horizon = (business_today() + timedelta(days=30)).isoformat()
@@ -2685,7 +2692,7 @@ async def dashboard_validation(request: Request,
                         {"issue_date": {"$exists": False}, "created_at": d}]
     invoices = await sdb.invoices.find(inv_q, {"_id": 0}).to_list(None)
     leg_revenue = sum(float(i.get("total") or 0) for i in invoices
-                      if i.get("status") in ("paid", "sent", "overdue"))
+                      if i.get("status") in ("paid", "sent", "overdue", "partially_paid"))
 
     ms_q: dict = {}
     if fd or td:
@@ -3294,7 +3301,7 @@ async def finance_dashboard_extended(request: Request,
     async for inv in sdb.invoices.find({"status": {"$in": ["sent", "overdue", "partially_paid"]},
                                        "doc_type": {"$ne": "quotation"}},
                                       {"_id": 0}):
-        amt = float(inv.get("total") or 0)
+        amt = max(0.0, float(inv.get("total") or 0) - float(inv.get("paid_amount") or 0))
         receivables_total += amt
         if (inv.get("due_date") or "") < today:
             receivables_overdue += amt

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
-import { dateForInput, formatDate } from "../lib/format";
+import { dateForInput, formatDate, formatINR } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import {
   Bank, Plus, Warning, Check, CurrencyInr, CalendarBlank, X,
@@ -16,7 +16,7 @@ function fmtErr(d, fb = "Failed") {
   if (Array.isArray(d)) return d.map((e) => e?.msg || String(e)).join(" · ");
   return d?.msg || String(d);
 }
-const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const fmtMoney = (n) => formatINR(n);
 const fmtDate = formatDate;
 
 export default function Loans() {
@@ -181,7 +181,7 @@ function CreateLoanModal({ accounts, onClose, onCreated }) {
             </select>
           </F>
           <F label="Principal amount *"><input required type="number" min="1" data-testid="l-principal" className="input-flat w-full font-mono" value={f.principal} onChange={(e) => setF({...f, principal: Number(e.target.value)})} /></F>
-          <F label="Interest rate (% p.a.) *"><input required type="number" step="0.01" data-testid="l-rate" className="input-flat w-full font-mono" value={f.interest_rate_pa} onChange={(e) => setF({...f, interest_rate_pa: Number(e.target.value)})} /></F>
+          <F label="Interest rate (% p.a.) *"><input required type="number" min="0" step="0.01" data-testid="l-rate" className="input-flat w-full font-mono" value={f.interest_rate_pa} onChange={(e) => setF({...f, interest_rate_pa: Number(e.target.value)})} /></F>
           <F label="Tenure (months) *"><input required type="number" min="1" data-testid="l-tenure" className="input-flat w-full font-mono" value={f.tenure_months} onChange={(e) => setF({...f, tenure_months: Number(e.target.value)})} /></F>
           <F label="Start date *"><input required type="date" className="input-flat w-full" value={f.start_date} onChange={(e) => setF({...f, start_date: e.target.value})} /></F>
           <F label="EMI day of month"><input type="number" min="1" max="31" className="input-flat w-full" value={f.emi_day} onChange={(e) => setF({...f, emi_day: Number(e.target.value)})} /></F>
@@ -328,7 +328,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
         <div className="flex-1 min-w-[220px]">
           <label className="overline text-[10px] mb-1 block">Prepay amount</label>
           <div className="flex gap-2">
-            <input type="number" className="input-flat flex-1 font-mono" value={prepayAmt}
+            <input type="number" min="0" className="input-flat flex-1 font-mono" value={prepayAmt}
                    placeholder="Lump-sum principal reduction"
                    onChange={(e) => setPrepayAmt(e.target.value)} data-testid="prepay-input" />
             <button onClick={prepay} disabled={!prepayAmt} className="btn-primary text-xs" data-testid="prepay-btn">

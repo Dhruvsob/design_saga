@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
-import { dateForInput, empName, formatDate } from "../lib/format";
+import { dateForInput, empName, formatDate, statusLabel } from "../lib/format";
 import {
   Plus, X, Trash, DotsSixVertical, MagnifyingGlass, ListChecks,
   Table as TableIcon, SquaresFour, Warning, Bell, DownloadSimple,
@@ -13,6 +13,7 @@ import TaskCalendar from "../components/TaskCalendar";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
+import { useAuth } from "../context/AuthContext";
 
 const LANES = [
   { id: "todo", label: "To do", color: "#5C5C5C" },
@@ -44,6 +45,8 @@ const EMPTY_TASK = {
 };
 
 export default function TasksBoard() {
+  const { hasPerm } = useAuth();
+  const canCreateTask = hasPerm("tasks.create");
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -74,7 +77,7 @@ export default function TasksBoard() {
     setProjects(p.data);
     setMeta(m.data);
     setVendors(v.data);
-    setEmployees(Array.isArray(e.data) ? e.data : e.data?.employees || []);
+    setEmployees((Array.isArray(e.data) ? e.data : e.data?.employees || []).filter((x) => x.employment_status !== "terminated"));
   };
   useEffect(() => { loadAll(); }, []);
 
@@ -225,9 +228,9 @@ export default function TasksBoard() {
         <button onClick={exportCSV} className="btn-ghost" data-testid="export-csv-btn">
           <DownloadSimple size={14} /> Export CSV
         </button>
-        <button onClick={() => setShowForm((s) => !s)} className="btn-primary" data-testid="new-task-btn">
+        {canCreateTask && <button onClick={() => setShowForm((s) => !s)} className="btn-primary" data-testid="new-task-btn">
           <Plus size={14} /> {showForm ? "Cancel" : "New task"}
-        </button>
+        </button>}
       </PageHero>
 
       {/* Task-type tabs */}
@@ -479,7 +482,7 @@ function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd
                       <span className="px-1.5 py-0.5 border" style={{ borderColor: isVendor ? "#2B5299" : "#8B7F6A", color: isVendor ? "#2B5299" : "#76705E" }}>
                         {isVendor ? "AGENCY" : "TEAM"}
                       </span>
-                      <span style={{ color: PRIORITY_COLORS[t.priority] || "#000" }}>{t.priority}</span>
+                      <span style={{ color: PRIORITY_COLORS[t.priority] || "#000" }}>{statusLabel(t.priority)}</span>
                       {overdue && <span className="text-[var(--danger)] flex items-center gap-1"><Warning size={10} weight="fill" /> OVERDUE</span>}
                       <DotsSixVertical size={12} className="text-[var(--line-strong)] ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
@@ -649,7 +652,7 @@ function InlineNumber({ value, onChange }) {
   useEffect(() => setV(value ?? ""), [value]);
   return (
     <input
-      type="number" value={v}
+      type="number" min="0" value={v}
       onChange={(e) => setV(e.target.value)}
       onBlur={() => { if (String(v) !== String(value ?? "")) onChange(v === "" ? null : Number(v)); }}
       className="bg-transparent border-none outline-none text-xs w-14 hover:bg-white focus:bg-white px-1 py-0.5"
@@ -736,7 +739,7 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
         <input className="input-flat" placeholder="Item description" value={form.item_description}
           onChange={(e) => set("item_description", e.target.value)} />
 
-        <input className="input-flat" placeholder="Quantity" type="number" value={form.quantity}
+        <input className="input-flat" placeholder="Quantity" type="number" min="0" value={form.quantity}
           onChange={(e) => set("quantity", e.target.value)} />
         <select aria-label="Status" className="input-flat" value={form.status_detail}
           onChange={(e) => set("status_detail", e.target.value)}>

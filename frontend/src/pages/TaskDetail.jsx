@@ -147,7 +147,7 @@ function Overview({ task, meta, onSave }) {
           <div className="grid grid-cols-2 gap-3">
             <LabeledInput label="Item description" value={t.item_description || ""}
               onChange={(v) => set("item_description", v)} onBlur={(v) => commit("item_description", v)} />
-            <LabeledInput label="Quantity" type="number" value={t.quantity ?? ""}
+            <LabeledInput label="Quantity" type="number" min="0" value={t.quantity ?? ""}
               onChange={(v) => set("quantity", v)}
               onBlur={(v) => commit("quantity", v === "" ? null : Number(v))} />
             <LabeledInput label="Remarks" value={t.remarks || ""}

@@ -338,7 +338,7 @@ async def list_vendors(
     else:
         query["active"] = {"$ne": False}
     if q:
-        rx = {"$regex": q, "$options": "i"}
+        rx = {"$regex": _re_mod.escape(q.strip()), "$options": "i"}   # typed text, not a pattern
         query["$or"] = [{"name": rx}, {"company": rx}]
         if _can_read_vendor_contacts(user):   # searching by phone would reveal it
             query["$or"] += [{"phone": rx}, {"email": rx}, {"gstin": rx}, {"contact_person": rx}]
@@ -1244,7 +1244,7 @@ async def _reverse_vendor_payment_locked(user: dict, pmt_id: str):
                       "description": f"Reversal · {l.get('description') or ''}".strip()}
                      for l in orig.get("lines") or []]
         rev = await _post_journal(
-            user, iso_now()[:10],
+            user, business_today().isoformat(),   # India date
             f"Vendor payment reversed · {pmt.get('vendor_name') or ''}".strip(),
             rev_lines, reference=orig.get("reference"), project_id=orig.get("project_id"),
             vendor_id=orig.get("vendor_id"), source="vendor_payment_reversal",

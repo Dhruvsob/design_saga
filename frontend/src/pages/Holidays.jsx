@@ -83,7 +83,7 @@ export default function Holidays() {
         <div className="flex items-center gap-2">
           <label className="overline">YEAR</label>
           <input
-            type="number" value={year} aria-label="Year"
+            type="number" min="2000" max="2100" value={year} aria-label="Year"
             data-testid="holiday-year-input"
             onChange={(e) => setYear(Number(e.target.value) || currentYear)}
             className="border border-[var(--line)] w-24 text-sm px-2 py-1"
