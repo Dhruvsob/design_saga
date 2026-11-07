@@ -23,6 +23,7 @@ from typing import Optional, List
 from datetime import date as _date, datetime, timedelta
 from pydantic import BaseModel
 
+from core.limits import MAX_LIST_ROWS
 from core.scoped_db import sdb
 from core.helpers import iso_now, new_id
 from core.deps import require_user
@@ -94,7 +95,7 @@ async def list_holidays(request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "holidays.read"):
         raise HTTPException(403, "Missing permission: holidays.read")
-    rows = await sdb.holidays.find({}, {"_id": 0}).sort("date", 1).to_list(2000)
+    rows = await sdb.holidays.find({}, {"_id": 0}).sort("date", 1).to_list(MAX_LIST_ROWS)
     if year:
         rows = _expand_recurring(rows, year)
         rows.sort(key=lambda r: r["date"])
@@ -213,7 +214,7 @@ async def is_holiday(date_str: str, request: Request,
     d = _date.fromisoformat(date_str)
 
     # Recurring match: same month+day
-    rows = await sdb.holidays.find({"active": True}, {"_id": 0}).to_list(2000)
+    rows = await sdb.holidays.find({"active": True}, {"_id": 0}).to_list(MAX_LIST_ROWS)
     match = None
     for r in rows:
         try:

@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import date as _date, datetime, timezone, timedelta
 
+from core.limits import MAX_LIST_ROWS
 from core.scoped_db import sdb
 from core.helpers import iso_now, new_id
 from core.deps import require_user
@@ -181,7 +182,7 @@ async def list_events(request: Request, start: Optional[str] = None, end: Option
     vis = await event_visibility_query(user)
     if vis:
         q = {"$and": [q, vis]} if q else vis
-    rows = await sdb.calendar_events.find(q, {"_id": 0}).sort("date", 1).to_list(1000)
+    rows = await sdb.calendar_events.find(q, {"_id": 0}).sort("date", 1).to_list(MAX_LIST_ROWS)
     return rows
 
 
@@ -193,6 +194,14 @@ async def _check_event_project(user: dict, project_id: Optional[str]) -> None:
         raise HTTPException(404, "Project not found")
 
 
+async def _check_event_links(client_id: Optional[str], vendor_id: Optional[str]) -> None:
+    """Tagged clients/vendors must exist in this company (sdb is tenant-scoped)."""
+    if client_id and not await sdb.clients.find_one({"id": client_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(404, "Client not found")
+    if vendor_id and not await sdb.vendors.find_one({"id": vendor_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(404, "Vendor not found")
+
+
 @router.post("/calendar/events")
 async def create_event(payload: EventIn, request: Request,
                        session_token: Optional[str] = Cookie(default=None),
@@ -202,6 +211,7 @@ async def create_event(payload: EventIn, request: Request,
         raise HTTPException(403, "Missing permission: calendar.read")
     _validate_event_timing(payload.date, payload.end_date, payload.start_time, payload.end_time)
     await _check_event_project(user, payload.project_id)
+    await _check_event_links(payload.client_id, payload.vendor_id)
     kind = payload.kind if payload.kind in EVENT_KINDS else "other"
     visibility = payload.visibility if payload.visibility in VISIBILITIES else "private"
     reminder = payload.reminder_minutes
@@ -259,6 +269,7 @@ async def update_event(event_id: str, payload: EventUpdate, request: Request,
                            merged.get("start_time"), merged.get("end_time"))
     if upd.get("project_id"):
         await _check_event_project(user, upd["project_id"])
+    await _check_event_links(upd.get("client_id"), upd.get("vendor_id"))
     if "kind" in upd and upd["kind"] not in EVENT_KINDS:
         upd["kind"] = "other"
     if "visibility" in upd and upd["visibility"] not in VISIBILITIES:
@@ -318,7 +329,7 @@ async def calendar_feed(start: str, end: str, request: Request,
             task_query,
             {"_id": 0, "id": 1, "title": 1, "due_date": 1, "status": 1,
              "priority": 1, "assignee_name": 1, "project_id": 1},
-        ).to_list(2000)
+        ).to_list(MAX_LIST_ROWS)
     proj_ids = {t["project_id"] for t in tasks if t.get("project_id")}
     proj_names = {}
     if proj_ids:
@@ -346,7 +357,7 @@ async def calendar_feed(start: str, end: str, request: Request,
         ms = await sdb.payment_milestones.find(
             milestone_query,
             {"_id": 0, "id": 1, "name": 1, "due_date": 1, "amount": 1, "status": 1, "project_id": 1},
-        ).to_list(500)
+        ).to_list(MAX_LIST_ROWS)
     ms_proj = {m["project_id"] for m in ms if m.get("project_id")}
     if ms_proj:
         async for p in sdb.projects.find({"id": {"$in": list(ms_proj)}}, {"_id": 0, "id": 1, "name": 1}):
@@ -373,7 +384,7 @@ async def calendar_feed(start: str, end: str, request: Request,
         projs = await sdb.projects.find(
             project_query,
             {"_id": 0, "id": 1, "name": 1, "end_date": 1, "stage": 1},
-        ).to_list(500)
+        ).to_list(MAX_LIST_ROWS)
     for p in projs:
         items.append({
             "id": f"project:{p['id']}",
@@ -389,7 +400,7 @@ async def calendar_feed(start: str, end: str, request: Request,
     # ---- 4) Holidays (exact + recurring expansion) ----
     y0, y1 = int(start[:4]), int(end[:4])
     holiday_rows = (await sdb.holidays.find(
-        {"active": {"$ne": False}}, {"_id": 0}).to_list(1000)
+        {"active": {"$ne": False}}, {"_id": 0}).to_list(MAX_LIST_ROWS)
                     if has_permission(user, "holidays.read") else [])
     for h in holiday_rows:
         hd = (h.get("date") or "")[:10]
@@ -429,7 +440,7 @@ async def calendar_feed(start: str, end: str, request: Request,
             leave_query,
             {"_id": 0, "id": 1, "employee_name": 1, "leave_type": 1,
              "from_date": 1, "to_date": 1},
-        ).to_list(500)
+        ).to_list(MAX_LIST_ROWS)
     for l in leaves:
         items.append({
             "id": f"leave:{l['id']}",
@@ -448,7 +459,7 @@ async def calendar_feed(start: str, end: str, request: Request,
             {"due_date": {"$gte": start, "$lte": end_hi},
              "status": {"$nin": ["paid", "cancelled"]}},
             {"_id": 0, "id": 1, "number": 1, "client_name": 1, "due_date": 1, "total": 1, "status": 1},
-        ).to_list(500)
+        ).to_list(MAX_LIST_ROWS)
         for inv in invs:
             items.append({
                 "id": f"invoice:{inv['id']}",
@@ -465,7 +476,7 @@ async def calendar_feed(start: str, end: str, request: Request,
     vis = await event_visibility_query(user)
     if vis:
         evt_q = {"$and": [evt_q, vis]}
-    evts = await sdb.calendar_events.find(evt_q, {"_id": 0}).to_list(1000)
+    evts = await sdb.calendar_events.find(evt_q, {"_id": 0}).to_list(MAX_LIST_ROWS)
     for e in evts:
         items.append({
             "id": f"event:{e['id']}",

@@ -8,11 +8,11 @@ Prepared 07/11/2026 from the code, test runs and live checks. Status: **Doing** 
 
 | # | Area | Finding (evidence) | Risk | Fix | Status |
 |---|---|---|---|---|---|
-| R1 | All lists | Backend reads stop at 500–2,000 rows in 65 places (`to_list(500)` etc.); no list has pagination | As data grows, records silently disappear from lists, totals and exports | Server-side pagination + "Load more"/pages on Daybook, Invoices, Tasks, Attendance, Audit, Clients, Leads | Next |
+| R1 | All lists | Backend reads stop at 500–2,000 rows in 65 places (`to_list(500)` etc.); no list has pagination | As data grows, records silently disappear from lists, totals and exports | Server-side pagination + "Load more"/pages on Daybook, Invoices, Tasks, Attendance, Audit, Clients, Leads | Done (DS-100) |
 | R2 | Security | The MongoDB Atlas password once exposed in history is not yet rotated (SEC-01) | Anyone with that string could reach old data | Rotate in Atlas, update VPS `.env` | Owner decision |
 | R3 | Backups | Backups stay on the same VPS (OPS-02/03) | Disk/VPS loss = data + backups lost together | Nightly copy to off-server storage (e.g. Backblaze/Drive) + failure alert | Owner decision |
-| R4 | Calendar | Events accept any `client_id` / `vendor_id` without checking they exist in the tenant | Wrong/foreign links on events | Validate like project links (done for projects in DS-097) | Next |
-| R5 | Forms | 17 native `prompt()` popups (Employee, Vendor, Quotation screens) | Ugly, blocked on some mobiles, no validation | Replace with in-app dialogs | Doing |
+| R4 | Calendar | Events accept any `client_id` / `vendor_id` without checking they exist in the tenant | Wrong/foreign links on events | Validate like project links (done for projects in DS-097) | Done (DS-100) |
+| R5 | Forms | 17 native `prompt()` popups (Employee, Vendor, Quotation screens) | Ugly, blocked on some mobiles, no validation | Replace with in-app dialogs | Done (DS-099) |
 | R6 | Performance | Accounting (1,883 lines), Attendance (1,879), VendorDetail (1,471) load everything at once | Slow on phones as data grows | Split into lazy-loaded sections | Later |
 | R7 | Ops | Machine-level: local test DB crashed under memory; no production uptime/error alert | Outages noticed only by users | Uptime ping + error alert to email/WhatsApp | Owner decision (destination) |
 | R8 | Permissions | Employee/Designer roles can read all clients and leads (SEC-02) | Staff see all client contacts | Decide policy; restrict if wanted | Owner decision |
@@ -24,7 +24,7 @@ Prepared 07/11/2026 from the code, test runs and live checks. Status: **Doing** 
 | # | Change | Why | Status |
 |---|---|---|---|
 | U1 | ⋮ menu on every list (Projects, Leads, Employees, Purchase orders, Expenses, Loans, Holidays, Tasks, Accounting entries, Vendor bills/payments) | Clean rows, consistent actions; done for Invoices, Quotations, Clients, Vendors | Doing |
-| U2 | Pagination + "showing 1–50 of 230" on every table | See R1 | Next |
+| U2 | Pagination + "showing 1–50 of 230" on every table | Done for Invoices, Clients, Vendors, Employees (DS-100) |
 | U3 | Sticky table headers and sticky first column on wide tables | Easier reading of Daybook/Monthly sheet | Next |
 | U4 | Empty states with one clear action ("No vendors yet — Add vendor") | Guides new firms | Next |
 | U5 | Loading skeletons on every page (some show nothing while loading) | Feels faster | Next |

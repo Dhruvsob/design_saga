@@ -19,6 +19,7 @@ from calendar import monthrange
 import hashlib
 from pymongo.errors import DuplicateKeyError
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, iso_now, now_utc, new_id
@@ -166,7 +167,7 @@ async def list_loans(request: Request,
         q["status"] = status
     elif not include_archived:
         q["status"] = {"$ne": "archived"}
-    rows = await sdb.loans.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.loans.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     for r in rows:
         r["outstanding"] = _outstanding(r.get("schedule", []))
         r["next_due_date"] = _next_due(r.get("schedule", []))
@@ -586,7 +587,7 @@ async def loans_summary(request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_any_permission(user, "finance.read", "loans.read"):
         raise HTTPException(403, "Missing permission")
-    rows = await sdb.loans.find({"status": "active"}, {"_id": 0}).to_list(200)
+    rows = await sdb.loans.find({"status": "active"}, {"_id": 0}).to_list(None)
     total_outstanding = 0.0
     next_due = None
     next_due_amount = 0

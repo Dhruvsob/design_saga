@@ -11,6 +11,15 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-100: No more silent row limits; paging on long lists; calendar link checks
+
+- R1: backend reads stopped at fixed row counts (500 to 20,000) in ~90 places. In money code this meant wrong totals once a company grew: P&L, ledgers, receivables, finance dashboard, vendor ledgers/commissions, payroll and advance recovery. In `core/access_control.visible_project_ids` it meant users would lose access to projects past the cap.
+- Fix: accounting, vendors, finance extras, payroll, advances, loans (EMI), attendance salary summaries and access control now read every row (`to_list(None)`). Plain display lists use one shared limit `core/limits.MAX_LIST_ROWS = 20000`. Naturally small sets (phases, office locations, master data) and explicit `.limit(n)` reads are unchanged.
+- Guard: `tests/test_row_limits.py` fails if a capped read returns to the money/access modules or server lists; added to the CI gate.
+- U2: shared `components/Pager.jsx` (`usePaged`): 50 rows per page with "Showing 1-50 of N" and Prev/Next on Invoices, Clients, Vendors, Employees; resets to page 1 when search/filter changes; hidden for short lists. Daybook already pages from the server.
+- R4: calendar events now refuse a `client_id` / `vendor_id` that does not exist in the company (404), on create and edit.
+- Verified: backend gate 386 + 2 new passed; ESLint clean; build OK; e2e ux/forms/a11y/money 28 passed (one mobile client-picker test timed out under load and passed when rerun alone).
+
 ### DS-099: Master improvement list; colourful map; in-app forms; more ⋮ menus
 
 - Owner asked for a list of bugs, risks, UI changes and module features, then fixes module by module. Written to `docs/PRODUCT_UX_RESEARCH/06_MASTER_IMPROVEMENT_LIST.md` (risks R1-R10, whole-app U1-U10, per-module ideas, order of work).

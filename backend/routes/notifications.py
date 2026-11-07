@@ -8,6 +8,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, iso_now, now_utc
@@ -103,7 +104,7 @@ async def list_notifications(request: Request,
         q["kind"] = kind
     rows = await db.notifications.find(q, {"_id": 0}) \
                                  .sort("created_at", -1) \
-                                 .limit(min(max(limit, 1), 500)).to_list(500)
+                                 .limit(min(max(limit, 1), 500)).to_list(MAX_LIST_ROWS)
     unread = await db.notifications.count_documents(
         notification_owner_filter(user, read=False))
     return {"unread_count": unread, "notifications": rows}

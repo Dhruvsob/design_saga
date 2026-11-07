@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Query
 from pydantic import BaseModel, Field
 
+from core.limits import MAX_LIST_ROWS
 from core.scoped_db import sdb
 from core.deps import require_user
 from core.helpers import iso_now, new_id
@@ -66,7 +67,7 @@ async def list_comments(request: Request,
     await _require_entity_access(user, entity_type, entity_id)
     rows = await sdb.comments.find(
         {"entity_type": entity_type, "entity_id": entity_id, "deleted": {"$ne": True}},
-        {"_id": 0}).sort("created_at", 1).to_list(500)
+        {"_id": 0}).sort("created_at", 1).to_list(MAX_LIST_ROWS)
     return rows
 
 

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 import uuid
 import re
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.helpers import iso_now, now_utc, new_id
 from core.tenancy import (
@@ -93,7 +94,7 @@ async def list_orgs(user=None, request: Request = None,
                     session_token: Optional[str] = Cookie(default=None),
                     authorization: Optional[str] = Header(default=None)):
     await require_super_admin(request, session_token, authorization)
-    rows = await db.organizations.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await db.organizations.find({}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     # Attach quick stats per org
     out = []
     for o in rows:
@@ -378,7 +379,7 @@ async def list_org_users(org_id: str, request: Request,
                          authorization: Optional[str] = Header(default=None)):
     await require_super_admin(request, session_token, authorization)
     rows = await db.users.find({"org_id": org_id}, {"_id": 0, "password_hash": 0}) \
-                         .sort("created_at", 1).to_list(500)
+                         .sort("created_at", 1).to_list(MAX_LIST_ROWS)
     return rows
 
 

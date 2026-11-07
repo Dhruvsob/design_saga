@@ -70,7 +70,7 @@ async def project_visibility_query(user: dict) -> dict:
 async def visible_project_ids(user: dict) -> list[str]:
     rows = await sdb.projects.find(
         await project_visibility_query(user), {"_id": 0, "id": 1}
-    ).to_list(2000)
+    ).to_list(None)
     return [row["id"] for row in rows if row.get("id")]
 
 
@@ -107,7 +107,7 @@ async def visible_purchase_order_ids(user: dict) -> list[str] | None:
         return None
     rows = await sdb.purchase_orders.find(
         await purchase_order_visibility_query(user), {"_id": 0, "id": 1}
-    ).to_list(2000)
+    ).to_list(None)
     return [row["id"] for row in rows if row.get("id")]
 
 

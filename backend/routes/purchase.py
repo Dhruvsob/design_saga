@@ -15,6 +15,7 @@ from typing import Optional, List
 from datetime import date as _date
 import hashlib
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, iso_now, new_id
@@ -103,7 +104,7 @@ async def list_pos(request: Request, vendor_id: Optional[str] = None,
     if vendor_id: q["vendor_id"] = vendor_id
     if status: q["status"] = status
     q = merge_query(q, await purchase_order_visibility_query(user))
-    rows = await sdb.purchase_orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.purchase_orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     return rows
 
 
@@ -310,7 +311,7 @@ async def list_grns(request: Request, po_id: Optional[str] = None,
     visible_ids = await visible_purchase_order_ids(user)
     if visible_ids is not None:
         q = merge_query(q, {"po_id": {"$in": visible_ids}})
-    rows = await sdb.goods_receipts.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.goods_receipts.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     return rows
 
 

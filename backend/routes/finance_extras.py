@@ -145,7 +145,7 @@ async def list_recurring(request: Request,
     if not has_permission(user, "finance.read"):
         raise HTTPException(403, "Missing permission: finance.read")
     q = {"active": True} if active_only else {}
-    rows = await sdb.recurring_expenses.find(q, {"_id": 0}).sort("next_run_date", 1).to_list(500)
+    rows = await sdb.recurring_expenses.find(q, {"_id": 0}).sort("next_run_date", 1).to_list(None)
     return rows
 
 
@@ -346,7 +346,7 @@ async def list_favorites(request: Request,
     if not ids:
         return {"account_ids": [], "accounts": []}
     accs = await sdb.accounts.find({"id": {"$in": ids}, "active": {"$ne": False}},
-                                   {"_id": 0}).to_list(50)
+                                   {"_id": 0}).to_list(None)
     order = {aid: i for i, aid in enumerate(ids)}
     accs.sort(key=lambda a: order.get(a["id"], 999))
     return {"account_ids": ids, "accounts": accs}
@@ -431,7 +431,7 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
         if from_date: d["$gte"] = from_date
         if to_date:   d["$lte"] = to_date
         q["bill_date"] = d
-    rows = await sdb.vendor_commissions.find(q, {"_id": 0}).sort("bill_date", 1).to_list(2000)
+    rows = await sdb.vendor_commissions.find(q, {"_id": 0}).sort("bill_date", 1).to_list(None)
 
     oid = user_org_id(user)
     org = await db.organizations.find_one(
@@ -804,7 +804,7 @@ async def list_bank_batches(account_id: str, request: Request,
         raise HTTPException(403, "Missing permission: finance.read")
     batches = await sdb.bank_statement_batches.find(
         {"account_id": account_id}, {"_id": 0, "raw_csv": 0},
-    ).sort("created_at", -1).to_list(500)
+    ).sort("created_at", -1).to_list(None)
     for b in batches:
         b["live"] = await _batch_live_stats(b["id"])
     return {"batches": batches}
@@ -890,7 +890,7 @@ async def list_bank_rows(account_id: str, request: Request,
         if from_date: d["$gte"] = from_date
         if to_date:   d["$lte"] = to_date
         q["date"] = d
-    rows = await sdb.bank_statement_rows.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
+    rows = await sdb.bank_statement_rows.find(q, {"_id": 0}).sort("date", -1).to_list(None)
     counts = {"unmatched": 0, "auto_matched": 0, "matched": 0, "reconciled": 0, "ignored": 0}
     for r in rows:
         s = r.get("status") or "unmatched"
@@ -1050,7 +1050,7 @@ async def bank_reconciliation_summary(request: Request,
         raise HTTPException(403, "Missing permission: finance.read")
     accs = await sdb.accounts.find({"$or": [{"is_bank": True}, {"name": "Cash"},
                                              {"name": "Petty Cash"}]},
-                                    {"_id": 0}).to_list(50)
+                                    {"_id": 0}).to_list(None)
     out = []
     for a in accs:
         stats = {"unmatched": 0, "auto_matched": 0, "matched": 0, "reconciled": 0, "ignored": 0}

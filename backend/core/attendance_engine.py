@@ -263,7 +263,7 @@ async def payroll_preview(year: int, month: int, policy: dict) -> dict:
     """Attendance-linked payroll preview for all active employees."""
     holiday_dates = await get_holiday_dates(year)
     emps = await sdb.employees.find(
-        {"employment_status": {"$nin": ["terminated"]}}, {"_id": 0}).to_list(1000)
+        {"employment_status": {"$nin": ["terminated"]}}, {"_id": 0}).to_list(None)
     rows = []
     total_net = 0.0
     unconfigured = 0

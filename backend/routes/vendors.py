@@ -327,7 +327,7 @@ async def list_vendors(
         query["$or"] = [{"name": rx}, {"company": rx}, {"phone": rx},
                         {"email": rx}, {"gstin": rx}, {"contact_person": rx}]
 
-    rows = await sdb.vendors_acc.find(query, {"_id": 0}).sort("name", 1).to_list(1000)
+    rows = await sdb.vendors_acc.find(query, {"_id": 0}).sort("name", 1).to_list(None)
 
     # Filter by project: only vendors that have journal_entries or bills against this project
     if project_id:
@@ -427,9 +427,9 @@ async def get_vendor(vendor_id: str, request: Request,
     can_finance = _can_read_vendor_financials(user)
     # Aggregate finance only for users allowed to read accounting data.
     bills = (await sdb.vendor_bills.find({"vendor_id": vendor_id}, {"_id": 0})
-             .sort("bill_date", -1).to_list(500)) if can_finance else []
+             .sort("bill_date", -1).to_list(None)) if can_finance else []
     payments = (await sdb.vendor_payments.find({"vendor_id": vendor_id}, {"_id": 0})
-                .sort("payment_date", -1).to_list(500)) if can_finance else []
+                .sort("payment_date", -1).to_list(None)) if can_finance else []
 
     outstanding = sum(float(b.get("outstanding") or 0)
                       for b in bills if b.get("status") in ("received", "partially_paid", "overdue"))
@@ -442,7 +442,7 @@ async def get_vendor(vendor_id: str, request: Request,
     task_query = await _vendor_task_query(v)
     tasks = await sdb.tasks.find(
         merge_query(task_query, await task_visibility_query(user)), {"_id": 0}
-    ).sort("created_at", -1).to_list(500)
+    ).sort("created_at", -1).to_list(None)
 
     project_ids = list({t.get("project_id") for t in tasks if t.get("project_id")})
     # Finance readers may also discover projects through bills/journals.
@@ -458,7 +458,7 @@ async def get_vendor(vendor_id: str, request: Request,
                                       {"id": {"$in": project_ids}},
                                       await project_visibility_query(user)),
                                       {"_id": 0, "id": 1, "name": 1, "stage": 1,
-                                       "client_name": 1}).to_list(200)
+                                       "client_name": 1}).to_list(None)
 
     v["summary"] = {
         "task_count": len(tasks),
@@ -728,7 +728,7 @@ async def list_vendor_ratings(vendor_id: str, request: Request,
         "$or": [{"project_id": {"$in": visible_ids}}, {"project_id": None},
                 {"project_id": {"$exists": False}}],
     }, {"_id": 0}) \
-                                  .sort("created_at", -1).to_list(500)
+                                  .sort("created_at", -1).to_list(None)
 
 
 # ==================================================
@@ -833,7 +833,7 @@ async def list_vendor_bills(request: Request,
     if vendor_id:  query["vendor_id"] = vendor_id
     if project_id: query["project_id"] = project_id
     if status:     query["status"] = status
-    rows = await sdb.vendor_bills.find(query, {"_id": 0}).sort("bill_date", -1).to_list(1000)
+    rows = await sdb.vendor_bills.find(query, {"_id": 0}).sort("bill_date", -1).to_list(None)
     return rows
 
 
@@ -849,7 +849,7 @@ async def get_vendor_bill(bill_id: str, request: Request,
     # Attach payments that touch this bill
     bill["payments"] = await sdb.vendor_payments.find(
         {"bill_ids": bill_id}, {"_id": 0}
-    ).sort("payment_date", -1).to_list(200)
+    ).sort("payment_date", -1).to_list(None)
     return bill
 
 
@@ -1053,7 +1053,7 @@ async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, ba
             {"vendor_id": payload.vendor_id,
              "status": {"$in": ["received", "partially_paid", "overdue"]}},
             {"_id": 0}
-        ).sort("bill_date", 1).to_list(500)
+        ).sort("bill_date", 1).to_list(None)
 
     for b in open_bills:
         if remaining <= 0.001:
@@ -1141,7 +1141,7 @@ async def list_vendor_payments(request: Request,
     query: dict = {}
     if vendor_id:  query["vendor_id"] = vendor_id
     if project_id: query["project_id"] = project_id
-    return await sdb.vendor_payments.find(query, {"_id": 0}).sort("payment_date", -1).to_list(1000)
+    return await sdb.vendor_payments.find(query, {"_id": 0}).sort("payment_date", -1).to_list(None)
 
 
 @router.patch("/vendor-payments/{pmt_id}")
@@ -1365,7 +1365,7 @@ async def vendor_performance(vendor_id: str, request: Request,
     task_query = await _vendor_task_query(vendor)
     tasks = await sdb.tasks.find(
         merge_query(task_query, await task_visibility_query(user)), {"_id": 0}
-    ).to_list(500)
+    ).to_list(None)
     total_tasks = len(tasks)
     done_tasks = sum(1 for t in tasks if t.get("status") == "done"
                      or t.get("status_detail") == "Completed")
@@ -1399,7 +1399,7 @@ async def vendor_performance(vendor_id: str, request: Request,
         "vendor_id": vendor_id,
         "$or": [{"project_id": {"$in": visible_ids}}, {"project_id": None},
                 {"project_id": {"$exists": False}}],
-    }, {"_id": 0}).to_list(500)
+    }, {"_id": 0}).to_list(None)
     def _avg(k):
         vals = [float(r[k]) for r in ratings if r.get(k) is not None]
         return round(sum(vals) / len(vals), 2) if vals else None
@@ -1851,7 +1851,7 @@ async def list_vendor_commissions(vendor_id: str, request: Request,
     if status:
         q["status"] = status
     rows = await sdb.vendor_commissions.find(q, {"_id": 0}) \
-                                      .sort("bill_date", -1).to_list(2000)
+                                      .sort("bill_date", -1).to_list(None)
     return rows
 
 
@@ -1864,7 +1864,7 @@ async def _active_commission_settlements(query: dict) -> tuple[list[dict], set[s
     when that journal has subsequently been reversed.
     """
     settlements = await sdb.commission_settlements.find(query, {"_id": 0}) \
-        .sort("received_date", -1).to_list(20000)
+        .sort("received_date", -1).to_list(None)
     journal_ids = {
         row.get("journal_entry_id") for row in settlements if row.get("journal_entry_id")
     }
@@ -1957,7 +1957,7 @@ async def vendor_commission_ledger(vendor_id: str, request: Request,
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     rows = await sdb.vendor_commissions.find({"vendor_id": vendor_id}, {"_id": 0}) \
-                                      .sort("bill_date", 1).to_list(5000)
+                                      .sort("bill_date", 1).to_list(None)
     receipts, settlement_journal_ids = await _active_commission_settlements(
         {"vendor_id": vendor_id}
     )
@@ -2079,7 +2079,7 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
         rows = await sdb.vendor_commissions.find(
             {"vendor_id": vendor_id, "status": {"$in": ["pending", "invoiced"]}},
             {"_id": 0}
-        ).sort("bill_date", 1).to_list(500)
+        ).sort("bill_date", 1).to_list(None)
 
     remaining = float(payload.amount)
     settled: list = []
@@ -2307,7 +2307,7 @@ async def commissions_dashboard(request: Request,
     by_vendor: dict = {}
     by_project: dict = {}
     rows = await sdb.vendor_commissions.find({"status": {"$nin": ["cancelled", "reversed"]}}, {"_id": 0}) \
-                                      .to_list(20000)
+                                      .to_list(None)
     for r in rows:
         earned = float(r.get("earned_amount")
                        if r.get("earned_amount") is not None
@@ -2419,7 +2419,7 @@ async def commissions_report(request: Request,
         if to_date:   d["$lte"] = to_date
         q["bill_date"] = d
     rows = await sdb.vendor_commissions.find(q, {"_id": 0}) \
-                                      .sort("bill_date", -1).to_list(5000)
+                                      .sort("bill_date", -1).to_list(None)
     totals = {
         "earned":   round(sum(float(r.get("earned_amount")
                                     if r.get("earned_amount") is not None

@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
+import { usePaged } from "../components/Pager";
 
 const AGENCY_LABELS = {
   vendor: "Vendor", agency: "Agency", contractor: "Contractor",
@@ -23,6 +24,7 @@ export default function Vendors() {
   const { hasPerm } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
+  const { pageRows: rowsPage, pager: rowsPager } = usePaged(rows, { key: "vendors" });
   const [meta, setMeta] = useState({ agency_types: [] });
   const [q, setQ] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -237,7 +239,7 @@ export default function Vendors() {
                 </td>
               </tr>
             )}
-            {rows.map((v) => (
+            {rowsPage.map((v) => (
               <tr
                 key={v.id}
                 className="border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer"
@@ -290,7 +292,7 @@ export default function Vendors() {
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table>{rowsPager}</div>
       </div>
     </div>
   );

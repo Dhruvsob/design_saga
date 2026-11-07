@@ -9,6 +9,7 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import PdfPreviewModal from "../components/PdfPreview";
 import RowActions from "../components/RowActions";
+import { usePaged } from "../components/Pager";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -18,6 +19,7 @@ export default function Invoices({ docType = "invoice" }) {
   const canRecordPayment = hasPerm("finance.create");
   const canCorrectPayment = hasPerm("finance.delete");
   const [rows, setRows] = useState([]);
+  const { pageRows: rowsPage, pager: rowsPager } = usePaged(rows, { key: "invoices" });
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -263,7 +265,7 @@ export default function Invoices({ docType = "invoice" }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rowsPage.map((r) => (
               <tr key={r.id} className="border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)]" data-testid={`${docType}-row-${r.id}`}>
                 <Td className="font-mono font-semibold">{r.number}</Td>
                 <Td>{r.client_name || "—"}</Td>
@@ -302,7 +304,7 @@ export default function Invoices({ docType = "invoice" }) {
               <tr><td colSpan="7" className="p-6 text-center text-[var(--ink-2)]">No {docType}s yet.</td></tr>
             )}
           </tbody>
-        </table>
+        </table>{rowsPager}
       </div>
 
       {preview && (

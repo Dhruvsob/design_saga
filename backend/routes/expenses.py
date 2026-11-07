@@ -20,6 +20,7 @@ from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import date as _date
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, iso_now, new_id
@@ -175,7 +176,7 @@ async def list_expenses(request: Request, status: Optional[str] = None,
     # `expenses.read` is a self-service perm (all staff have it), so team-wide
     # visibility requires a manager perm (finance.read / expenses.update|approve).
     q = _visible_expense_query(user, q)
-    rows = await sdb.expenses.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.expenses.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     return rows
 
 

@@ -43,6 +43,7 @@ db = client[db_name]
 
 # Tenant-scoped proxy — use `sdb.<coll>.` in place of `db.<coll>.` for
 # any business collection so reads/writes auto-filter by org_id.
+from core.limits import MAX_LIST_ROWS
 from core.scoped_db import sdb  # noqa: E402
 from core.audit import audit as audit_log  # noqa: E402
 from core.downloads import content_disposition  # noqa: E402
@@ -763,7 +764,7 @@ async def rbac_users(request: Request,
     if not (has_permission(user, "users.read") or has_permission(user, "rbac.read")):
         raise HTTPException(status_code=403, detail="Missing permission: users.read")
     from core.tenancy import tenant_filter as _tfilter
-    users = await db.users.find(_tfilter(user), {"_id": 0}).sort("created_at", 1).to_list(500)
+    users = await db.users.find(_tfilter(user), {"_id": 0}).sort("created_at", 1).to_list(MAX_LIST_ROWS)
     # Which identifiers are currently locked out (>=5 fails in the window)?
     from datetime import timedelta as _td
     cutoff = now_utc() - _td(minutes=15)
@@ -773,7 +774,7 @@ async def rbac_users(request: Request,
             {"$match": {"at": {"$gte": cutoff}}},
             {"$group": {"_id": "$identifier", "n": {"$sum": 1}}},
             {"$match": {"n": {"$gte": 5}}},
-        ]).to_list(1000)
+        ]).to_list(MAX_LIST_ROWS)
         locked_idents = {a["_id"] for a in agg}
     except Exception:
         locked_idents = set()
@@ -987,7 +988,7 @@ async def list_leads(request: Request, session_token: Optional[str] = Cookie(def
                      authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "leads.read")
-    leads = await sdb.leads.find({"archived": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    leads = await sdb.leads.find({"archived": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     return leads
 
 
@@ -1283,7 +1284,7 @@ async def list_clients(request: Request, include_archived: bool = False,
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "clients.read")
     q = {} if include_archived else {"archived": {"$ne": True}}
-    rows = await sdb.clients.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.clients.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     return rows
 
 
@@ -1316,10 +1317,10 @@ async def get_client(client_id: str, request: Request,
     c["projects"] = await sdb.projects.find(
         merge_query({"client_id": client_id, "archived": {"$ne": True}},
                     await project_visibility_query(user)),
-        {"_id": 0}).sort("created_at", -1).to_list(200)
+        {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     # Financial history is only included for invoice/finance readers.
     c["invoices"] = (await sdb.invoices.find(
-        {"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        {"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
         if _can_read_invoices(user) else [])
     invoiced = sum(i.get("total", 0) or 0 for i in c["invoices"] if i.get("doc_type") != "quotation")
     paid = sum(i.get("total", 0) or 0 for i in c["invoices"]
@@ -1433,7 +1434,7 @@ async def list_projects(request: Request, include_archived: bool = False,
     enforce_permission(user, "projects.read")
     q = {} if include_archived else {"archived": {"$ne": True}}
     q = merge_query(q, await project_visibility_query(user))
-    projects = await sdb.projects.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    projects = await sdb.projects.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     if not has_permission(user, "projects.update"):
         for project in projects:
             project.pop("share_token", None)
@@ -1503,23 +1504,23 @@ async def get_project(project_id: str, request: Request,
     p = await get_visible_project(user, project_id)
     if has_permission(user, "tasks.read"):
         task_query = await _project_detail_task_query(user, project_id)
-        p["tasks"] = await sdb.tasks.find(task_query, {"_id": 0}).to_list(500)
+        p["tasks"] = await sdb.tasks.find(task_query, {"_id": 0}).to_list(MAX_LIST_ROWS)
     else:
         p["tasks"] = []
-    p["files"] = (await sdb.files.find({"project_id": project_id}, {"_id": 0}).to_list(500)
+    p["files"] = (await sdb.files.find({"project_id": project_id}, {"_id": 0}).to_list(MAX_LIST_ROWS)
                   if has_permission(user, "files.read") else [])
     can_invoice = _can_read_invoices(user)
     can_procurement = has_permission(user, "purchase_orders.read")
     can_vendor_cost = has_permission(user, "*.*") or has_permission(user, "finance.read")
     p["invoices"] = (await sdb.invoices.find(
-        {"project_id": project_id}, {"_id": 0}).to_list(500) if can_invoice else [])
+        {"project_id": project_id}, {"_id": 0}).to_list(MAX_LIST_ROWS) if can_invoice else [])
     p["milestones"] = (await sdb.payment_milestones.find(
-        {"project_id": project_id}, {"_id": 0}).to_list(200) if can_invoice else [])
+        {"project_id": project_id}, {"_id": 0}).to_list(MAX_LIST_ROWS) if can_invoice else [])
     p["purchase_orders"] = (await sdb.purchase_orders.find(
-        {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
         if can_procurement else [])
     p["vendor_bills"] = (await sdb.vendor_bills.find(
-        {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
         if can_vendor_cost else [])
     # --- team enrichment ---
     team_ids = [i for i in (p.get("team_ids") or []) if i]
@@ -1736,7 +1737,7 @@ async def list_files(request: Request, project_id: Optional[str] = None,
         q["project_id"] = project_id
     else:
         q["project_id"] = {"$in": await visible_project_ids(user)}
-    return await sdb.files.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return await sdb.files.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
 
 
 @api.post("/files")
@@ -1939,7 +1940,7 @@ async def list_invoices(request: Request, doc_type: Optional[str] = None,
     q = {}
     if doc_type:
         q["doc_type"] = doc_type
-    return await sdb.invoices.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return await sdb.invoices.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
 
 
 @api.post("/invoices")
@@ -2587,13 +2588,13 @@ def _public_milestone_projection(milestones: list[dict]) -> list[dict]:
 async def portal_view(token: str):
     project, org_id = await _public_project_by_token(token)
     owned_project = {"project_id": project["id"], "org_id": org_id}
-    tasks = await db.tasks.find(owned_project, {"_id": 0}).to_list(200)
+    tasks = await db.tasks.find(owned_project, {"_id": 0}).to_list(MAX_LIST_ROWS)
     files = await db.files.find(
-        {**owned_project, "client_visible": True}, {"_id": 0}).to_list(200)
+        {**owned_project, "client_visible": True}, {"_id": 0}).to_list(MAX_LIST_ROWS)
     invoices = await db.invoices.find(
         {**owned_project, "status": {"$in": ["sent", "paid", "overdue"]}},
-        {"_id": 0}).to_list(200)
-    milestones = await db.payment_milestones.find(owned_project, {"_id": 0}).to_list(100)
+        {"_id": 0}).to_list(MAX_LIST_ROWS)
+    milestones = await db.payment_milestones.find(owned_project, {"_id": 0}).to_list(MAX_LIST_ROWS)
 
     stage_index = PROJECT_STAGES.index(project.get("stage", "Requirement")) if project.get("stage") in PROJECT_STAGES else 0
     progress = round(((stage_index + 1) / len(PROJECT_STAGES)) * 100)
@@ -3352,7 +3353,7 @@ async def adv_list(request: Request, session_token: Optional[str] = Cookie(defau
                    authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "quotations.read")
-    rows = await sdb.quotations_adv.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.quotations_adv.find({}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     # summary
     out = []
     for r in rows:
@@ -4545,7 +4546,7 @@ async def list_employees(request: Request,
         q["department"] = department
     if status:
         q["employment_status"] = status
-    rows = await sdb.employees.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    rows = await sdb.employees.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     return [_employee_for_user(row, user) for row in rows]
 
 

@@ -11,6 +11,7 @@ import {
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { ArrowSquareOut } from "@phosphor-icons/react";
+import { usePaged } from "../components/Pager";
 
 const EMPTY = { name: "", email: "", phone: "", company: "", address: "", client_type: "", notes: "" };
 
@@ -49,6 +50,7 @@ export default function Clients() {
       [c.name, c.company, c.email, c.phone].some((v) => (v || "").toLowerCase().includes(q)));
     return rows;
   }, [clients, query, typeFilter, showArchived]);
+  const { pageRows: filteredPage, pager: filteredPager } = usePaged(filtered, { key: "clients" });
 
   const submit = async (e) => {
     e.preventDefault(); setErr("");
@@ -159,7 +161,7 @@ export default function Clients() {
             {loading && (
               <tr><td colSpan="7" className="p-6 text-center text-sm text-[var(--ink-3)] font-mono uppercase tracking-wider">Loading…</td></tr>
             )}
-            {!loading && filtered.map((c) => (
+            {!loading && filteredPage.map((c) => (
               <tr key={c.id}
                   onClick={() => navigate(`/clients/${c.id}`)}
                   className={`border-b border-[var(--line-soft)] hover:bg-[var(--surface-2)] cursor-pointer transition ${c.archived ? "opacity-50" : ""}`}
@@ -199,7 +201,7 @@ export default function Clients() {
               </td></tr>
             )}
           </tbody>
-        </table></div>
+        </table>{filteredPager}</div>
       </div>
     </div>
   );

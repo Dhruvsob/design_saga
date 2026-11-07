@@ -160,6 +160,10 @@ test("calendar splits Studio and Project items from one feed; events link only t
   await json(ctx.post("/api/calendar/events", { data: { title: site, date: day, kind: "meeting", project_id: proj.id, visibility: "org" } }));
   const bad = await ctx.post("/api/calendar/events", { data: { title: "x", date: day, project_id: "proj_not_mine" } });
   expect(bad.status()).toBe(404);
+  for (const link of [{ client_id: "cli_not_mine" }, { vendor_id: "ven_not_mine" }]) {
+    const r = await ctx.post("/api/calendar/events", { data: { title: "x", date: day, ...link } });
+    expect(r.status(), JSON.stringify(link)).toBe(404);
+  }
   const feed = await json(ctx.get(`/api/calendar/feed?start=${day}&end=${day}`));
   const projectItem = feed.items.find((i) => i.title === site);
   expect(projectItem.scope).toBe("project");
@@ -222,4 +226,23 @@ test("project card ⋮ pins to top and archives; employee forms use in-app dialo
   const check = await api("admin");
   await expect.poll(async () => JSON.stringify(await json(check.get(`/api/employees/${emp.id}`)))).toContain("Late to site");
   await check.dispose();
+});
+
+test("long lists page at 50 rows and every client is reachable", async ({ page }) => {
+  const ctx = await api("admin");
+  const tag = `Pg${uid()}`;
+  for (let i = 1; i <= 52; i += 1) {
+    await json(ctx.post("/api/clients", { data: { name: `${tag} client ${String(i).padStart(2, "0")}` } }));
+  }
+  const all = await json(ctx.get("/api/clients"));
+  expect(all.filter((c) => c.name.startsWith(tag))).toHaveLength(52);
+  await ctx.dispose();
+
+  await page.goto("/clients");
+  await page.getByTestId("clients-search").fill(tag);
+  await expect(page.getByTestId("pager-clients-range")).toHaveText(/Showing 1–50 of 52/);
+  await page.getByTestId("pager-clients-next").click();
+  await expect(page.getByTestId("pager-clients-range")).toHaveText(/Showing 51–52 of 52/);
+  await page.getByTestId("clients-search").fill(`${tag} client 01`);
+  await expect(page.getByTestId("pager-clients")).toHaveCount(0);       // short list: no pager
 });

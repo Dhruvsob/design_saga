@@ -408,7 +408,7 @@ async def list_runs(request: Request, employee_id: Optional[str] = None,
     if employee_id: q["employee_id"] = employee_id
     if year: q["year"] = year
     if month: q["month"] = month
-    rows = await sdb.payroll_runs.find(q, {"_id": 0}).sort("paid_at", -1).to_list(500)
+    rows = await sdb.payroll_runs.find(q, {"_id": 0}).sort("paid_at", -1).to_list(None)
     return rows
 
 

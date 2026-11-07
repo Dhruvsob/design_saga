@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Depends
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, now_utc, iso, iso_now, new_id
@@ -170,7 +171,7 @@ async def list_tasks(request: Request,
     # tasks for projects they're on (team member or PM) OR tasks assigned to them.
     q = merge_query(q, await task_visibility_query(user))
 
-    rows = await sdb.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    rows = await sdb.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
 
     # ---- Annotate `assigned_to_me` so the UI can badge "Assigned to me". ----
     for t in rows:
@@ -657,7 +658,7 @@ async def upcoming_reminders(request: Request,
         "status": 1, "status_detail": 1,
         "reminder_date": 1, "reminder_time": 1,
         "follow_up_date": 1, "due_date": 1,
-    }).sort("reminder_date", 1).to_list(500)
+    }).sort("reminder_date", 1).to_list(MAX_LIST_ROWS)
 
     for r in rows:
         earliest = min(

@@ -74,7 +74,7 @@ async def apply_recovery(employee_id: str, run_id: str, year: int, month: int,
     left = _d(amount)
     applied = []
     rows = await sdb.employee_advances.find(
-        {"employee_id": employee_id, "status": "open"}, {"_id": 0}).sort("date", 1).to_list(500)
+        {"employee_id": employee_id, "status": "open"}, {"_id": 0}).sort("date", 1).to_list(None)
     for adv in rows:
         if left <= 0:
             break
@@ -96,7 +96,7 @@ async def apply_recovery(employee_id: str, run_id: str, year: int, month: int,
 
 async def restore_recovery(run_id: str) -> None:
     """Undo the recoveries made by a payroll run that has been reversed."""
-    rows = await sdb.employee_advances.find({"recoveries.payroll_run_id": run_id}, {"_id": 0}).to_list(100)
+    rows = await sdb.employee_advances.find({"recoveries.payroll_run_id": run_id}, {"_id": 0}).to_list(None)
     for adv in rows:
         give_back = Decimal(0)
         recs = []
@@ -129,7 +129,7 @@ async def list_advances(eid: str, request: Request,
     _require(user, "payroll.read")
     if not await sdb.employees.find_one({"id": eid}, {"_id": 1}):
         raise HTTPException(status_code=404, detail="Employee not found")
-    rows = await sdb.employee_advances.find({"employee_id": eid}, {"_id": 0}).sort("date", -1).to_list(500)
+    rows = await sdb.employee_advances.find({"employee_id": eid}, {"_id": 0}).sort("date", -1).to_list(None)
     items = [_pack(r) for r in rows]
     open_rows = [r for r in items if r["status"] == "open"]
     suggested = sum(min(r["outstanding"], r.get("monthly_recovery") or r["outstanding"]) for r in open_rows)

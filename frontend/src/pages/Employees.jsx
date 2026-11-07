@@ -7,6 +7,7 @@ import { dateForInput, formatDate } from "../lib/format";
 import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
+import { usePaged } from "../components/Pager";
 
 const STATUS_CHIP = {
   active: "chip-paid",
@@ -81,6 +82,7 @@ export default function Employees() {
       return true;
     });
   }, [rows, filter]);
+  const { pageRows: filteredPage, pager: filteredPager } = usePaged(filtered, { key: "employees" });
 
   const canCreate = hasPerm("employees.create");
   const canDelete = hasPerm("employees.delete") || user?.role === "Admin";
@@ -167,7 +169,7 @@ export default function Employees() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => (
+              {filteredPage.map((r) => (
                 <tr
                   key={r.id}
                   className="row-hover border-b border-[var(--line-soft)] cursor-pointer"
@@ -213,7 +215,7 @@ export default function Employees() {
                 </td></tr>
               )}
             </tbody>
-          </table></div>
+          </table>{filteredPager}</div>
         </div>
       )}
     </div>

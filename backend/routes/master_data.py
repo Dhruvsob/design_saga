@@ -13,6 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Depends
 from pydantic import BaseModel
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.deps import require_user
 from core.helpers import iso_now, new_id
@@ -160,7 +161,7 @@ async def list_all(request: Request,
     q = {"org_id": org_id}
     if not include_inactive:
         q["is_active"] = True
-    rows = await db.master_data.find(q, {"_id": 0}).sort([("kind", 1), ("sort_order", 1)]).to_list(2000)
+    rows = await db.master_data.find(q, {"_id": 0}).sort([("kind", 1), ("sort_order", 1)]).to_list(MAX_LIST_ROWS)
     grouped = {}
     for r in rows:
         grouped.setdefault(r["kind"], []).append(r)

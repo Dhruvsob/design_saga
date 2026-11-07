@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Cookie, Header
 from typing import Optional
 from datetime import date as _date, datetime, timezone, timedelta
 
+from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import now_utc, iso_now, new_id
@@ -344,7 +345,7 @@ async def attendance_project_options(request: Request,
     rows = await sdb.projects.find(
         await _attendance_project_query(user),
         {"_id": 0, "id": 1, "name": 1},
-    ).sort("name", 1).to_list(500)
+    ).sort("name", 1).to_list(MAX_LIST_ROWS)
     return rows
 
 
@@ -943,7 +944,7 @@ async def my_summary(request: Request, year: Optional[int] = None, month: Option
     rows = await sdb.attendance.find(
         {"employee_id": emp_id, "date": {"$gte": start, "$lt": end}},
         {"_id": 0},
-    ).sort("date", 1).to_list(500)
+    ).sort("date", 1).to_list(None)
     counts = {s: 0 for s in ATTENDANCE_STATUSES}
     for r in rows:
         counts[r.get("status", "absent")] = counts.get(r.get("status", "absent"), 0) + 1
@@ -969,7 +970,7 @@ async def monthly_sheet(request: Request, year: Optional[int] = None, month: Opt
              "employee_id": 1, "designation": 1, "department": 1,
              "shift_start": 1, "shift_end": 1, "grace_minutes": 1,
              "weekly_offs": 1, "full_day_min_minutes": 1,
-             "payroll_basis_days": 1, "monthly_salary": 1, "salary": 1}).to_list(500)
+             "payroll_basis_days": 1, "monthly_salary": 1, "salary": 1}).to_list(None)
     policy = await _get_attendance_policy()
     holiday_dates = await engine.get_holiday_dates(y)
     rows = []
@@ -1151,7 +1152,7 @@ async def list_leaves(request: Request, employee_id: Optional[str] = None,
         q["employee_id"] = employee_id
     if status:
         q["status"] = status
-    rows = await sdb.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     # Always surface the employee's name on every leave permission row.
     missing = [r["employee_id"] for r in rows if not r.get("employee_name")]
     if missing:
@@ -1301,7 +1302,7 @@ async def pending_approvals(request: Request,
         raise HTTPException(status_code=403, detail="Missing permission")
     rows = await sdb.attendance.find(
         {"approval_status": "pending"}, {"_id": 0},
-    ).sort("check_in", -1).to_list(500)
+    ).sort("check_in", -1).to_list(MAX_LIST_ROWS)
     return rows
 
 
@@ -1431,7 +1432,7 @@ async def team_dashboard(request: Request,
     today = _today()
     total_emp = await sdb.employees.count_documents(
         {"employment_status": {"$nin": ["terminated"]}})
-    recs = await sdb.attendance.find({"date": today}, {"_id": 0}).to_list(1000)
+    recs = await sdb.attendance.find({"date": today}, {"_id": 0}).to_list(None)
     present = sum(1 for r in recs if r.get("status") in ("present", "late", "half_day", "pending_approval"))
     late = sum(1 for r in recs if r.get("status") == "late")
     checked_in = sum(1 for r in recs if r.get("check_in") and not r.get("check_out"))
@@ -1474,7 +1475,7 @@ async def attendance_records(request: Request, employee_id: Optional[str] = None
             q["date"]["$gte"] = start
         if end:
             q["date"]["$lte"] = end
-    rows = await sdb.attendance.find(q, {"_id": 0}).sort("date", -1).to_list(1000)
+    rows = await sdb.attendance.find(q, {"_id": 0}).sort("date", -1).to_list(MAX_LIST_ROWS)
     name_map = await _employee_name_map(list({r["employee_id"] for r in rows}))
     for r in rows:
         r["employee_name"] = name_map.get(r["employee_id"]) or r.get("employee_name") or r["employee_id"]
@@ -1492,7 +1493,7 @@ async def live_board(request: Request,
     today = _today()
     policy = await _get_attendance_policy()
     emps = await sdb.employees.find(
-        {"employment_status": {"$nin": ["terminated"]}}, {"_id": 0}).to_list(1000)
+        {"employment_status": {"$nin": ["terminated"]}}, {"_id": 0}).to_list(MAX_LIST_ROWS)
     recs = {r["employee_id"]: r async for r in sdb.attendance.find({"date": today}, {"_id": 0})}
     is_holiday_today, _hrow = await _is_holiday(today)
     weekday = _date.fromisoformat(today).weekday()
@@ -1637,7 +1638,7 @@ async def list_late_approvals(request: Request, status: Optional[str] = "pending
     if not has_any_permission(user, "employees.read", "attendance.update", "attendance.approve"):
         raise HTTPException(403, "Missing permission: employees.read")
     q = {"late_approval_status": status} if status else {"late_approval_status": {"$in": ["pending", "approved", "rejected"]}}
-    rows = await sdb.attendance.find(q, {"_id": 0}).sort("date", -1).to_list(500)
+    rows = await sdb.attendance.find(q, {"_id": 0}).sort("date", -1).to_list(MAX_LIST_ROWS)
     name_map = await _employee_name_map(list({r["employee_id"] for r in rows}))
     for r in rows:
         r["employee_name"] = name_map.get(r["employee_id"]) or r.get("employee_name") or r["employee_id"]
@@ -1742,7 +1743,7 @@ async def list_corrections(request: Request, status: Optional[str] = None,
         q["employee_id"] = await _resolve_employee_id(user, None)
     if status:
         q["status"] = status
-    rows = await sdb.attendance_corrections.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    rows = await sdb.attendance_corrections.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     missing = [r["employee_id"] for r in rows if not r.get("employee_name")]
     if missing:
         nm = await _employee_name_map(list(set(missing)))

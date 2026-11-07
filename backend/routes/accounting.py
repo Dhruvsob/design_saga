@@ -170,7 +170,7 @@ async def list_accounts(request: Request,
     await _seed_coa_if_empty()
     q: dict = {} if include_inactive else {"active": {"$ne": False}}
     if type: q["type"] = type
-    rows = await sdb.accounts.find(q, {"_id": 0}).sort("code", 1).to_list(1000)
+    rows = await sdb.accounts.find(q, {"_id": 0}).sort("code", 1).to_list(None)
     if include_balances and rows:
         account_ids = [row["id"] for row in rows]
         movements = await sdb.journal_entries.aggregate([
@@ -464,7 +464,7 @@ async def reverse_receipt_je(user: dict, *, source: str, source_id: str,
     """
     originals = await sdb.journal_entries.find(
         {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
-        {"_id": 0}).sort("date", 1).to_list(5000)
+        {"_id": 0}).sort("date", 1).to_list(None)
     if not originals:
         # Even if there's no active JE, still make sure source status/journal_id
         # is cleaned up (idempotent safety net).
@@ -509,7 +509,7 @@ async def _reset_source_after_reversal(source: str, source_id: str):
             return
         active = await sdb.journal_entries.find(
             {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
-            {"_id": 0, "id": 1, "total": 1}).to_list(5000)
+            {"_id": 0, "id": 1, "total": 1}).to_list(None)
         received = round(sum(float(row.get("total") or 0) for row in active), 2)
         total = float(invoice.get("total") or 0)
         status = "paid" if total > 0 and received + 0.01 >= total \
@@ -527,7 +527,7 @@ async def _reset_source_after_reversal(source: str, source_id: str):
             return
         active = await sdb.journal_entries.find(
             {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
-            {"_id": 0, "id": 1, "total": 1}).to_list(5000)
+            {"_id": 0, "id": 1, "total": 1}).to_list(None)
         received = round(sum(float(row.get("total") or 0) for row in active), 2)
         amount = float(milestone.get("amount") or 0)
         status = "paid" if amount > 0 and received + 0.01 >= amount \
@@ -721,7 +721,7 @@ async def _current_account_balance(account: dict) -> float:
             "debit": {"$sum": "$lines.debit"},
             "credit": {"$sum": "$lines.credit"},
         }},
-    ]).to_list(1)
+    ]).to_list(None)
     totals = movement[0] if movement else {}
     return round(
         float(account.get("opening_balance") or 0)
@@ -947,7 +947,7 @@ async def _sync_other_receivable_after_reversal(journal_entry_id: str) -> None:
         {"source_id": source_id, "source_type": "other_receivable",
          "status": "received"},
         {"_id": 0, "amount": 1, "date": 1},
-    ).to_list(5000)
+    ).to_list(None)
     received = round(sum(float(row.get("amount") or 0) for row in active), 2)
     source = await sdb.collection_receivables.find_one(
         {"id": source_id}, {"_id": 0, "amount": 1})
@@ -1452,7 +1452,7 @@ async def create_income(payload: IncomeIn, request: Request,
         active_receipts = await sdb.journal_entries.find(
             {"source": source, "source_id": source_id, "reversed": {"$ne": True}},
             {"_id": 0, "total": 1},
-        ).to_list(5000)
+        ).to_list(None)
         accounted_received = round(sum(float(row.get("total") or 0)
                                        for row in active_receipts), 2)
         received_before = max(round(float(linked.get("paid_amount") or 0), 2),
@@ -1781,7 +1781,7 @@ async def project_ledger(project_id: str, request: Request,
     base = await _entity_ledger("project", project_id, entity=project,
                                 from_date=fd, to_date=td, label=label)
     # Extra project-specific block: milestones + P&L
-    milestones = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).to_list(200)
+    milestones = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).to_list(None)
     revenue = 0.0
     expense = 0.0
     for e in base["entries"]:
@@ -1838,7 +1838,7 @@ async def _entity_ledger(entity_type: str, entity_id: str, entity: Optional[dict
         if from_date: d["$gte"] = from_date
         if to_date: d["$lte"] = to_date
         q["date"] = d
-    entries_raw = await sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1).to_list(5000)
+    entries_raw = await sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1).to_list(None)
 
     inflow = 0.0
     outflow = 0.0
@@ -1935,7 +1935,7 @@ async def profit_and_loss(request: Request,
         if td: d["$lte"] = td
         q["date"] = d
     if project_id: q["project_id"] = project_id
-    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(5000)
+    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(None)
 
     income_by_acc: dict = {}
     expense_by_acc: dict = {}
@@ -1976,7 +1976,7 @@ async def trial_balance(request: Request, as_of: Optional[str] = None,
         _, as_of, _ = resolve_period(fy=fy)
     q = {}
     if as_of: q["date"] = {"$lte": as_of}
-    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(10000)
+    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(None)
 
     per_acc: dict = {}
     for e in entries:
@@ -2036,7 +2036,7 @@ async def finance_dashboard(request: Request,
 
     # Cash / Bank balances (asset accounts flagged as is_bank OR Cash)
     accs = await sdb.accounts.find({"$or": [{"is_bank": True}, {"name": "Cash"}, {"name": "Petty Cash"}]},
-                                  {"_id": 0}).to_list(50)
+                                  {"_id": 0}).to_list(None)
     cash_bank = []
     for a in accs:
         # sum all movements for that account
@@ -2046,7 +2046,7 @@ async def finance_dashboard(request: Request,
             {"$group": {"_id": None,
                         "debit": {"$sum": "$lines.debit"},
                         "credit": {"$sum": "$lines.credit"}}},
-        ]).to_list(1)
+        ]).to_list(None)
         d = agg[0]["debit"] if agg else 0.0
         c = agg[0]["credit"] if agg else 0.0
         bal = float(a.get("opening_balance") or 0) + _movement_for("asset", d, c)
@@ -2056,7 +2056,7 @@ async def finance_dashboard(request: Request,
 
     # This month P&L (income & expense from journal source)
     entries_month = await sdb.journal_entries.find(
-        {"date": {"$gte": month_start}}, {"_id": 0}).to_list(5000)
+        {"date": {"$gte": month_start}}, {"_id": 0}).to_list(None)
     income_month = 0.0
     expense_month = 0.0
     salary_month = 0.0
@@ -2088,7 +2088,7 @@ async def finance_dashboard(request: Request,
         {"status": {"$ne": "paid"}},
         {"_id": 0, "amount": 1, "paid_amount": 1, "due_date": 1,
          "status": 1, "project_id": 1, "name": 1},
-    ).to_list(500)
+    ).to_list(None)
     outstanding_ms = sum(max(0.0, float(m.get("amount") or 0)
                              - float(m.get("paid_amount") or 0)) for m in ms)
     outstanding = round(outstanding_invoices + outstanding_ms, 2)
@@ -2103,7 +2103,7 @@ async def finance_dashboard(request: Request,
     # Recent transactions
     recent = await sdb.journal_entries.find(
         {"voided_from_view": {"$ne": True}}, {"_id": 0}
-    ).sort("created_at", -1).limit(10).to_list(10)
+    ).sort("created_at", -1).limit(10).to_list(None)
 
     return {
         "kpis": {
@@ -2340,14 +2340,14 @@ async def project_receivables(request: Request,
     today = business_today()
     horizon = today + timedelta(days=30)
     milestones = await sdb.payment_milestones.find(
-        {"status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(5000)
+        {"status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(None)
     invoices = await sdb.invoices.find(
         {"doc_type": {"$ne": "quotation"}, "status": {"$nin": ["draft", "cancelled"]}},
-        {"_id": 0}).to_list(5000)
+        {"_id": 0}).to_list(None)
     commissions = await sdb.vendor_commissions.find(
-        {"status": {"$nin": ["cancelled", "reversed"]}}, {"_id": 0}).to_list(5000)
+        {"status": {"$nin": ["cancelled", "reversed"]}}, {"_id": 0}).to_list(None)
     other_rows = await sdb.collection_receivables.find(
-        {"status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(5000)
+        {"status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(None)
 
     project_ids = {row.get("project_id") for row in
                    [*milestones, *invoices, *commissions, *other_rows] if row.get("project_id")}
@@ -2467,7 +2467,7 @@ async def dashboard_validation(request: Request,
         if fd: d["$gte"] = fd
         if td: d["$lte"] = td
         q["date"] = d
-    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(20000)
+    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(None)
     acc_income = 0.0
     acc_expense = 0.0
     for e in entries:
@@ -2488,7 +2488,7 @@ async def dashboard_validation(request: Request,
         inv_q["$or"] = [{"issue_date": {k: v[:10] for k, v in d.items()}},
                         {"issue_date": {"$in": [None, ""]}, "created_at": d},
                         {"issue_date": {"$exists": False}, "created_at": d}]
-    invoices = await sdb.invoices.find(inv_q, {"_id": 0}).to_list(5000)
+    invoices = await sdb.invoices.find(inv_q, {"_id": 0}).to_list(None)
     leg_revenue = sum(float(i.get("total") or 0) for i in invoices
                       if i.get("status") in ("paid", "sent", "overdue"))
 
@@ -2498,7 +2498,7 @@ async def dashboard_validation(request: Request,
         if fd: d["$gte"] = fd
         if td: d["$lte"] = td
         ms_q["due_date"] = d
-    milestones = await sdb.payment_milestones.find(ms_q, {"_id": 0}).to_list(5000)
+    milestones = await sdb.payment_milestones.find(ms_q, {"_id": 0}).to_list(None)
     leg_collected = sum(float(m.get("paid_amount") or 0) for m in milestones
                         if m.get("status") == "paid")
     leg_outstanding = sum(float(m.get("amount") or 0) for m in milestones
@@ -2723,7 +2723,7 @@ async def accounting_source_integrity(request: Request,
     journals = await sdb.journal_entries.find(
         {}, {"_id": 0, "id": 1, "date": 1, "source": 1, "source_id": 1, "total": 1,
              "lines.debit": 1, "lines.credit": 1, "reversed": 1, "reversal_je_id": 1,
-             "voided_from_view": 1}).to_list(100000)
+             "voided_from_view": 1}).to_list(None)
     wanted: dict = {}
     for je in journals:
         collection = _INTEGRITY_SOURCE_COLLECTIONS.get(je.get("source") or "")
@@ -2741,11 +2741,11 @@ async def accounting_source_integrity(request: Request,
     paid_payroll = await sdb.payroll_runs.find(
         {"status": "paid"},
         {"_id": 0, "id": 1, "employee_id": 1, "month": 1, "year": 1, "journal_id": 1},
-    ).to_list(50000)
+    ).to_list(None)
     vendor_payments = await sdb.vendor_payments.find(
         {"status": {"$ne": "reversed"}},
         {"_id": 0, "id": 1, "vendor_id": 1, "payment_date": 1, "journal_entry_id": 1},
-    ).to_list(50000)
+    ).to_list(None)
     report = _evaluate_source_integrity(journals, existing, paid_payroll, vendor_payments)
 
     # --- Historical Cash/Bank method vs ledger mismatches (ACC-09) ---
@@ -2816,9 +2816,9 @@ async def balance_sheet(request: Request, as_of: Optional[str] = None,
         _, as_of, _ = resolve_period(fy=fy)
     q = {}
     if as_of: q["date"] = {"$lte": as_of}
-    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(20000)
+    entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(None)
 
-    accs = await sdb.accounts.find({}, {"_id": 0}).to_list(500)
+    accs = await sdb.accounts.find({}, {"_id": 0}).to_list(None)
     by_id = {a["id"]: a for a in accs}
     balances: dict = {}
     for a in accs:
@@ -2967,7 +2967,7 @@ async def cash_flow_statement(request: Request,
     cash_accs = await sdb.accounts.find({"$or": [{"is_bank": True},
                                                  {"name": "Cash"},
                                                  {"name": "Petty Cash"}]},
-                                       {"_id": 0}).to_list(50)
+                                       {"_id": 0}).to_list(None)
     cash_ids = {a["id"] for a in cash_accs}
     account_split = {
         a["id"]: {
@@ -3329,7 +3329,7 @@ async def list_milestones(project_id: str, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
     await require_user(request, session_token, authorization)
-    rows = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).sort("due_date", 1).to_list(200)
+    rows = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).sort("due_date", 1).to_list(None)
     return rows
 
 
