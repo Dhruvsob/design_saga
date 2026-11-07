@@ -56,6 +56,14 @@ export default function Leads() {
 
   const submit = async (e) => {
     e.preventDefault();
+    // Same person entered twice? Compare phone (last 10 digits) and email with existing leads.
+    const digits = (v) => String(v || "").replace(/\D/g, "").slice(-10);
+    const phone = digits(form.phone);
+    const email = String(form.email || "").trim().toLowerCase();
+    const dupe = leads.find((l) => (phone.length === 10 && digits(l.phone) === phone)
+      || (email && String(l.email || "").trim().toLowerCase() === email));
+    if (dupe && !await confirmAction(
+      `${dupe.name} is already a lead with this ${phone && digits(dupe.phone) === phone ? "phone number" : "email"} (stage: ${dupe.stage || "New"}). Add another lead anyway?`)) return;
     await api.post("/leads", { ...form, budget: Number(form.budget || 0) });
     setShowForm(false);
     setForm({ name: "", email: "", phone: "", source: "Website", project_type: "Residential", budget: "", location: "", stage: "New" });

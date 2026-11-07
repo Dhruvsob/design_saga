@@ -265,3 +265,20 @@ test("1st and 4th Saturdays are added as holidays in one go, without duplicates"
   await expect(page.getByText("Those Saturdays were already added")).toBeVisible({ timeout: 30000 });
   await ctx.dispose();
 });
+
+test("adding a lead with a phone number already on file asks before creating a duplicate", async ({ browser }) => {
+  const ctx = await api("admin");
+  const phone = `98${Math.floor(10000000 + Math.random() * 89999999)}`;
+  await json(ctx.post("/api/leads", { data: { name: `First ${uid()}`, phone } }));
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/crm");
+  await page.getByTestId("new-lead-btn").click({ timeout: 20000 });
+  await page.getByTestId("lead-name").fill(`Again ${uid()}`);
+  await page.getByTestId("lead-form").getByPlaceholder(/phone/i).fill(`+91 ${phone}`);
+  await page.getByTestId("lead-submit").click();
+  await expect(page.getByTestId("confirm-dialog")).toContainText("already a lead with this phone number");
+  await page.getByTestId("confirm-cancel").click();
+  const same = (await json(ctx.get("/api/leads"))).filter((l) => String(l.phone || "").replace(/\D/g, "").endsWith(phone));
+  expect(same, "cancel keeps a single lead").toHaveLength(1);
+  await ctx.dispose();
+});

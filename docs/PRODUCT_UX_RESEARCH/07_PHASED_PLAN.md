@@ -19,6 +19,16 @@ each finding. Brand colours stay as they are. Each phase ships in small tested b
 | 1.9 | Projects | "#001" number is just the position and changes with sorting; "Unassigned" actually means no client | Remove; say "No client" |
 | 1.10 | Sidebar | "Expenses" opens staff claims while company expenses live in Accounting → Expense | Rename to "Expense claims" |
 
+## Status (08/11/2026)
+
+- **Phase 1: done** (1.1–1.10 all shipped; 1.7 was already in place).
+- **Phase 2 done:** Invoices search + status filter + received / still-due columns; Collections Due / Payment
+  Reminders / Received Payments tabs. **Open:** Payroll as its own page, Attendance tabs 9 → 5, Task filter
+  simplification, Calendar legend filters, Company Settings preview alignment, splitting the largest screens.
+- **Phase 3 done:** payment reminders (PDF + WhatsApp), cash-basis collections, % fee milestones, signature on PDFs,
+  bulk Saturday holidays. **Open:** site visits with photos, live check-in map, drawing register, Gantt,
+  lead duplicate warning, Google Calendar (needs keys), client approvals, UPI QR, retainers, BOQ → PO.
+
 ## Phase 2 — Reorganise for daily work
 
 - **Payroll** gets its own page under People (now hidden inside Attendance tabs and employee profiles).

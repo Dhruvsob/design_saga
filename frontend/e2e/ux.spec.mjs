@@ -153,7 +153,7 @@ test("sidebar groups stay open and the rail collapse is remembered", async ({ pa
 test("calendar splits Studio and Project items from one feed; events link only to visible projects", async ({ page }) => {
   const ctx = await api("admin");
   const proj = await json(ctx.post("/api/projects", { data: { name: `Cal ${uid()}`, engagement_type: "consultancy" } }));
-  const day = new Date().toISOString().slice(0, 10);
+  const day = today();   // India date, like the app (UTC is still "yesterday" before 05:30 IST)
   const studio = `Studio meet ${uid()}`;
   const site = `Site visit ${uid()}`;
   await json(ctx.post("/api/calendar/events", { data: { title: studio, date: day, kind: "meeting", visibility: "org" } }));
