@@ -701,8 +701,11 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
     if attendance.get("paid_days") is not None:
         pdf.set_font("Helvetica", "I", 8)
         pdf.set_text_color(90, 90, 90)
-        pdf.cell(0, 5, _safe(f"Paid days {_count(attendance['paid_days'])} · loss of pay "
-                             f"{_count(attendance.get('lop_days', 0))} day(s)"), 0, 1, "R")
+        note = (f"Paid days {_count(attendance['paid_days'])} · loss of pay "
+                f"{_count(attendance.get('lop_days', 0))} day(s)")
+        if attendance.get("as_of_today"):
+            note = ("Attendance as recorded today; salary was calculated on the attendance at payment. " + note)
+        pdf.multi_cell(0, 4.5, _safe(note), 0, "R")
         pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
 
@@ -873,6 +876,7 @@ async def salary_slip_pdf(run_id: str, request: Request,
         breakdown = {**breakdown, "payable_days": breakdown.get("payable_days", calc.get("payable_days")),
                      "lop_days": breakdown.get("lop_days", calc.get("lop_days"))}
     counts = _slip_attendance(summary, breakdown)
+    counts["as_of_today"] = not (run.get("breakdown") or {}).get("attendance_summary")
 
     # Org branding
     org = await db.organizations.find_one(
