@@ -153,6 +153,11 @@ function KPI({ label, value, tone }) {
 }
 
 const CATEGORIES = ["travel","meals","materials","utilities","site","office","other"];
+const CATEGORY_LABEL = {
+  travel: "Travel", meals: "Meals", materials: "Materials", utilities: "Utilities",
+  site: "Site spend", office: "Office", other: "Other",
+};
+const blankLine = () => ({ category: "travel", amount: "", description: "", receipt_url: "", tax_rate: 0 });
 
 function CreateExpense({ onClose, onCreated, initial = null, expenseId = null }) {
   const [f, setF] = useState({
@@ -164,7 +169,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
       category: line.category, amount: Number(line.amount || 0),
       description: line.description || "", receipt_url: line.receipt_url || "",
       tax_rate: Number(line.tax_rate || 0), date: line.date || null,
-    })) || [{ category: "travel", amount: 0, description: "", receipt_url: "", tax_rate: 0 }],
+    })) || [blankLine()],
   });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const total = f.lines.reduce((s, l) => s + Number(l.amount || 0) + Number(l.amount || 0) * Number(l.tax_rate || 0)/100, 0);
@@ -172,8 +177,12 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try {
-      if (expenseId) await api.put(`/expenses/${expenseId}`, f);
-      else await api.post("/expenses", f);
+      const body = {
+        ...f,
+        lines: f.lines.map((line) => ({ ...line, amount: Number(line.amount) || 0, receipt_url: line.receipt_url || null })),
+      };
+      if (expenseId) await api.put(`/expenses/${expenseId}`, body);
+      else await api.post("/expenses", body);
       onCreated();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Submit failed"));
@@ -192,27 +201,54 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
           </select>
         </F>
 
-        <div className="overline">LINE ITEMS</div>
-        {f.lines.map((l, i) => (
-          <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`exp-line-${i}`}>
-            <select aria-label="Category" className="input-flat col-span-2" value={l.category} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, category: e.target.value} : x)}))}>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input placeholder="Description" className="input-flat col-span-4" value={l.description} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, description: e.target.value} : x)}))} />
-            <input type="number" step="0.01" placeholder="Amount" className="input-flat col-span-2 font-mono" value={l.amount} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, amount: Number(e.target.value)} : x)}))} />
-            <input placeholder="Receipt URL" className="input-flat col-span-3" value={l.receipt_url} onChange={(e) => setF((s) => ({...s, lines: s.lines.map((x,j) => j === i ? {...x, receipt_url: e.target.value} : x)}))} />
-            <button type="button" onClick={() => setF((s) => ({...s, lines: s.lines.filter((_,j) => j !== i)}))} className="btn-ghost col-span-1 text-[var(--danger)]"><X size={12}/></button>
+        <div>
+          <div className="overline mb-2">WHAT WAS SPENT</div>
+          <div className="hidden md:grid grid-cols-12 gap-2 px-1 pb-1 text-[11px] font-semibold text-[var(--ink-3)]">
+            <span className="col-span-2">Category</span>
+            <span className="col-span-4">What it was for</span>
+            <span className="col-span-2 text-right">Amount (₹)</span>
+            <span className="col-span-3">Receipt link</span>
           </div>
-        ))}
-        <button type="button" onClick={() => setF((s) => ({...s, lines: [...s.lines, { category: "travel", amount: 0, description: "", receipt_url: "", tax_rate: 0 }]}))} className="btn-ghost text-xs"><Plus size={11}/> Add line</button>
+          <div className="space-y-2">
+            {f.lines.map((l, i) => {
+              const setLine = (patch) => setF((s) => ({ ...s, lines: s.lines.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+              return (
+                <div key={i} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center rounded-lg md:rounded-none border md:border-0 border-[var(--line)] p-2 md:p-0" data-testid={`exp-line-${i}`}>
+                  <select aria-label="Category" className="input-flat col-span-1 md:col-span-2" value={l.category} onChange={(e) => setLine({ category: e.target.value })}>
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>)}
+                  </select>
+                  <input type="number" step="0.01" min="0" inputMode="decimal" aria-label="Amount" placeholder="0.00"
+                    className="input-flat col-span-1 md:col-span-2 md:order-3 text-right tabular-nums" value={l.amount}
+                    onChange={(e) => setLine({ amount: e.target.value })} />
+                  <input aria-label="What it was for" placeholder="e.g. Auto to site, Andheri" className="input-flat col-span-2 md:col-span-4 md:order-2" value={l.description}
+                    onChange={(e) => setLine({ description: e.target.value })} />
+                  <input aria-label="Receipt link" type="url" placeholder="Paste a photo or Drive link" className="input-flat col-span-2 md:col-span-3 md:order-4" value={l.receipt_url}
+                    onChange={(e) => setLine({ receipt_url: e.target.value })} />
+                  <div className="col-span-2 md:col-span-1 md:order-5 flex justify-end">
+                    {f.lines.length > 1 && (
+                      <button type="button" aria-label={`Remove line ${i + 1}`} title="Remove line"
+                        onClick={() => setF((s) => ({ ...s, lines: s.lines.filter((_, j) => j !== i) }))}
+                        className="p-2 rounded-md text-[var(--ink-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)]"><X size={14} /></button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button type="button" onClick={() => setF((s) => ({ ...s, lines: [...s.lines, blankLine()] }))} className="btn-ghost text-xs mt-2"><Plus size={11}/> Add another item</button>
+          <p className="text-[11px] text-[var(--ink-3)] mt-2">Bigger claims need a receipt link before they go for approval.</p>
+        </div>
 
         <F label="Notes"><textarea className="input-flat w-full h-16" value={f.notes} onChange={(e) => setF({...f, notes: e.target.value})} /></F>
-        <div className="text-right font-mono font-bold text-lg accent-blue" data-testid="exp-total">Total: {fmtMoney(total)}</div>
+        <div className="flex items-baseline justify-end gap-3 border-t border-[var(--line)] pt-3">
+          <span className="text-sm text-[var(--ink-2)]">Total claim</span>
+          <span className="font-display font-bold text-2xl tabular-nums" data-testid="exp-total">{fmtMoney(total)}</span>
+        </div>
 
         {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-          <button disabled={busy || !f.title || f.lines.length === 0} className="btn-primary" data-testid="exp-submit">{busy ? "Saving…" : expenseId ? "Save and restart approval" : "Submit claim"}</button>
+          <button disabled={busy || !f.title || f.lines.length === 0 || f.lines.some((line) => !(Number(line.amount) > 0))} className="btn-primary" data-testid="exp-submit">{busy ? "Saving…" : expenseId ? "Save and restart approval" : "Submit claim"}</button>
         </div>
       </form>
     </Modal>

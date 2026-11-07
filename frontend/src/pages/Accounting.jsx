@@ -17,7 +17,7 @@ import {
   HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle, Trash,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
-import { confirmAction } from "../lib/confirm";
+import { askForm, confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
 // Journal "source" codes in plain words for the dashboard.
@@ -28,6 +28,7 @@ const SOURCE_LABELS = {
   vendor_payment: "Vendor payment", vendor_bill: "Vendor bill", expense: "Expense", income: "Income",
   expense_reimbursement: "Expense claim paid", loan_emi: "Loan EMI", loan_disbursement: "Loan received",
   capital: "Capital", owner_withdrawal: "Owner withdrawal", transfer: "Transfer", manual: "Manual entry",
+  opening_balance: "Opening balance",
 };
 const sourceLabel = (code) => {
   if (!code) return "—";
@@ -1519,6 +1520,33 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
       toast.error(err?.response?.data?.detail || "Could not update account");
     }
   };
+  // Opening money for an account that already has entries (the field itself
+  // locks once there is activity): posts a dated adjustment journal.
+  const addOpening = async (account) => {
+    const values = await askForm({
+      title: `Opening balance — ${account.name}`,
+      body: "Money the account already held before you started recording it here. It is dated before the account's first entry unless you pick a date, and can be reversed from the ledger.",
+      fields: [
+        { name: "amount", label: "Amount (₹)", type: "number", required: true, placeholder: "e.g. 10336" },
+        { name: "date", label: "As on date (optional)", type: "date" },
+        { name: "note", label: "Note (optional)", placeholder: "e.g. balance per bank statement" },
+      ],
+      confirmLabel: "Add opening balance",
+    });
+    if (!values) return;
+    try {
+      await api.post(`/accounts/${account.id}/opening-adjustment`, {
+        amount: Number(values.amount), date: values.date || null, note: values.note || null,
+      });
+      toast.success(`Opening balance added to ${account.name}`);
+      const params = new URLSearchParams({ include_balances: "true" });
+      if (showInactive) params.set("include_inactive", "true");
+      setAccounts((await api.get(`/accounts?${params.toString()}`)).data);
+      onReload();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not add opening balance");
+    }
+  };
   const toggleFav = async (a, e) => {
     e.stopPropagation();
     try {
@@ -1600,6 +1628,8 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
                         {a.is_bank && <Bank size={12} className="text-[var(--accent-strong)] mr-1" />}
                         <RowActions label={a.name} testid={`account-actions-${a.id}`} actions={[
                           { label: "Edit account", icon: PencilSimple, onSelect: () => startEdit(a, { stopPropagation() {}, preventDefault() {} }), testid: `account-edit-${a.id}` },
+                          { label: "Add opening balance", icon: Plus, hidden: a.active === false || a.type === "income" || a.type === "expense",
+                            onSelect: () => addOpening(a), testid: `account-opening-${a.id}` },
                           { label: a.active === false ? "Restore account" : "Deactivate account", icon: a.active === false ? ArrowCounterClockwise : Archive,
                             danger: a.active !== false, onSelect: () => toggleActive(a, { stopPropagation() {}, preventDefault() {} }), testid: `account-active-${a.id}` },
                         ]} />

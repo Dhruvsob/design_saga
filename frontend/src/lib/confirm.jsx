@@ -116,11 +116,21 @@ export function ConfirmHost() {
                 return (
                   <label key={f.name} className="block text-xs font-semibold text-[var(--ink-2)]">
                     {f.label}{f.required && <span className="text-[var(--danger)]"> *</span>}
-                    <Tag autoFocus={i === 0} type={f.multiline ? undefined : (f.type || "text")} rows={f.multiline ? 3 : undefined}
-                         className={`input-flat mt-1 w-full font-normal ${bad ? "!border-[var(--danger)]" : ""}`}
-                         placeholder={f.placeholder} value={values[f.name] ?? ""}
-                         onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-                         data-testid={`form-field-${f.name}`} />
+                    {f.options ? (
+                      <select autoFocus={i === 0} className={`input-flat mt-1 w-full font-normal ${bad ? "!border-[var(--danger)]" : ""}`}
+                              value={values[f.name] ?? ""}
+                              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                              data-testid={`form-field-${f.name}`}>
+                        {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    ) : (
+                      <Tag autoFocus={i === 0} type={f.multiline ? undefined : (f.type || "text")} rows={f.multiline ? 3 : undefined}
+                           className={`input-flat mt-1 w-full font-normal ${bad ? "!border-[var(--danger)]" : ""}`}
+                           placeholder={f.placeholder} value={values[f.name] ?? ""}
+                           onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                           data-testid={`form-field-${f.name}`} />
+                    )}
+                    {f.hint && <span className="block mt-1 font-normal text-[var(--ink-3)]">{f.hint}</span>}
                     {bad && <span className="block mt-1 font-normal text-[var(--danger)]">Required</span>}
                   </label>
                 );

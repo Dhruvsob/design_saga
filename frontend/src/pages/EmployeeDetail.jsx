@@ -739,20 +739,23 @@ function PaySalaryBlock({ employeeId, netMonthly, advanceVersion = 0 }) {
           <input type="date" className="input-flat w-full" value={paymentDate}
             onChange={(e) => setPaymentDate(e.target.value)} data-testid="salary-payment-date" />
         </label>
-        <label className="text-xs min-w-[170px]">
-          <div className="overline mb-1">Payment method</div>
-          <select aria-label="Payment method" className="input-flat w-full" value={paymentMethod}
-            onChange={(e) => {
-              const method = e.target.value;
-              setPaymentMethod(method);
-              const compatible = compatibleAccount(banks, method);
-              if (compatible) setBankAccountId(compatible.id);
-            }} data-testid="salary-payment-method">
-            <option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option>
-            <option value="cheque">Cheque</option><option value="online">Online</option>
-            <option value="cash">Cash</option><option value="other">Other</option>
-          </select>
-        </label>
+        {/* Cash is already said by "Pay from"; only a bank needs the how. */}
+        {paymentMethod !== "cash" && (
+          <label className="text-xs min-w-[170px]">
+            <div className="overline mb-1">Paid by</div>
+            <select aria-label="Payment method" className="input-flat w-full" value={paymentMethod}
+              onChange={(e) => {
+                const method = e.target.value;
+                setPaymentMethod(method);
+                const compatible = compatibleAccount(banks, method);
+                if (compatible) setBankAccountId(compatible.id);
+              }} data-testid="salary-payment-method">
+              <option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option>
+              <option value="cheque">Cheque</option><option value="online">Online</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+        )}
         <label className="text-xs flex-1 min-w-[180px]">
           <div className="overline mb-1">Reference</div>
           <input className="input-flat w-full" value={reference} onChange={(e) => setReference(e.target.value)}
@@ -1155,6 +1158,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
 function PaymentHistoryBlock({ employeeId, canCorrect }) {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showOld, setShowOld] = useState(false);
 
   const load = useCallback(() => {
     let alive = true;
@@ -1172,22 +1176,80 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
   }, [employeeId]);
   useEffect(() => load(), [load]);
 
-  const reverse = async (run) => {
-    if (!await confirmAction(`Reverse the salary payment for ${MONTHS[(run.month || 1) - 1]} ${run.year}? A balancing journal will be posted.`)) return;
+  const period = (run) => `${MONTHS[(run.month || 1) - 1]} ${run.year}`;
+  // Months that already have a live payment: their cancelled/replaced rows are history only.
+  const paidPeriods = new Set(runs.filter((r) => r.status === "paid").map((r) => `${r.year}-${r.month}`));
+  const current = runs.filter((r) => r.status === "paid" || r.status === "processing");
+  const old = runs.filter((r) => !current.includes(r));
+  const shown = showOld ? runs : current;
+
+  const cancel = async (run) => {
+    if (!await confirmAction(`Cancel the ${period(run)} salary of ${fmt(run.net)}? It is removed from the Daybook and this sheet (kept in the audit log), and the month can be paid again.`)) return;
     try {
       await api.post(`/payroll/runs/${run.id}/reverse`);
+      toast.success("Salary payment cancelled");
       load();
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Could not reverse salary payment");
+      toast.error(error?.response?.data?.detail || "Could not cancel salary payment");
     }
   };
 
+  const edit = async (run) => {
+    let accounts = [];
+    try {
+      const { data } = await api.get("/accounts?type=asset");
+      accounts = (data || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
+    } catch { /* the dialog still opens; saving reports the problem */ }
+    const values = await askForm({
+      title: `Edit ${period(run)} salary`,
+      body: "Change what was actually paid. The old entry is replaced everywhere: Daybook, ledgers, this sheet and the salary slip.",
+      fields: [
+        { name: "net", label: "Amount paid (₹)", type: "number", required: true, defaultValue: String(run.net ?? "") },
+        { name: "bonus", label: "Of which bonus (₹)", type: "number", defaultValue: run.extras?.bonus ? String(run.extras.bonus) : "",
+          hint: "Shown as Bonus on the salary slip, e.g. Diwali bonus." },
+        { name: "payment_date", label: "Paid on", type: "date", required: true,
+          defaultValue: dateForInput(run.payment_date || run.paid_at) },
+        { name: "paid_from_account_id", label: "Paid from", required: true,
+          defaultValue: run.paid_from_account_id || accounts[0]?.id || "",
+          options: accounts.map((a) => ({ value: a.id, label: a.name })) },
+        { name: "reference", label: "Reference (optional)", defaultValue: run.reference || "", placeholder: "UTR / cheque / voucher" },
+      ],
+      confirmLabel: "Save payment",
+    });
+    if (!values) return;
+    const account = accounts.find((a) => a.id === values.paid_from_account_id);
+    const method = methodForAccount(account);
+    const keepMethod = method !== "cash" && run.payment_method && run.payment_method !== "cash";
+    try {
+      await api.post(`/payroll/runs/${run.id}/correct`, {
+        net: Number(values.net), bonus: values.bonus === "" ? 0 : Number(values.bonus),
+        payment_date: values.payment_date, paid_from_account_id: values.paid_from_account_id,
+        payment_method: keepMethod ? run.payment_method : method,
+        reference: values.reference || null,
+      });
+      toast.success(`${period(run)} salary saved as ${fmt(Number(values.net))}`);
+      load();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not update salary payment");
+    }
+  };
+
+  const slipUrl = (run) => `${api.defaults.baseURL}/payroll/runs/${run.id}/slip.pdf`;
+
   return (
     <div className="card-flat" data-testid="payment-history-block">
-      <div className="overline flex items-center gap-1.5 mb-4"><Receipt size={13} /> SALARY PAYMENT HISTORY</div>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="overline flex items-center gap-1.5"><Receipt size={13} /> SALARY PAYMENT HISTORY</div>
+        {old.length > 0 && (
+          <label className="text-xs text-[var(--ink-2)] inline-flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" checked={showOld} onChange={(e) => setShowOld(e.target.checked)} data-testid="show-cancelled-runs" />
+            Show cancelled ({old.length})
+          </label>
+        )}
+      </div>
       {loading ? (
         <div className="skeleton h-16 w-full" />
-      ) : runs.length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)]" data-testid="payment-history-empty">
           No salary payments recorded yet.
         </div>
@@ -1199,34 +1261,37 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
                 <th className="py-2 pr-3">Period</th>
                 <th className="py-2 pr-3 text-right">Net paid</th>
                 <th className="py-2 pr-3">Paid on</th>
-                <th className="py-2 pr-3">Method</th>
-                <th className="py-2 pr-3">Account / reference</th>
-                <th className="py-2 pr-3">Slip</th>
-                {canCorrect && <th className="py-2 pr-3">Correction</th>}
+                <th className="py-2 pr-3">Paid from</th>
+                <th className="py-2 pr-3">Status</th>
+                <th className="py-2 w-10"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {runs.map((r) => (
-                <tr key={r.id} className="border-b border-[var(--line-soft)]" data-testid={`payment-run-${r.id}`}>
-                  <td className="py-2 pr-3 font-mono">{MONTHS[(r.month || 1) - 1]} {r.year}</td>
-                  <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(r.net)}</td>
-                  <td className="py-2 pr-3 font-mono text-xs">{formatDate(r.payment_date || r.paid_at)}</td>
-                  <td className="py-2 pr-3 text-xs">{(r.payment_method || "—").replace(/_/g, " ")}</td>
-                  <td className="py-2 pr-3 text-xs">{r.paid_from_account_name || "—"}{r.reference ? ` · ${r.reference}` : ""}</td>
-                  <td className="py-2 pr-3">
-                    <a href={`${api.defaults.baseURL}/payroll/runs/${r.id}/slip.pdf`} target="_blank" rel="noreferrer"
-                       className="text-[var(--accent-strong)] hover:underline text-xs inline-flex items-center gap-1"
-                       data-testid={`payment-slip-${r.id}`}>
-                      <FileText size={12} /> PDF
-                    </a>
-                  </td>
-                  {canCorrect && <td className="py-2 pr-3">
-                    {r.status === "paid" ? <button className="btn-ghost text-xs text-[var(--danger)]" onClick={() => reverse(r)}>
-                      <ClockCounterClockwise size={12} /> Reverse
-                    </button> : <span className="text-[10px] uppercase text-[var(--ink-3)]">{r.status}</span>}
-                  </td>}
-                </tr>
-              ))}
+              {shown.map((r) => {
+                const live = r.status === "paid";
+                const canRepay = r.status === "reversed" && !paidPeriods.has(`${r.year}-${r.month}`);
+                return (
+                  <tr key={r.id} className={`border-b border-[var(--line-soft)] ${live ? "" : "text-[var(--ink-3)]"}`} data-testid={`payment-run-${r.id}`}>
+                    <td className="py-2 pr-3">{period(r)}</td>
+                    <td className={`py-2 pr-3 text-right tabular-nums font-semibold ${live ? "" : "line-through"}`}>{fmt(r.net)}</td>
+                    <td className="py-2 pr-3 text-xs">{formatDate(r.payment_date || r.paid_at)}</td>
+                    <td className="py-2 pr-3 text-xs">{r.paid_from_account_name || "—"}{r.reference ? ` · ${r.reference}` : ""}</td>
+                    <td className="py-2 pr-3 text-xs">
+                      {live ? (r.extras?.bonus ? `Paid · incl. bonus ${fmt(r.extras.bonus)}` : "Paid")
+                        : r.status === "corrected" ? "Replaced by edit" : r.status === "reversed" ? "Cancelled" : r.status}
+                    </td>
+                    <td className="py-2 text-right">
+                      <RowActions label={`${period(r)} salary`} testid={`payment-actions-${r.id}`} actions={[
+                        { label: "Salary slip (PDF)", icon: FileText, hidden: !live, onSelect: () => window.open(slipUrl(r), "_blank", "noopener") },
+                        { label: "Edit payment", icon: PencilSimple, hidden: !canCorrect || !live, onSelect: () => edit(r), testid: `payment-edit-${r.id}` },
+                        { label: "Pay again with correct amount", icon: PencilSimple, hidden: !canCorrect || !canRepay, onSelect: () => edit(r), testid: `payment-repay-${r.id}` },
+                        { label: "Cancel payment", icon: ClockCounterClockwise, danger: true, divider: true,
+                          hidden: !canCorrect || !live, onSelect: () => cancel(r), testid: `payment-cancel-${r.id}` },
+                      ]} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

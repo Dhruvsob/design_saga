@@ -296,6 +296,67 @@ async def update_account(acc_id: str, payload: AccountIn, request: Request,
     return await sdb.accounts.find_one({"id": acc_id}, {"_id": 0})
 
 
+class OpeningAdjustmentIn(FiniteModel):
+    amount: float                      # + adds to the account's natural balance
+    date: Optional[str] = None         # YYYY-MM-DD; default: day before its first entry
+    note: Optional[str] = None
+
+
+@router.post("/accounts/{acc_id}/opening-adjustment")
+async def add_opening_adjustment(acc_id: str, payload: OpeningAdjustmentIn, request: Request,
+                                 session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    """Opening balance for an account that already has entries.
+
+    The opening_balance field is frozen once journals exist, so this posts the
+    documented adjustment instead: the account against the equity account
+    "Opening Balance Adjustment", dated before the account's first entry.
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.update")
+    account = await sdb.accounts.find_one({"id": acc_id}, {"_id": 0})
+    if not account or account.get("active") is False:
+        raise HTTPException(status_code=404, detail="Account not found")
+    amount = round(float(payload.amount or 0), 2)
+    if not math.isfinite(amount) or amount == 0:
+        raise HTTPException(status_code=400, detail="Enter an amount other than zero")
+    if account.get("name", "").strip().lower() == "opening balance adjustment":
+        raise HTTPException(status_code=400, detail="Choose the account that holds the money")
+    offset = await _ensure_named_account("Opening Balance Adjustment", "equity")
+    date = (payload.date or "").strip()
+    if not date:
+        first = await sdb.journal_entries.find(
+            {"lines.account_id": acc_id}, {"_id": 0, "date": 1}
+        ).sort("date", 1).limit(1).to_list(1)
+        if first:
+            try:
+                date = (_date.fromisoformat(first[0]["date"][:10]) - timedelta(days=1)).isoformat()
+            except (TypeError, ValueError, KeyError):
+                date = ""
+        date = date or _date.today().isoformat()
+    # Assets/expenses grow on the debit side, everything else on the credit side.
+    debit_natural = account.get("type") in {"asset", "expense"}
+    grows = amount > 0
+    value = abs(amount)
+    acct_line = {"account_id": acc_id, "description": "Opening balance",
+                 "debit": value if debit_natural == grows else 0,
+                 "credit": 0 if debit_natural == grows else value}
+    offset_line = {"account_id": offset["id"], "description": f"Opening balance — {account['name']}",
+                   "debit": acct_line["credit"], "credit": acct_line["debit"]}
+    note = (payload.note or "").strip()
+    narration = f"Opening balance — {account['name']}" + (f" ({note})" if note else "")
+    je = await _post_journal(user, date, narration, [acct_line, offset_line],
+                             source="opening_balance", source_id=acc_id,
+                             idempotency_suffix=new_id("ob_"))
+    await audit(
+        user, "account.opening_adjustment", target=acc_id, target_type="account",
+        meta={"amount": amount, "date": date, "journal_id": je["id"]},
+        org_id=user_org_id(user),
+    )
+    return je
+
+
 @router.delete("/accounts/{acc_id}")
 async def deactivate_account(acc_id: str, request: Request,
                              session_token: Optional[str] = Cookie(default=None),
@@ -926,7 +987,7 @@ def _can_void_from_journal(je: dict) -> bool:
         return False
     if not je.get("source_id"):
         return source in {"manual", "income", "expense", "non_operating"}
-    return source in {"invoice_payment", "milestone_payment", "other_receivable_income"}
+    return source in {"invoice_payment", "milestone_payment", "other_receivable_income", "opening_balance"}
 
 
 async def _sync_other_receivable_after_reversal(journal_entry_id: str) -> None:
@@ -1046,6 +1107,23 @@ async def _reverse_journal_entry(user: dict, je: dict, *, action: str = "reverse
         org_id=user_org_id(user),
     )
     return rev
+
+
+async def _hide_reversed_pair(user: dict, je: dict, reason: str) -> None:
+    """Take an already reversed entry and its reversal out of normal books.
+
+    The pair nets to zero, so balances do not move; both stay in the audit trail.
+    """
+    if not je.get("reversed") or not je.get("reversal_je_id"):
+        raise HTTPException(status_code=409, detail="This transaction is not reversed")
+    reversal = await sdb.journal_entries.find_one({"id": je["reversal_je_id"]}, {"_id": 0})
+    if not reversal or reversal.get("undone"):
+        raise HTTPException(status_code=409, detail="This reversal was undone; administrator review required")
+    await sdb.journal_entries.update_many(
+        {"id": {"$in": [je["id"], reversal["id"]]}},
+        {"$set": {"voided_from_view": True, "voided_at": iso_now(),
+                  "voided_by": user["user_id"], "void_reason": reason}},
+    )
 
 
 @router.get("/journal-entries/{je_id}")
@@ -1273,6 +1351,12 @@ async def reverse_journal(je_id: str, request: Request,
     je = await sdb.journal_entries.find_one({"id": je_id}, {"_id": 0})
     if not je:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    if (je.get("source") or "") == "payroll":
+        # Reversing here would leave the payroll run marked "paid".
+        raise HTTPException(
+            status_code=409,
+            detail="Cancel or edit this salary from the employee's Payroll tab so the salary record stays in step.",
+        )
     rev = await _reverse_journal_entry(user, je)
     return {"ok": True, "reversal": rev}
 
@@ -1318,7 +1402,7 @@ async def undo_journal_reversal(je_id: str, request: Request,
         raise HTTPException(status_code=409, detail="The linked original transaction is not in a reversible state")
 
     original_source = original.get("source") or "manual"
-    if original_source not in {"manual", "income", "expense", "non_operating"}:
+    if original_source not in {"manual", "income", "expense", "non_operating", "opening_balance"}:
         raise HTTPException(
             status_code=409,
             detail="Undo this reversal from its original invoice, milestone, payroll, vendor, or other source workflow",

@@ -11,6 +11,16 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-107: Edit a paid salary; cancelled salaries leave the books; opening balance for accounts with activity
+
+- Owner report: reversing a salary left "minus" reversal lines in the Daybook and employee sheet; a wrong salary amount could not simply be edited. Janvi's October run still said "paid" although its journal had been reversed from the Daybook (books and payroll out of step).
+- `POST /payroll/runs/{id}/correct`: replace a paid (or previously cancelled) salary with the right amount/bonus/date/account. Old journal is reversed on its own date with both entries hidden from books (kept for audit); slip breakdown is rebuilt so earnings − deductions = paid amount (bonus shown as Bonus).
+- Cancelling a salary now hides the pair too (reversal dated with the payment, so no balance moves on any date). Reversing a payroll journal from the Daybook is refused with a pointer to the Payroll tab.
+- Employee sheet: payment history shows live payments only (toggle for cancelled), ⋮ menu with Slip / Edit payment / Cancel payment / Pay again.
+- `POST /accounting/accounts/{id}/opening-adjustment` + "Add opening balance" in the Chart of Accounts ⋮ menu: posts account vs "Opening Balance Adjustment" dated the day before the account's first entry (the opening field itself stays frozen once there is activity). Reversible from the ledger.
+- UI: expense claim form (headings, proper category names, empty amount, phone layout); salary Pay row no longer asks "Cash" twice; monthly attendance sheet drops "— ·", holiday letter H, half-day ½, legend letters, upcoming days blank.
+- Tests: `tests/test_payroll_correction.py`, `tests/test_opening_adjustment.py`, e2e "a paid salary is edited in place".
+
 ### DS-106: Senior review + Phase 1 batch 1 — logos 404 on gamaa.in, blue PDFs, dialogs under the header, white sidebar
 
 - Review method: walked all 19 screens as admin on the local QA copy (screenshots), logged failing API calls per page, traced settings to where they apply. Plan written to `docs/PRODUCT_UX_RESEARCH/07_PHASED_PLAN.md` (Phase 1 clean-up, Phase 2 reorganise, Phase 3 architect features, owner actions).

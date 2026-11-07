@@ -43,6 +43,8 @@ jobs:
           python -m pytest -q
           tests/test_access_and_url_safety.py
           tests/test_accounting_safety.py
+          tests/test_opening_adjustment.py
+          tests/test_payroll_correction.py
           tests/test_financial_read_permissions.py
           tests/test_invoice_pdf_format.py
           tests/test_employee_corrections.py

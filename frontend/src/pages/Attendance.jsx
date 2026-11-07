@@ -717,9 +717,9 @@ function SalRow({ k, v, sub, red }) {
 }
 
 const STATUS_LETTER = {
-  present: "P", late: "L", absent: "A", half_day: "H",
+  present: "P", late: "L", absent: "A", half_day: "½",
   leave: "LV", paid_leave: "LV", unpaid_leave: "LV",
-  holiday: "H*", week_off: "W", pending_approval: "?", site_visit: "SV",
+  holiday: "H", week_off: "W", pending_approval: "?", site_visit: "SV",
 };
 
 /* Day-by-day monthly attendance grid (employees × days) */
@@ -728,13 +728,18 @@ function MonthlyGrid({ monthly, ym }) {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const pad = (n) => String(n).padStart(2, "0");
   const dow = (d) => new Date(ym.y, ym.m - 1, d).getDay(); // 0=Sun … 6=Sat
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono" data-testid="monthly-grid-legend">
         {[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["half_day", "Half"], ["leave", "Leave"], ["holiday", "Holiday"], ["week_off", "Week-off"]].map(([k, l]) => (
           <span key={k} className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3" style={{ background: STATUS_COLORS[k] }} /> {l}
+            <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold"
+              style={{ background: STATUS_COLORS[k] + "22", color: STATUS_COLORS[k], border: `1px solid ${STATUS_COLORS[k]}` }}>
+              {STATUS_LETTER[k]}
+            </span> {l}
           </span>
         ))}
       </div>
@@ -763,8 +768,8 @@ function MonthlyGrid({ monthly, ym }) {
                 <tr key={r.employee.id} className="border-t border-[var(--line-soft)]" data-testid={`monthly-grid-${r.employee.id}`}>
                   <td className="sticky left-0 z-10 bg-white p-2 border-r border-[var(--line)]">
                     <div className="font-semibold truncate max-w-[170px]">{r.employee.name}</div>
-                    <div className="text-[10px] text-[var(--ink-3)] font-mono">
-                      {r.employee.designation || "—"} · shift {r.employee.shift_start || "09:00"}
+                    <div className="text-[10px] text-[var(--ink-3)]">
+                      {[r.employee.designation, `Shift ${r.employee.shift_start || "09:00"}`].filter(Boolean).join(" · ")}
                     </div>
                   </td>
                   {days.map((d) => {
@@ -775,6 +780,7 @@ function MonthlyGrid({ monthly, ym }) {
                     const letter = st ? (STATUS_LETTER[st] || "•") : "·";
                     const lateM = rec?.late_minutes;
                     const title = rec ? `${dateStr}: ${st}${lateM ? ` · ${lateM} min late` : ""}` : `${dateStr}: no record`;
+                    if (!rec && dateStr > todayKey) return <td key={d} className="p-0.5" aria-label={`${dateStr}: upcoming`} />;
                     return (
                       <td key={d} className="p-0.5 text-center" title={title}>
                         <span className="inline-flex items-center justify-center font-mono text-[9px] font-bold"

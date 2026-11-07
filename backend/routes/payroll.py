@@ -12,6 +12,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 from datetime import date as _date
 import io
+import math
 import calendar
 from fpdf import FPDF
 from pymongo.errors import DuplicateKeyError
@@ -433,14 +434,19 @@ async def reverse_salary_payment(run_id: str, request: Request,
         )
         if not journal:
             raise HTTPException(status_code=409, detail="Linked payroll journal is missing; administrator review required")
-        from routes.accounting import _reverse_journal_entry
+        from routes.accounting import _hide_reversed_pair, _reverse_journal_entry
+        # A cancelled salary leaves the Daybook and ledgers entirely: the reversal is
+        # dated with the payment and both stay only in the audit trail.
         if journal.get("reversed") and journal.get("reversal_je_id"):
             reversal = await sdb.journal_entries.find_one(
                 {"id": journal["reversal_je_id"]}, {"_id": 0})
             if not reversal:
                 raise HTTPException(status_code=409, detail="Payroll reversal needs administrator review")
+            await _hide_reversed_pair(user, journal, "payroll_cancel")
         else:
-            reversal = await _reverse_journal_entry(user, journal, action="payroll_cancel")
+            reversal = await _reverse_journal_entry(
+                user, journal, action="payroll_cancel",
+                reversal_date=journal.get("date"), hide_from_books=True)
         changed_at = iso_now()
         result = await sdb.payroll_runs.update_one(
             {"id": run_id, "status": "paid"},
@@ -459,6 +465,142 @@ async def reverse_salary_payment(run_id: str, request: Request,
                       "reversal_journal_id": reversal["id"]},
                 org_id=user_org_id(user))
     return {"ok": True, "status": "reversed", "reversal_journal_id": reversal["id"]}
+
+
+class SalaryCorrectionIn(BaseModel):
+    net: float                          # the amount actually paid
+    bonus: Optional[float] = None       # part of net shown as bonus on the slip
+    payment_date: str
+    paid_from_account_id: str
+    payment_method: Literal["cash", "bank_transfer", "upi", "cheque", "online", "other"] = "cash"
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+
+
+def _corrected_breakdown(run: dict, net: float, bonus: Optional[float]) -> tuple:
+    """Rebuild the slip so earnings - deductions equals the corrected net."""
+    breakdown = dict(run.get("breakdown") or {})
+    extras = dict(run.get("extras") or {})
+    old_net = float(run.get("net") or 0)
+    old_bonus = float(extras.get("bonus") or 0)
+    new_bonus = old_bonus if bonus is None else float(bonus)
+    delta_bonus = round(new_bonus - old_bonus, 2)
+    extras["bonus"] = new_bonus
+    breakdown["additions"] = round(float(breakdown.get("additions") or 0) + delta_bonus, 2)
+    breakdown["gross"] = round(float(breakdown.get("gross") or 0) + delta_bonus, 2)
+    rest = round(net - (old_net + delta_bonus), 2)
+    if rest > 0:
+        breakdown["other_earning"] = round(float(breakdown.get("other_earning") or 0) + rest, 2)
+        breakdown["gross"] = round(breakdown["gross"] + rest, 2)
+    elif rest < 0:
+        breakdown["other_deduction"] = round(float(breakdown.get("other_deduction") or 0) - rest, 2)
+        breakdown["deductions_total"] = round(float(breakdown.get("deductions_total") or 0) - rest, 2)
+    breakdown["net"] = net
+    return breakdown, extras
+
+
+@router.post("/payroll/runs/{run_id}/correct")
+async def correct_salary_payment(run_id: str, payload: SalaryCorrectionIn, request: Request,
+                                 session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    """Edit a salary already paid (amount, bonus, date, account).
+
+    The old payment leaves the books (kept in the audit trail) and the corrected
+    one is posted in its place, so the Daybook and employee sheet show one entry.
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "payroll.create") or not has_permission(user, "finance.update"):
+        raise HTTPException(status_code=403, detail="Payroll create and finance update permissions are required")
+    net = round(float(payload.net or 0), 2)
+    if not math.isfinite(net) or net <= 0:
+        raise HTTPException(status_code=400, detail="Amount paid must be greater than zero")
+    if payload.bonus is not None and (not math.isfinite(float(payload.bonus)) or payload.bonus < 0 or payload.bonus > net):
+        raise HTTPException(status_code=400, detail="Bonus must be between zero and the amount paid")
+    try:
+        _date.fromisoformat(payload.payment_date)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="payment_date must be YYYY-MM-DD")
+    async with doc_lock(sdb.payroll_runs, run_id):
+        run = await sdb.payroll_runs.find_one({"id": run_id}, {"_id": 0})
+        if not run:
+            raise HTTPException(status_code=404, detail="Payroll run not found")
+        if run.get("status") not in {"paid", "reversed"}:
+            raise HTTPException(status_code=409, detail="This payment was already replaced; edit the latest one")
+        if float((run.get("extras") or {}).get("advances_recovered") or 0) > 0:
+            raise HTTPException(status_code=409, detail=(
+                "This salary also recovered an advance. Cancel it and pay again instead."))
+        other = await sdb.payroll_runs.find_one(
+            {"employee_id": run["employee_id"], "year": run["year"], "month": run["month"],
+             "status": {"$in": ["paid", "processing"]}, "id": {"$ne": run_id}}, {"_id": 0, "id": 1})
+        if other:
+            raise HTTPException(status_code=409, detail="Another payment for this month is recorded; edit that one")
+        journal = await sdb.journal_entries.find_one(
+            {"id": run.get("journal_id"), "source": "payroll", "source_id": run_id}, {"_id": 0})
+        if not journal:
+            raise HTTPException(status_code=409, detail="Linked payroll journal is missing; administrator review required")
+        paid_from = await sdb.accounts.find_one(
+            {"id": payload.paid_from_account_id},
+            {"_id": 0, "id": 1, "type": 1, "name": 1, "is_bank": 1, "active": 1})
+        if not paid_from or paid_from.get("active") is False or str(paid_from.get("type") or "").lower() != "asset":
+            raise HTTPException(status_code=400, detail="Paid-from account must be a cash/bank asset account")
+        from core.finance import validate_method_account
+        validate_method_account(payload.payment_method, paid_from, label="salary payments")
+        salary_acc_id = run.get("salary_account_id")
+        if not salary_acc_id:
+            raise HTTPException(status_code=409, detail="Salary account missing on this run")
+
+        breakdown, extras = _corrected_breakdown(run, net, payload.bonus)
+        emp_name = run.get("employee_name") or run["employee_id"]
+        new_run_id = new_id("pr_")
+        new_run = {
+            **{k: run.get(k) for k in ("employee_id", "employee_name", "year", "month", "salary_account_id")},
+            "id": new_run_id,
+            "breakdown": breakdown, "extras": extras, "net": net,
+            "paid_from_account_id": paid_from["id"], "paid_from_account_name": paid_from.get("name"),
+            "payment_date": payload.payment_date, "payment_method": payload.payment_method,
+            "reference": payload.reference, "notes": payload.notes,
+            "journal_id": None, "status": "processing", "corrected_from_run_id": run_id,
+            "created_at": iso_now(), "paid_by": user["user_id"], "paid_by_name": user.get("name"),
+        }
+        await sdb.payroll_runs.insert_one(dict(new_run))
+        try:
+            je = await _post_journal(
+                user, payload.payment_date, f"Salary {run['year']}-{run['month']:02d} — {emp_name}",
+                [{"account_id": salary_acc_id, "debit": net, "credit": 0, "description": f"Payroll — {emp_name}"},
+                 {"account_id": paid_from["id"], "debit": 0, "credit": net, "description": "Paid"}],
+                reference=payload.reference or f"PAYROLL-{run['year']}-{run['month']:02d}",
+                employee_id=run["employee_id"], source="payroll", source_id=new_run_id,
+            )
+        except Exception:
+            await sdb.payroll_runs.delete_one({"id": new_run_id, "status": "processing"})
+            raise
+
+        from routes.accounting import _hide_reversed_pair, _reverse_journal_entry
+        if journal.get("reversed"):
+            await _hide_reversed_pair(user, journal, "payroll_correction")
+        else:
+            await _reverse_journal_entry(user, journal, action="payroll_correction",
+                                         reversal_date=journal.get("date"), hide_from_books=True)
+        changed_at = iso_now()
+        period_key = run.get("period_key") or run.get("original_period_key") or _payroll_period_key(
+            user.get("org_id") or "org_default", run["employee_id"], run["year"], run["month"])
+        await sdb.payroll_runs.update_one(
+            {"id": run_id},
+            {"$set": {"status": "corrected", "corrected_at": changed_at, "corrected_by": user["user_id"],
+                      "corrected_to_run_id": new_run_id, "original_period_key": period_key},
+             "$unset": {"period_key": ""}},
+        )
+        await sdb.payroll_runs.update_one(
+            {"id": new_run_id},
+            {"$set": {"journal_id": je["id"], "status": "paid", "paid_at": changed_at,
+                      "period_key": period_key}},
+        )
+        new_run.update({"journal_id": je["id"], "status": "paid", "paid_at": changed_at, "period_key": period_key})
+    await audit(user, "payroll.payment.correct", target=run_id, target_type="payroll_run",
+                meta={"employee_id": run["employee_id"], "old_net": run.get("net"), "new_net": net,
+                      "new_run_id": new_run_id, "payment_date": payload.payment_date},
+                org_id=user_org_id(user))
+    return {"run": new_run, "journal": je}
 
 
 # ==================================================================

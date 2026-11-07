@@ -111,6 +111,41 @@ test("payroll: bank salary posts once to the chosen bank, with name, and can be 
   await ctx.dispose();
 });
 
+test("payroll: a paid salary is edited in place (bonus included) and the old entry leaves the books", async ({ browser }) => {
+  const ctx = await api("admin");
+  const { cash } = await accounts(ctx);
+  const emp = await json(ctx.post("/api/employees", { data: {
+    first_name: "Meet", last_name: `QA${uid()}`, salary: { basic: 12000 },
+  } }));
+  const paid = await json(ctx.post(`/api/employees/${emp.id}/pay-salary`, { data: {
+    year: 2026, month: 10, apply_attendance_deductions: false, payment_date: "2026-10-28",
+    paid_from_account_id: cash.id, payment_method: "cash",
+  } }));
+  expect(paid.run.net).toBe(12000);
+
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto(`/employees/${emp.id}`);
+  await page.getByRole("button", { name: "Salary & Bank" }).first().click();
+  await page.getByTestId(`payment-actions-${paid.run.id}`).click();
+  await page.getByRole("menuitem", { name: "Edit payment" }).click();
+  await page.getByTestId("form-field-net").fill("15000");
+  await page.getByTestId("form-field-bonus").fill("3000");
+  await page.getByTestId("form-field-payment_date").fill("2026-10-31");
+  await page.getByTestId("confirm-ok").click();
+  const history = page.getByTestId("payment-history-table");
+  await expect(history).toContainText("15,000");
+  await expect(history).toContainText("bonus");
+  await expect(history).not.toContainText("12,000");
+
+  const live = await journals(ctx, { source: "payroll", employee_id: emp.id });
+  expect(live, "only the corrected salary is in the books").toHaveLength(1);
+  expect(live[0].date).toBe("2026-10-31");
+  expect(live[0].total).toBe(15000);
+  const reversals = await journals(ctx, { source: "payroll_reversal", employee_id: emp.id });
+  expect(reversals, "no visible reversal line").toHaveLength(0);
+  await ctx.dispose();
+});
+
 test("vendor commission: planned posts nothing, partial receipt posts once to bank", async ({ browser }) => {
   const ctx = await api("admin");
   const { cash, bank } = await accounts(ctx);
