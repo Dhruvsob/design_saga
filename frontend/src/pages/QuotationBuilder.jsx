@@ -8,7 +8,7 @@ import {
   CheckCircle, X, Clock,
 } from "@phosphor-icons/react";
 import { ProposalDetails, ProposalFees } from "../components/ConsultancyProposal";
-import { confirmAction } from "../lib/confirm";
+import { askForm, confirmAction } from "../lib/confirm";
 import useUnsavedWarning from "../lib/useUnsavedWarning";
 import { PdfFrame } from "../components/PdfPreview";
 
@@ -84,8 +84,11 @@ export default function QuotationBuilder() {
   };
 
   const newVersion = async () => {
-    const note = window.prompt("Revision note (what changed?)") || "";
-    await api.post(`/quotations-adv/${id}/version`, { note });
+    const v = await askForm({ title: "Create a new version", confirmLabel: "Create version", fields: [
+      { name: "note", label: "What changed?", multiline: true, placeholder: "e.g. Revised fee after site visit" },
+    ] });
+    if (!v) return;
+    await api.post(`/quotations-adv/${id}/version`, { note: v.note });
     load();
   };
 
@@ -274,11 +277,13 @@ function Overview({ q, update, isConsult }) {
   const setHL = (k, v) => update({ highlights: { ...(q.highlights || {}), [k]: v } });
   const setDel = (k, v) => update({ deliverables: { ...(q.deliverables || {}), [k]: Number(v) || 0 } });
 
-  const editList = (key) => {
+  const editList = async (key) => {
     const current = (q[key] || []).join("\n");
-    const next = window.prompt("One bullet per line:", current);
-    if (next === null) return;
-    update({ [key]: next.split("\n").map((s) => s.trim()).filter(Boolean) });
+    const v = await askForm({ title: "Edit list", body: "One item per line.", fields: [
+      { name: "items", label: "Items", multiline: true, defaultValue: current },
+    ] });
+    if (!v) return;
+    update({ [key]: v.items.split("\n").map((s) => s.trim()).filter(Boolean) });
   };
 
   return (

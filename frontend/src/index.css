@@ -409,7 +409,6 @@ textarea:focus-visible {
 }
 
 /* Leaflet premium look */
-.leaflet-premium .leaflet-tile-pane { filter: grayscale(100%) contrast(90%) brightness(1.03); }
 .leaflet-container { font-family: var(--font-sans) !important; }
 
 /* Hide scrollbar utility (used on horizontal tab strips) */

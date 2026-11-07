@@ -14,7 +14,7 @@ import {
   Archive,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
-import { confirmAction } from "../lib/confirm";
+import { askForm, confirmAction } from "../lib/confirm";
 
 const INR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
@@ -274,15 +274,13 @@ export default function VendorDetail() {
     await api.delete(`/vendors/${id}/documents/${docId}`); await load();
   };
   const editDoc = async (doc) => {
-    const label = window.prompt("Document label", doc.label || "");
-    if (!label?.trim()) return;
-    const kind = window.prompt("Document type", doc.kind || "other");
-    if (!kind?.trim()) return;
-    const expiresOn = window.prompt("Expiry date (YYYY-MM-DD, blank for none)", doc.expires_on || "");
-    if (expiresOn === null) return;
-    await api.patch(`/vendors/${id}/documents/${doc.id}`, {
-      label: label.trim(), kind: kind.trim(), expires_on: expiresOn.trim(),
-    });
+    const v = await askForm({ title: "Edit document", fields: [
+      { name: "label", label: "Label", required: true, defaultValue: doc.label || "" },
+      { name: "kind", label: "Type", required: true, defaultValue: doc.kind || "other" },
+      { name: "expires_on", label: "Expiry date (optional)", type: "date", defaultValue: doc.expires_on || "" },
+    ] });
+    if (!v) return;
+    await api.patch(`/vendors/${id}/documents/${doc.id}`, v);
     await load();
   };
 

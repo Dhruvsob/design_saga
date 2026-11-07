@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { dateForInput } from "../lib/format";
 import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const KINDS = [
   { id: "national", label: "National", color: "#B22B22" },
@@ -163,15 +164,10 @@ export default function Holidays() {
                         <span className="text-xs" style={{ color: meta.color }}>{meta.label}{h.recurring && " · recurring"}</span>
                       </td>
                       <td className="py-1.5 text-right">
-                        {canDelete && !h.materialized_from_recurring && (
-                          <button
-                            className="text-[var(--danger)] hover:opacity-70"
-                            data-testid={`holiday-delete-${h.id}`}
-                            onClick={() => del(h.id)}
-                          >
-                            <Trash size={14} />
-                          </button>
-                        )}
+                        <RowActions label={h.name} testid={`holiday-actions-${h.id}`} actions={[
+                          { label: "Delete", icon: Trash, danger: true, onSelect: () => del(h.id), testid: `holiday-delete-${h.id}`,
+                            hidden: !(canDelete && !h.materialized_from_recurring) },
+                        ]} />
                       </td>
                     </tr>
                   );

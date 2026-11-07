@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
-import { Plus, ArrowRight, CaretRight, MagnifyingGlass, SquaresFour, ListBullets } from "@phosphor-icons/react";
+import { Plus, ArrowRight, CaretRight, MagnifyingGlass, SquaresFour, ListBullets, PushPin, PencilSimple, Archive } from "@phosphor-icons/react";
+import RowActions from "../components/RowActions";
+import { confirmAction } from "../lib/confirm";
+import { toast } from "sonner";
 import PageHero from "../components/PageHero";
 import { formatINR, empName } from "../lib/format";
 import SearchSelect from "../components/SearchSelect";
@@ -14,6 +17,7 @@ const FALLBACK_TYPES = ["Residential", "Commercial"];
 export default function Projects() {
   const { currentOrg, hasPerm } = useAuth();
   const canCreate = hasPerm("projects.create");
+  const canUpdate = hasPerm("projects.update");
   const { values } = useMasterData();
   const STAGES = values("project_stage", FALLBACK_STAGES);
   const TYPES = values("project_type", FALLBACK_TYPES);
@@ -42,6 +46,14 @@ export default function Projects() {
     try { localStorage.setItem("ds_projects_view", v); } catch { /* storage unavailable */ }
   };
   const navigate = useNavigate();
+  const [pinned, setPinned] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ds_projects_pinned") || "[]"); } catch { return []; }
+  });
+  const togglePin = (pid) => setPinned((cur) => {
+    const next = cur.includes(pid) ? cur.filter((x) => x !== pid) : [pid, ...cur];
+    try { localStorage.setItem("ds_projects_pinned", JSON.stringify(next)); } catch { /* storage unavailable */ }
+    return next;
+  });
 
   const load = async () => {
     const [p, c, e] = await Promise.all([
@@ -88,7 +100,30 @@ export default function Projects() {
     .filter((p) => !term || `${p.name} ${p.client_name || ""} ${p.project_type || ""}`.toLowerCase().includes(term))
     .sort((a, b) => (sort === "name" ? (a.name || "").localeCompare(b.name || "")
       : sort === "stage" ? STAGES.indexOf(a.stage || "Requirement") - STAGES.indexOf(b.stage || "Requirement")
-        : String(b.created_at || "").localeCompare(String(a.created_at || ""))));
+        : String(b.created_at || "").localeCompare(String(a.created_at || ""))))
+    .sort((a, b) => Number(pinned.includes(b.id)) - Number(pinned.includes(a.id)));
+
+  const archive = async (p) => {
+    if (!await confirmAction(`Archive “${p.name}”? It will be hidden from active lists but all history is preserved.`)) return;
+    try {
+      await api.post(`/projects/${p.id}/archive`);
+      toast.success("Project archived");
+      load();
+    } catch (ex) {
+      toast.error(ex?.response?.data?.detail || "Could not archive");
+    }
+  };
+  const menuFor = (p) => (
+    <RowActions label={p.name} testid={`project-actions-${p.id}`} actions={[
+      { label: "Open", icon: ArrowRight, onSelect: () => navigate(`/projects/${p.id}`) },
+      { label: pinned.includes(p.id) ? "Unpin" : "Pin to top", icon: PushPin, onSelect: () => togglePin(p.id),
+        testid: `project-pin-${p.id}` },
+      { label: "Edit details", icon: PencilSimple, onSelect: () => navigate(`/projects/${p.id}?edit=1`), hidden: !canUpdate },
+      { divider: true },
+      { label: "Archive", icon: Archive, danger: true, onSelect: () => archive(p), hidden: !canUpdate,
+        testid: `project-archive-${p.id}` },
+    ]} />
+  );
 
   return (
     <div className="space-y-8" data-testid="projects-page">
@@ -231,7 +266,7 @@ export default function Projects() {
                   <td className="p-3">{p.client_name || "—"}</td>
                   <td className="p-3"><span className="status-chip chip-medium">{p.stage || "Requirement"}</span></td>
                   <td className="p-3 text-right font-mono">{formatINR(p.budget)}</td>
-                  <td className="p-3 text-right"><CaretRight size={14} className="inline text-[var(--ink-4)]" /></td>
+                  <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>{menuFor(p)}</td>
                 </tr>
               ))}
             </tbody>
@@ -245,16 +280,17 @@ export default function Projects() {
           const idx = STAGES.indexOf(p.stage || "Requirement");
           const pct = Math.round(((idx + 1) / STAGES.length) * 100);
           return (
+            <div key={p.id} className="fade-up relative border-r border-b border-[var(--line)] group hover:bg-[var(--surface-2)] transition">
+            <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+              {pinned.includes(p.id) && <PushPin size={13} weight="fill" className="text-[var(--accent-strong)]" aria-label="Pinned" />}
+              <span className="font-mono text-[10px] text-[var(--ink-3)] tracking-widest">#{String(i + 1).padStart(3, "0")}</span>
+              {menuFor(p)}
+            </div>
             <button
-              key={p.id}
               onClick={() => navigate(`/projects/${p.id}`)}
-              className="fade-up text-left border-r border-b border-[var(--line)] p-6 hover:bg-[var(--surface-2)] transition group relative"
+              className="w-full text-left p-6 pr-24"
               data-testid={`project-card-${p.id}`}
             >
-              {/* index number */}
-              <div className="absolute top-4 right-4 font-mono text-[10px] text-[var(--ink-3)] tracking-widest">
-                #{String(i + 1).padStart(3, "0")}
-              </div>
 
               <div className="overline mb-2">
                 {p.project_type}
@@ -287,6 +323,7 @@ export default function Projects() {
                 </div>
               </div>
             </button>
+            </div>
           );
         })}
         {projects.length === 0 && (

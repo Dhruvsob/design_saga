@@ -22,9 +22,18 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
     if (mapRef.current || !elRef.current) return undefined;
     const hasPoint = lat !== "" && lat != null && lng !== "" && lng != null;
     const center = hasPoint ? [Number(lat), Number(lng)] : [20.5937, 78.9629];
-    const map = L.map(elRef.current, { zoomControl: true, attributionControl: false })
+    const map = L.map(elRef.current, { zoomControl: true, attributionControl: true })
       .setView(center, hasPoint ? 16 : 5);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    map.attributionControl.setPrefix(false);
+    // Colourful street map (default) + satellite imagery to see the actual building.
+    const streets = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      maxZoom: 20, subdomains: "abcd",
+      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    }).addTo(map);
+    const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19, attribution: "Imagery &copy; Esri",
+    });
+    L.control.layers({ Map: streets, Satellite: satellite }, null, { position: "topright" }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     map.on("click", (e) => {
       if (onPick) onPick(Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6)));
@@ -60,8 +69,8 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
     }
     if (!circleRef.current) {
       circleRef.current = L.circle(pos, {
-        radius: Number(radius) || 150, color: "#8B7F6A", weight: 2,
-        fillColor: "#8B7F6A", fillOpacity: 0.12,
+        radius: Number(radius) || 150, color: "#1D633E", weight: 2.5,
+        fillColor: "#2E9E62", fillOpacity: 0.18,
       }).addTo(map);
     } else {
       circleRef.current.setLatLng(pos);
@@ -79,8 +88,8 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
     (locations || []).forEach((l) => {
       if (l.lat == null || l.lng == null) return;
       L.circle([Number(l.lat), Number(l.lng)], {
-        radius: Number(l.radius_m) || 150, color: "#76705E", weight: 1,
-        fillColor: "#8B7F6A", fillOpacity: 0.08, dashArray: "4 4",
+        radius: Number(l.radius_m) || 150, color: "#2B5299", weight: 2,
+        fillColor: "#4C7BD9", fillOpacity: 0.14, dashArray: "6 4",
       }).addTo(layer).bindPopup(`${l.name || "Location"} · ${l.radius_m || 150}m`);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,7 +99,7 @@ export const GeoFenceMap = ({ lat, lng, radius = 150, locations = [], onPick, he
     <div
       ref={elRef}
       data-testid="geofence-map"
-      className="rounded-xl overflow-hidden border border-[var(--line)] leaflet-premium"
+      className="rounded-xl overflow-hidden border border-[var(--line)]"
       style={{ height, width: "100%", zIndex: 0 }}
     />
   );

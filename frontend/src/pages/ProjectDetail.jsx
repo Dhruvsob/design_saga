@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -23,6 +23,7 @@ const inr = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasPerm, user } = useAuth();
   const { values } = useMasterData();
   const STAGES = values("project_stage", FALLBACK_STAGES);
@@ -134,6 +135,14 @@ export default function ProjectDetail() {
     setErr("");
     setEditOpen(true);
   };
+
+  // ⋮ "Edit details" on the Projects list lands here with ?edit=1
+  useEffect(() => {
+    if (p && searchParams.get("edit") === "1" && hasPerm("projects.update")) {
+      openEdit();
+      setSearchParams({}, { replace: true });
+    }
+  }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveEdit = async (e) => {
     e.preventDefault(); setErr("");

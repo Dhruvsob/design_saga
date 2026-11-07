@@ -46,8 +46,33 @@ export function confirmAction(input) {
   });
 }
 
+/**
+ * In-app form dialog replacing window.prompt() chains.
+ *
+ *   const v = await askForm({ title: "Add warning", confirmLabel: "Save", fields: [
+ *     { name: "reason", label: "Reason", required: true },
+ *     { name: "note", label: "Note (optional)", multiline: true },
+ *   ]});
+ *   if (!v) return;            // cancelled
+ */
+export function askForm({ title, body, fields, confirmLabel = "Save", danger = false }) {
+  return new Promise((resolve) => {
+    const request = { title, body, fields, confirmLabel, danger, cancelLabel: "Cancel", form: true, resolve };
+    if (open) open(request);
+    else queue.push(request);
+  });
+}
+
 export function ConfirmHost() {
   const [request, setRequest] = useState(null);
+  const [values, setValues] = useState({});
+  const [missing, setMissing] = useState([]);
+
+  useEffect(() => {
+    if (!request?.form) return;
+    setValues(Object.fromEntries(request.fields.map((f) => [f.name, f.defaultValue ?? ""])));
+    setMissing([]);
+  }, [request]);
 
   useEffect(() => {
     open = (req) => setRequest((cur) => {
@@ -62,7 +87,12 @@ export function ConfirmHost() {
     // the action click and the dialog's close event both arrive; settle once
     if (!request || request.settled) return;
     request.settled = true;
-    request.resolve(value);
+    if (request.form) {
+      const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]));
+      request.resolve(value ? clean : null);
+    } else {
+      request.resolve(value);
+    }
     setRequest(queue.length ? queue.shift() : null);
   };
 
@@ -78,10 +108,35 @@ export function ConfirmHost() {
               <AlertDialogDescription className="sr-only">Please confirm this action.</AlertDialogDescription>
             )}
           </AlertDialogHeader>
+          {request.form && (
+            <div className="space-y-3" data-testid="form-dialog">
+              {request.fields.map((f, i) => {
+                const Tag = f.multiline ? "textarea" : "input";
+                const bad = missing.includes(f.name);
+                return (
+                  <label key={f.name} className="block text-xs font-semibold text-[var(--ink-2)]">
+                    {f.label}{f.required && <span className="text-[var(--danger)]"> *</span>}
+                    <Tag autoFocus={i === 0} type={f.multiline ? undefined : (f.type || "text")} rows={f.multiline ? 3 : undefined}
+                         className={`input-flat mt-1 w-full font-normal ${bad ? "!border-[var(--danger)]" : ""}`}
+                         placeholder={f.placeholder} value={values[f.name] ?? ""}
+                         onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                         data-testid={`form-field-${f.name}`} />
+                    {bad && <span className="block mt-1 font-normal text-[var(--danger)]">Required</span>}
+                  </label>
+                );
+              })}
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => finish(false)} data-testid="confirm-cancel">{request.cancelLabel || "Cancel"}</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => finish(true)}
+              onClick={(e) => {
+                if (request.form) {
+                  const need = request.fields.filter((f) => f.required && !String(values[f.name] ?? "").trim()).map((f) => f.name);
+                  if (need.length) { e.preventDefault(); setMissing(need); return; }
+                }
+                finish(true);
+              }}
               className={request.danger ? "bg-[var(--danger)] hover:bg-[#8F1F18] text-white" : ""}
               data-testid="confirm-ok">
               {request.confirmLabel || "Continue"}

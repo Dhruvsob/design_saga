@@ -6,6 +6,7 @@ import PageHero from "../components/PageHero";
 import { dateForInput, formatDate } from "../lib/format";
 import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const STATUS_CHIP = {
   active: "chip-paid",
@@ -196,12 +197,12 @@ export default function Employees() {
                   <Td className="font-mono text-xs">{formatDate(r.joining_date)}</Td>
                   <Td>
                     <div className="flex items-center gap-2 justify-end">
-                      <ArrowRight size={14} className="text-[var(--ink-2)]" />
-                      {canDelete && (
-                        <button onClick={(e) => remove(r.id, e)} className="text-[var(--danger)] hover:scale-110 transition" title="Terminate employee">
-                          <UserMinus size={14} />
-                        </button>
-                      )}
+                      <RowActions label={r.name || "employee"} testid={`employee-actions-${r.id}`} actions={[
+                        { label: "Open profile", icon: ArrowRight, onSelect: () => navigate(`/employees/${r.id}`) },
+                        { divider: true },
+                        { label: "Terminate employee", icon: UserMinus, danger: true, hidden: !canDelete,
+                          onSelect: () => remove(r.id, { stopPropagation() {} }) },
+                      ]} />
                     </div>
                   </Td>
                 </tr>

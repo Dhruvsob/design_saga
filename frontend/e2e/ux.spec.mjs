@@ -193,3 +193,33 @@ test("work board: quick add, group by category, list and calendar show the same 
   await page.getByTestId("view-calendar-btn").click();
   await expect(page.getByTestId("task-unscheduled")).toContainText(title);
 });
+
+test("project card ⋮ pins to top and archives; employee forms use in-app dialogs", async ({ page }) => {
+  const ctx = await api("admin");
+  const a = await json(ctx.post("/api/projects", { data: { name: `Pin A ${uid()}`, engagement_type: "consultancy" } }));
+  const b = await json(ctx.post("/api/projects", { data: { name: `Pin B ${uid()}`, engagement_type: "consultancy" } }));
+  const emp = await json(ctx.post("/api/employees", { data: { first_name: "Dialog", last_name: `T${uid()}`, salary: { basic: 20000 } } }));
+  await ctx.dispose();
+
+  await page.goto("/projects");
+  await page.getByTestId(`project-actions-${a.id}`).click();
+  await page.getByTestId(`project-pin-${a.id}`).click();
+  await expect(page.locator('[data-testid^="project-card-"]').first()).toHaveAttribute("data-testid", `project-card-${a.id}`);
+  await page.getByTestId(`project-actions-${b.id}`).click();
+  await page.getByTestId(`project-archive-${b.id}`).click();
+  await page.getByTestId("confirm-ok").click();
+  await expect(page.getByTestId(`project-card-${b.id}`)).toHaveCount(0);
+
+  page.on("dialog", () => { throw new Error("native prompt() should not appear"); });
+  await page.goto(`/employees/${emp.id}`);
+  await page.getByTestId("emp-warning-btn").click();
+  await expect(page.getByTestId("confirm-dialog")).toContainText("Add warning");
+  await page.getByTestId("confirm-ok").click();                       // reason is required
+  await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+  await page.getByTestId("form-field-reason").fill("Late to site");
+  await page.getByTestId("confirm-ok").click();
+  await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+  const check = await api("admin");
+  await expect.poll(async () => JSON.stringify(await json(check.get(`/api/employees/${emp.id}`)))).toContain("Late to site");
+  await check.dispose();
+});

@@ -11,6 +11,14 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-099: Master improvement list; colourful map; in-app forms; more ⋮ menus
+
+- Owner asked for a list of bugs, risks, UI changes and module features, then fixes module by module. Written to `docs/PRODUCT_UX_RESEARCH/06_MASTER_IMPROVEMENT_LIST.md` (risks R1-R10, whole-app U1-U10, per-module ideas, order of work).
+- Attendance geofence map: was greyscale. Now colourful street map (CARTO Voyager) with a Satellite layer switch (Esri), attribution shown; office fence green, saved locations dashed blue; help text updated.
+- R5: all 17 browser `prompt()` popups replaced by an in-app form dialog (`askForm` in `lib/confirm.jsx`) with labelled fields, required-field check and defaults: employee warnings/rewards/documents, quotation new version and list editing, vendor document edit.
+- U1: ⋮ action menus on Leads (Convert stays visible), Employees, Holidays and Projects. Project menu: Open, Pin to top (remembered on this device), Edit details (opens the edit form), Archive (confirm). Works in grid and list views.
+- Verified: ESLint clean, build OK; e2e ux/forms/a11y 22 passed incl. new test (pin moves the card first, archive removes it, warning dialog refuses an empty reason then saves).
+
 ### DS-098: One paid leave per month for every employee; taupe sidebar; logo tile
 
 - Owner: "1 leave in one month to all the employees". Verified the payroll engine already applies a company-wide monthly paid-leave allowance (default 1; first approved casual/sick/earned leave in a month is paid, further ordinary leave is unpaid at the per-day rate; "unpaid" always deducted; maternity/paternity/comp-off not counted). Live DESIGN SAGA policy has no stored value, so the default 1 already applies (read-only check 06/11).

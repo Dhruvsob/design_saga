@@ -8,6 +8,7 @@ import { Plus, ArrowRight, Trash, DotsSixVertical, PencilSimple, Eye, X, Check, 
 import PageHero from "../components/PageHero";
 import { formatDateTime } from "../lib/format";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["New", "Qualified", "Proposal", "Negotiation", "Won", "Lost"];
 const FALLBACK_SOURCES = ["Website", "Instagram", "Referral", "Marketplace", "Walk-in"];
@@ -259,12 +260,13 @@ export default function Leads() {
                             <ArrowRight size={12} weight="bold" /> Convert
                           </button>
                         )}
-                        <button onClick={() => startEdit(l)} className="text-[var(--ink-2)] hover:text-[var(--ink)] hover:scale-110 transition shrink-0" title={canUpdate ? "Edit" : "View details"} data-testid={`lead-edit-${l.id}`}>
-                          {canUpdate ? <PencilSimple size={12} /> : <Eye size={12} />}
-                        </button>
-                        {canDelete && <button onClick={() => del(l.id)} className="text-[var(--danger)] hover:scale-110 transition shrink-0" title="Delete" data-testid={`lead-delete-${l.id}`}>
-                          <Trash size={12} />
-                        </button>}
+                        <RowActions label={l.name || "lead"} testid={`lead-actions-${l.id}`} actions={[
+                          { label: canUpdate ? "Edit" : "View details", icon: canUpdate ? PencilSimple : Eye, onSelect: () => startEdit(l), testid: `lead-edit-${l.id}` },
+                          { label: "Convert to project", icon: ArrowRight, onSelect: () => convert(l.id),
+                            hidden: !(canConvert && l.stage !== "Won" && l.stage !== "Lost") },
+                          { divider: true },
+                          { label: "Delete", icon: Trash, danger: true, onSelect: () => del(l.id), hidden: !canDelete, testid: `lead-delete-${l.id}` },
+                        ]} />
                       </div>
                     </div>
                   </div>

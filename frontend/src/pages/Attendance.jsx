@@ -1671,8 +1671,8 @@ function GeoPolicyTab({ projects }) {
         />
         <p className="text-[11px] text-[var(--ink-3)] mt-2 leading-relaxed">
           Click anywhere on the map or drag the pin to set the <b>default office fence</b>.
-          The solid circle is the office radius; dashed gold circles are saved geofence
-          locations. Use <b>current location</b> to drop the pin where you are standing.
+          The green circle is the office fence; dashed blue circles are saved geofence
+          locations. Switch between Map and Satellite at the top right. Use <b>current location</b> to drop the pin where you are standing.
         </p>
       </div>
 

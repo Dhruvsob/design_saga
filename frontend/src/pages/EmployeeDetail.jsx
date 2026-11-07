@@ -13,7 +13,7 @@ import {
   TrendUp, ClockCounterClockwise, Key, Receipt,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
-import { confirmAction } from "../lib/confirm";
+import { askForm, confirmAction } from "../lib/confirm";
 import useUnsavedWarning from "../lib/useUnsavedWarning";
 
 const TABS = ["Overview", "Employment", "Salary & Bank", "Documents", "Performance", "ERP Access"];
@@ -111,27 +111,32 @@ export default function EmployeeDetail() {
   };
 
   const addWarning = async () => {
-    const reason = window.prompt("Warning reason?");
-    if (!reason) return;
-    const note = window.prompt("Additional note (optional):") || "";
-    await api.post(`/employees/${id}/warnings`, { reason, note });
+    const v = await askForm({ title: "Add warning", fields: [
+      { name: "reason", label: "Reason", required: true },
+      { name: "note", label: "Additional note", multiline: true },
+    ] });
+    if (!v) return;
+    await api.post(`/employees/${id}/warnings`, v);
     load();
   };
 
   const addReward = async () => {
-    const title = window.prompt("Reward title?");
-    if (!title) return;
-    const note = window.prompt("Description (optional):") || "";
-    await api.post(`/employees/${id}/rewards`, { title, note });
+    const v = await askForm({ title: "Add reward", fields: [
+      { name: "title", label: "Reward title", required: true },
+      { name: "note", label: "Description", multiline: true },
+    ] });
+    if (!v) return;
+    await api.post(`/employees/${id}/rewards`, v);
     load();
   };
 
   const editWarning = async (warning) => {
-    const reason = window.prompt("Warning reason?", warning.reason || "");
-    if (!reason?.trim()) return;
-    const note = window.prompt("Additional note (optional):", warning.note || "");
-    if (note === null) return;
-    await api.patch(`/employees/${id}/warnings/${warning.id}`, { reason: reason.trim(), note });
+    const v = await askForm({ title: "Edit warning", fields: [
+      { name: "reason", label: "Reason", required: true, defaultValue: warning.reason || "" },
+      { name: "note", label: "Additional note", multiline: true, defaultValue: warning.note || "" },
+    ] });
+    if (!v) return;
+    await api.patch(`/employees/${id}/warnings/${warning.id}`, v);
     await load();
   };
 
@@ -142,11 +147,12 @@ export default function EmployeeDetail() {
   };
 
   const editReward = async (reward) => {
-    const title = window.prompt("Reward title?", reward.title || "");
-    if (!title?.trim()) return;
-    const note = window.prompt("Description (optional):", reward.note || "");
-    if (note === null) return;
-    await api.patch(`/employees/${id}/rewards/${reward.id}`, { title: title.trim(), note });
+    const v = await askForm({ title: "Edit reward", fields: [
+      { name: "title", label: "Reward title", required: true, defaultValue: reward.title || "" },
+      { name: "note", label: "Description", multiline: true, defaultValue: reward.note || "" },
+    ] });
+    if (!v) return;
+    await api.patch(`/employees/${id}/rewards/${reward.id}`, v);
     await load();
   };
 
@@ -157,11 +163,12 @@ export default function EmployeeDetail() {
   };
 
   const addDocument = async () => {
-    const label = window.prompt("Document label? (e.g. Aadhaar, Offer letter)");
-    if (!label) return;
-    const url = window.prompt("Document URL:");
-    if (!url) return;
-    await api.post(`/employees/${id}/documents`, { label, url });
+    const v = await askForm({ title: "Add document", fields: [
+      { name: "label", label: "Label", required: true, placeholder: "e.g. Aadhaar, Offer letter" },
+      { name: "url", label: "Link (URL)", required: true, type: "url", placeholder: "https://…" },
+    ] });
+    if (!v) return;
+    await api.post(`/employees/${id}/documents`, v);
     load();
   };
 
@@ -172,13 +179,12 @@ export default function EmployeeDetail() {
   };
 
   const editDocument = async (document) => {
-    const label = window.prompt("Document label", document.label || "");
-    if (!label?.trim()) return;
-    const url = window.prompt("Document URL", document.url || "");
-    if (!url?.trim()) return;
-    await api.patch(`/employees/${id}/documents/${document.id}`, {
-      label: label.trim(), url: url.trim(),
-    });
+    const v = await askForm({ title: "Edit document", fields: [
+      { name: "label", label: "Label", required: true, defaultValue: document.label || "" },
+      { name: "url", label: "Link (URL)", required: true, type: "url", defaultValue: document.url || "" },
+    ] });
+    if (!v) return;
+    await api.patch(`/employees/${id}/documents/${document.id}`, v);
     await load();
   };
 
