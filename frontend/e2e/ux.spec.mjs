@@ -273,3 +273,19 @@ test("geofence map loads keyless colour tiles and a drawn pin", async ({ page },
   await expect.poll(() => map.locator('img.leaflet-tile[src*="tile.openstreetmap.org"]').count()).toBeGreaterThan(0);
   expect(blocked).toEqual([]);
 });
+
+test("lists explain an empty result instead of showing a bare table", async ({ page }) => {
+  await page.goto("/clients");
+  await page.getByTestId("clients-search").fill(`nothing-${uid()}`);
+  await expect(page.getByTestId("table-empty")).toContainText("No clients match");
+  await expect(page.getByTestId("table-loading")).toHaveCount(0);
+
+  await page.goto("/quotations");
+  await expect(page.getByTestId("table-loading")).toHaveCount(0);       // loaded: real rows, no shimmer
+  const empty = page.getByTestId("table-empty");
+  await expect(page.locator('[data-testid^="q-row-"], [data-testid="table-empty"]').first()).toBeVisible();
+  if (await empty.isVisible()) {
+    await page.getByTestId("table-empty-action").click();              // empty state's own button
+    await expect(page.getByTestId("q-type-consultancy")).toBeVisible();
+  }
+});

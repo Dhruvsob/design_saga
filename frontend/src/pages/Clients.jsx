@@ -12,6 +12,8 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import { usePaged } from "../components/Pager";
+import { UsersThree } from "@phosphor-icons/react";
+import { SkeletonRows, EmptyRow } from "../components/TableState";
 
 const EMPTY = { name: "", email: "", phone: "", company: "", address: "", client_type: "", notes: "" };
 
@@ -158,9 +160,7 @@ export default function Clients() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr><td colSpan="7" className="p-6 text-center text-sm text-[var(--ink-3)] font-mono uppercase tracking-wider">Loading…</td></tr>
-            )}
+            {loading && <SkeletonRows cols={7} />}
             {!loading && filteredPage.map((c) => (
               <tr key={c.id}
                   onClick={() => navigate(`/clients/${c.id}`)}
@@ -194,12 +194,14 @@ export default function Clients() {
                 </Td>
               </tr>
             ))}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan="7" className="p-8 text-center text-[var(--ink-2)]">
-                <div className="overline mb-1">{query || typeFilter ? "NO MATCHES" : "NO CLIENTS YET"}</div>
-                <div className="text-sm">{query || typeFilter ? "Try a different search or filter." : "Add your first client or convert a lead from the CRM."}</div>
-              </td></tr>
-            )}
+            {!loading && filtered.length === 0 && (query || typeFilter ? (
+              <EmptyRow cols={7} icon={UsersThree} title="No clients match" hint="Try a different search or filter." />
+            ) : (
+              <EmptyRow cols={7} icon={UsersThree} title="No clients yet"
+                hint="Add your first client, or convert a won lead from the CRM."
+                actionLabel={canCreate ? "Add client" : undefined}
+                onAction={() => { setEditing(null); setForm(EMPTY); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            ))}
           </tbody>
         </table>{filteredPager}</div>
       </div>

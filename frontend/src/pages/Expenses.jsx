@@ -9,6 +9,7 @@ import {
   PencilSimple, Trash,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import { SkeletonRows, EmptyRow } from "../components/TableState";
 
 const fmtMoney = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 function fmtErr(d, fb = "Failed") {
@@ -119,7 +120,12 @@ export default function Expenses() {
                   <Td className="font-mono text-xs">{formatDate(e.created_at)}</Td>
                 </tr>
               ))}
-              {expenses.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[var(--ink-2)]">No expenses yet.</td></tr>}
+              {loading && expenses.length === 0 && <SkeletonRows cols={6} />}
+              {!loading && expenses.length === 0 && (
+                <EmptyRow cols={6} icon={Receipt} title="No claims here"
+                  hint="Staff claims for travel, site purchases and other spends appear here for approval."
+                  actionLabel={canCreate ? "New claim" : undefined} onAction={() => setShowCreate(true)} />
+              )}
             </tbody>
           </table>
         </div>

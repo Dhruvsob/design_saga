@@ -26,8 +26,8 @@ Prepared 07/11/2026 from the code, test runs and live checks. Status: **Doing** 
 | U1 | ⋮ menu on every list (Projects, Leads, Employees, Purchase orders, Expenses, Loans, Holidays, Tasks, Accounting entries, Vendor bills/payments) | Clean rows, consistent actions; done for Invoices, Quotations, Clients, Vendors | Doing |
 | U2 | Pagination + "showing 1–50 of 230" on every table | Done for Invoices, Clients, Vendors, Employees (DS-100) |
 | U3 | Sticky table headers and sticky first column on wide tables | Easier reading of Daybook/Monthly sheet | Next |
-| U4 | Empty states with one clear action ("No vendors yet — Add vendor") | Guides new firms | Next |
-| U5 | Loading skeletons on every page (some show nothing while loading) | Feels faster | Next |
+| U4 | Empty states with one clear action ("No vendors yet — Add vendor") | Guides new firms | Done on main lists (DS-103) |
+| U5 | Loading skeletons on every page (some show nothing while loading) | Feels faster | Done on main lists (DS-103) |
 | U6 | Saved filters per page (remember last filter) | Fewer clicks daily | Later |
 | U7 | Keyboard shortcuts: N = new, / = search, Esc = close | Speed for power users | Later |
 | U8 | Breadcrumb links clickable back to list | Navigation | Next |

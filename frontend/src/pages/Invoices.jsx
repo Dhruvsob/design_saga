@@ -10,6 +10,8 @@ import { confirmAction } from "../lib/confirm";
 import PdfPreviewModal from "../components/PdfPreview";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
+import { Receipt } from "@phosphor-icons/react";
+import { SkeletonRows, EmptyRow } from "../components/TableState";
 
 export default function Invoices({ docType = "invoice" }) {
   const { hasPerm } = useAuth();
@@ -19,6 +21,7 @@ export default function Invoices({ docType = "invoice" }) {
   const canRecordPayment = hasPerm("finance.create");
   const canCorrectPayment = hasPerm("finance.delete");
   const [rows, setRows] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const { pageRows: rowsPage, pager: rowsPager } = usePaged(rows, { key: "invoices" });
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -51,11 +54,12 @@ export default function Invoices({ docType = "invoice" }) {
       canRecordPayment ? api.get("/accounts").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
     ]);
     setRows(inv.data);
+    setLoaded(true);
     setClients(cl.data);
     setProjects(pr.data);
     setAccounts((acc.data || []).filter((row) => row.is_bank || ["Cash", "Petty Cash"].includes(row.name)));
   };
-  useEffect(() => { load(); setForm(initialForm(docType)); /* eslint-disable-next-line */ }, [docType]);
+  useEffect(() => { load().catch(() => {}).finally(() => setLoaded(true)); setForm(initialForm(docType)); /* eslint-disable-next-line */ }, [docType]);
 
   const updateItem = (i, key, val) => {
     const items = [...form.items];
@@ -300,8 +304,12 @@ export default function Invoices({ docType = "invoice" }) {
                 </Td>
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr><td colSpan="7" className="p-6 text-center text-[var(--ink-2)]">No {docType}s yet.</td></tr>
+            {!loaded && <SkeletonRows cols={7} />}
+            {loaded && rows.length === 0 && (
+              <EmptyRow cols={7} icon={Receipt} title={`No ${docType}s yet`}
+                hint={docType === "invoice" ? "Bill a client for a project milestone or fee. Payments you record here post to Accounting automatically." : "Create one to send to a client."}
+                actionLabel={canCreate ? `New ${docType}` : undefined}
+                onAction={() => { setShowForm(true); setEditingId(null); setForm(initialForm(docType)); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
             )}
           </tbody>
         </table>{rowsPager}

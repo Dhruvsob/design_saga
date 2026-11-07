@@ -8,6 +8,8 @@ import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/re
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
+import { IdentificationCard } from "@phosphor-icons/react";
+import { SkeletonRows, EmptyRow } from "../components/TableState";
 
 const STATUS_CHIP = {
   active: "chip-paid",
@@ -209,11 +211,15 @@ export default function Employees() {
                   </Td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={canPayrollRead ? 8 : 7} className="p-10 text-center text-[var(--ink-2)]">
-                  {rows.length === 0 ? "No employees yet. Create the first employee to get started." : "No matches for these filters."}
-                </td></tr>
-              )}
+              {loading && rows.length === 0 && <SkeletonRows cols={canPayrollRead ? 8 : 7} />}
+              {!loading && filtered.length === 0 && (rows.length === 0 ? (
+                <EmptyRow cols={canPayrollRead ? 8 : 7} icon={IdentificationCard} title="No employees yet"
+                  hint="Add your team to track attendance, leave and salary."
+                  actionLabel={canCreate ? "Add employee" : undefined}
+                  onAction={() => { setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+              ) : (
+                <EmptyRow cols={canPayrollRead ? 8 : 7} icon={MagnifyingGlass} title="No matches" hint="Try a different search or filter." />
+              ))}
             </tbody>
           </table>{filteredPager}</div>
         </div>

@@ -9,6 +9,7 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { FilePdf } from "@phosphor-icons/react";
 import { API } from "../lib/api";
+import { SkeletonRows, EmptyRow } from "../components/TableState";
 
 const TYPE_LABELS = {
   turnkey: "Turnkey",
@@ -33,6 +34,7 @@ const STATUS_COLORS = {
 export default function QuotationsAdv() {
   const { hasPerm } = useAuth();
   const [rows, setRows] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -49,13 +51,14 @@ export default function QuotationsAdv() {
       api.get("/quotations-adv/templates").catch(() => ({ data: {} })),
     ]);
     setRows(r.data);
+    setLoaded(true);
     setClients(c.data);
     setProjects(p.data);
     const allowed = (t.data.allowed_types || ["turnkey", "consultancy"]).filter((x) => NEW_TYPE_LABELS[x]);
     setAllowedTypes(allowed);
     if (allowed.length === 1) setForm((f) => ({ ...f, type: allowed[0] }));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load().catch(() => {}).finally(() => setLoaded(true)); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -177,8 +180,12 @@ export default function QuotationsAdv() {
                 </Td>
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr><td colSpan="8" className="p-8 text-center text-[var(--ink-2)]">No quotations yet. Create the first quotation to get started.</td></tr>
+            {!loaded && <SkeletonRows cols={8} />}
+            {loaded && rows.length === 0 && (
+              <EmptyRow cols={8} icon={FilePdf} title="No quotations yet"
+                hint="Create a design proposal or a turnkey BOQ quotation and download it as a branded PDF."
+                actionLabel={hasPerm("quotations.create") ? "New quotation" : undefined}
+                onAction={() => { setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
             )}
           </tbody>
         </table></div>

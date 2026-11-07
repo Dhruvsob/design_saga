@@ -10,6 +10,7 @@ import {
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
+import { SkeletonRows, EmptyRow } from "../components/TableState";
 
 const AGENCY_LABELS = {
   vendor: "Vendor", agency: "Agency", contractor: "Contractor",
@@ -24,6 +25,7 @@ export default function Vendors() {
   const { hasPerm } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const { pageRows: rowsPage, pager: rowsPager } = usePaged(rows, { key: "vendors" });
   const [meta, setMeta] = useState({ agency_types: [] });
   const [q, setQ] = useState("");
@@ -51,9 +53,10 @@ export default function Vendors() {
       api.get("/vendors/meta"),
     ]);
     setRows(v);
+    setLoaded(true);
     setMeta(m);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filterType]);
+  useEffect(() => { load().catch(() => {}).finally(() => setLoaded(true)); /* eslint-disable-next-line */ }, [filterType]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -230,15 +233,15 @@ export default function Vendors() {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="p-12 text-center text-[var(--ink-2)]">
-                  <HardHat size={26} className="mx-auto text-[var(--ink-3)] mb-3" />
-                  <div className="overline mb-1">EMPTY</div>
-                  No vendors yet. Add your first one.
-                </td>
-              </tr>
-            )}
+            {!loaded && <SkeletonRows cols={7} />}
+            {loaded && rows.length === 0 && (q || filterType ? (
+              <EmptyRow cols={7} icon={HardHat} title="No vendors match" hint="Try a different search or agency type." />
+            ) : (
+              <EmptyRow cols={7} icon={HardHat} title="No vendors yet"
+                hint="Add the contractors, agencies and suppliers you work with to track their bills, payments and ratings."
+                actionLabel={canCreate ? "Add vendor" : undefined}
+                onAction={() => { setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            ))}
             {rowsPage.map((v) => (
               <tr
                 key={v.id}

@@ -11,6 +11,13 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-103: Loading shimmer and helpful empty states on list pages
+
+- Invoices, Vendors and Quotations had no loading state, so they briefly said "No ... yet" while data was still arriving; Clients showed a plain "Loading..." line; empty messages were bare text with no next step.
+- New `components/TableState.jsx`: `SkeletonRows` (shimmer rows using the existing `.skeleton` style, screen-reader "Loading...") and `EmptyRow` (icon, title, one-line hint, primary action button).
+- Applied to Invoices, Quotations, Vendors, Clients, Employees and Expense claims: shimmer while loading; "No X yet" with a create button (only for users allowed to create) when truly empty; "No X match - try a different search" when a search/filter hides everything. A failed load ends the shimmer instead of spinning forever.
+- Verified: ESLint clean, build OK; e2e ux/smoke/a11y/forms pass (two forms tests timed out under load and passed when rerun alone); new test covers the no-match state and the empty state's create button.
+
 ### DS-102: Geofence map showed "API KEY REQUIRED" and a broken pin on gamaa.in
 
 - Owner screenshot: CARTO Voyager tiles (DS-099) work on localhost but CARTO now refuses unregistered domains, so production showed "API KEY REQUIRED" watermarks. The default Leaflet marker PNG is not bundled by Vite, so the pin showed as a broken image.
