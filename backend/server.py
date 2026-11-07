@@ -4408,7 +4408,7 @@ class EmployeeIn(BaseModel):
     half_day_min_minutes: Optional[int] = None
     full_day_min_minutes: Optional[int] = None
     monthly_salary: Optional[float] = None         # flat fallback (no structure)
-    payroll_basis_days: Optional[int] = 26
+    payroll_basis_days: Optional[int] = 30
 
 
 class EmployeeUpdate(BaseModel):

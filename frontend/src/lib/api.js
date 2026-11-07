@@ -78,7 +78,8 @@ api.interceptors.response.use(
     if (typeof window !== "undefined") {
       if (error?.response?.status === 423) {
         window.dispatchEvent(new CustomEvent("app-pin-locked"));
-      } else if (error?.response?.status === 401) {
+      } else if (error?.response?.status === 401 && !String(error?.config?.url || "").includes("/auth/pin/")) {
+        // A PIN check never signs anyone out; wrong PINs are handled on the lock screen.
         // Keep protected routes from displaying stale data after server-side
         // expiry, password reset, tenant suspension or explicit revocation.
         window.dispatchEvent(new CustomEvent("session-invalid"));

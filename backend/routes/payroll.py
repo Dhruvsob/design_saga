@@ -173,7 +173,7 @@ async def _apply_attendance_deductions(emp: dict, breakdown: dict,
     # Transparency: the formula inputs and a reason for every deducted day.
     breakdown["per_day_rate"] = s.get("per_day_rate")
     breakdown["hourly_rate"] = s.get("hourly_rate")
-    breakdown["basis_days"] = int(emp.get("payroll_basis_days") or 26)
+    breakdown["basis_days"] = int(emp.get("payroll_basis_days") or 30)
     breakdown["monthly_salary_used"] = flat
     breakdown["attendance_summary"] = s.get("summary") or {}
     lines = []
@@ -903,7 +903,7 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
     _kv(pdf, "Employee", emp.get("name") or "-", "Emp. Code", emp.get("employee_id") or "-")
     _kv(pdf, "Department", emp.get("department") or "-", "Designation", emp.get("designation") or "-")
     _kv(pdf, "Monthly Salary", f"Rs. {_fmt_amt(s.get('employee', {}).get('monthly_salary'))}",
-        "Basis Days", str(emp.get("payroll_basis_days") or 26))
+        "Basis Days", str(emp.get("payroll_basis_days") or 30))
     _kv(pdf, "Per-day Rate", f"Rs. {_fmt_amt(s.get('per_day_rate'))}",
         "Payable Days", str(s.get("payable_days")))
     pdf.ln(2)

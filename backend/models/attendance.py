@@ -136,7 +136,8 @@ class AttendanceOverrideIn(BaseModel):
 
 class LeaveRequestIn(BaseModel):
     employee_id: Optional[str] = None
-    leave_type: str
+    # No leave kinds for staff: every leave uses the one-free-leave-a-month rule.
+    leave_type: str = "casual"
     from_date: str
     to_date: str
     reason: Optional[str] = Field(default="", max_length=2000)

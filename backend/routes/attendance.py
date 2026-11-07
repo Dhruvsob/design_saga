@@ -1845,7 +1845,7 @@ async def get_employee_config(employee_id: str, request: Request,
             "monthly_salary": float(emp.get("monthly_salary") or 0),
             "net_monthly_structure": float((emp.get("salary") or {}).get("net_monthly") or 0),
             "effective_monthly_salary": engine.effective_monthly_salary(emp),
-            "payroll_basis_days": emp.get("payroll_basis_days") or 26,
+            "payroll_basis_days": emp.get("payroll_basis_days") or 30,
         })
     return data
 

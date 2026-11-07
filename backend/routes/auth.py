@@ -303,8 +303,10 @@ async def _verify_app_pin(user: dict, pin: str) -> dict:
             }},
         )
         raise HTTPException(status_code=429, detail="Too many incorrect PIN attempts. Try again in 15 minutes")
+    # 400, not 401: a wrong PIN is a typo, not an expired session. 401 makes the
+    # app sign the person out and send them back to email + password.
     raise HTTPException(
-        status_code=401,
+        status_code=400,
         detail=f"Incorrect PIN. {PIN_MAX_FAILED - failures} attempt(s) remaining",
     )
 

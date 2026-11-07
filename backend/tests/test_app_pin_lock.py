@@ -136,7 +136,7 @@ def test_incorrect_pin_attempts_are_counted_and_lock_after_five(monkeypatch):
     for remaining in (4, 3, 2, 1):
         with pytest.raises(HTTPException) as exc:
             asyncio.run(auth._verify_app_pin(user, "000000"))
-        assert exc.value.status_code == 401
+        assert exc.value.status_code == 400   # wrong PIN must not look like a lost session
         assert f"{remaining} attempt(s) remaining" in exc.value.detail
 
     with pytest.raises(HTTPException) as exc:

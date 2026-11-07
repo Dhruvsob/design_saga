@@ -566,7 +566,7 @@ export default function Attendance() {
               )}
             </div>
 
-            <MyLeaveBalance employeeId={mySalary?.employee?.id} year={ym.y} />
+            <MyLeaveMonth summary={mySalary} ym={ym} />
           </div>
         </div>
       )}
@@ -583,18 +583,20 @@ export default function Attendance() {
           </div>
           {showLeaveForm && (
             <form onSubmit={submitLeave} className="card-flat grid grid-cols-1 md:grid-cols-4 gap-3" data-testid="leave-form">
-              <select aria-label="Leave type" className="input-flat" value={leaveForm.leave_type} onChange={(e) => setLeaveForm({ ...leaveForm, leave_type: e.target.value })}>
-                {(meta?.leave_types || []).map((t) => <option key={t}>{t}</option>)}
-              </select>
-              <input type="date" required className="input-flat" value={leaveForm.from_date} onChange={(e) => setLeaveForm({ ...leaveForm, from_date: e.target.value })} data-testid="leave-from" />
-              <input type="date" required className="input-flat" value={leaveForm.to_date} onChange={(e) => setLeaveForm({ ...leaveForm, to_date: e.target.value })} data-testid="leave-to" />
-              <input className="input-flat" placeholder="Reason" value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
+              <label className="text-xs text-[var(--ink-2)]">From
+                <input type="date" required className="input-flat w-full mt-1" value={leaveForm.from_date} onChange={(e) => setLeaveForm({ ...leaveForm, from_date: e.target.value })} data-testid="leave-from" />
+              </label>
+              <label className="text-xs text-[var(--ink-2)]">To
+                <input type="date" required className="input-flat w-full mt-1" value={leaveForm.to_date} onChange={(e) => setLeaveForm({ ...leaveForm, to_date: e.target.value })} data-testid="leave-to" />
+              </label>
+              <label className="text-xs text-[var(--ink-2)] md:col-span-2">Reason
+                <input required className="input-flat w-full mt-1" placeholder="e.g. family function, unwell" value={leaveForm.reason}
+                  onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} data-testid="leave-reason" />
+              </label>
               <button className="btn-primary md:col-span-4" data-testid="leave-submit"><PaperPlaneRight size={14} /> Submit</button>
-              {meta && !meta.can_manage && (
-                <p className="md:col-span-4 text-xs text-[var(--ink-3)]">
-                  Need maternity or paternity leave? Tell HR and they will record it for you privately.
-                </p>
-              )}
+              <p className="md:col-span-4 text-xs text-[var(--ink-3)]">
+                One leave a month is free. Each extra leave day that month is deducted from salary.
+              </p>
             </form>
           )}
           {showCorrForm && (
@@ -609,13 +611,12 @@ export default function Attendance() {
           <div className="border border-[var(--line)] overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
-                <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">Type</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
+                <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
               </thead>
               <tbody>
                 {leaves.map((l) => (
                   <tr key={l.id} className="border-t border-[var(--line-soft)]" data-testid={`leave-${l.id}`}>
                     <td className="p-2 font-semibold" data-testid={`leave-emp-${l.id}`}>{l.employee_name || "—"}</td>
-                    <td className="p-2 capitalize">{l.leave_type}</td>
                     <td className="p-2 font-mono text-xs">{formatDate(l.from_date)}</td>
                     <td className="p-2 font-mono text-xs">{formatDate(l.to_date)}</td>
                     <td className="p-2 font-mono">{l.days}</td>
@@ -623,7 +624,7 @@ export default function Attendance() {
                     <td className="p-2"><LeaveStatus s={l.status} /></td>
                   </tr>
                 ))}
-                {leaves.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-[var(--ink-3)] text-sm">No leaves yet.</td></tr>}
+                {leaves.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-[var(--ink-3)] text-sm">No leaves yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1144,7 +1145,7 @@ function RequestsTab({ canWrite }) {
                       {l.employee_name || "Unknown employee"}
                     </div>
                     <div className="text-xs font-mono text-[var(--ink-2)] mt-0.5">
-                      <span className="capitalize text-[#8A6DFF] font-semibold">{l.leave_type}</span>
+                      <span className="text-[#8A6DFF] font-semibold">Leave</span>
                       {" · "}{formatDate(l.from_date)} → {formatDate(l.to_date)} · {l.days} day{l.days !== 1 ? "s" : ""}
                     </div>
                     {l.reason && <div className="text-xs text-[var(--ink-2)] mt-1">“{l.reason}”</div>}
@@ -1269,7 +1270,7 @@ function EmployeeSetupCard() {
       weekly_offs: r.data.weekly_offs,
       ...(canPayroll ? {
         monthly_salary: r.data.monthly_salary || 0,
-        payroll_basis_days: r.data.payroll_basis_days || 26,
+        payroll_basis_days: r.data.payroll_basis_days || 30,
       } : {}),
       net_monthly_structure: r.data.net_monthly_structure,
       effective_monthly_salary: r.data.effective_monthly_salary,
@@ -1293,7 +1294,7 @@ function EmployeeSetupCard() {
       };
       if (canPayroll) {
         payload.monthly_salary = Number(cfg.monthly_salary) || 0;
-        payload.payroll_basis_days = Number(cfg.payroll_basis_days) || 26;
+        payload.payroll_basis_days = Number(cfg.payroll_basis_days) || 30;
       }
       await api.put(`/attendance/employees/${sel}/config`, payload);
       setSavedAt(Date.now());
@@ -1871,32 +1872,28 @@ function LeaveStatus({ s }) {
 }
 
 
-function MyLeaveBalance({ employeeId, year }) {
-  const [rows, setRows] = useState(null);
-  useEffect(() => {
-    if (!employeeId) { setRows([]); return; }
-    let alive = true;
-    api.get(`/leaves/balance/${employeeId}`, { params: { year } })
-      .then(({ data }) => alive && setRows(Object.entries(data.balance || {})))
-      .catch(() => alive && setRows([]));
-    return () => { alive = false; };
-  }, [employeeId, year]);
+/** This month's leave: one free leave, the rest deducted (no yearly quotas). */
+function MyLeaveMonth({ summary, ym }) {
+  const month = new Date(ym.y, ym.m - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+  const free = Number(summary?.monthly_paid_leave_allowance ?? 1);
+  const used = Number(summary?.paid_leave_allowance_used || 0) + Number(summary?.excess_ordinary_leave_days || 0);
+  const extra = Number(summary?.excess_ordinary_leave_days || 0);
+  const perDay = Number(summary?.per_day_rate || 0);
   return (
     <div className="card-flat" data-testid="my-leave-balance">
-      <div className="overline mb-3">MY LEAVE · {year}</div>
-      {rows === null ? (
-        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-[var(--ink-3)]">No leave balance to show yet.</p>
-      ) : rows.map(([type, b]) => (
-        <div key={type} className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
-          <span className="capitalize">{type.replace("_", " ")}</span>
-          <span className="font-mono text-xs">
-            <span className="text-[var(--ink)] font-semibold">{b.remaining}</span>
-            <span className="text-[var(--ink-3)]"> left · {b.used} used</span>
-          </span>
-        </div>
-      ))}
+      <div className="overline mb-3">MY LEAVE · {month}</div>
+      <div className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
+        <span>Free leave this month</span><span className="font-semibold tabular-nums">{free}</span>
+      </div>
+      <div className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
+        <span>Leave taken</span><span className="font-semibold tabular-nums">{used}</span>
+      </div>
+      <div className="flex items-center justify-between py-2 text-sm">
+        <span>Deducted from salary</span>
+        <span className={`font-semibold tabular-nums ${extra > 0 ? "text-[var(--danger)]" : ""}`}>
+          {extra} day{extra === 1 ? "" : "s"}{extra > 0 && perDay ? ` · ₹${Math.round(extra * perDay).toLocaleString("en-IN")}` : ""}
+        </span>
+      </div>
     </div>
   );
 }
@@ -1905,7 +1902,7 @@ function MyLeaveBalance({ employeeId, year }) {
 function LeaveAllowance({ value, onChange }) {
   const n = value === "" ? "" : Number(value);
   const allowance = n === "" ? 1 : Math.max(0, n);
-  const perDay = 24000 / 26;
+  const perDay = 24000 / 30;
   const money = (x) => `₹${x.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
     <section className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-4 space-y-3" data-testid="leave-policy">
@@ -1925,7 +1922,7 @@ function LeaveAllowance({ value, onChange }) {
         <li>Leave marked &quot;unpaid&quot; is always deducted. Maternity, paternity and comp-off are not counted against this allowance.</li>
       </ul>
       <div className="text-xs bg-white border border-[var(--line)] rounded-lg p-3" data-testid="leave-policy-example">
-        <div className="font-semibold text-[var(--ink)] mb-1">Example: ₹24,000 monthly salary, 26-day basis ({money(perDay)} per day)</div>
+        <div className="font-semibold text-[var(--ink)] mb-1">Example: ₹24,000 monthly salary, 30-day basis ({money(perDay)} per day)</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[var(--ink-2)]">
           {[1, 2, 3].map((k) => {
             const unpaid = Math.max(0, k - allowance);

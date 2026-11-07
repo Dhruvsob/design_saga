@@ -18,7 +18,7 @@ Key rules (Jewellers logic):
 Salary sources (merged, non-destructive):
 - primary : existing salary structure `emp.salary.net_monthly`
 - fallback: flat `emp.monthly_salary` (Jewellers style)
-- basis   : `emp.payroll_basis_days` (default 26)
+- basis   : `emp.payroll_basis_days` (default 30: Sundays, holidays and the free leave are paid days)
 """
 import calendar
 from datetime import date as _date, datetime, timedelta
@@ -224,7 +224,7 @@ async def monthly_summary(emp: dict, year: int, month: int,
         })
 
     monthly = effective_monthly_salary(emp)
-    basis = int(emp.get("payroll_basis_days") or 26)
+    basis = int(emp.get("payroll_basis_days") or 30)
     per_day = monthly / basis if basis else 0
     daily_hours = float(emp.get("full_day_min_minutes")
                         or (policy.get("full_day_min_hours") or 8) * 60) / 60.0

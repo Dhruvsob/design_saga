@@ -104,3 +104,10 @@ def test_month_totals_and_statements_skip_hidden_entries():
                accounting.finance_dashboard_extended, accounting._current_account_balance,
                accounting.list_accounts):
         assert '"voided_from_view": {"$ne": True}' in inspect.getsource(fn), fn.__name__
+
+
+def test_leave_needs_no_type_and_uses_the_monthly_free_leave():
+    from models.attendance import LeaveRequestIn
+    from core.attendance_engine import MONTHLY_ALLOWANCE_LEAVE_TYPES
+    leave = LeaveRequestIn(from_date="2026-11-10", to_date="2026-11-12", reason="family function")
+    assert leave.leave_type in MONTHLY_ALLOWANCE_LEAVE_TYPES
