@@ -273,8 +273,7 @@ export default function Leads() {
                 ))}
                 {items.length === 0 && (
                   <div className="text-center py-8 text-xs text-[var(--ink-3)]">
-                    <div className="dotted-bg mx-auto mb-2" style={{ width: 32, height: 32 }} />
-                    —
+                    {canUpdate ? "Drop a lead here" : "No leads"}
                   </div>
                 )}
               </div>

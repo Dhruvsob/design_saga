@@ -38,7 +38,7 @@ const NAV_GROUPS = [
   { id: "finance", label: "Finance", items: [
     { to: "/invoices",    label: "Invoices",     perm: "invoices.read",  Icon: Receipt, module: "invoices" },
     { to: "/accounting",  label: "Accounting",   perm: "finance.read",   Icon: Bank, module: "accounting" },
-    { to: "/expenses",    label: "Expenses",     perm: "expenses.read",  Icon: Wallet, module: "expenses" },
+    { to: "/expenses",    label: "Expense claims", perm: "expenses.read",  Icon: Wallet, module: "expenses" },
     { to: "/loans",       label: "Loans & EMI",  perm: "loans.read",     Icon: CreditCard, module: "loans" },
   ] },
   { id: "people", label: "People", items: [

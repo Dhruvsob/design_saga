@@ -190,10 +190,16 @@ def _origin_of(url: str) -> Optional[str]:
 def csrf_violation(request: Request) -> bool:
     if request.method.upper() not in _UNSAFE:
         return False
-    # Bearer-token API clients are not exposed to ambient-credential CSRF.
-    if not request.cookies.get("session_token"):
-        return False
     origin = request.headers.get("origin")
+    # Bearer-token / server clients carry neither a session cookie nor a browser
+    # Origin. A browser request from a foreign site is refused even without a
+    # cookie (e.g. login CSRF: signing the victim into an attacker's account).
+    if not request.cookies.get("session_token"):
+        if not origin or origin == "null":
+            return False
+        o = origin.rstrip("/").lower()
+        host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower()
+        return not ((host and urlsplit(o).netloc == host) or o in _allowed_origins())
     if not origin or origin == "null":
         ref = request.headers.get("referer")
         origin = _origin_of(ref) if ref else None

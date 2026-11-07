@@ -11,7 +11,7 @@ Any authenticated user in an org can READ; only Admin/Director can WRITE.
 Logo storage lives in Emergent Object Storage (see services/storage.py) so
 Mongo documents never grow unbounded.
 """
-from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Body, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Body, UploadFile, File, Response
 from fastapi.responses import Response as FastAPIResponse
 from typing import Optional
 import logging
@@ -105,7 +105,8 @@ def _pack_org(o: dict) -> dict:
     """Public projection of an org doc."""
     if not o:
         return o
-    out = {k: v for k, v in o.items() if k not in ("_id", "notes")}
+    out = {k: v for k, v in o.items() if k not in ("_id", "notes", "signature_path")}
+    out["has_signature"] = bool(o.get("signature_path"))
     out["branding"] = _safe_branding_projection(
         out.get("branding") or {}, out.get("org_id") or DEFAULT_ORG_ID)
     for k, v in DEFAULT_BRANDING.items():
@@ -177,6 +178,78 @@ async def update_current_org(payload: BrandingUpdateIn, request: Request,
                     meta={"from": org.get("accounting_basis") or "cash", "to": up["accounting_basis"]},
                     org_id=oid)
     return _pack_org(await get_org(oid))
+
+
+@router.post("/current/signature")
+async def upload_signature(request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None),
+                           payload: dict = Body(...)):
+    """{signature_data_url: "data:image/png;base64,..."} from the draw pad or an upload.
+
+    Stored privately (not reachable through the public logo proxy) and printed on
+    invoices, payment reminders and salary slips above "Authorised Signatory".
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(403, "Admin only")
+    oid = user_org_id(user)
+    if not oid:
+        raise HTTPException(400, "No organisation context")
+    data_url = payload.get("signature_data_url")
+    if not isinstance(data_url, str) or not data_url.startswith("data:"):
+        raise HTTPException(400, "signature_data_url is required")
+    if len(data_url) > 2_800_000:
+        raise HTTPException(413, "Signature image too large. Use an image under 2 MB.")
+    try:
+        info = _storage.upload_signature_data_url(data_url, owner_id=oid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        _log.warning("Signature storage failed: %s", type(e).__name__)
+        raise HTTPException(503, "Signature storage is temporarily unavailable. Try again later.") from e
+    await db.organizations.update_one({"org_id": oid}, {"$set": {
+        "signature_path": info["path"], "signature_updated_at": iso_now(),
+        "signature_updated_by": user["user_id"], "updated_at": iso_now()}})
+    from core.audit import audit
+    await audit(user, "org.signature.set", target=oid, target_type="organization", org_id=oid)
+    from core import pdf_brand
+    pdf_brand.clear_signature_cache()
+    return _pack_org(await get_org(oid))
+
+
+@router.delete("/current/signature")
+async def remove_signature(request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(403, "Admin only")
+    oid = user_org_id(user)
+    await db.organizations.update_one({"org_id": oid}, {
+        "$unset": {"signature_path": ""}, "$set": {"updated_at": iso_now()}})
+    from core.audit import audit
+    await audit(user, "org.signature.remove", target=oid, target_type="organization", org_id=oid)
+    return _pack_org(await get_org(oid))
+
+
+@router.get("/current/signature")
+async def view_signature(request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    """Admin preview only; PDFs read the image server-side."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(403, "Admin only")
+    org = await get_org(user_org_id(user)) or {}
+    path = org.get("signature_path")
+    if not path or not _storage.SIGNATURE_PATH_RE.match(path):
+        raise HTTPException(404, "No signature saved")
+    try:
+        data, _ctype = _storage.get_object(path)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(404, "No signature saved") from e
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @router.post("/current/logo")

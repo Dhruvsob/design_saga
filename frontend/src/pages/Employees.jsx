@@ -192,7 +192,7 @@ export default function Employees() {
                       )}
                       <div>
                         <div className="font-semibold text-sm">{r.first_name} {r.last_name}</div>
-                        <div className="text-xs text-[var(--ink-2)]">{r.email || "—"}</div>
+                        {r.email && <div className="text-xs text-[var(--ink-2)]">{r.email}</div>}
                       </div>
                     </div>
                   </Td>
@@ -204,7 +204,7 @@ export default function Employees() {
                   <Td className="font-mono text-xs">{formatDate(r.joining_date)}</Td>
                   <Td>
                     <div className="flex items-center gap-2 justify-end">
-                      <RowActions label={r.name || "employee"} testid={`employee-actions-${r.id}`} actions={[
+                      <RowActions label={[r.first_name, r.last_name].filter(Boolean).join(" ") || "employee"} testid={`employee-actions-${r.id}`} actions={[
                         { label: "Open profile", icon: ArrowRight, onSelect: () => navigate(`/employees/${r.id}`) },
                         { divider: true },
                         { label: "Terminate employee", icon: UserMinus, danger: true, hidden: !canDelete,

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput } from "../lib/format";
 import { Calendar, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
-import { confirmAction } from "../lib/confirm";
+import { askForm, confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import PageHero from "../components/PageHero";
 
@@ -70,6 +70,48 @@ export default function Holidays() {
     }
   };
 
+  // e.g. 1st and 4th Saturday of every month as company holidays (paid days off).
+  const addSaturdays = async () => {
+    const v = await askForm({
+      title: `Saturday holidays for ${year}`,
+      body: "Adds the chosen Saturdays of every month as company holidays. Dates already added are skipped; you can still delete any single day afterwards.",
+      fields: [
+        { name: "which", label: "Which Saturdays (comma separated: 1, 2, 3, 4, 5)", required: true, defaultValue: "1, 4" },
+        { name: "from", label: "Starting from", type: "date", defaultValue: `${year}-01-01` },
+      ],
+      confirmLabel: "Add Saturdays",
+    });
+    if (!v) return;
+    const nths = [...new Set(String(v.which).split(/[^1-5]+/).filter(Boolean).map(Number))];
+    if (!nths.length) { toast.error("Enter Saturday numbers between 1 and 5"); return; }
+    const from = v.from || `${year}-01-01`;
+    const existing = new Set(rows.map((r) => r.date));
+    const label = (n) => ["1st", "2nd", "3rd", "4th", "5th"][n - 1];
+    const dates = [];
+    for (let m = 0; m < 12; m += 1) {
+      let nth = 0;
+      for (let d = 1; d <= 31; d += 1) {
+        const dt = new Date(Date.UTC(year, m, d));
+        if (dt.getUTCMonth() !== m) break;
+        if (dt.getUTCDay() !== 6) continue;
+        nth += 1;
+        const iso = dt.toISOString().slice(0, 10);
+        if (nths.includes(nth) && iso >= from && !existing.has(iso)) dates.push([iso, nth]);
+      }
+    }
+    let added = 0;
+    for (const [date, nth] of dates) {
+      try {
+        await api.post("/holidays", { date, name: `${label(nth)} Saturday`, kind: "company" });
+        added += 1;
+      } catch (e) {
+        if (e?.response?.status !== 409) { toast.error(e?.response?.data?.detail || `Could not add ${date}`); break; }
+      }
+    }
+    toast.success(added ? `Added ${added} Saturday holiday${added === 1 ? "" : "s"}` : "Those Saturdays were already added");
+    load();
+  };
+
   const del = async (id) => {
     if (!await confirmAction("Delete this holiday?")) return;
     await api.delete(`/holidays/${id}`);
@@ -91,6 +133,11 @@ export default function Holidays() {
           <button className="btn-ghost text-xs" onClick={load} data-testid="holiday-refresh">
             <ArrowsClockwise size={14} /> Refresh
           </button>
+          {canCreate && (
+            <button className="btn-ghost text-xs" onClick={addSaturdays} data-testid="holiday-saturdays">
+              <Calendar size={14} /> Add Saturdays
+            </button>
+          )}
         </div>
       </PageHero>
 

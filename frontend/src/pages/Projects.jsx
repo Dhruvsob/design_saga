@@ -283,7 +283,7 @@ export default function Projects() {
             <div key={p.id} className="fade-up relative border-r border-b border-[var(--line)] group hover:bg-[var(--surface-2)] transition">
             <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
               {pinned.includes(p.id) && <PushPin size={13} weight="fill" className="text-[var(--accent-strong)]" aria-label="Pinned" />}
-              <span className="font-mono text-[10px] text-[var(--ink-3)] tracking-widest">#{String(i + 1).padStart(3, "0")}</span>
+              <span className="font-mono text-[10px] text-[var(--ink-3)] tracking-widest">{p.project_type || ""}</span>
               {menuFor(p)}
             </div>
             <button
@@ -303,7 +303,7 @@ export default function Projects() {
               <div className="font-display font-bold tracking-tighter text-2xl mb-1 leading-tight group-hover:accent-blue transition-colors">
                 {p.name}
               </div>
-              <div className="text-sm text-[var(--ink-2)] mb-5">{p.client_name || "Unassigned"}</div>
+              <div className="text-sm text-[var(--ink-2)] mb-5">{p.client_name || "No client"}</div>
 
               <div className="flex items-center justify-between text-xs font-mono mb-2 tabular-nums">
                 <span className="text-[var(--ink)] font-semibold">{p.stage}</span>

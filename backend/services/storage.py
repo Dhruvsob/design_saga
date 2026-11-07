@@ -12,6 +12,7 @@ Public helpers:
 - `upload_data_url(...)`- convenience for browser data-URL uploads
 """
 import base64
+import io
 import logging
 import os
 import re
@@ -45,6 +46,8 @@ MAX_LOGO_BYTES = 2 * 1024 * 1024   # 2MB decoded
 # external references) and cannot be safely sanitised server-side here.
 ALLOWED_LOGO_MIME = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
 LOGO_PATH_RE = re.compile(r"^" + re.escape("designsaga-erp") + r"/org-logos/[A-Za-z0-9_-]{1,64}/[a-f0-9]{32}\.(png|jpg|webp)$")
+# Signatures live apart from logos and are never served by the public logo proxy.
+SIGNATURE_PATH_RE = re.compile(r"^" + re.escape("designsaga-erp") + r"/org-signatures/[A-Za-z0-9_-]{1,64}/[a-f0-9]{32}\.png$")
 
 
 def sniff_image_mime(raw: bytes) -> Optional[str]:
@@ -148,7 +151,7 @@ _LOCAL_EXT_MIME = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"
 
 def _local_branding_path(path: str) -> Optional[Path]:
     """Local, backed-up location for logo objects (strict path allowlist)."""
-    if not LOGO_PATH_RE.match(path or ""):
+    if not (LOGO_PATH_RE.match(path or "") or SIGNATURE_PATH_RE.match(path or "")):
         return None
     root = Path(os.environ.get("FILE_STORAGE_ROOT", "/data/files")) / "branding"
     target = (root / path).resolve()
@@ -261,3 +264,53 @@ def upload_data_url(data_url: str, folder: str, owner_id: str,
         "size": result.get("size", len(raw)),
         "etag": result.get("etag"),
     }
+
+
+def normalize_signature(raw: bytes) -> bytes:
+    """Signature photo/scan/drawing -> transparent PNG trimmed to the ink.
+
+    Drawings from the pad (Apple Pencil) arrive transparent. Photos or scans on
+    white paper get their near-white background made transparent so the
+    signature sits cleanly over the PDF. Size is capped like logos.
+    """
+    from PIL import Image
+    with Image.open(io.BytesIO(raw)) as probe:
+        if probe.width * probe.height > LOGO_MAX_PIXELS:
+            raise ValueError("Image is too large")
+    with Image.open(io.BytesIO(raw)) as img:
+        img.load()
+        rgba = img.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    if alpha.getextrema()[0] >= 250:            # no transparency: paper background
+        grey = rgba.convert("L")
+        # ink = darker than the paper; soft edge between 200 and 235
+        mask = grey.point(lambda v: 255 if v < 200 else (0 if v > 235 else int((235 - v) * 255 / 35)))
+        rgba.putalpha(mask)
+    bbox = rgba.getchannel("A").point(lambda v: 255 if v >= 24 else 0).getbbox()
+    if not bbox:
+        raise ValueError("The signature is empty")
+    x0, y0, x1, y1 = bbox
+    pad = 6
+    rgba = rgba.crop((max(0, x0 - pad), max(0, y0 - pad), min(rgba.width, x1 + pad), min(rgba.height, y1 + pad)))
+    if max(rgba.size) > LOGO_MAX_SIDE:
+        scale = LOGO_MAX_SIDE / max(rgba.size)
+        rgba = rgba.resize((max(1, round(rgba.width * scale)), max(1, round(rgba.height * scale))), Image.LANCZOS)
+    out = io.BytesIO()
+    rgba.save(out, "PNG", optimize=True)
+    return out.getvalue()
+
+
+def upload_signature_data_url(data_url: str, owner_id: str) -> dict:
+    raw, mime = parse_data_url(data_url)
+    if mime not in ALLOWED_LOGO_MIME:
+        raise ValueError("Use a PNG, JPEG or WebP image, or draw the signature")
+    validate_logo_bytes(raw, mime)
+    try:
+        png = normalize_signature(raw)
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001 - undecodable image
+        raise ValueError("The signature image could not be read") from e
+    path = f"{APP_NAME}/org-signatures/{owner_id}/{uuid.uuid4().hex}.png"
+    result = put_object(path, png, "image/png")
+    return {"path": result.get("path", path), "size": len(png)}

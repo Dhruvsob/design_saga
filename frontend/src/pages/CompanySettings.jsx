@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import api from "../lib/api";
+import api, { API } from "../lib/api";
+import SignaturePad from "../components/SignaturePad";
+import { confirmAction } from "../lib/confirm";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import MasterDataManager from "../components/MasterDataManager";
@@ -27,6 +29,41 @@ export default function CompanySettings() {
   const [logoBroken, setLogoBroken] = useState(false);   // show initials if the image cannot load
   const [err, setErr] = useState("");
   const fileRef = useRef(null);
+  const sigFileRef = useRef(null);
+  const [sigMode, setSigMode] = useState(null);        // null | "draw"
+  const [sigBusy, setSigBusy] = useState(false);
+  const [sigVersion, setSigVersion] = useState(Date.now());
+  const [sigMsg, setSigMsg] = useState("");
+
+  const saveSignature = async (dataUrl) => {
+    setSigBusy(true); setSigMsg("");
+    try {
+      const { data } = await api.post("/org/current/signature", { signature_data_url: dataUrl });
+      setOrg((o) => ({ ...o, has_signature: data.has_signature }));
+      setSigVersion(Date.now()); setSigMode(null);
+      setSigMsg("Signature saved. It now prints on invoices, payment reminders and salary slips.");
+    } catch (e) {
+      setSigMsg(e?.response?.data?.detail || "Could not save the signature");
+    } finally { setSigBusy(false); }
+  };
+  const uploadSignature = (file) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      setSigMsg("Use a PNG, JPEG or WebP image — or draw the signature with Apple Pencil above.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => saveSignature(reader.result);
+    reader.readAsDataURL(file);
+  };
+  const removeSignature = async () => {
+    if (!await confirmAction("Remove the signature? PDFs will show only the signature line.")) return;
+    try {
+      const { data } = await api.delete("/org/current/signature");
+      setOrg((o) => ({ ...o, has_signature: data.has_signature }));
+      setSigMsg("Signature removed.");
+    } catch (e) { setSigMsg(e?.response?.data?.detail || "Could not remove the signature"); }
+  };
 
   useEffect(() => { setOrg(currentOrg); }, [currentOrg]);
   useEffect(() => { setLogoBroken(false); }, [org?.branding?.logo_url]);
@@ -198,6 +235,39 @@ export default function CompanySettings() {
                        value={branding.pdf_footer || ""} onChange={(e) => setBranding({ pdf_footer: e.target.value })}
                        data-testid="pdf-footer-input" />
               </div>
+            </div>
+            <div className="card-flat" data-testid="signature-card">
+              <div className="overline mb-1">SIGNATURE ON PDFs</div>
+              <p className="text-xs text-[var(--ink-2)] mb-3">
+                Printed above “Authorised Signatory” on invoices, payment reminders and salary slips.
+                Draw it here with Apple Pencil on your iPad, or upload a PNG / JPEG / WebP. A white paper background is removed automatically.
+              </p>
+              {org.has_signature && sigMode !== "draw" && (
+                <div className="flex items-center gap-4 flex-wrap mb-3">
+                  <div className="border border-[var(--line)] rounded-lg bg-white px-4 py-2">
+                    <img src={`${API}/org/current/signature?v=${sigVersion}`} alt="Saved signature" className="h-16 object-contain" data-testid="signature-preview" />
+                  </div>
+                  <button type="button" className="btn-ghost text-xs" onClick={removeSignature}>Remove</button>
+                </div>
+              )}
+              {sigMode === "draw" ? (
+                <>
+                  <SignaturePad onSave={saveSignature} saving={sigBusy} />
+                  <button type="button" className="btn-ghost text-xs mt-2" onClick={() => setSigMode(null)}>Cancel</button>
+                </>
+              ) : (
+                <div className="flex gap-2 flex-wrap">
+                  <button type="button" className="btn-primary text-xs" onClick={() => { setSigMode("draw"); setSigMsg(""); }} data-testid="signature-draw">
+                    {org.has_signature ? "Draw a new signature" : "Draw signature"}
+                  </button>
+                  <button type="button" className="btn-ghost text-xs" onClick={() => sigFileRef.current?.click()} disabled={sigBusy}>
+                    Upload image
+                  </button>
+                  <input ref={sigFileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                         onChange={(e) => { uploadSignature(e.target.files?.[0]); e.target.value = ""; }} data-testid="signature-file" />
+                </div>
+              )}
+              {sigMsg && <p className="text-xs mt-2 text-[var(--ink-2)]" data-testid="signature-msg">{sigMsg}</p>}
             </div>
           </div>
 

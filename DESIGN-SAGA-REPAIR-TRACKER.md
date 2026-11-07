@@ -11,6 +11,21 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-109: Security review + pentest, signature on PDFs, cash-basis restatement, Phase 1 leftovers
+
+- Security review / penetration test (local active, production read-only): see `docs/SECURITY_REVIEW_2026-11-08.md`.
+  Fixed: login CSRF (cookie-less foreign-origin writes), cross-company reads answering empty 200 (now 404),
+  fpdf2 CVEs (2.8.8), dotfile/backup paths 404 in nginx. 32 cross-company attacks, 382-route staff matrix and
+  injection probes found no data exposure.
+- Signature on PDFs: draw with Apple Pencil (pointer pressure) or upload PNG/JPEG/WebP; white paper removed,
+  stored privately (`org-signatures`, admin-only preview), printed above "Authorised Signatory" on invoices,
+  payment reminders and salary slips (slip gained a signatory block).
+- `POST /accounting/invoices/{id}/restate-cash-basis` (admin, audited, once): accrual-era invoice -> cash basis
+  (issue entry reversed+hidden; receipts re-booked as income on their dates).
+- Holidays: "Add Saturdays" (e.g. 1st and 4th of every month), skips existing dates.
+- Phase 1: Leads empty columns, Vendors "Not rated" + no duplicate Open, Employees no empty line,
+  Projects no "#001" / "No client", sidebar "Expense claims".
+
 ### DS-108: Invoices, payment reminders, collections and accounting kept apart (₹6 lakh fix)
 
 - Root cause: issuing an invoice booked its full value as income (Dr Receivable / Cr Income). sample(Demo) INV-1004 for ₹6,00,000 with ₹51,000 received showed ₹6,00,000 Consultancy Income. Also: PATCH milestone status "paid" auto-posted a full receipt (no date/account; duplicate on part-paid milestones).

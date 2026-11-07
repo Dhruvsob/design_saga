@@ -87,6 +87,33 @@ def _raw_logo_bytes(logo_url: str) -> Optional[bytes]:
     return None
 
 
+_SIGNATURE_CACHE: dict = {}
+
+
+def clear_signature_cache() -> None:
+    _SIGNATURE_CACHE.clear()
+
+
+def signature_png(org: Optional[dict]) -> Optional[bytes]:
+    """The company's saved signature (transparent PNG), or None."""
+    path = (org or {}).get("signature_path")
+    if not path:
+        return None
+    if path in _SIGNATURE_CACHE:
+        return _SIGNATURE_CACHE[path]
+    try:
+        from services import storage
+        if not storage.SIGNATURE_PATH_RE.match(path):
+            return None
+        data, _ctype = storage.get_object(path)
+    except Exception:  # noqa: BLE001 - a missing signature must never break a PDF
+        data = None
+    if len(_SIGNATURE_CACHE) > 64:
+        _SIGNATURE_CACHE.clear()
+    _SIGNATURE_CACHE[path] = data
+    return data
+
+
 def logo_png(org: Optional[dict]) -> Optional[bytes]:
     """Tenant logo normalised to a PNG FPDF can embed (WebP/JPEG/PNG input)."""
     url = (((org or {}).get("branding") or {}).get("logo_url") or "").strip()
@@ -147,6 +174,15 @@ class Brand:
         if self.bank_rows and not bank.get("account_name"):
             self.bank_rows.insert(0, ("Account name", self.name))
         self.has_bank = any(bank.get(k) for k in ("bank", "account", "ifsc", "upi"))
+        self.signature = signature_png(org)
+        self.signature_ratio = 3.0
+        if self.signature:
+            try:
+                from PIL import Image
+                with Image.open(io.BytesIO(self.signature)) as img:
+                    self.signature_ratio = max(0.5, min(8.0, img.width / max(1, img.height)))
+            except Exception:  # noqa: BLE001
+                self.signature = None
         self.logo = logo_png(org)
         self.logo_ratio = 1.0
         if self.logo:
@@ -352,6 +388,16 @@ def draw_signatory(pdf: BrandedPDF, x: float = 125, width: float = 70) -> None:
         pdf.set_xy(x, y + i * 4.6)
         pdf.cell(width, 4.6, part, 0, 0, "R")
     line_y = y + 22
+    b = pdf.brand
+    if getattr(b, "signature", None):
+        # sits on the line, right-aligned, between the company name and the line
+        h = 13.0
+        w = min(width - 8, h * b.signature_ratio)
+        h = w / b.signature_ratio
+        try:
+            pdf.image(io.BytesIO(b.signature), x=x + width - w, y=line_y - h - 0.5, w=w, h=h)
+        except Exception:  # noqa: BLE001
+            pass
     pdf.set_draw_color(*INK)
     pdf.line(x + 5, line_y, x + width, line_y)
     pdf.set_xy(x, line_y + 1)

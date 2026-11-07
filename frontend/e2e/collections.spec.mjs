@@ -156,11 +156,11 @@ test("screens: money-in tabs, reminder from Collections Due, received payments",
   const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
   await page.goto("/invoices");
   const tabs = page.getByTestId("money-in-tabs");
-  await expect(tabs).toContainText("Invoices");
+  await expect(tabs).toContainText("Invoices", { timeout: 20000 });   // first page load on a cold test machine
   await expect(tabs).toContainText("Payment Reminders");
   await expect(tabs).toContainText("Collections Due");
   await expect(tabs).toContainText("Received Payments");
-  await expect(page.getByRole("row", { name: new RegExp(inv.number) })).toContainText("25,000");
+  await expect(page.getByRole("row", { name: new RegExp(inv.number) })).toContainText("25,000", { timeout: 20000 });
 
   await page.getByTestId(`invoice-actions-${inv.id}`).click();
   await page.getByRole("menuitem", { name: "Send payment reminder" }).click();
@@ -173,5 +173,90 @@ test("screens: money-in tabs, reminder from Collections Due, received payments",
   await expect(page.getByTestId("reminders-table")).toContainText(client.name);
   await page.goto("/invoices/received");
   await expect(page.getByTestId("received-payments-page")).toBeVisible();
+  await ctx.dispose();
+});
+
+test("restating an accrual-era ₹6,00,000 invoice on cash basis leaves only the ₹51,000 received as income", async () => {
+  const ctx = await api("admin");
+  const { cash } = await accounts(ctx);
+  await json(ctx.patch("/api/org/current", { data: { accounting_basis: "accrual" } }));
+  try {
+    const client = await json(ctx.post("/api/clients", { data: { name: `Accrual ${uid()}` } }));
+    const inv = await json(ctx.post("/api/invoices", { data: {
+      client_id: client.id, doc_type: "invoice", tax_rate: 0, items: [{ description: "Project value", quantity: 1, rate: 600000 }],
+    } }));
+    await json(ctx.patch(`/api/invoices/${inv.id}/status`, { data: { status: "sent" } }));
+    await json(receive(ctx, "invoice", inv.id, 51000, cash));
+    const incomeOf = async () => (await journals(ctx, { client_id: client.id }))
+      .flatMap((j) => j.lines).filter((l) => l.account_type === "income")
+      .reduce((s, l) => s + l.credit - l.debit, 0);
+    expect(await incomeOf(), "accrual booked the full value").toBe(600000);
+
+    await json(ctx.patch("/api/org/current", { data: { accounting_basis: "cash" } }));
+    const res = await json(ctx.post(`/api/accounting/invoices/${inv.id}/restate-cash-basis`));
+    expect(res.receipts).toHaveLength(1);
+    expect(await incomeOf(), "only money received is income").toBe(51000);
+    const visible = await journals(ctx, { client_id: client.id });
+    expect(visible.flatMap((j) => j.lines).some((l) => l.account_name === "Accounts Receivable")).toBe(false);
+    expect(visible.every((j) => balanced(j))).toBe(true);
+    const row = await rowFor(ctx, "invoice", inv.id);
+    expect([row.received_amount, row.outstanding]).toEqual([51000, 549000]);
+    const again = await ctx.post(`/api/accounting/invoices/${inv.id}/restate-cash-basis`);
+    expect(again.status(), "runs once").toBe(409);
+    const staff = await api("employee");
+    expect((await staff.post(`/api/accounting/invoices/${inv.id}/restate-cash-basis`)).status()).toBe(403);
+    await staff.dispose();
+  } finally {
+    await ctx.patch("/api/org/current", { data: { accounting_basis: "cash" } });
+    await ctx.dispose();
+  }
+});
+
+test("signature drawn on the pad prints on PDFs; staff cannot read or change it", async ({ browser }) => {
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/settings/company");
+  await page.getByTestId("signature-draw").click();
+  await page.getByTestId("signature-canvas").scrollIntoViewIfNeeded();
+  const box = await page.getByTestId("signature-canvas").boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 110);
+  await page.mouse.down();
+  for (const [dx, dy] of [[80, 40], [130, 120], [190, 50], [260, 115], [340, 60], [420, 90]]) {
+    await page.mouse.move(box.x + dx, box.y + dy, { steps: 6 });
+  }
+  await page.mouse.up();
+  await page.getByTestId("signature-save").click();
+  await expect(page.getByTestId("signature-msg")).toContainText("Signature saved");
+  await expect(page.getByTestId("signature-preview")).toBeVisible();
+
+  const ctx = await api("admin");
+  const client = await json(ctx.post("/api/clients", { data: { name: `Signed ${uid()}` } }));
+  const inv = await json(ctx.post("/api/invoices", { data: {
+    client_id: client.id, doc_type: "invoice", tax_rate: 0, items: [{ description: "Fee", quantity: 1, rate: 5000 }] } }));
+  const pdf = await (await ctx.get(`/api/invoices/${inv.id}/pdf`)).body();
+  expect(pdf.toString("latin1")).toContain("/Subtype /Image");
+  const org = await json(ctx.get("/api/org/current"));
+  expect(org.has_signature).toBe(true);
+  expect(JSON.stringify(org)).not.toContain("org-signatures");          // storage path never exposed
+  const staff = await api("employee");
+  expect((await staff.get("/api/org/current/signature")).status()).toBe(403);
+  expect((await staff.delete("/api/org/current/signature")).status()).toBe(403);
+  await staff.dispose();
+  await ctx.dispose();
+});
+
+test("1st and 4th Saturdays are added as holidays in one go, without duplicates", async ({ browser }) => {
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/holidays");
+  await page.getByTestId("holiday-saturdays").click();
+  await page.getByTestId("confirm-ok").click();                       // defaults: 1, 4 from 1 Jan
+  await expect(page.getByText(/Added \d+ Saturday holidays/)).toBeVisible({ timeout: 30000 });
+  const ctx = await api("admin");
+  const year = new Date().getFullYear();
+  const list = (await json(ctx.get(`/api/holidays?year=${year}`))).holidays.filter((h) => /Saturday$/.test(h.name));
+  expect(list.length).toBe(24);
+  for (const h of list) expect(new Date(`${h.date}T00:00:00Z`).getUTCDay()).toBe(6);
+  await page.getByTestId("holiday-saturdays").click();
+  await page.getByTestId("confirm-ok").click();
+  await expect(page.getByText("Those Saturdays were already added")).toBeVisible({ timeout: 30000 });
   await ctx.dispose();
 });

@@ -795,6 +795,11 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
         pdf.ln(1)
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(0, 5, _safe(f"Notes: {run['notes']}"))
+    from core.pdf_brand import draw_signatory
+    pdf.ln(6)
+    if pdf.get_y() > 240:
+        pdf.add_page()
+    draw_signatory(pdf, 125, 70)
     return pdf.to_bytes()
 
 

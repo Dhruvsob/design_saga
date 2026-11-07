@@ -1884,6 +1884,8 @@ async def client_ledger(client_id: str, request: Request,
     await require_user(request, session_token, authorization)
     fd, td, label = resolve_period(fy, from_date, to_date)
     client = await sdb.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
     return await _entity_ledger("client", client_id, entity=client,
                                 from_date=fd, to_date=td, label=label)
 
@@ -1897,6 +1899,8 @@ async def vendor_ledger(vendor_id: str, request: Request,
     await require_user(request, session_token, authorization)
     fd, td, label = resolve_period(fy, from_date, to_date)
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
     return await _entity_ledger("vendor", vendor_id, entity=vendor,
                                 from_date=fd, to_date=td, label=label)
 
@@ -1910,6 +1914,8 @@ async def employee_ledger(employee_id: str, request: Request,
     await require_user(request, session_token, authorization)
     fd, td, label = resolve_period(fy, from_date, to_date)
     employee = await sdb.employees.find_one({"id": employee_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
     return await _entity_ledger("employee", employee_id, entity=employee,
                                 from_date=fd, to_date=td, label=label)
 
@@ -1923,6 +1929,8 @@ async def project_ledger(project_id: str, request: Request,
     await require_user(request, session_token, authorization)
     fd, td, label = resolve_period(fy, from_date, to_date)
     project = await sdb.projects.find_one({"id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
     base = await _entity_ledger("project", project_id, entity=project,
                                 from_date=fd, to_date=td, label=label)
     # Extra project-specific block: milestones + P&L
@@ -3531,6 +3539,8 @@ async def list_milestones(project_id: str, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
     await require_user(request, session_token, authorization)
+    if not await sdb.projects.find_one({"id": project_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Project not found")
     rows = await sdb.payment_milestones.find({"project_id": project_id}, {"_id": 0}).sort("due_date", 1).to_list(None)
     return rows
 
@@ -3677,6 +3687,89 @@ async def delete_milestone(ms_id: str, request: Request,
 # ==================================================
 # Meta / seed
 # ==================================================
+async def restate_invoice_cash_basis(user: dict, invoice_id: str) -> dict:
+    """Move one invoice booked under accrual onto cash basis, keeping the audit trail.
+
+    - The "invoice issued" entry (full invoice value as income) is reversed on its
+      own date and both are hidden from books (they net to zero on that day).
+    - Each receipt that settled the receivable is reversed the same way and
+      re-booked on its original date as income received (+ output GST share),
+      into the same Cash/Bank account.
+    Nothing is deleted; the invoice's paid amount and status are recomputed.
+    """
+    inv = await sdb.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv or inv.get("doc_type") == "quotation":
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    accrual = await sdb.journal_entries.find_one(
+        {"source": "invoice_issue", "source_id": invoice_id, "reversed": {"$ne": True}}, {"_id": 0})
+    if not accrual:
+        raise HTTPException(status_code=409, detail="This invoice is already on cash basis")
+    income_line = next((l for l in accrual.get("lines") or [] if l.get("account_type") == "income"), None)
+    income_id = (income_line or {}).get("account_id")
+    if not income_id:
+        _bank, income = await default_receipt_accounts()
+        income_id = (income or {}).get("id")
+    gst = await sdb.accounts.find_one(
+        {"name": "GST Payable", "type": "liability", "active": {"$ne": False}}, {"_id": 0, "id": 1})
+    total = float(inv.get("total") or 0)
+    tax = float(inv.get("tax") or 0)
+
+    accrual_ids = [row["id"] for row in await sdb.journal_entries.find(
+        {"source": "invoice_issue", "source_id": invoice_id, "reversed": {"$ne": True}},
+        {"_id": 0, "id": 1}).to_list(None)]
+    # The general reversal refuses invoice_issue on purpose (invoices are reversed
+    # through their own workflow); this is that workflow. Each pair is then hidden.
+    await reverse_receipt_je(user, source="invoice_issue", source_id=invoice_id,
+                             narration=f"Invoice {inv.get('number') or invoice_id} restated on cash basis",
+                             reset_source=False)
+    for jid in accrual_ids:
+        fresh = await sdb.journal_entries.find_one({"id": jid}, {"_id": 0})
+        await _hide_reversed_pair(user, fresh, "cash_basis_restatement")
+    receipts = await sdb.journal_entries.find(
+        {"source": "invoice_payment", "source_id": invoice_id, "reversed": {"$ne": True},
+         "voided_from_view": {"$ne": True}}, {"_id": 0}).sort("date", 1).to_list(None)
+    restated = []
+    for r in receipts:
+        if not any(l.get("account_name") == "Accounts Receivable" for l in r.get("lines") or []):
+            continue          # already a cash-basis receipt
+        cash = next((l for l in r["lines"] if float(l.get("debit") or 0) > 0), None)
+        amount = round(float(cash["debit"]), 2)
+        gst_part = round(amount * tax / total, 2) if total > 0 and tax > 0 and gst else 0.0
+        await _reverse_journal_entry(user, r, action="cash_basis_restatement",
+                                     reversal_date=r.get("date"), hide_from_books=True)
+        lines = [{"account_id": cash["account_id"], "debit": amount, "credit": 0, "description": "Received"},
+                 {"account_id": income_id, "debit": 0, "credit": round(amount - gst_part, 2),
+                  "description": "Revenue (received)"}]
+        if gst_part:
+            lines.append({"account_id": gst["id"], "debit": 0, "credit": gst_part,
+                          "description": "Output GST on amount received"})
+        je = await _post_journal(
+            user, r.get("date"), f"{r.get('narration') or 'Invoice payment'} (cash basis)", lines,
+            reference=r.get("reference"), project_id=r.get("project_id"), client_id=r.get("client_id"),
+            source="invoice_payment", source_id=invoice_id, idempotency_suffix=new_id("restate_"))
+        restated.append({"from": r["id"], "to": je["id"], "amount": amount, "date": r.get("date")})
+    await _reset_source_after_reversal("invoice_payment", invoice_id)
+    await sdb.invoices.update_one({"id": invoice_id}, {"$set": {
+        "accounting_basis": "cash", "accrual_journal_id": None, "updated_at": iso_now()}})
+    await audit(user, "invoice.cash_basis_restatement", target=invoice_id, target_type="invoice",
+                meta={"number": inv.get("number"), "accrual_journal_ids": accrual_ids,
+                      "accrual_total": accrual.get("total"), "receipts": restated},
+                org_id=user_org_id(user))
+    return {"ok": True, "invoice_id": invoice_id, "accruals_reversed": accrual_ids, "receipts": restated}
+
+
+@router.post("/accounting/invoices/{invoice_id}/restate-cash-basis")
+async def restate_cash_basis_endpoint(invoice_id: str, request: Request,
+                                      session_token: Optional[str] = Cookie(default=None),
+                                      authorization: Optional[str] = Header(default=None)):
+    """Admin correction: put an invoice booked under accrual onto cash basis (audited)."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with doc_lock(sdb.invoices, invoice_id):
+        return await restate_invoice_cash_basis(user, invoice_id)
+
+
 @router.post("/accounting/repair/orphan-invoices")
 async def repair_orphan_invoices(request: Request,
                                  session_token: Optional[str] = Cookie(default=None),

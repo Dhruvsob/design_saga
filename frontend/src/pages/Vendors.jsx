@@ -262,10 +262,12 @@ export default function Vendors() {
                 </Td>}
                 <Td>{v.category || "—"}</Td>
                 <Td>
-                  <div className="flex items-center gap-1">
-                    <Star size={13} weight="fill" className="text-[#F5B800]" />
-                    <span className="font-mono text-xs">{Number(v.rating || 0).toFixed(1)}</span>
-                  </div>
+                  {Number(v.rating) > 0 ? (
+                    <div className="flex items-center gap-1">
+                      <Star size={13} weight="fill" className="text-[#F5B800]" />
+                      <span className="font-mono text-xs">{Number(v.rating).toFixed(1)}</span>
+                    </div>
+                  ) : <span className="text-xs text-[var(--ink-3)]">Not rated</span>}
                 </Td>
                 <Td className="text-right font-mono">
                   {Number(v.outstanding) > 0 ? (
@@ -274,9 +276,6 @@ export default function Vendors() {
                 </Td>
                 <Td className="text-right">
                   <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-                    <Link to={`/vendors/${v.id}`} className="btn-ghost text-xs text-[var(--accent-strong)] font-semibold">
-                      Open <CaretRight size={11} weight="bold" />
-                    </Link>
                     <RowActions label={v.name} testid={`vendor-actions-${v.id}`} actions={[
                       { label: "Edit", icon: PencilSimple, onSelect: () => navigate(`/vendors/${v.id}?edit=1`),
                         hidden: !canEdit, testid: `vendor-edit-${v.id}` },
