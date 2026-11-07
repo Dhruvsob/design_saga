@@ -653,7 +653,7 @@ export default function Attendance() {
           {monthlyView === "grid" ? (
             <MonthlyGrid monthly={monthly} ym={ym} />
           ) : (
-            <div className="border border-[var(--line)] overflow-x-auto">
+            <div className="border border-[var(--line)] overflow-x-auto table-scroll">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                   <tr>
@@ -725,7 +725,7 @@ function MonthlyGrid({ monthly, ym }) {
           </span>
         ))}
       </div>
-      <div className="border border-[var(--line)] overflow-x-auto" data-testid="monthly-grid">
+      <div className="border border-[var(--line)] overflow-x-auto table-scroll" data-testid="monthly-grid">
         <table className="text-xs border-collapse">
           <thead>
             <tr className="bg-[var(--surface-2)]">

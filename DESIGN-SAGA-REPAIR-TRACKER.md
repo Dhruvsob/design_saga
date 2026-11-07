@@ -11,6 +11,12 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-104: Clickable breadcrumbs; pinned headers on long tables
+
+- U8: top-bar breadcrumb was plain text. Company name now links to the Dashboard; on a detail page (e.g. one project) the list name links back to the list and the last crumb reads "Details". On the list itself it stays a plain label.
+- U3: Daybook and the Attendance monthly sheet (grid and summary) scroll inside their own box on tablet/desktop (max 72% of screen height) with the column headings pinned; the frozen Employee column corner stays above both. Phones keep normal page scrolling.
+- Verified: ESLint clean, build OK; e2e ux/smoke/a11y 28 passed incl. new test (breadcrumb back-links, Daybook header computed position sticky).
+
 ### DS-103: Loading shimmer and helpful empty states on list pages
 
 - Invoices, Vendors and Quotations had no loading state, so they briefly said "No ... yet" while data was still arriving; Clients showed a plain "Loading..." line; empty messages were bare text with no next step.

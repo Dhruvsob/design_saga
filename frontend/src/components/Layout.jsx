@@ -289,7 +289,7 @@ export default function Layout({ children }) {
           </button>
           {/* breadcrumb */}
           <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-3 text-sm text-[var(--ink-2)]" data-testid="breadcrumb">
-            <span className="text-[var(--ink-3)]">{brandName}</span>
+            <NavLink to="/dashboard" className="text-[var(--ink-3)] hover:text-[var(--ink)] hover:underline underline-offset-4" data-testid="crumb-home">{brandName}</NavLink>
             {currentGroup?.label && currentGroup.label !== currentNav?.label && (
               <>
                 <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
@@ -297,7 +297,16 @@ export default function Layout({ children }) {
               </>
             )}
             <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
-            <span className="text-[var(--ink)] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
+            {currentNav && location.pathname !== currentNav.to ? (
+              <>
+                {/* on a detail page the list name links back to the list */}
+                <NavLink to={currentNav.to} end className="hover:text-[var(--ink)] hover:underline underline-offset-4" data-testid="crumb-list">{currentNav.label}</NavLink>
+                <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
+                <span className="text-[var(--ink)] font-semibold" aria-current="page">Details</span>
+              </>
+            ) : (
+              <span className="text-[var(--ink)] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
+            )}
           </nav>
 
           {/* search — opens the command palette */}

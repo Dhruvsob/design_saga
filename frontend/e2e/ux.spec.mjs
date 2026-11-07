@@ -289,3 +289,23 @@ test("lists explain an empty result instead of showing a bare table", async ({ p
     await expect(page.getByTestId("q-type-consultancy")).toBeVisible();
   }
 });
+
+test("breadcrumbs link back to the list and the Daybook header stays pinned", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "breadcrumb is hidden on phones");
+  const ctx = await api("admin");
+  const proj = await json(ctx.post("/api/projects", { data: { name: `Crumb ${uid()}`, engagement_type: "consultancy" } }));
+  await ctx.dispose();
+  await page.goto(`/projects/${proj.id}`);
+  await expect(page.getByTestId("breadcrumb")).toContainText("Details");
+  await page.getByTestId("crumb-list").click();
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(page.getByTestId("crumb-list")).toHaveCount(0);           // on the list itself: plain label
+  await page.getByTestId("crumb-home").click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto("/accounting");
+  await page.getByTestId("tab-daybook").click();
+  const th = page.getByTestId("daybook-scroll").locator("thead th").first();
+  await expect(th).toBeVisible();
+  expect(await th.evaluate((el) => getComputedStyle(el).position)).toBe("sticky");
+});

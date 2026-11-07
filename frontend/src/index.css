@@ -512,3 +512,11 @@ main > div:last-child { animation: page-in 260ms var(--ease) both; }
 .sidebar-taupe .btn-icon:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.2); }
 .sidebar-taupe ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-color: var(--accent-strong); }
 .sidebar-taupe .nav-active-bar { background: #FAF9F6; }
+
+/* Long tables (Daybook, monthly attendance): on tablet/desktop the table scrolls inside
+   its own box so the column headings stay pinned while reading down. */
+@media (min-width: 768px) {
+  .table-scroll { max-height: 72vh; overflow: auto; }
+  .table-scroll thead th { position: sticky; top: 0; z-index: 20; background: var(--surface-2); box-shadow: inset 0 -1px 0 var(--line); }
+  .table-scroll thead th.sticky { z-index: 30; }   /* frozen first column corner */
+}
