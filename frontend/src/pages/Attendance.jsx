@@ -780,7 +780,7 @@ function MonthlyGrid({ monthly, ym }) {
                     const letter = st ? (STATUS_LETTER[st] || "•") : "·";
                     const lateM = rec?.late_minutes;
                     const title = rec ? `${dateStr}: ${st}${lateM ? ` · ${lateM} min late` : ""}` : `${dateStr}: no record`;
-                    if (!rec && dateStr > todayKey) return <td key={d} className="p-0.5" aria-label={`${dateStr}: upcoming`} />;
+                    if (st === "upcoming" || (!rec && dateStr > todayKey)) return <td key={d} className="p-0.5" aria-label={`${dateStr}: upcoming`} />;
                     return (
                       <td key={d} className="p-0.5 text-center" title={title}>
                         <span className="inline-flex items-center justify-center font-mono text-[9px] font-bold"

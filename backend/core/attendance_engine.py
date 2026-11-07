@@ -267,6 +267,27 @@ async def monthly_summary(emp: dict, year: int, month: int,
     }
 
 
+WORKED_STATUSES = ("present", "late", "half_day", "site_visit")
+
+
+def on_roll_for_month(emp: dict, year: int, month: int, summary: Optional[dict] = None) -> bool:
+    """Should this employee appear on the month's attendance sheet?
+
+    Current staff always do. Someone terminated still shows for months before
+    they left (history), and for the month they left only if they worked a day
+    in it; after that they are off the sheet.
+    """
+    if (emp.get("employment_status") or "active") != "terminated":
+        return True
+    left = str(emp.get("exit_date") or emp.get("terminated_at") or "")[:7]
+    if len(left) == 7 and f"{year:04d}-{month:02d}" < left:
+        return True
+    if len(left) == 7 and f"{year:04d}-{month:02d}" == left:
+        worked = sum(float((summary or {}).get(k) or 0) for k in WORKED_STATUSES)
+        return worked > 0
+    return False
+
+
 async def payroll_preview(year: int, month: int, policy: dict) -> dict:
     """Attendance-linked payroll preview for all active employees."""
     holiday_dates = await get_holiday_dates(year)

@@ -175,7 +175,7 @@ async def list_accounts(request: Request,
         account_ids = [row["id"] for row in rows]
         movements = await sdb.journal_entries.aggregate([
             {"$unwind": "$lines"},
-            {"$match": {"lines.account_id": {"$in": account_ids}}},
+            {"$match": {"lines.account_id": {"$in": account_ids}, "voided_from_view": {"$ne": True}}},
             {"$group": {
                 "_id": "$lines.account_id",
                 "debit": {"$sum": "$lines.debit"},
@@ -776,7 +776,7 @@ async def _ensure_named_account(
 async def _current_account_balance(account: dict) -> float:
     movement = await sdb.journal_entries.aggregate([
         {"$unwind": "$lines"},
-        {"$match": {"lines.account_id": account["id"]}},
+        {"$match": {"lines.account_id": account["id"], "voided_from_view": {"$ne": True}}},
         {"$group": {
             "_id": None,
             "debit": {"$sum": "$lines.debit"},
@@ -2012,7 +2012,7 @@ async def profit_and_loss(request: Request,
                           authorization: Optional[str] = Header(default=None)):
     await require_user(request, session_token, authorization)
     fd, td, label = resolve_period(fy, from_date, to_date)
-    q: dict = {}
+    q: dict = {"voided_from_view": {"$ne": True}}
     if fd or td:
         d = {}
         if fd: d["$gte"] = fd
@@ -2058,7 +2058,7 @@ async def trial_balance(request: Request, as_of: Optional[str] = None,
     # intentionally leaves the upper bound open.
     if fy and not as_of:
         _, as_of, _ = resolve_period(fy=fy)
-    q = {}
+    q = {"voided_from_view": {"$ne": True}}
     if as_of: q["date"] = {"$lte": as_of}
     entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(None)
 
@@ -2126,7 +2126,7 @@ async def finance_dashboard(request: Request,
         # sum all movements for that account
         agg = await sdb.journal_entries.aggregate([
             {"$unwind": "$lines"},
-            {"$match": {"lines.account_id": a["id"]}},
+            {"$match": {"lines.account_id": a["id"], "voided_from_view": {"$ne": True}}},
             {"$group": {"_id": None,
                         "debit": {"$sum": "$lines.debit"},
                         "credit": {"$sum": "$lines.credit"}}},
@@ -2140,7 +2140,7 @@ async def finance_dashboard(request: Request,
 
     # This month P&L (income & expense from journal source)
     entries_month = await sdb.journal_entries.find(
-        {"date": {"$gte": month_start}}, {"_id": 0}).to_list(None)
+        {"date": {"$gte": month_start}, "voided_from_view": {"$ne": True}}, {"_id": 0}).to_list(None)
     income_month = 0.0
     expense_month = 0.0
     salary_month = 0.0
@@ -2909,7 +2909,7 @@ async def balance_sheet(request: Request, as_of: Optional[str] = None,
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     if fy and not as_of:
         _, as_of, _ = resolve_period(fy=fy)
-    q = {}
+    q = {"voided_from_view": {"$ne": True}}
     if as_of: q["date"] = {"$lte": as_of}
     entries = await sdb.journal_entries.find(q, {"_id": 0}).to_list(None)
 
@@ -3073,9 +3073,9 @@ async def cash_flow_statement(request: Request,
         for a in cash_accs
     }
 
-    opening_q: dict = {}
+    opening_q: dict = {"voided_from_view": {"$ne": True}}
     if from_date: opening_q["date"] = {"$lt": from_date}
-    period_q: dict = {}
+    period_q: dict = {"voided_from_view": {"$ne": True}}
     if from_date or to_date:
         d = {}
         if from_date: d["$gte"] = from_date
@@ -3223,7 +3223,7 @@ async def finance_dashboard_extended(request: Request,
 
     key_index = {m["key"]: m for m in months}
     async for e in sdb.journal_entries.find(
-        {"date": {"$gte": months[0]["key"] + "-01"}}, {"_id": 0}
+        {"date": {"$gte": months[0]["key"] + "-01"}, "voided_from_view": {"$ne": True}}, {"_id": 0}
     ):
         mkey = (e.get("date") or "")[:7]
         bucket = key_index.get(mkey)
@@ -3243,7 +3243,7 @@ async def finance_dashboard_extended(request: Request,
     month_start = f"{now.year:04d}-{now.month:02d}-01"
     expense_by_cat: dict = {}
     async for e in sdb.journal_entries.find(
-        {"date": {"$gte": month_start}}, {"_id": 0}
+        {"date": {"$gte": month_start}, "voided_from_view": {"$ne": True}}, {"_id": 0}
     ):
         for l in e["lines"]:
             if l["account_type"] == "expense":

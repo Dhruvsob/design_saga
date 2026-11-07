@@ -111,6 +111,19 @@ export default function EmployeeDetail() {
     navigate("/employees");
   };
 
+  // For someone added by mistake: allowed only when there is no salary/accounting history.
+  const removeForever = async () => {
+    const name = [emp?.first_name, emp?.last_name].filter(Boolean).join(" ") || "this employee";
+    if (!await confirmAction(`Delete ${name} permanently? Their attendance and leave records are deleted too. This cannot be undone.`)) return;
+    try {
+      await api.delete(`/employees/${id}/permanent`);
+      toast.success(`${name} deleted`);
+      navigate("/employees");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not delete this employee");
+    }
+  };
+
   const addWarning = async () => {
     const v = await askForm({ title: "Add warning", fields: [
       { name: "reason", label: "Reason", required: true },
@@ -263,9 +276,15 @@ export default function EmployeeDetail() {
           <button onClick={addDocument} className="btn-ghost" data-testid="emp-doc-btn">
             <FileText size={14} /> Add document
           </button>
-          {canDelete && (
+          {canDelete && emp?.employment_status !== "terminated" && (
             <button onClick={remove} className="btn-ghost ml-auto" style={{ color: "#B22B22", borderColor: "#B22B22" }}>
               <UserMinus size={14} /> Terminate
+            </button>
+          )}
+          {canDelete && emp?.employment_status === "terminated" && (
+            <button onClick={removeForever} className="btn-ghost ml-auto" style={{ color: "#B22B22", borderColor: "#B22B22" }}
+              data-testid="emp-delete-permanent">
+              <Trash size={14} /> Delete permanently
             </button>
           )}
         </div>

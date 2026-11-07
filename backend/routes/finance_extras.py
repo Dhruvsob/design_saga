@@ -724,6 +724,8 @@ async def upload_bank_statement(account_id: str, request: Request,
                         "lines.account_id": account_id}},
             {"$unwind": "$lines"},
             {"$match": {"lines.account_id": account_id,
+                        "voided_from_view": {"$ne": True},
+                        "reversed": {"$ne": True},
                         ("lines.debit" if need_debit else "lines.credit"):
                             {"$gte": abs(signed_amt) - 0.01, "$lte": abs(signed_amt) + 0.01}}},
             {"$lookup": {

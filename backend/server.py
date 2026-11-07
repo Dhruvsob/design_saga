@@ -4650,6 +4650,9 @@ async def update_employee(eid: str, payload: EmployeeUpdate, request: Request,
         raise HTTPException(status_code=400, detail="Invalid employment_type")
     if "employment_status" in patch and patch["employment_status"] not in EMPLOYMENT_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid employment_status")
+    if patch.get("employment_status") == "terminated" and doc.get("employment_status") != "terminated":
+        patch.setdefault("terminated_at", iso(now_utc()))   # the monthly sheet uses this
+        patch.setdefault("terminated_by", user["user_id"])
     patch["updated_at"] = iso(now_utc())
     patch["updated_by"] = user["user_id"]
     await sdb.employees.update_one({"id": eid}, {"$set": patch})
@@ -4691,6 +4694,53 @@ async def delete_employee(eid: str, request: Request,
                     meta={"linked_user_deactivated": bool(linked_user_id)})
     return {"ok": True, "employment_status": "terminated",
             "linked_user_deactivated": bool(linked_user_id)}
+
+
+# Records that make an employee part of the legal/accounting history.
+_EMPLOYEE_HISTORY = (("payroll_runs", "salary payments"), ("employee_advances", "advances"),
+                     ("journal_entries", "accounting entries"), ("expenses", "expense claims"),
+                     ("loans", "loans"))
+
+
+@api.delete("/employees/{eid}/permanent")
+async def delete_employee_permanently(eid: str, request: Request,
+                                      session_token: Optional[str] = Cookie(default=None),
+                                      authorization: Optional[str] = Header(default=None)):
+    """Remove someone added by mistake (never really staff).
+
+    Only for a terminated employee with no salary, advance, expense, loan or
+    accounting history; their attendance and leave rows go with them. Anyone
+    with money history stays terminated (kept for the books, off the sheets).
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.delete"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.delete")
+    employee = await sdb.employees.find_one({"id": eid}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if employee.get("employment_status") != "terminated":
+        raise HTTPException(status_code=409, detail="Terminate the employee first, then delete")
+    if employee.get("user_id") and employee.get("user_id") == user.get("user_id"):
+        raise HTTPException(status_code=400, detail="You cannot delete your own employee record")
+    blockers = []
+    for coll, label in _EMPLOYEE_HISTORY:
+        if await sdb[coll].count_documents({"employee_id": eid}):
+            blockers.append(label)
+    if blockers:
+        raise HTTPException(status_code=409, detail=(
+            f"Has {', '.join(blockers)}, which must stay in the books. "
+            "They remain terminated and are hidden from attendance sheets."))
+    removed = {}
+    for coll in ("attendance", "attendance_corrections", "leaves"):
+        result = await sdb[coll].delete_many({"employee_id": eid})
+        if result.deleted_count:
+            removed[coll] = result.deleted_count
+    await sdb.employees.delete_one({"id": eid})
+    name = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+    await audit_log(user, "employee.delete_permanent", target=eid, target_type="employee",
+                    meta={"name": name, "removed": removed,
+                          "linked_user_id": employee.get("user_id")})
+    return {"ok": True, "removed": removed}
 
 
 def _employee_account_filter(employee: dict, actor: dict) -> dict:
