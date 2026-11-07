@@ -246,3 +246,15 @@ test("long lists page at 50 rows and every client is reachable", async ({ page }
   await page.getByTestId("clients-search").fill(`${tag} client 01`);
   await expect(page.getByTestId("pager-clients")).toHaveCount(0);       // short list: no pager
 });
+
+test("accounting sections are grouped by what you are doing", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "grouped grid is the desktop layout; mobile uses the grouped select");
+  await page.goto("/accounting");
+  const groups = { overview: ["dashboard", "validation"], in: ["income", "receivables", "commissions"],
+    out: ["expense", "recurring"], books: ["daybook", "ledgers", "bank"], reports: ["reports", "balance", "cashflow"], setup: ["coa"] };
+  for (const [g, tabs] of Object.entries(groups)) {
+    for (const t of tabs) await expect(page.getByTestId(`acc-group-${g}`).getByTestId(`tab-${t}`)).toBeVisible();
+  }
+  await page.getByTestId("tab-balance").click();
+  await expect(page.getByTestId("tab-balance")).toHaveAttribute("aria-current", "page");
+});

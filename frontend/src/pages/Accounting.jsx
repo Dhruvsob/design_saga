@@ -22,20 +22,30 @@ import { confirmAction } from "../lib/confirm";
 const CURRENCY = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 const TABS = [
-  { id: "dashboard", label: "Dashboard", Icon: ChartLine },
-  { id: "income",    label: "Income",    Icon: ArrowDown },
-  { id: "expense",   label: "Expense",   Icon: ArrowUp },
-  { id: "receivables", label: "Collections Due", Icon: Money },
-  { id: "daybook",   label: "Daybook",   Icon: Notebook },
-  { id: "coa",       label: "Chart of Accounts", Icon: ListDashes },
-  { id: "ledgers",   label: "Ledgers",   Icon: Bank },
-  { id: "reports",   label: "Reports",   Icon: Receipt },
-  { id: "balance",   label: "Balance Sheet", Icon: Scales },
-  { id: "cashflow",  label: "Cash Flow", Icon: Waves },
-  { id: "commissions", label: "Commissions", Icon: Coins },
-  { id: "recurring", label: "Recurring", Icon: Repeat },
-  { id: "bank",      label: "Bank Reconciliation", Icon: Bank },
-  { id: "validation", label: "Validation", Icon: ArrowsClockwise },
+  { id: "dashboard", label: "Dashboard", Icon: ChartLine, group: "overview" },
+  { id: "validation", label: "Health check", Icon: ArrowsClockwise, group: "overview" },
+  { id: "income",    label: "Income",    Icon: ArrowDown, group: "in" },
+  { id: "receivables", label: "Collections Due", Icon: Money, group: "in" },
+  { id: "commissions", label: "Commissions", Icon: Coins, group: "in" },
+  { id: "expense",   label: "Expense",   Icon: ArrowUp, group: "out" },
+  { id: "recurring", label: "Recurring", Icon: Repeat, group: "out" },
+  { id: "daybook",   label: "Daybook",   Icon: Notebook, group: "books" },
+  { id: "ledgers",   label: "Ledgers",   Icon: Bank, group: "books" },
+  { id: "bank",      label: "Bank Reconciliation", Icon: Bank, group: "books" },
+  { id: "reports",   label: "P&L · Trial Balance", Icon: Receipt, group: "reports" },
+  { id: "balance",   label: "Balance Sheet", Icon: Scales, group: "reports" },
+  { id: "cashflow",  label: "Cash Flow", Icon: Waves, group: "reports" },
+  { id: "coa",       label: "Chart of Accounts", Icon: ListDashes, group: "setup" },
+];
+
+// Sections grouped by what the user is doing, not by accounting jargon.
+const TAB_GROUPS = [
+  { id: "overview", label: "Overview" },
+  { id: "in",       label: "Money in" },
+  { id: "out",      label: "Money out" },
+  { id: "books",    label: "Books" },
+  { id: "reports",  label: "Reports" },
+  { id: "setup",    label: "Setup" },
 ];
 
 export default function Accounting() {
@@ -194,30 +204,38 @@ export default function Accounting() {
       )}
 
       <nav className="border border-[var(--line)] bg-white p-3 md:p-4" aria-label="Accounting sections" data-testid="accounting-tabs">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div>
-            <div className="overline">ACCOUNTING WORKSPACE</div>
-            <p className="text-xs text-[var(--ink-2)] mt-1">Choose a section — every module is visible without horizontal scrolling.</p>
-          </div>
+        <div className="flex items-center justify-between gap-3 mb-3 sm:hidden">
+          <div className="overline">SECTION</div>
           <select
             value={tab}
             onChange={(event) => setTab(event.target.value)}
-            className="input-flat min-w-[180px] sm:hidden"
+            className="input-flat min-w-[180px]"
             aria-label="Accounting section"
             data-testid="accounting-section-select"
           >
-            {TABS.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+            {TAB_GROUPS.map((g) => (
+              <optgroup key={g.id} label={g.label}>
+                {TABS.filter((t) => t.group === g.id).map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+              </optgroup>
+            ))}
           </select>
         </div>
-        <div className="hidden sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
-          {TABS.map(({ id, label, Icon }) => (
-            <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
-              aria-current={tab === id ? "page" : undefined}
-              className={`min-h-11 px-3 py-2 text-left text-xs flex items-center gap-2 border transition ${tab === id
-                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[#5B4E3A] font-semibold"
-                : "border-[var(--line)] text-[var(--ink-2)] hover:border-[#B9AE9B] hover:text-[var(--ink)]"}`}>
-              <Icon size={15} className="shrink-0" /> <span>{label}</span>
-            </button>
+        <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-6 gap-x-3 gap-y-4">
+          {TAB_GROUPS.map((g) => (
+            <div key={g.id} role="group" aria-labelledby={`acc-group-${g.id}`} data-testid={`acc-group-${g.id}`}>
+              <div id={`acc-group-${g.id}`} className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-3)] mb-1.5 px-1">{g.label}</div>
+              <div className="flex flex-col gap-1">
+                {TABS.filter((t) => t.group === g.id).map(({ id, label, Icon }) => (
+                  <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
+                    aria-current={tab === id ? "page" : undefined}
+                    className={`min-h-10 px-2.5 py-1.5 text-left text-xs flex items-center gap-2 rounded-md border transition ${tab === id
+                      ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[#5B4E3A] font-semibold"
+                      : "border-transparent text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"}`}>
+                    <Icon size={15} className="shrink-0" /> <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </nav>

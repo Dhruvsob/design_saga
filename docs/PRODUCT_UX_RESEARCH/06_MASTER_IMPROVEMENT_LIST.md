@@ -54,7 +54,7 @@ Prepared 07/11/2026 from the code, test runs and live checks. Status: **Doing** 
 
 **Invoices** — ⋮ done; recurring invoices (retainers); payment reminder emails; UPI QR on invoice PDF; aging report (0-30/31-60/60+).
 
-**Accounting** — regroup 14 sections into Money In / Money Out / Books / Reports / Setup; bank statement import with auto-match; GST summary report; cash-flow forecast from collections + bills due; month-end close lock.
+**Accounting** — done: sections grouped Overview / Money in / Money out / Books / Reports / Setup (DS-101). Next: bank statement import with auto-match; GST summary report; cash-flow forecast from collections + bills due; month-end close lock.
 
 **Expenses** — receipt photo upload with amount auto-read (OCR); approval flow; mileage claims.
 

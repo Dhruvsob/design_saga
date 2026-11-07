@@ -11,6 +11,12 @@ Last updated: 2026-11-05 (Asia/Kolkata)
 - Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
 - Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
 
+### DS-101: Accounting sections grouped by task
+
+- The 14 Accounting sections were one flat grid of equal buttons. Now grouped under plain headings: Overview (Dashboard, Health check), Money in (Income, Collections Due, Commissions), Money out (Expense, Recurring), Books (Daybook, Ledgers, Bank Reconciliation), Reports (P&L · Trial Balance, Balance Sheet, Cash Flow), Setup (Chart of Accounts). Mobile select uses the same groups (optgroups).
+- Labels: "Reports" renamed to "P&L · Trial Balance" (what the tab shows); "Validation" renamed to "Health check". Section ids and test ids unchanged, so links and tests keep working.
+- Verified: ESLint clean, build OK; e2e ux/money/smoke/a11y 29 passed incl. new grouping test.
+
 ### DS-100: No more silent row limits; paging on long lists; calendar link checks
 
 - R1: backend reads stopped at fixed row counts (500 to 20,000) in ~90 places. In money code this meant wrong totals once a company grew: P&L, ledgers, receivables, finance dashboard, vendor ledgers/commissions, payroll and advance recovery. In `core/access_control.visible_project_ids` it meant users would lose access to projects past the cap.
