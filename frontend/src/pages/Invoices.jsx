@@ -206,6 +206,22 @@ export default function Invoices({ docType = "invoice" }) {
     load();
   };
 
+  // Admin correction for invoices booked under the old "income when sent" rule.
+  const restateCashBasis = async (row) => {
+    const paid = Number(row.paid_amount || 0);
+    if (!await confirmAction(
+      `Restate ${row.number} on cash basis?
+
+It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income when it was sent. ` +
+      `After this, income shows only the ₹${paid.toLocaleString("en-IN")} actually received, on the dates it came in. ` +
+      "Nothing is deleted: the old entries stay in the audit log. This can be done once.")) return;
+    try {
+      await api.post(`/accounting/invoices/${row.id}/restate-cash-basis`);
+      toast.success(`${row.number} restated: income now equals the money received`);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not restate this invoice"); }
+  };
+
   const download = (id) => {
     window.open(`${API}/invoices/${id}/pdf`, "_blank");
   };
@@ -351,6 +367,10 @@ export default function Invoices({ docType = "invoice" }) {
                     )}
                     <RowActions label={`${docType} ${r.number}`} testid={`${docType}-actions-${r.id}`} actions={[
                       { label: "Download PDF", icon: FilePdf, onSelect: () => download(r.id) },
+                      { label: "Restate on cash basis", icon: ArrowCounterClockwise, testid: `invoice-restate-${r.id}`,
+                        hidden: !(docType === "invoice" && hasPerm("*.*") && r.accrual_journal_id && r.accounting_basis !== "cash"
+                                  && !["draft", "cancelled"].includes(r.status)),
+                        onSelect: () => restateCashBasis(r) },
                       { label: "Send payment reminder", icon: BellRinging, testid: `invoice-remind-${r.id}`,
                         hidden: !(docType === "invoice" && canRemind && ["sent", "overdue", "partially_paid"].includes(r.status) && due(r) > 0),
                         onSelect: () => startReminder({ source_type: "invoice", source_id: r.id, party: r.client_name, outstanding: due(r),

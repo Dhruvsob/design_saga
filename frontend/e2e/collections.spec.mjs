@@ -176,7 +176,7 @@ test("screens: money-in tabs, reminder from Collections Due, received payments",
   await ctx.dispose();
 });
 
-test("restating an accrual-era ₹6,00,000 invoice on cash basis leaves only the ₹51,000 received as income", async () => {
+test("restating an accrual-era ₹6,00,000 invoice on cash basis leaves only the ₹51,000 received as income", async ({ browser }) => {
   const ctx = await api("admin");
   const { cash } = await accounts(ctx);
   await json(ctx.patch("/api/org/current", { data: { accounting_basis: "accrual" } }));
@@ -193,8 +193,13 @@ test("restating an accrual-era ₹6,00,000 invoice on cash basis leaves only the
     expect(await incomeOf(), "accrual booked the full value").toBe(600000);
 
     await json(ctx.patch("/api/org/current", { data: { accounting_basis: "cash" } }));
-    const res = await json(ctx.post(`/api/accounting/invoices/${inv.id}/restate-cash-basis`));
-    expect(res.receipts).toHaveLength(1);
+    // the admin does it from the invoice's ⋮ menu
+    const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+    await page.goto("/invoices");
+    await page.getByTestId(`invoice-actions-${inv.id}`).click({ timeout: 20000 });
+    await page.getByRole("menuitem", { name: "Restate on cash basis" }).click();
+    await page.getByTestId("confirm-ok").click();
+    await expect(page.getByText(/restated: income now equals the money received/)).toBeVisible({ timeout: 20000 });
     expect(await incomeOf(), "only money received is income").toBe(51000);
     const visible = await journals(ctx, { client_id: client.id });
     expect(visible.flatMap((j) => j.lines).some((l) => l.account_name === "Accounts Receivable")).toBe(false);
