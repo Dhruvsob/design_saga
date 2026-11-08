@@ -56,7 +56,7 @@ export default function GettingStarted() {
         done: has(counts?.clients), to: "/clients" },
       { key: "project", label: "Create your first project", hint: "Tasks, files, site work and finances live here",
         done: has(counts?.projects), to: "/projects" },
-      { key: "vendor", label: "Add a vendor or contractor", hint: "For purchase orders, bills and commissions",
+      { key: "vendor", label: "Add a vendor or contractor", hint: "For purchase orders, bills and vendor incentives",
         done: has(counts?.vendors), to: "/vendors" },
     ];
   }, [currentOrg, counts]);

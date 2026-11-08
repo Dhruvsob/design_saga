@@ -1569,7 +1569,7 @@ async def _reverse_commission_je(commission_row: dict) -> Optional[str]:
         )
         return None
 
-    narration = f"Commission reversal – bill {commission_row.get('bill_number')} cancelled"
+    narration = f"Vendor incentive reversal – bill {commission_row.get('bill_number')} cancelled"
     rev_lines = [
         {"account_id": income_acc["id"], "debit": received, "credit": 0.0,
          "description": narration},
@@ -1736,6 +1736,9 @@ async def create_expected_commission(vendor_id: str, payload: CommissionExpected
         "origin": "manual_expected",
         "due_date": payload.due_date,
         "reminder_date": payload.reminder_date,
+        "reminder_time": payload.reminder_time,
+        "remind_before_days": payload.remind_before_days,
+        "repeat_every": payload.repeat_every or "none",
         "reference": payload.reference,
         "notes": payload.notes,
         "received_amount": 0.0,
@@ -1749,6 +1752,8 @@ async def create_expected_commission(vendor_id: str, payload: CommissionExpected
                 target_type="vendor_commission",
                 meta={"vendor_id": vendor_id, "amount": doc["amount"],
                       "recognition": doc["recognition"]})
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("vendor_commission", doc["id"], user["user_id"])
     return doc
 
 
@@ -1762,13 +1767,13 @@ async def update_expected_commission(vendor_id: str, commission_id: str,
     row = await sdb.vendor_commissions.find_one(
         {"id": commission_id, "vendor_id": vendor_id}, {"_id": 0})
     if not row:
-        raise HTTPException(status_code=404, detail="Commission not found")
+        raise HTTPException(status_code=404, detail="Vendor incentive not found")
     if row.get("origin") != "manual_expected":
         raise HTTPException(status_code=409,
-                            detail="Bill-earned commissions must be corrected from the vendor bill")
+                            detail="Bill-earned vendor incentives must be corrected from the vendor bill")
     if float(row.get("received_amount") or 0) > 0:
         raise HTTPException(status_code=409,
-                            detail="Reverse the linked receipt before changing this commission")
+                            detail="Reverse the linked receipt before changing this vendor incentive")
     patch = payload.model_dump(exclude_unset=True)
     if patch.get("project_id"):
         project = await get_visible_project(user, patch["project_id"])
@@ -1784,6 +1789,8 @@ async def update_expected_commission(vendor_id: str, commission_id: str,
     await sdb.vendor_commissions.update_one({"id": commission_id}, {"$set": patch})
     await audit(user, "vendor_commission.update", target=commission_id,
                 target_type="vendor_commission", meta={"fields": sorted(patch.keys())})
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("vendor_commission", commission_id, user["user_id"])
     return await sdb.vendor_commissions.find_one({"id": commission_id}, {"_id": 0})
 
 
@@ -1796,13 +1803,13 @@ async def delete_expected_commission(vendor_id: str, commission_id: str, request
     row = await sdb.vendor_commissions.find_one(
         {"id": commission_id, "vendor_id": vendor_id}, {"_id": 0})
     if not row:
-        raise HTTPException(status_code=404, detail="Commission not found")
+        raise HTTPException(status_code=404, detail="Vendor incentive not found")
     if row.get("origin") != "manual_expected":
         raise HTTPException(status_code=409,
-                            detail="Bill-earned commissions must be cancelled from the vendor bill")
+                            detail="Bill-earned vendor incentives must be cancelled from the vendor bill")
     if float(row.get("received_amount") or 0) > 0:
         raise HTTPException(status_code=409,
-                            detail="Reverse the linked receipt before deleting this commission")
+                            detail="Reverse the linked receipt before deleting this vendor incentive")
     await sdb.vendor_commissions.update_one(
         {"id": commission_id},
         {"$set": {"status": "cancelled", "cancelled_at": iso_now(),
@@ -1810,6 +1817,8 @@ async def delete_expected_commission(vendor_id: str, commission_id: str, request
     )
     await audit(user, "vendor_commission.cancel", target=commission_id,
                 target_type="vendor_commission")
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("vendor_commission", commission_id)
     return {"ok": True, "cancelled": True}
 
 
@@ -2050,7 +2059,7 @@ async def receive_commission(vendor_id: str, payload: CommissionReceiveIn, reque
         raise HTTPException(status_code=400, detail="Amount must be positive")
     bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
     if payload.commission_ids and len(set(payload.commission_ids)) != len(payload.commission_ids):
-        raise HTTPException(status_code=400, detail="Duplicate commission IDs in request")
+        raise HTTPException(status_code=400, detail="Duplicate vendor incentive IDs in request")
     idem = (request.headers.get("idempotency-key") or "").strip()[:100] or None
     request_key = f"{user_org_id(user)}:{vendor_id}:{idem}" if idem else None
     async with doc_lock(sdb.vendors_acc, vendor_id):
@@ -2076,12 +2085,12 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
 
-    income_label = ((vendor.get("commission") or {}).get("income_label")
-                    or "Vendor Commission Income")
-    inc = await sdb.accounts.find_one({"name": income_label}, {"_id": 0})
+    from routes.accounting import vendor_incentive_account
+    income_label = (vendor.get("commission") or {}).get("income_label")
+    inc = await vendor_incentive_account(income_label)
     if not inc:
-        raise HTTPException(status_code=500,
-                            detail=f"Income account '{income_label}' missing – seed COA first")
+        raise HTTPException(status_code=409,
+                            detail="No vendor incentive income account. Add one in Accounting > Chart of Accounts.")
 
     # Pick rows to settle — FIFO across pending/invoiced if none provided.
     if payload.commission_ids:
@@ -2126,7 +2135,7 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
     from routes.accounting import _post_journal
     allocated = round(float(payload.amount) - remaining, 2)
     je_lines = [{"account_id": bank["id"], "debit": float(payload.amount), "credit": 0.0,
-                 "description": f"Commission received from {vendor.get('name')}"}]
+                 "description": f"Vendor incentive received from {vendor.get('name')}"}]
     if allocated > 0:
         je_lines.append({"account_id": inc["id"], "debit": 0.0, "credit": allocated,
                          "description": income_label})
@@ -2134,18 +2143,19 @@ async def _receive_commission_locked(user: dict, vendor_id: str, payload: Commis
         from routes.accounting import _seed_coa_if_empty
         await _seed_coa_if_empty()
         advance = await sdb.accounts.find_one(
-            {"name": "Commission Advances", "type": "liability", "active": {"$ne": False}},
+            {"type": "liability", "active": {"$ne": False},
+             "$or": [{"name": {"$in": ["Vendor Incentive Advances", "Commission Advances"]}}, {"code": "2302"}]},
             {"_id": 0, "id": 1})
         if not advance:
-            raise HTTPException(status_code=500, detail="Commission Advances account missing")
+            raise HTTPException(status_code=500, detail="Vendor incentive advances account missing")
         je_lines.append({"account_id": advance["id"], "debit": 0.0,
                          "credit": round(remaining, 2),
-                         "description": f"Unallocated commission advance from {vendor.get('name')}"})
+                         "description": f"Unallocated vendor incentive advance from {vendor.get('name')}"})
     settlement_id = (f"vcpay_{hashlib.sha256(request_key.encode('utf-8')).hexdigest()[:24]}"
                      if request_key else new_id("vcpay_"))
     je = await _post_journal(
         user, payload.received_date,
-        f"Vendor commission – {vendor.get('name')}",
+        f"Vendor incentive – {vendor.get('name')}",
         je_lines, reference=payload.reference,
         project_id=single_project,
         vendor_id=vendor_id,
@@ -2227,7 +2237,7 @@ async def update_commission_settlement_metadata(
         settlement = await sdb.commission_settlements.find_one(
             {"id": settlement_id}, {"_id": 0})
         if not settlement:
-            raise HTTPException(status_code=404, detail="Commission receipt not found")
+            raise HTTPException(status_code=404, detail="Vendor incentive receipt not found")
         if settlement.get("status") in ("cancelled", "reversed"):
             raise HTTPException(status_code=409, detail="A reversed receipt cannot be edited")
         journal_id = settlement.get("journal_entry_id")
@@ -2255,7 +2265,7 @@ async def _reverse_commission_settlement_locked(user: dict, settlement_id: str) 
     settlement = await sdb.commission_settlements.find_one(
         {"id": settlement_id}, {"_id": 0})
     if not settlement:
-        raise HTTPException(status_code=404, detail="Commission receipt not found")
+        raise HTTPException(status_code=404, detail="Vendor incentive receipt not found")
     if settlement.get("status") in ("cancelled", "reversed"):
         return {"ok": True, "already_reversed": True,
                 "reversal_je_id": settlement.get("reversal_je_id")}
@@ -2264,7 +2274,7 @@ async def _reverse_commission_settlement_locked(user: dict, settlement_id: str) 
     if not journal_id:
         raise HTTPException(
             status_code=409,
-            detail="Commission receipt has no linked journal entry; reconcile it before deletion",
+            detail="Vendor incentive receipt has no linked journal entry; reconcile it before deletion",
         )
     journal = await sdb.journal_entries.find_one({"id": journal_id}, {"_id": 0})
     if not journal:

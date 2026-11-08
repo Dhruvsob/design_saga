@@ -88,6 +88,7 @@ RATE_RULES = [
     ("*", re.compile(r"^/api/ai/|/ai-suggest$"), "ai_daily", 200, 86400),
     ("GET", re.compile(r"(\.csv|/csv|/pdf|/export[^/]*|/payslip[^/]*)$"), "export", 30, 60),
     ("POST", re.compile(r"/logo(/upload)?$|/bank-statement|/import|/files/upload$|/documents/upload$"), "upload", 20, 300),
+    ("POST", re.compile(r"^/api/site-visits/[^/]+/photos$"), "site_photo", 60, 300),
 ]
 EXPORT_RE = re.compile(r"(\.csv|/csv|/pdf|/export[^/]*|/payslip[^/]*)$")
 

@@ -22,7 +22,8 @@ and links existing documents instead of repeating them:
 | 02 | `02_COVERAGE_MATRIX.md` — what has been inspected, how, and what has not | Started |
 | 03 | `03_EXTERNAL_DESIGN_REFERENCES.md` — verified references with source and date | Started (Work Hand) |
 | 04 | `04_FINDINGS_BACKLOG.md` — verified UX/structure findings with evidence and priority | Started |
-| 05+ | Information architecture, design system, motion, accounting UX, project workflows, HR UX, PDF system, feature ideas, roadmap, executive blueprint | Pending — written after module-by-module browser inspection |
+| 05 | `05_WORKHAND_PROJECT_MANAGEMENT_BENCHMARK.md` — WorkHand logic, Design Saga gap map and safe project-management roadmap | Done from official walkthrough, public route metadata and source comparison; current-account sample writes pending browser-control recovery |
+| 06+ | Information architecture, design system, motion, accounting UX, HR UX, PDF system, feature ideas, roadmap, executive blueprint | Pending — written after module-by-module browser inspection |
 
 ## Rules followed
 

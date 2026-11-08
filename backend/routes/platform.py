@@ -43,12 +43,14 @@ TENANT_PURGE_COLLECTIONS = (
     "leave_applications", "leave_rules", "leaves", "office_locations",
     "journal_entries", "accounts", "payroll_runs", "notifications", "files",
     "documents", "milestones", "payment_milestones", "calendar_events",
-    "holidays", "comments", "expenses", "expense_policies", "purchase_orders",
+    "holidays", "comments", "expenses", "expense_policies", "expense_receipts",
+    "purchase_orders",
     "goods_receipts", "loans", "recurring_expenses", "user_favorite_accounts",
     "bank_statement_rows", "bank_statement_batches", "master_data",
     "chat_messages", "ai_messages", "role_permissions", "counters",
     "google_calendar_connections", "google_oauth_states",
     "google_calendar_sync_queue", "google_calendar_synced_events", "audit_log",
+    "site_visits",
 )
 
 

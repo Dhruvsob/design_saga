@@ -36,7 +36,7 @@ MONEY_IN_SOURCES = ("income", "invoice_payment", "milestone_payment",
 SOURCE_LABELS = {
     "income": "Money in", "invoice_payment": "Invoice payment",
     "milestone_payment": "Milestone payment", "other_receivable_income": "Other receivable",
-    "commission_income": "Vendor commission",
+    "commission_income": "Vendor incentive",
 }
 
 

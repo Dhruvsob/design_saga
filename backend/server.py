@@ -5505,6 +5505,8 @@ api.include_router(calendar_router)
 api.include_router(google_calendar_router)
 api.include_router(finance_extras_router)
 api.include_router(money_in_router)
+from routes.site_visits import router as site_visits_router  # noqa: E402
+api.include_router(site_visits_router)
 
 app.include_router(api)
 
@@ -5744,6 +5746,22 @@ async def _bootstrap_default_org():
             await asyncio.sleep(5 * 60)
 
     app.state._google_calendar_sync_task = asyncio.create_task(_google_calendar_sync_loop())
+
+    # Collections Due reminders: fire each timed alert (advance / main / repeat)
+    # once, at its minute, as an ERP notification with sound.
+    async def _collection_reminder_loop():
+        await asyncio.sleep(20)
+        while True:
+            try:
+                from core.collection_reminders import process_due_alerts
+                fired = await process_due_alerts(100)
+                if fired:
+                    logger.info("[Scheduler] Collection reminders sent: %s", fired)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[Scheduler] Collection reminders failed: %s", type(exc).__name__)
+            await asyncio.sleep(60)
+
+    app.state._collection_reminder_task = asyncio.create_task(_collection_reminder_loop())
 
 
 async def _run_recurring_expense_scan():

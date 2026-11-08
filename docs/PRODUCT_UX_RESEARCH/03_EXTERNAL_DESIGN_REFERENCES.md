@@ -34,6 +34,35 @@ do not copy same to same, remove duplicates").
   bar (DS-092); DS-093 replaced it with a "Needs attention" list. Keep one
   navigation per screen.
 
+## REF-005 — WorkHand: complete official Workspace walkthrough
+- Source: <https://www.workhand.in/workspace/>, opened 06/11/2026.
+- Pattern: one project context connects Workboard, Files, Schedule, Team,
+  Selections, Product Library, Presentation, Address Book and Client Portal.
+- Business value: designers move from decision to approval and execution without
+  re-entering the same project/item across unrelated tools.
+- Adaptation: keep Design Saga's existing project/accounting/task engines and
+  add controlled handoffs: drawing revision → approval, selection → procurement,
+  site issue → verified closure.
+- Do not copy: brand, text, visuals, assets, exact information architecture or
+  simplified financial assumptions.
+
+## REF-006 — WorkHand: project hub status contracts
+- Source: publicly delivered WorkHand application client, inspected read-only
+  06/11/2026; no private account/API data accessed.
+- Pattern: each project area returns a short summary such as open/overdue tasks,
+  pending approvals, procurement lines/on-site/overdue, site progress/blocked,
+  outstanding/overdue finance, files/folders and team count.
+- Adaptation: enrich Design Saga's existing `ProjectAttention` read model with
+  permission-filtered source counts. Do not restore duplicate navigation tiles.
+
+## REF-007 — WorkHand: design-to-delivery selection lifecycle
+- Source: <https://www.workhand.in/workspace/>, opened 06/11/2026.
+- Pattern: Proposed → Review → Approved → Ordered → Delivered → Installed,
+  grouped by room with quantity, cost, markup/client value and project totals.
+- Adaptation: create selection/option/decision records, then idempotently create
+  a procurement request from an approved selection. Never post accounting merely
+  because a selection or reminder exists.
+
 Pending external research (not yet opened in this session): Monograph,
 Procore, Autodesk Construction Cloud, Houzz Pro, Odoo, Zoho Books, Xero,
 QuickBooks, Linear, Notion, Stripe dashboard.

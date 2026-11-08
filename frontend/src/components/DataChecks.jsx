@@ -14,7 +14,7 @@ const CHECKS = [
 ];
 
 const KIND_LABELS = {
-  payroll_run: "Salary", vendor_payment: "Vendor payment", commission_receipt: "Commission receipt",
+  payroll_run: "Salary", vendor_payment: "Vendor payment", commission_receipt: "Vendor incentive receipt",
   collection_receipt: "Collection receipt", money_in: "Money In", money_out: "Money Out",
 };
 

@@ -4,8 +4,8 @@ import {
   SquaresFour, UsersThree, Briefcase, Kanban, Receipt, UserCircle,
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard, CalendarCheck,
-  Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn,
-  Scroll, LockKey, CaretDoubleLeft, CaretDoubleRight,
+  Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn, MapTrifold,
+  Scroll, LockKey, CaretDoubleLeft, CaretDoubleRight, Money,
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
@@ -44,6 +44,8 @@ const NAV_GROUPS = [
   { id: "people", label: "People", items: [
     { to: "/employees",   label: "Employees",    perm: "employees.read", Icon: IdentificationCard, module: "employees" },
     { to: "/attendance",  label: "Attendance",   perm: "attendance.read", Icon: Clock, module: "attendance" },
+    { to: "/live-map",    label: "Live map",     perm: "attendance.approve", Icon: MapTrifold, module: "attendance" },
+    { to: "/payroll",     label: "Payroll",      perm: "payroll.read",   Icon: Money, module: "payroll" },
     { to: "/holidays",    label: "Holidays",     perm: "holidays.read",  Icon: CalendarCheck, module: "attendance" },
   ] },
   { id: "admin", label: "Administration", items: [

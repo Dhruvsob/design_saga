@@ -18,8 +18,15 @@ import {
  */
 export default function RowActions({ actions, label = "record", testid, align = "end" }) {
   const shown = (actions || []).filter((a) => a && !a.hidden);
+  // `divider: true` is accepted both as a standalone separator and as a
+  // request to separate the action that carries it (normally Delete/Cancel).
+  // Treating the latter as a separator used to silently remove the action.
+  const expanded = shown.flatMap((a) => {
+    const isAction = Boolean(a.label || a.icon || a.onSelect);
+    return a.divider && isAction ? [{ divider: true }, { ...a, divider: false }] : [a];
+  });
   // drop leading/trailing/duplicate dividers left after hiding items
-  const clean = shown.filter((a, i, arr) => !a.divider
+  const clean = expanded.filter((a, i, arr) => !a.divider
     || (i > 0 && i < arr.length - 1 && !arr[i - 1].divider));
   if (!clean.some((a) => !a.divider)) return null;
   return (

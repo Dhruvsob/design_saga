@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from routes import payroll
 import routes.accounting as accounting
+import routes.employee_advances as employee_advances
 
 
 def test_payroll_period_key_is_stable_and_period_specific():
@@ -72,6 +73,11 @@ def test_salary_reversal_balances_journal_and_reopens_period(monkeypatch):
     async def no_audit(*_args, **_kwargs):
         return None
 
+    recovered = []
+
+    async def restore_recovery(run_id):
+        recovered.append(run_id)
+
     @asynccontextmanager
     async def unlocked(*_args, **_kwargs):
         yield
@@ -83,9 +89,11 @@ def test_salary_reversal_balances_journal_and_reopens_period(monkeypatch):
     monkeypatch.setattr(payroll, "doc_lock", unlocked)
     monkeypatch.setattr(payroll, "audit", no_audit)
     monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
+    monkeypatch.setattr(employee_advances, "restore_recovery", restore_recovery)
 
     result = asyncio.run(payroll.reverse_salary_payment("run_1", None))
     assert result["status"] == "reversed"
     assert run["status"] == "reversed"
     assert run["original_period_key"] == "org_a:emp_1:2026-10"
     assert run["period_key"] == "org_a:emp_1:2026-10#reversed-run_1"   # never unset (legacy index)
+    assert recovered == ["run_1"]

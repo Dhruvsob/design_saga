@@ -311,6 +311,8 @@ async def event_body(org_id: str, source_type: str, doc: dict,
             f"Open in Design Saga: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}{link}",
         ]))
         reminder = doc.get("reminder_minutes")
+        if reminder is None and doc.get("alert_minutes"):
+            reminder = list(doc["alert_minutes"])
         location = doc.get("location")
 
     start, end = _date_time_fields(day, start_time, doc.get("end_date"), doc.get("end_time"))
@@ -341,11 +343,13 @@ async def event_body(org_id: str, source_type: str, doc: dict,
     if reminder is None:
         body["reminders"] = {"useDefault": False, "overrides": []}
     else:
-        minutes = max(0, min(40320, int(reminder)))
-        body["reminders"] = {"useDefault": False, "overrides": [
-            {"method": "popup", "minutes": minutes},
-            {"method": "email", "minutes": minutes},
-        ]}
+        times = reminder if isinstance(reminder, list) else [reminder]
+        times = sorted({max(0, min(40320, int(m))) for m in times})[:2]
+        overrides = [{"method": "popup", "minutes": m} for m in times]
+        overrides.append({"method": "email", "minutes": times[-1]})
+        body["reminders"] = {"useDefault": False, "overrides": overrides[:5]}
+    if doc.get("recurrence") and source_type == "calendar_event":
+        body["recurrence"] = list(doc["recurrence"])[:3]
     return body
 
 

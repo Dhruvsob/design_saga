@@ -30,6 +30,7 @@ from core.audit import audit
 from core.locks import doc_lock
 from models.base import FiniteModel
 from pymongo.errors import DuplicateKeyError
+from core.limits import MAX_LIST_ROWS
 from core.finance import (
     resolve_period, current_fy_label, fy_choices, fy_range, require_asset_account,
 )
@@ -125,14 +126,37 @@ def _default_account_id(org_id: str, name: str) -> str:
     return f"acc_default_{digest}"
 
 
+_LEGACY_DEFAULT_NAMES = {"3010": ("Vendor Commission Income",), "2302": ("Commission Advances",)}
+
+
+async def vendor_incentive_account(preferred: Optional[str] = None) -> Optional[dict]:
+    """The income account vendor incentives (formerly 'commissions') are booked to."""
+    await _seed_coa_if_empty()
+    base = {"type": "income", "active": {"$ne": False}}
+    for q in ([{"name": preferred}] if preferred else []) + [
+            {"name": "Vendor Incentive Income"}, {"code": "3010"},
+            {"name": "Vendor Commission Income"},
+            {"name": {"$regex": "incentive|commission", "$options": "i"}}]:
+        acc = await sdb.accounts.find_one({**base, **q}, {"_id": 0})
+        if acc:
+            return acc
+    return None
+
+
 async def _seed_coa_if_empty():
     """Idempotent seed — inserts only the DEFAULT_COA accounts that are missing.
     Runs on every /accounts fetch so newly-shipped default accounts (e.g. new
     income categories) show up on existing installations without a migration."""
-    existing_names = {a["name"] async for a in sdb.accounts.find({}, {"_id": 0, "name": 1})}
+    existing_names, existing_codes = set(), set()
+    async for a in sdb.accounts.find({}, {"_id": 0, "name": 1, "code": 1}):
+        existing_names.add(a.get("name"))
+        existing_codes.add(str(a.get("code") or ""))
     org_id = current_org_id() or "org_default"
     for name, typ, code in DEFAULT_COA:
-        if name in existing_names:
+        # A default the company renamed (e.g. 3010 "Vendor Incentive Income") is
+        # still that account: never seed a second copy under the old name.
+        if name in existing_names or code in existing_codes or name in _LEGACY_DEFAULT_NAMES.get(code, ()) \
+                and existing_names & set(_LEGACY_DEFAULT_NAMES.get(code, ())):
             continue
         account_id = _default_account_id(org_id, name)
         try:
@@ -1536,6 +1560,10 @@ async def create_income(payload: IncomeIn, request: Request,
             raise HTTPException(status_code=404, detail="Invoice not found")
         if linked.get("status") == "paid":
             raise HTTPException(status_code=409, detail="Invoice is already paid")
+        if not invoice_collects_money(linked):
+            raise HTTPException(status_code=409, detail=(
+                "Invoices don't take payments. Add this invoice to Collections Due "
+                "(invoice ⋮ menu) and record the payment there."))
         expected = round(max(0.0, float(linked.get("total") or 0)
                              - float(linked.get("paid_amount") or 0)), 2)
         if payload.amount > expected + 0.01:
@@ -1553,7 +1581,9 @@ async def create_income(payload: IncomeIn, request: Request,
             raise HTTPException(status_code=409, detail="Milestone is already paid")
         live_invoice = await sdb.invoices.find_one(
             {"milestone_id": payload.milestone_id,
-             "status": {"$nin": ["draft", "cancelled"]}}, {"_id": 0, "number": 1})
+             "status": {"$nin": ["draft", "cancelled"]},
+             "$or": [{"paid_amount": {"$gt": 0}}, {"accrual_journal_id": {"$nin": [None, ""]}}]},
+            {"_id": 0, "number": 1})
         if live_invoice:
             raise HTTPException(status_code=409, detail=(
                 f"This milestone is billed on invoice {live_invoice.get('number')}. "
@@ -1918,6 +1948,140 @@ async def employee_ledger(employee_id: str, request: Request,
         raise HTTPException(status_code=404, detail="Employee not found")
     return await _entity_ledger("employee", employee_id, entity=employee,
                                 from_date=fd, to_date=td, label=label)
+
+
+def _id_list(value: Optional[str]) -> list[str]:
+    return [v.strip() for v in str(value or "").split(",") if v.strip()][:50]
+
+
+@router.get("/accounting/ledger/combined")
+async def combined_ledger(request: Request,
+                          project_ids: Optional[str] = None, vendor_ids: Optional[str] = None,
+                          client_ids: Optional[str] = None, account_ids: Optional[str] = None,
+                          fy: Optional[str] = None,
+                          from_date: Optional[str] = None, to_date: Optional[str] = None,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    """One ledger for several things at once, e.g. a project and its vendors:
+    how much consultancy income and vendor incentive came from each vendor on it.
+
+    Filters combine with AND across kinds (project AND vendor) and OR within a kind.
+    Vendor-incentive receipts that span several projects are split by the amount
+    applied to each project.
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+    P, V, C, A = (_id_list(project_ids), _id_list(vendor_ids), _id_list(client_ids), _id_list(account_ids))
+    if not (P or V or C or A):
+        raise HTTPException(status_code=400, detail="Choose at least one project, vendor, client or account")
+    fd, td, label = resolve_period(fy, from_date, to_date)
+    q: dict = {"voided_from_view": {"$ne": True}}
+    and_terms = []
+    if P:
+        and_terms.append({"$or": [{"project_id": {"$in": P}}, {"project_ids": {"$in": P}}]})
+    if V:
+        and_terms.append({"vendor_id": {"$in": V}})
+    if C:
+        and_terms.append({"client_id": {"$in": C}})
+    if A:
+        and_terms.append({"lines.account_id": {"$in": A}})
+    if and_terms:
+        q["$and"] = and_terms
+    if fd or td:
+        q["date"] = {k: v for k, v in (("$gte", fd), ("$lte", td)) if v}
+    entries = await sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1).to_list(MAX_LIST_ROWS)
+
+    # names for display
+    async def names(coll, ids):
+        ids = [i for i in ids if i]
+        if not ids:
+            return {}
+        return {r["id"]: r.get("name") async for r in getattr(sdb, coll).find(
+            {"id": {"$in": list(set(ids))}}, {"_id": 0, "id": 1, "name": 1})}
+    proj_names = await names("projects", [e.get("project_id") for e in entries]
+                             + [p for e in entries for p in (e.get("project_ids") or [])])
+    vend_names = await names("vendors_acc", [e.get("vendor_id") for e in entries])
+    cli_names = await names("clients", [e.get("client_id") for e in entries])
+
+    # project share for receipts spanning several projects
+    multi = [e["id"] for e in entries if e.get("project_ids") and P]
+    shares: dict = {}
+    if multi:
+        async for st in sdb.commission_settlements.find(
+                {"journal_entry_id": {"$in": multi}}, {"_id": 0, "journal_entry_id": 1, "commissions": 1}):
+            applied = [(c.get("project_id"), float(c.get("applied") or 0)) for c in st.get("commissions") or []]
+            total = sum(a for _p, a in applied) or 1.0
+            shares[st["journal_entry_id"]] = {pid: a / total for pid, a in applied}
+
+    by_account: dict = {}
+    by_vendor: dict = {}
+    by_project: dict = {}
+    rows = []
+    income = expense = 0.0
+    for e in entries:
+        if P and e.get("project_id") not in P and e.get("project_ids"):
+            share_map = shares.get(e["id"])
+            share = sum(v for k, v in share_map.items() if k in P) if share_map else (
+                len(set(e["project_ids"]) & set(P)) / max(1, len(set(e["project_ids"]))))
+            projects_here = [p for p in e["project_ids"] if p in P]
+        else:
+            share = 1.0
+            projects_here = [e.get("project_id")] if e.get("project_id") else list(e.get("project_ids") or [])
+        e_in = e_out = 0.0
+        for line in e.get("lines") or []:
+            if A and line.get("account_id") not in A:
+                continue
+            kind = line.get("account_type")
+            if kind == "income":
+                amt = (float(line.get("credit") or 0) - float(line.get("debit") or 0)) * share
+                e_in += amt
+            elif kind == "expense":
+                amt = (float(line.get("debit") or 0) - float(line.get("credit") or 0)) * share
+                e_out += amt
+            else:
+                continue
+            key = line.get("account_id")
+            acc = by_account.setdefault(key, {"account_id": key, "account_name": line.get("account_name"),
+                                              "type": kind, "amount": 0.0})
+            acc["amount"] += amt
+            vkey = e.get("vendor_id") or "_none"
+            vrow = by_vendor.setdefault(vkey, {"vendor_id": e.get("vendor_id"),
+                                               "vendor_name": vend_names.get(e.get("vendor_id")) or "No vendor",
+                                               "income": 0.0, "expense": 0.0, "accounts": {}})
+            vrow["income" if kind == "income" else "expense"] += amt
+            vrow["accounts"][line.get("account_name")] = vrow["accounts"].get(line.get("account_name"), 0.0) + amt
+            for pid in projects_here or [None]:
+                pshare = 1.0 / max(1, len(projects_here)) if not shares.get(e["id"]) else (
+                    shares[e["id"]].get(pid, 0) / share if share else 0)
+                prow = by_project.setdefault(pid or "_none", {"project_id": pid,
+                                                              "project_name": proj_names.get(pid) or "No project",
+                                                              "income": 0.0, "expense": 0.0})
+                prow["income" if kind == "income" else "expense"] += amt * pshare
+        if not e_in and not e_out:
+            continue
+        income += e_in
+        expense += e_out
+        rows.append({
+            "id": e["id"], "date": e.get("date"), "narration": e.get("narration"), "source": e.get("source"),
+            "reference": e.get("reference"),
+            "project": ", ".join(filter(None, (proj_names.get(p) for p in projects_here))) or None,
+            "vendor": vend_names.get(e.get("vendor_id")), "client": cli_names.get(e.get("client_id")),
+            "income": round(e_in, 2), "expense": round(e_out, 2), "share": round(share, 4),
+        })
+    rnd = lambda d: {k: (round(v, 2) if isinstance(v, float) else v) for k, v in d.items()}
+    for v in by_vendor.values():
+        v["accounts"] = {k: round(x, 2) for k, x in v["accounts"].items()}
+    return {
+        "period": {"from_date": fd, "to_date": td, "label": label},
+        "filters": {"project_ids": P, "vendor_ids": V, "client_ids": C, "account_ids": A},
+        "totals": {"income": round(income, 2), "expense": round(expense, 2), "net": round(income - expense, 2),
+                   "entries": len(rows)},
+        "by_account": sorted((rnd(a) for a in by_account.values()), key=lambda a: (a["type"], -abs(a["amount"]))),
+        "by_vendor": sorted((rnd(v) for v in by_vendor.values()), key=lambda v: -v["income"]),
+        "by_project": sorted((rnd(p) for p in by_project.values()), key=lambda p: -p["income"]),
+        "entries": rows,
+    }
 
 
 @router.get("/accounting/ledger/project/{project_id}")
@@ -2341,12 +2505,31 @@ async def create_other_receivable(payload: OtherReceivableIn, request: Request,
             {"_id": 0, "id": 1})
         if not account:
             raise HTTPException(status_code=400, detail="Income account is unavailable")
+    if doc.get("invoice_id"):
+        # "From this bill I expect this much": capped at what the invoice has left.
+        invoice = await sdb.invoices.find_one({"id": doc["invoice_id"], "doc_type": {"$ne": "quotation"}}, {"_id": 0})
+        if not invoice or invoice.get("status") in ("draft", "cancelled"):
+            raise HTTPException(status_code=409, detail="Mark the invoice as sent before adding it to Collections Due")
+        planned = 0.0
+        async for receivable in sdb.collection_receivables.find(
+                {"invoice_id": doc["invoice_id"], "status": {"$ne": "cancelled"}},
+                {"_id": 0, "amount": 1}):
+            planned += float(receivable.get("amount") or 0)
+        left = round(float(invoice.get("total") or 0) - float(invoice.get("paid_amount") or 0) - planned, 2)
+        if doc["amount"] > left + 0.01:
+            raise HTTPException(status_code=400, detail=f"Only Rs. {left:,.2f} of this invoice is not yet in Collections Due")
+        doc.setdefault("client_id", invoice.get("client_id"))
+        doc["client_id"] = doc.get("client_id") or invoice.get("client_id")
+        doc["project_id"] = doc.get("project_id") or invoice.get("project_id")
+        doc["reference"] = doc.get("reference") or invoice.get("number")
     doc.update({"id": new_id("recv_"), "received_amount": 0.0, "status": "pending",
                 "created_at": iso_now(), "created_by": user["user_id"],
                 "updated_at": iso_now()})
     await sdb.collection_receivables.insert_one(dict(doc))
     await audit(user, "receivable.create", target=doc["id"], target_type="receivable",
                 meta={"amount": doc["amount"], "due_date": doc.get("due_date")})
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("other_receivable", doc["id"], user["user_id"])
     return doc
 
 
@@ -2384,6 +2567,8 @@ async def update_other_receivable(receivable_id: str, payload: OtherReceivableUp
     await sdb.collection_receivables.update_one({"id": receivable_id}, {"$set": patch})
     await audit(user, "receivable.update", target=receivable_id, target_type="receivable",
                 meta={"fields": sorted(patch.keys())})
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("other_receivable", receivable_id, user["user_id"])
     return await sdb.collection_receivables.find_one({"id": receivable_id}, {"_id": 0})
 
 
@@ -2406,6 +2591,8 @@ async def delete_other_receivable(receivable_id: str, request: Request,
                   "cancelled_by": user["user_id"], "updated_at": iso_now()}},
     )
     await audit(user, "receivable.cancel", target=receivable_id, target_type="receivable")
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("other_receivable", receivable_id)
     return {"ok": True, "cancelled": True}
 
 
@@ -2430,11 +2617,11 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
         from routes.vendors import _receive_commission_locked
         row = await sdb.vendor_commissions.find_one({"id": payload.source_id}, {"_id": 0})
         if not row or row.get("status") in ("cancelled", "reversed"):
-            raise HTTPException(status_code=404, detail="Commission not found")
+            raise HTTPException(status_code=404, detail="Vendor incentive not found")
         outstanding = round(max(0.0, float(row.get("amount") or 0)
                                 - float(row.get("received_amount") or 0)), 2)
         if payload.amount > outstanding + 0.01:
-            raise HTTPException(status_code=400, detail=f"Amount exceeds pending commission ({outstanding:.2f})")
+            raise HTTPException(status_code=400, detail=f"Amount exceeds pending vendor incentive ({outstanding:.2f})")
         bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
         commission_payload = CommissionReceiveIn(
             amount=payload.amount, received_date=payload.date,
@@ -2448,6 +2635,8 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
                 idem=idem or None, request_key=request_key)
         receipt = {**result, "source_type": payload.source_type,
                    "source_id": payload.source_id, "amount": payload.amount}
+        from core.collection_reminders import refresh as refresh_reminders
+        await refresh_reminders("vendor_commission", payload.source_id)
         return receipt
 
     if payload.source_type in ("invoice", "milestone"):
@@ -2491,12 +2680,26 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
             raise HTTPException(status_code=400, detail="Select an active income account")
         receipt_id = (f"cr_{hashlib.sha256(request_key.encode('utf-8')).hexdigest()[:24]}"
                       if request_key else new_id("cr_"))
+        lines = [{"account_id": bank["id"], "debit": payload.amount, "credit": 0,
+                  "description": "Received"},
+                 {"account_id": income["id"], "debit": 0, "credit": payload.amount,
+                  "description": income.get("name")}]
+        if row.get("invoice_id"):
+            # Money for a GST invoice: the GST share of each receipt is owed to
+            # the government, not income (cash basis, in the invoice's proportion).
+            inv = await sdb.invoices.find_one({"id": row["invoice_id"]}, {"_id": 0, "total": 1, "tax": 1})
+            total, tax = float((inv or {}).get("total") or 0), float((inv or {}).get("tax") or 0)
+            if total > 0 and tax > 0:
+                gst = await sdb.accounts.find_one(
+                    {"name": "GST Payable", "type": "liability", "active": {"$ne": False}}, {"_id": 0, "id": 1})
+                gst_part = round(payload.amount * tax / total, 2)
+                if gst and gst_part > 0:
+                    lines[1]["credit"] = round(payload.amount - gst_part, 2)
+                    lines.append({"account_id": gst["id"], "debit": 0, "credit": gst_part,
+                                  "description": "Output GST on amount received"})
         je = await _post_journal(
             user, payload.date, payload.notes or f"Collection received - {row.get('name')}",
-            [{"account_id": bank["id"], "debit": payload.amount, "credit": 0,
-              "description": "Received"},
-             {"account_id": income["id"], "debit": 0, "credit": payload.amount,
-              "description": income.get("name")}],
+            lines,
             reference=payload.reference, project_id=row.get("project_id"),
             client_id=row.get("client_id"), vendor_id=row.get("vendor_id"),
             source="other_receivable_income", source_id=receipt_id,
@@ -2524,7 +2727,9 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
         await audit(user, "receivable.receive", target=payload.source_id,
                     target_type="receivable",
                     meta={"receipt_id": receipt_id, "amount": payload.amount})
-        return receipt
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("other_receivable", payload.source_id)
+    return receipt
 
 
 @router.get("/accounting/receivables")
@@ -2538,15 +2743,28 @@ async def project_receivables(request: Request,
     return await collection_rows()
 
 
+def invoice_collects_money(inv: dict) -> bool:
+    """Legacy invoices (money already recorded on them) are still collected on the invoice."""
+    return float(inv.get("paid_amount") or 0) > 0 or bool(inv.get("accrual_journal_id")) \
+        or inv.get("status") in ("partially_paid", "paid")
+
+
+def _reminder_extra(row: dict) -> dict:
+    return {"reminder_time": row.get("reminder_time"), "remind_before_days": row.get("remind_before_days"),
+            "repeat_every": row.get("repeat_every") or "none"}
+
+
 async def collection_rows() -> dict:
     """Every expected Money In item for the current tenant (no journal side effects)."""
     today = business_today()
     horizon = today + timedelta(days=30)
     milestones = await sdb.payment_milestones.find(
         {"status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(None)
-    invoices = await sdb.invoices.find(
+    # Invoices are documents. Only invoices that already carry money from the
+    # old flow (a receipt or an accrual entry) are still collected on the invoice.
+    invoices = [inv for inv in await sdb.invoices.find(
         {"doc_type": {"$ne": "quotation"}, "status": {"$nin": ["draft", "cancelled"]}},
-        {"_id": 0}).to_list(None)
+        {"_id": 0}).to_list(None) if invoice_collects_money(inv)]
     commissions = await sdb.vendor_commissions.find(
         {"status": {"$nin": ["cancelled", "reversed"]}}, {"_id": 0}).to_list(None)
     other_rows = await sdb.collection_receivables.find(
@@ -2575,7 +2793,8 @@ async def collection_rows() -> dict:
                    project_id: Optional[str] = None, client_id: Optional[str] = None,
                    vendor_id: Optional[str] = None, reference: Optional[str] = None,
                    recognition: Optional[str] = None, income_account_id: Optional[str] = None,
-                   origin: Optional[str] = None, reminder_date: Optional[str] = None):
+                   origin: Optional[str] = None, reminder_date: Optional[str] = None,
+                   extra: Optional[dict] = None):
         project = projects.get(project_id, {})
         status = _collection_status(due_date, amount, received, today, horizon)
         outstanding = round(max(0.0, float(amount or 0) - float(received or 0)), 2)
@@ -2595,10 +2814,10 @@ async def collection_rows() -> dict:
             "outstanding": outstanding, "days_overdue": days_overdue,
             "reference": reference, "recognition": recognition,
             "income_account_id": income_account_id, "origin": origin,
-            "reminder_date": reminder_date,
+            "reminder_date": reminder_date, **(extra or {}),
         })
 
-    billed_milestones = {row.get("milestone_id") for row in invoices if row.get("milestone_id")}
+    billed_milestones = {row.get("milestone_id") for row in invoices if row.get("milestone_id")}   # legacy only
     milestone_names = {row["id"]: row.get("name") for row in milestones}
     for row in milestones:
         if row["id"] in billed_milestones:
@@ -2619,12 +2838,12 @@ async def collection_rows() -> dict:
                    client_id=row.get("client_id"), reference=row.get("number"))
     for row in commissions:
         append_row(source_type="vendor_commission", source_id=row["id"],
-                   name=(f"Commission - {row.get('vendor_name') or vendors.get(row.get('vendor_id')) or 'Vendor'}"),
+                   name=(f"Vendor incentive - {row.get('vendor_name') or vendors.get(row.get('vendor_id')) or 'Vendor'}"),
                    amount=row.get("amount") or 0, received=row.get("received_amount") or 0,
                    due_date=row.get("due_date"), project_id=row.get("project_id"),
                    vendor_id=row.get("vendor_id"), reference=row.get("reference") or row.get("bill_number"),
                    recognition=row.get("recognition") or "earned", origin=row.get("origin"),
-                   reminder_date=row.get("reminder_date"))
+                   reminder_date=row.get("reminder_date"), extra=_reminder_extra(row))
     for row in other_rows:
         append_row(source_type="other_receivable", source_id=row["id"],
                    name=row.get("name") or "Other receivable", amount=row.get("amount") or 0,
@@ -2632,7 +2851,8 @@ async def collection_rows() -> dict:
                    project_id=row.get("project_id"), client_id=row.get("client_id"),
                    vendor_id=row.get("vendor_id"), reference=row.get("reference"),
                    recognition="cash_basis", income_account_id=row.get("income_account_id"),
-                   origin="manual_expected", reminder_date=row.get("reminder_date"))
+                   origin="manual_expected", reminder_date=row.get("reminder_date"),
+                   extra={**_reminder_extra(row), "invoice_id": row.get("invoice_id"), "notes": row.get("notes")})
 
     totals = {key: 0.0 for key in (
         "all", "overdue", "due_today", "upcoming", "later", "no_due_date",
@@ -2868,7 +3088,7 @@ def _evaluate_source_integrity(journals: list, existing_sources: dict,
 _MISMATCH_FIX = {
     "payroll_run": "Employees > employee > Salary: reverse this payment, then pay again from the correct Cash/Bank account.",
     "vendor_payment": "Vendors > vendor > Payments: delete (reverses) this payment, then record it again with the correct account.",
-    "commission_receipt": "Vendors > vendor > Commissions: delete (reverses) this receipt, then record it again with the correct account.",
+    "commission_receipt": "Vendors > vendor > Vendor incentives: delete (reverses) this receipt, then record it again with the correct account.",
     "collection_receipt": "Accounting > Collections Due: reverse this receipt, then record it again with the correct account.",
     "money_in": "Accounting > Daybook: reverse this entry, then enter it again with the correct account.",
     "money_out": "Accounting > Daybook: reverse this entry, then enter it again with the correct account.",
@@ -3131,7 +3351,7 @@ def _cash_flow_bucket(entry: dict, cash_ids: set[str], net: float) -> tuple[str,
         "income": "Direct income receipts",
         "invoice_payment": "Client invoice collections",
         "milestone_payment": "Project milestone collections",
-        "commission_income": "Commission receipts",
+        "commission_income": "Vendor incentive receipts",
         "expense": "Operating expenses",
         "recurring_expense": "Recurring expenses",
         "vendor_payment": "Vendor payments",

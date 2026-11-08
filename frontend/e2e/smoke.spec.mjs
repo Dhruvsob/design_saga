@@ -22,8 +22,7 @@ async function expectRendersCleanly(page, path) {
   const errors = [];
   const onError = (e) => errors.push(String(e).slice(0, 300));
   page.on("pageerror", onError);
-  await page.goto(path);
-  await page.waitForLoadState("networkidle");
+  await page.goto(path, { waitUntil: "domcontentloaded" });
   const main = page.locator("main");
   const rendered = await main.waitFor({ state: "visible", timeout: 20_000 }).then(() => true, () => false);
   page.off("pageerror", onError);
@@ -66,8 +65,7 @@ test.describe("phone layout", () => {
     test.setTimeout(180_000);
     const overflowing = [];
     for (const path of ROUTES) {
-      await page.goto(path);
-      await page.waitForLoadState("networkidle");
+      await page.goto(path, { waitUntil: "domcontentloaded" });
       await page.locator("main").waitFor({ state: "visible", timeout: 20_000 });
       const { sw, vw } = await page.evaluate(() => ({
         sw: document.documentElement.scrollWidth, vw: document.documentElement.clientWidth }));

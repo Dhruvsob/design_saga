@@ -199,7 +199,8 @@ def test_scan_reuses_finance_notifications_for_planned_collections(monkeypatch):
     result = asyncio.run(notification_routes.run_scan("org_a"))
 
     assert result["emitted"]["collection_due"] == 1
-    assert result["emitted"]["collection_reminder"] == 1
+    # reminders now fire at their own date/time (core.collection_reminders), not in the scan
+    assert result["emitted"]["collection_reminder"] == 0
     due = next(row for row in emitted if row["kind"] == "collection_due")
     assert "Dhrumil Bhai" in due["title"]
     assert "4,000" in due["body"]

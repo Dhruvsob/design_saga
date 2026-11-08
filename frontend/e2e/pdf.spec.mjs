@@ -90,7 +90,10 @@ test("invoice preview loads inside the app under production security headers", a
   const csp = fs.readFileSync(fileURLToPath(new URL("../../deploy/nginx.conf", import.meta.url)), "utf8")
     .match(/Content-Security-Policy "([^"]+)"/)[1];
   const context = await browser.newContext({ baseURL, storageState: authFile("admin") });
-  await context.route("**/*", async (route) => {
+  // Apply the production headers only to our own origin. Intercepting remote
+  // font requests makes route.fetch depend on the workstation CA store and
+  // can fail before the application or PDF preview is exercised.
+  await context.route(`${baseURL}/**`, async (route) => {
     const response = await route.fetch();
     await route.fulfill({ response, headers: { ...response.headers(),
       "content-security-policy": csp, "x-frame-options": "DENY" } });

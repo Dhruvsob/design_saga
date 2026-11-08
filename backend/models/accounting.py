@@ -20,12 +20,12 @@ DEFAULT_COA = [
     ("Accounts Payable", "liability", "2001"), ("GST Payable", "liability", "2101"),
     ("TDS Payable", "liability", "2102"), ("Loans", "liability", "2201"),
     ("Employee Payables", "liability", "2301"),
-    ("Commission Advances", "liability", "2302"),
+    ("Vendor Incentive Advances", "liability", "2302"),
     # Income
     ("Consultancy Income", "income", "3001"), ("Design Fees", "income", "3002"),
     ("Site Supervision Fees", "income", "3003"), ("Project Revenue", "income", "3004"),
     ("Interior Revenue", "income", "3005"),
-    ("Vendor Commission Income", "income", "3010"),
+    ("Vendor Incentive Income", "income", "3010"),
     ("Referral Income", "income", "3011"),
     ("Incentive Income", "income", "3012"),
     ("Other Income", "income", "3099"),
@@ -141,6 +141,10 @@ class OtherReceivableIn(FiniteModel):
     reminder_date: Optional[str] = None
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
+    reminder_time: Optional[str] = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    remind_before_days: Optional[int] = Field(default=None, ge=0, le=30)
+    repeat_every: Optional[Literal["none", "daily", "weekly"]] = None
+    invoice_id: Optional[str] = None
 
     @field_validator("due_date", "reminder_date")
     @classmethod
@@ -166,6 +170,10 @@ class OtherReceivableUpdate(FiniteModel):
     reminder_date: Optional[str] = None
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
+    reminder_time: Optional[str] = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    remind_before_days: Optional[int] = Field(default=None, ge=0, le=30)
+    repeat_every: Optional[Literal["none", "daily", "weekly"]] = None
+    invoice_id: Optional[str] = None
 
     @field_validator("due_date", "reminder_date")
     @classmethod

@@ -6,7 +6,7 @@ import { dateForInput, formatDate, roundPaise, statusLabel } from "../lib/format
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import SearchSelect from "../components/SearchSelect";
-import { confirmAction } from "../lib/confirm";
+import { askForm, confirmAction } from "../lib/confirm";
 import PdfPreviewModal from "../components/PdfPreview";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
@@ -29,6 +29,11 @@ export default function Invoices({ docType = "invoice" }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const due = (r) => roundPaise(Math.max(0, Number(r.total || 0) - Number(r.paid_amount || 0)));
+  // Invoices are documents. Only invoices that already carry money from the old
+  // flow are still collected on the invoice; the rest go through Collections Due.
+  const legacyMoney = (r) => Number(r.paid_amount || 0) > 0 || Boolean(r.accrual_journal_id) || ["paid", "partially_paid"].includes(r.status);
+  const [incomeAccounts, setIncomeAccounts] = useState([]);
+  const [planned, setPlanned] = useState({});   // invoice_id -> {planned, received}
   const visibleRows = useMemo(() => rows.filter((r) => {
     if (statusFilter === "unpaid" && !["sent", "overdue", "partially_paid"].includes(r.status)) return false;
     if (statusFilter !== "all" && statusFilter !== "unpaid" && r.status !== statusFilter) return false;
@@ -87,11 +92,63 @@ export default function Invoices({ docType = "invoice" }) {
       api.get("/projects"),
       canRecordPayment ? api.get("/accounts").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
     ]);
+    if (docType === "invoice" && hasPerm("finance.read")) {
+      api.get("/accounting/receivables").then(({ data }) => {
+        const m = {};
+        for (const row of data.rows || []) {
+          if (!row.invoice_id) continue;
+          const x = m[row.invoice_id] || { planned: 0, received: 0 };
+          x.planned += Number(row.amount || 0); x.received += Number(row.received_amount || 0);
+          m[row.invoice_id] = x;
+        }
+        setPlanned(m);
+      }).catch(() => {});
+    }
     setRows(inv.data);
     setLoaded(true);
     setClients(cl.data);
     setProjects(pr.data);
     setAccounts((acc.data || []).filter((row) => row.is_bank || ["Cash", "Petty Cash"].includes(row.name)));
+    setIncomeAccounts((acc.data || []).filter((row) => row.type === "income" && row.active !== false));
+  };
+
+  // "From this bill I expect this much": a separate expected collection, with its
+  // own due date and reminder. The invoice itself never touches the accounts.
+  const addToCollections = async (r) => {
+    const already = planned[r.id]?.planned || 0;
+    const left = roundPaise(Math.max(0, Number(r.total || 0) - Number(r.paid_amount || 0) - already));
+    if (left <= 0) { toast.info("The whole invoice is already in Collections Due"); return; }
+    const consult = incomeAccounts.find((a) => /consult/i.test(a.name)) || incomeAccounts[0];
+    const v = await askForm({
+      title: `Collect from ${r.number}`,
+      body: `${r.client_name || "Client"} · ₹${left.toLocaleString("en-IN")} not yet planned. This adds an expected collection with its reminder; nothing is posted until you record the payment.`,
+      fields: [
+        { name: "amount", label: "Amount you expect (₹)", type: "number", required: true, defaultValue: String(left) },
+        { name: "due_date", label: "Due date", type: "date", defaultValue: r.due_date || "" },
+        { name: "income_account_id", label: "Income account on receipt", required: true, defaultValue: consult?.id || "",
+          options: incomeAccounts.map((a) => ({ value: a.id, label: a.name })) },
+        { name: "reminder_date", label: "Reminder date (optional)", type: "date" },
+        { name: "reminder_time", label: "Reminder time", type: "time", defaultValue: "10:00" },
+        { name: "remind_before_days", label: "Also remind before", defaultValue: "0",
+          options: [{ value: "0", label: "No advance reminder" }, { value: "1", label: "1 day before" }, { value: "2", label: "2 days before" }, { value: "7", label: "1 week before" }] },
+        { name: "repeat_every", label: "Repeat until received", defaultValue: "none",
+          options: [{ value: "none", label: "Don't repeat" }, { value: "daily", label: "Every day" }, { value: "weekly", label: "Every week" }] },
+      ],
+      confirmLabel: "Add to Collections Due",
+    });
+    if (!v) return;
+    try {
+      await api.post("/accounting/receivables", {
+        invoice_id: r.id, amount: Number(v.amount), name: `Invoice ${r.number}`,
+        due_date: v.due_date || undefined, income_account_id: v.income_account_id,
+        reminder_date: v.reminder_date || undefined,
+        reminder_time: v.reminder_date ? (v.reminder_time || "10:00") : undefined,
+        remind_before_days: v.reminder_date ? Number(v.remind_before_days || 0) : undefined,
+        repeat_every: v.reminder_date ? v.repeat_every : undefined,
+      });
+      toast.success(v.reminder_date ? "Added to Collections Due with its reminder" : "Added to Collections Due");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not add to Collections Due"); }
   };
   useEffect(() => { load().catch(() => {}).finally(() => setLoaded(true)); setForm(initialForm(docType)); /* eslint-disable-next-line */ }, [docType]);
 
@@ -229,7 +286,7 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
   return (
     <div className="space-y-6" data-testid={`${docType}s-page`}>
       <PageHero title={docType === "quotation" ? "Quotations" : "Invoices"} count={loaded ? rows.length : undefined}
-        kicker={docType === "quotation" ? undefined : "Invoices are documents. Money is booked only when you record a payment, for the amount actually received."}>
+        kicker={docType === "quotation" ? undefined : "Invoices are documents for your client; the status is just for you. To follow up on money, use ⋮ › Add to Collections Due — reminders and payments live there."}>
         {canCreate && <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(initialForm(docType)); }} className="btn-primary" data-testid={`new-${docType}-btn`}>
           <Plus size={14} /> {showForm ? "Cancel" : `New ${docType}`}
         </button>}
@@ -335,7 +392,7 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
               <Th>Number</Th><Th>Client</Th><Th>Project</Th><Th>Due</Th><Th>Total</Th>
-              {docType === "invoice" && <><Th>Received</Th><Th>Still due</Th></>}
+              {docType === "invoice" && <><Th>In collections</Th><Th>Received</Th></>}
               <Th>Status</Th><Th>Actions</Th>
             </tr>
           </thead>
@@ -348,21 +405,22 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
                 <Td className="font-mono text-xs">{formatDate(r.due_date)}</Td>
                 <Td className="font-mono font-semibold">₹{(r.total || 0).toLocaleString("en-IN")}</Td>
                 {docType === "invoice" && <>
-                  <Td className="font-mono text-[var(--success)]">{Number(r.paid_amount || 0) > 0 ? `₹${Number(r.paid_amount).toLocaleString("en-IN")}` : "—"}</Td>
-                  <Td className="font-mono font-semibold">{["draft", "cancelled"].includes(r.status) ? "—" : `₹${due(r).toLocaleString("en-IN")}`}</Td>
+                  <Td className="font-mono">{planned[r.id]?.planned ? `₹${planned[r.id].planned.toLocaleString("en-IN")}` : "—"}</Td>
+                  <Td className="font-mono text-[var(--success)]">{(Number(r.paid_amount || 0) + (planned[r.id]?.received || 0)) > 0
+                    ? `₹${(Number(r.paid_amount || 0) + (planned[r.id]?.received || 0)).toLocaleString("en-IN")}` : "—"}</Td>
                 </>}
                 <Td>
                   {canUpdate && !["paid", "partially_paid"].includes(r.status) ? <select aria-label="Status" className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>
-                    <option value="draft">draft</option>
-                    <option value="sent">sent</option>
-                    <option value="overdue">overdue</option>
-                    <option value="cancelled">cancelled</option>
+                    <option value="draft">Draft</option>
+                    <option value="sent">Sent to client</option>
+                    {r.status === "overdue" && <option value="overdue">Overdue</option>}
+                    <option value="cancelled">Cancelled</option>
                   </select> : <span className={`status-chip chip-${r.status}`}>{statusLabel(r.status)}</span>}
                 </Td>
                 <Td>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setPreview(r)} className="text-[var(--accent-strong)]" title="Preview"><Eye size={16} /></button>
-                    {docType === "invoice" && canRecordPayment && ["sent", "overdue", "partially_paid"].includes(r.status) && accounts.length > 0 && (
+                    {docType === "invoice" && canRecordPayment && legacyMoney(r) && ["sent", "overdue", "partially_paid"].includes(r.status) && accounts.length > 0 && (
                       <button onClick={() => openPayment(r)} className="text-[var(--success)]" title="Record payment" data-testid={`invoice-pay-${r.id}`}><Money size={16} /></button>
                     )}
                     <RowActions label={`${docType} ${r.number}`} testid={`${docType}-actions-${r.id}`} actions={[
@@ -371,8 +429,11 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
                         hidden: !(docType === "invoice" && hasPerm("*.*") && r.accrual_journal_id && r.accounting_basis !== "cash"
                                   && !["draft", "cancelled"].includes(r.status)),
                         onSelect: () => restateCashBasis(r) },
+                      { label: "Add to Collections Due", icon: Money, testid: `invoice-collect-${r.id}`,
+                        hidden: !(docType === "invoice" && canRemind && hasPerm("finance.create") && !legacyMoney(r) && r.status !== "draft" && r.status !== "cancelled"),
+                        onSelect: () => addToCollections(r) },
                       { label: "Send payment reminder", icon: BellRinging, testid: `invoice-remind-${r.id}`,
-                        hidden: !(docType === "invoice" && canRemind && ["sent", "overdue", "partially_paid"].includes(r.status) && due(r) > 0),
+                        hidden: !(docType === "invoice" && canRemind && legacyMoney(r) && ["sent", "overdue", "partially_paid"].includes(r.status) && due(r) > 0),
                         onSelect: () => startReminder({ source_type: "invoice", source_id: r.id, party: r.client_name, outstanding: due(r),
                                                         due_by: r.due_date && r.due_date > dateForInput(new Date()) ? r.due_date : undefined }) },
                       { label: "Edit", icon: PencilSimple, onSelect: () => startEdit(r), testid: `${docType}-edit-${r.id}`,
@@ -390,9 +451,7 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
             {!loaded && <SkeletonRows cols={docType === "invoice" ? 9 : 7} />}
             {loaded && rows.length === 0 && (
               <EmptyRow cols={docType === "invoice" ? 9 : 7} icon={Receipt} title={`No ${docType}s yet`}
-                hint={docType === "invoice" ? "Bill a client for a project milestone or fee. Money is booked only when you record a payment." : "Create one to send to a client."}
-                actionLabel={canCreate ? `New ${docType}` : undefined}
-                onAction={() => { setShowForm(true); setEditingId(null); setForm(initialForm(docType)); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+                hint={docType === "invoice" ? "Use New invoice above to bill a client for a project milestone or fee. Money is booked only when you record a collection." : "Use New quotation above to create one for a client."} />
             )}
           </tbody>
         </table>{rowsPager}

@@ -48,6 +48,7 @@ jobs:
           tests/test_former_staff.py
           tests/test_staff_visibility.py
           tests/test_money_in.py
+          tests/test_collection_reminders.py
           tests/test_sweep_fixes.py
           tests/test_financial_read_permissions.py
           tests/test_invoice_pdf_format.py
@@ -66,6 +67,7 @@ jobs:
           tests/test_repair_release_safety.py
           tests/test_purchase_safety.py
           tests/test_expense_safety.py
+          tests/test_expense_receipts.py
           tests/test_google_calendar.py
           tests/test_calendar_holiday_permission_revocation.py
           tests/test_notification_safety.py
@@ -73,6 +75,7 @@ jobs:
           tests/test_monitor_safety.py
           tests/test_public_share_safety.py
           tests/test_attendance_safety.py
+          tests/test_site_visits.py
           tests/test_payroll_safety.py
           tests/test_vendor_payment_safety.py
           tests/test_download_safety.py

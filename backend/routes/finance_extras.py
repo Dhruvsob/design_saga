@@ -462,9 +462,9 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     status_label = {"pending": "Pending", "invoiced": "Partially received",
                     "received": "Received", "cancelled": "Cancelled", "reversed": "Reversed"}
     period = f"{_dmy(from_date) if from_date else 'Inception'} to {_dmy(to_date or business_today().isoformat())}"
-    pdf = BrandedPDF(Brand(org), "Commission Statement", vendor.get("name") or "")
+    pdf = BrandedPDF(Brand(org), "Vendor Incentive Statement", vendor.get("name") or "")
     pdf.add_page()
-    draw_letterhead(pdf, "Commission Statement", [
+    draw_letterhead(pdf, "Vendor Incentive Statement", [
         ("Period", period if len(period) <= 24 else _dmy(to_date or business_today().isoformat())),
         ("Generated", _dmy(business_today().isoformat())),
     ])
@@ -483,7 +483,7 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
 
     card_w = CONTENT_W / 3
     y = pdf.get_y()
-    for i, (label, value) in enumerate((("Commission earned", earned), ("Received", received),
+    for i, (label, value) in enumerate((("Incentive earned", earned), ("Received", received),
                                         ("Pending", pending))):
         x = LEFT + i * card_w
         pdf.set_fill_color(*SOFT)
@@ -527,15 +527,15 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
         pdf.ln()
     if not rows:
         pdf.set_text_color(*GREY)
-        pdf.cell(0, 8, "No commission rows in this period.", 0, 1, "C")
+        pdf.cell(0, 8, "No vendor incentive rows in this period.", 0, 1, "C")
 
     body = pdf.to_bytes()
-    filename = f"commission-statement-{(vendor.get('name') or 'vendor').replace(' ', '-').lower()}.pdf"
+    filename = f"vendor-incentive-statement-{(vendor.get('name') or 'vendor').replace(' ', '-').lower()}.pdf"
     return FastAPIResponse(
         content=body,
         media_type="application/pdf",
         headers={"Content-Disposition": content_disposition(
-            "attachment", filename, "commission-statement.pdf")},
+            "attachment", filename, "vendor-incentive-statement.pdf")},
     )
 
 

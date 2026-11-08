@@ -17,6 +17,8 @@ const Tasks = lazy(() => import("./pages/TasksBoard"));
 const TaskDetail = lazy(() => import("./pages/TaskDetail"));
 const Attendance = lazy(() => import("./pages/Attendance"));
 const Holidays = lazy(() => import("./pages/Holidays"));
+const LiveMap = lazy(() => import("./pages/LiveMap"));
+const Payroll = lazy(() => import("./pages/Payroll"));
 const Accounting = lazy(() => import("./pages/Accounting"));
 const Clients = lazy(() => import("./pages/Clients"));
 const ClientDetail = lazy(() => import("./pages/ClientDetail"));
@@ -140,6 +142,8 @@ function AppRouter() {
       <Route path="/vendors/:id" element={<ProtectedShell requirePerm="vendors.read"><VendorDetail /></ProtectedShell>} />
       <Route path="/attendance" element={<ProtectedShell requirePerm="attendance.read"><Attendance /></ProtectedShell>} />
       <Route path="/holidays" element={<ProtectedShell requirePerm="holidays.read"><Holidays /></ProtectedShell>} />
+      <Route path="/live-map" element={<ProtectedShell requirePerm="attendance.approve"><LiveMap /></ProtectedShell>} />
+      <Route path="/payroll" element={<ProtectedShell requirePerm="payroll.read"><Payroll /></ProtectedShell>} />
       <Route path="/accounting" element={<ProtectedShell requirePerm="finance.read"><Accounting /></ProtectedShell>} />
       <Route path="/loans" element={<ProtectedShell requirePerm="loans.read"><Loans /></ProtectedShell>} />
       <Route path="/purchase-orders" element={<ProtectedShell requirePerm="purchase_orders.read"><PurchaseOrders /></ProtectedShell>} />

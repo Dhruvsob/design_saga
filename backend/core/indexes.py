@@ -147,9 +147,17 @@ _INDEXES = [
     ("expenses",           [("org_id", 1), ("status", 1)], {}),
     ("expenses",           [("org_id", 1), ("claimant_id", 1)], {}),
     ("expenses",           [("org_id", 1), ("pending_approver_role", 1)], {}),
+    ("expense_receipts",   [("org_id", 1), ("id", 1)], {}),
+    ("expense_receipts",   [("org_id", 1), ("uploaded_by", 1), ("expense_id", 1)], {}),
     # Geo-fencing
     ("office_locations",   [("org_id", 1), ("kind", 1)], {}),
     ("attendance",         [("org_id", 1), ("date", 1), ("geo_inside", 1)], {}),
+    # Site visits (one open visit per employee; open_key is removed on check-out)
+    ("site_visits",        [("org_id", 1), ("project_id", 1), ("check_in_at", -1)], {}),
+    ("site_visits",        [("org_id", 1), ("date", 1)], {}),
+    ("site_visits",        [("org_id", 1), ("employee_id", 1), ("status", 1)], {}),
+    ("site_visits",        [("open_key", 1)],
+                            {"name": "site_visit_open_unique", "unique": True, "sparse": True}),
 ]
 
 

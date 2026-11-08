@@ -70,7 +70,7 @@ export default function CalendarReminders() {
             description: `${r.start_time || ""}${r.location ? " · " + r.location : ""} · ${when}`,
             icon: <Bell size={16} />,
             duration: 12000,
-            action: { label: "Open", onClick: () => navigate("/calendar") },
+            action: { label: "Open", onClick: () => navigate(r.link || "/calendar") },
           });
           playBeep();
         }

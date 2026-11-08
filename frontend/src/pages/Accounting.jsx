@@ -25,7 +25,7 @@ import { BellRinging } from "@phosphor-icons/react";
 // Journal "source" codes in plain words for the dashboard.
 const SOURCE_LABELS = {
   invoice_issue: "Invoice raised", invoice_payment: "Invoice payment", milestone_payment: "Fee instalment received",
-  other_receivable_income: "Collection received", commission_income: "Vendor commission", payroll: "Salary",
+  other_receivable_income: "Collection received", commission_income: "Vendor incentive", payroll: "Salary",
   payroll_reversal: "Salary reversed", employee_advance: "Staff advance", recurring_expense: "Recurring expense",
   vendor_payment: "Vendor payment", vendor_bill: "Vendor bill", expense: "Expense", income: "Income",
   expense_reimbursement: "Expense claim paid", loan_emi: "Loan EMI", loan_disbursement: "Loan received",
@@ -50,7 +50,7 @@ const TABS = [
   { id: "validation", label: "Health check", Icon: ArrowsClockwise, group: "overview" },
   { id: "income",    label: "Income",    Icon: ArrowDown, group: "in" },
   { id: "receivables", label: "Collections Due", Icon: Money, group: "in" },
-  { id: "commissions", label: "Commissions", Icon: Coins, group: "in" },
+  { id: "commissions", label: "Vendor incentives", Icon: Coins, group: "in" },
   { id: "expense",   label: "Expense",   Icon: ArrowUp, group: "out" },
   { id: "recurring", label: "Recurring", Icon: Repeat, group: "out" },
   { id: "daybook",   label: "Daybook",   Icon: Notebook, group: "books" },
@@ -399,7 +399,7 @@ export default function Accounting() {
 
       {tab === "ledgers" && (
         <LedgersView
-          clients={clients} vendors={vendors}
+          clients={clients} vendors={vendors} accounts={accounts}
           employees={employees} projects={projects}
           fy={fy} fromDate={fromDate} toDate={toDate}
         />
@@ -647,7 +647,7 @@ function CommissionsDashboard({ data, onDownload }) {
                 );
               })}
               {(data.top_vendors || []).length === 0 && (
-                <tr><td colSpan={4} className="p-6 text-center text-[var(--ink-3)]">No commission data yet.</td></tr>
+                <tr><td colSpan={4} className="p-6 text-center text-[var(--ink-3)]">No vendor incentive data yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -656,7 +656,7 @@ function CommissionsDashboard({ data, onDownload }) {
 
       <div className="card-flat">
         <div className="overline mb-3">BY PROJECT</div>
-        {(data.by_project || []).length === 0 && <div className="text-sm text-[var(--ink-3)]">No project-linked commission yet.</div>}
+        {(data.by_project || []).length === 0 && <div className="text-sm text-[var(--ink-3)]">No project-linked vendor incentive yet.</div>}
         {(data.by_project || []).slice(0, 10).map((p) => (
           <div key={p.project_id} className="flex justify-between items-center border-b border-[var(--hover)] py-2 text-sm">
             <a href={`/projects/${p.project_id}`} className="font-semibold hover:text-[var(--accent-strong)]">{p.project_name}</a>
@@ -956,10 +956,15 @@ function SubKPI({ label, value, tint, sub, testid }) {
 }
 
 function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onSaved }) {
+  // The income account the money will land in decides the form: the vendor
+  // incentive account asks for a vendor; anything else asks for a client.
+  const isIncentiveAccount = (id) => /incentive|commission/i.test(incomeAccounts.find((a) => a.id === id)?.name || "");
+  const defaultIncomeId = (incomeAccounts.find((a) => /consult/i.test(a.name)) || incomeAccounts[0])?.id || "";
   const emptyPlan = {
-    type: "vendor_commission", name: "", amount: "", due_date: "",
+    name: "", amount: "", due_date: "",
     vendor_id: "", client_id: "", project_id: "", recognition: "planned",
-    income_account_id: "", reference: "", reminder_date: "", notes: "",
+    income_account_id: defaultIncomeId, reference: "", reminder_date: "", reminder_time: "10:00",
+    remind_before_days: "0", repeat_every: "none", notes: "",
   };
   const [data, setData] = useState(null);
   const [startReminder, reminderModal] = useReminderFlow();
@@ -1026,21 +1031,30 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
         amount: Number(plan.amount), due_date: plan.due_date || undefined,
         project_id: plan.project_id || undefined, reference: plan.reference || undefined,
         reminder_date: plan.reminder_date || undefined, notes: plan.notes || undefined,
+        reminder_time: plan.reminder_date ? (plan.reminder_time || "10:00") : undefined,
+        remind_before_days: plan.reminder_date ? Number(plan.remind_before_days || 0) : undefined,
+        repeat_every: plan.reminder_date ? (plan.repeat_every || "none") : undefined,
       };
-      if (plan.type === "vendor_commission") {
+      const incentive = editingRow ? editingRow.source_type === "vendor_commission" : isIncentiveAccount(plan.income_account_id);
+      if (incentive) {
         const path = `/vendors/${plan.vendor_id}/commissions${editingRow ? `/${editingRow.id}` : ""}`;
         await api[editingRow ? "patch" : "post"](path, {
           ...common, recognition: plan.recognition,
         });
       } else {
         const path = `/accounting/receivables${editingRow ? `/${editingRow.id}` : ""}`;
+        const accountName = incomeAccounts.find((a) => a.id === plan.income_account_id)?.name;
+        const party = clients.find((c) => c.id === plan.client_id)?.name || vendors.find((v) => v.id === plan.vendor_id)?.name;
         await api[editingRow ? "patch" : "post"](path, {
-          ...common, name: plan.name, client_id: plan.client_id || undefined,
+          ...common, name: plan.name || [accountName, party].filter(Boolean).join(" · ") || "Expected collection",
+          client_id: plan.client_id || undefined,
           vendor_id: plan.vendor_id || undefined,
           income_account_id: plan.income_account_id || undefined,
         });
       }
-      toast.success("Collection reminder added - no journal posted");
+      toast.success(plan.reminder_date
+        ? "Saved. The reminder is on the calendar and in Payment Reminders. Nothing posted to accounts."
+        : "Saved to Collections Due. Nothing posted to accounts.");
       setShowPlan(false);
       setEditingRow(null);
       setPlan(emptyPlan);
@@ -1053,12 +1067,16 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
   const editPlan = (row) => {
     setEditingRow(row);
     setPlan({
-      type: row.source_type, name: row.name || "", amount: row.amount,
+      name: row.source_type === "vendor_commission" ? "" : (row.name || ""), amount: row.amount,
       due_date: row.due_date || "", vendor_id: row.vendor_id || "",
       client_id: row.client_id || "", project_id: row.project_id || "",
       recognition: row.recognition === "earned" ? "earned" : "planned",
-      income_account_id: row.income_account_id || "", reference: row.reference || "",
-      reminder_date: row.reminder_date || "", notes: "",
+      income_account_id: row.source_type === "vendor_commission"
+        ? (incomeAccounts.find((a) => /incentive|commission/i.test(a.name))?.id || "")
+        : (row.income_account_id || defaultIncomeId),
+      reference: row.reference || "", reminder_date: row.reminder_date || "",
+      reminder_time: row.reminder_time || "10:00", remind_before_days: String(row.remind_before_days || 0),
+      repeat_every: row.repeat_every || "none", notes: row.notes || "",
     });
     setShowPlan(true);
   };
@@ -1107,7 +1125,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
   ];
   const categories = [
     ["all", "All money in"], ["client", "Client payments"],
-    ["vendor_commission", "Vendor commission"], ["other_receivable", "Other receivables"],
+    ["vendor_commission", "Vendor incentive"], ["other_receivable", "Other receivables"],
   ];
 
   return (
@@ -1134,28 +1152,42 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 
       {showPlan && (
         <form onSubmit={savePlan} className="card-flat space-y-3" data-testid="collection-plan-form">
-          <div className="overline">{editingRow ? "EDIT EXPECTED COLLECTION" : "ADD A REMINDER - THIS DOES NOT POST ACCOUNTING"}</div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <label className="text-xs">Collection type<select disabled={Boolean(editingRow)} className="input-flat mt-1 w-full" value={plan.type} onChange={(e) => setPlan({ ...emptyPlan, type: e.target.value })}><option value="vendor_commission">Vendor commission</option><option value="other_receivable">Other receivable</option></select></label>
-            {plan.type === "vendor_commission" ? (
-              <label className="text-xs">Vendor<SearchSelect required className="input-flat mt-1 w-full" value={plan.vendor_id} onChange={(e) => setPlan({ ...plan, vendor_id: e.target.value })}><option value="">Select vendor</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</SearchSelect></label>
-            ) : (
-              <label className="text-xs">What is due?<input required className="input-flat mt-1 w-full" value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} placeholder="Referral fee, reimbursement…" /></label>
-            )}
-            <label className="text-xs">Expected amount<input required min="0.01" step="0.01" type="number" className="input-flat mt-1 w-full" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: e.target.value })} /></label>
-            <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={plan.due_date} onChange={(e) => setPlan({ ...plan, due_date: e.target.value })} /></label>
-            <label className="text-xs">Project<SearchSelect className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</SearchSelect></label>
-            {plan.type === "vendor_commission" ? (
-              <label className="text-xs">Accounting basis<select className="input-flat mt-1 w-full" value={plan.recognition} onChange={(e) => setPlan({ ...plan, recognition: e.target.value })}><option value="planned">Expected only - not earned yet</option><option value="earned">Already earned - awaiting receipt</option></select></label>
-            ) : <>
-              <label className="text-xs">Related client<SearchSelect className="input-flat mt-1 w-full" value={plan.client_id} onChange={(e) => setPlan({ ...plan, client_id: e.target.value })}><option value="">No client</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</SearchSelect></label>
-              <label className="text-xs">Income account on receipt<SearchSelect className="input-flat mt-1 w-full" value={plan.income_account_id} onChange={(e) => setPlan({ ...plan, income_account_id: e.target.value })}><option value="">Choose when received</option>{incomeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</SearchSelect></label>
-            </>}
-            <label className="text-xs">Reference<input className="input-flat mt-1 w-full" value={plan.reference} onChange={(e) => setPlan({ ...plan, reference: e.target.value })} /></label>
-            <label className="text-xs">Reminder date<input type="date" className="input-flat mt-1 w-full" value={plan.reminder_date} onChange={(e) => setPlan({ ...plan, reminder_date: e.target.value })} /></label>
+          <div className="overline">{editingRow ? "EDIT EXPECTED COLLECTION" : "EXPECTED COLLECTION · NOTHING IS POSTED UNTIL YOU RECORD THE PAYMENT"}</div>
+          {(() => {
+            const incentive = editingRow ? editingRow.source_type === "vendor_commission" : isIncentiveAccount(plan.income_account_id);
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <label className="text-xs">Income account on receipt<SearchSelect required disabled={Boolean(editingRow)} className="input-flat mt-1 w-full" value={plan.income_account_id}
+                  onChange={(e) => setPlan({ ...plan, income_account_id: e.target.value, vendor_id: "", client_id: "" })} data-testid="plan-income-account">
+                  <option value="" disabled>Select income account</option>
+                  {incomeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </SearchSelect></label>
+                {incentive ? (
+                  <label className="text-xs">Vendor<SearchSelect required className="input-flat mt-1 w-full" value={plan.vendor_id} onChange={(e) => setPlan({ ...plan, vendor_id: e.target.value })} data-testid="plan-vendor"><option value="">Select vendor</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</SearchSelect></label>
+                ) : (
+                  <label className="text-xs">Client<SearchSelect className="input-flat mt-1 w-full" value={plan.client_id} onChange={(e) => setPlan({ ...plan, client_id: e.target.value })} data-testid="plan-client"><option value="">No client</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</SearchSelect></label>
+                )}
+                <label className="text-xs">Project<SearchSelect className="input-flat mt-1 w-full" value={plan.project_id} onChange={(e) => setPlan({ ...plan, project_id: e.target.value })}><option value="">No project</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</SearchSelect></label>
+                <label className="text-xs">Expected amount<input required min="0.01" step="0.01" type="number" className="input-flat mt-1 w-full" value={plan.amount} onChange={(e) => setPlan({ ...plan, amount: e.target.value })} data-testid="plan-amount" /></label>
+                {!incentive && <label className="text-xs">What is due? (optional)<input className="input-flat mt-1 w-full" value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} placeholder="e.g. 2nd instalment, referral fee" /></label>}
+                <label className="text-xs">Due date<input type="date" className="input-flat mt-1 w-full" value={plan.due_date} onChange={(e) => setPlan({ ...plan, due_date: e.target.value })} data-testid="plan-due" /></label>
+                <label className="text-xs">Reference<input className="input-flat mt-1 w-full" value={plan.reference} onChange={(e) => setPlan({ ...plan, reference: e.target.value })} /></label>
+              </div>
+            );
+          })()}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-[var(--line-soft)] pt-3" data-testid="plan-reminder">
+            <label className="text-xs">Reminder date<input type="date" className="input-flat mt-1 w-full" value={plan.reminder_date} onChange={(e) => setPlan({ ...plan, reminder_date: e.target.value })} data-testid="plan-reminder-date" /></label>
+            <label className="text-xs">Reminder time<input type="time" disabled={!plan.reminder_date} className="input-flat mt-1 w-full" value={plan.reminder_time} onChange={(e) => setPlan({ ...plan, reminder_time: e.target.value })} data-testid="plan-reminder-time" /></label>
+            <label className="text-xs">Also remind before<select disabled={!plan.reminder_date} className="input-flat mt-1 w-full" value={plan.remind_before_days} onChange={(e) => setPlan({ ...plan, remind_before_days: e.target.value })} data-testid="plan-remind-before">
+              <option value="0">No advance reminder</option><option value="1">1 day before</option><option value="2">2 days before</option><option value="3">3 days before</option><option value="7">1 week before</option>
+            </select></label>
+            <label className="text-xs">Repeat until received<select disabled={!plan.reminder_date} className="input-flat mt-1 w-full" value={plan.repeat_every} onChange={(e) => setPlan({ ...plan, repeat_every: e.target.value })} data-testid="plan-repeat">
+              <option value="none">Don't repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option>
+            </select></label>
+            {plan.reminder_date && <p className="col-span-2 md:col-span-4 text-[11px] text-[var(--ink-3)]">The reminder goes to the calendar (and your connected Google Calendar), Invoices &gt; Payment Reminders, and rings in the ERP at that time. It stops by itself once the money is recorded.</p>}
           </div>
-          <textarea className="input-flat w-full" value={plan.notes} onChange={(e) => setPlan({ ...plan, notes: e.target.value })} placeholder="Reminder notes" />
-          <button className="btn-primary" disabled={saving}>{saving ? "Saving…" : editingRow ? "Save changes" : "Save reminder"}</button>
+          <textarea className="input-flat w-full" value={plan.notes} onChange={(e) => setPlan({ ...plan, notes: e.target.value })} placeholder="Notes" />
+          <button className="btn-primary" disabled={saving} data-testid="plan-save">{saving ? "Saving…" : editingRow ? "Save changes" : "Save to Collections Due"}</button>
         </form>
       )}
 
@@ -1210,9 +1242,10 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
                   <div>{formatDate(row.due_date)}</div>
                   {row.days_overdue > 0 && <div className="text-[10px] text-[var(--danger)]">{row.days_overdue} days overdue</div>}
                 </td>
-                <td className="p-3"><span className="status-chip chip-medium">{(row.source_type || "").replaceAll("_", " ")}</span></td>
+                <td className="p-3"><span className="status-chip chip-medium">{{ vendor_commission: "Vendor incentive", other_receivable: "Expected", invoice: "Invoice", milestone: "Milestone" }[row.source_type] || row.source_type}</span></td>
                 <td className="p-3"><div className="font-semibold">{row.vendor_name || row.client_name || "—"}</div><div className="text-xs text-[var(--ink-2)]">{row.project_name || "No project"}</div></td>
-                <td className="p-3"><div>{row.name || "Collection"}</div>{row.recognition === "planned" && <div className="text-[10px] text-[var(--warning)]">Expected only - not yet earned</div>}</td>
+                <td className="p-3"><div>{row.name || "Collection"}</div>
+                  {row.reminder_date && row.status !== "received" && <div className="text-[10px] text-[var(--ink-3)]" data-testid={`collection-reminder-${row.id}`}>Reminder {formatDate(row.reminder_date)} {row.reminder_time || "10:00"}{row.repeat_every && row.repeat_every !== "none" ? ` · repeats ${row.repeat_every}` : ""}</div>}</td>
                 <td className="p-3"><span className={`status-chip chip-${row.status}`}>{(row.status || "").replaceAll("_", " ")}</span></td>
                 <td className="p-3 text-right font-mono font-semibold">
                   {isHistory ? (
@@ -1768,7 +1801,113 @@ const ENTITY_TYPES = [
   { id: "project",  label: "Project",  endpoint: "/accounting/ledger/project" },
 ];
 
-function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDate }) {
+// Several things at once: e.g. one project + its lighting, fan and ceiling vendors
+// -> how much vendor incentive and consultancy income came from each.
+function MultiPick({ label, options, value, onChange, testid }) {
+  const left = options.filter((o) => !value.includes(o.id));
+  return (
+    <div className="space-y-1" data-testid={testid}>
+      <select className="input-flat w-full text-sm" value="" aria-label={`Add ${label}`}
+        onChange={(e) => e.target.value && onChange([...value, e.target.value])}>
+        <option value="">+ {label}</option>
+        {left.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+      </select>
+      <div className="flex flex-wrap gap-1">
+        {value.map((id) => (
+          <button key={id} type="button" onClick={() => onChange(value.filter((x) => x !== id))}
+            className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--hover)] text-[var(--ink)] hover:bg-[var(--danger-soft)]" title="Remove">
+            {options.find((o) => o.id === id)?.label || id} ×
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CombinedLedger({ clients, vendors, projects, accounts, fy, fromDate, toDate }) {
+  const [sel, setSel] = useState({ project_ids: [], vendor_ids: [], client_ids: [], account_ids: [] });
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const any = Object.values(sel).some((v) => v.length);
+  useEffect(() => {
+    if (!any) { setData(null); return; }
+    const p = new URLSearchParams();
+    Object.entries(sel).forEach(([k, v]) => v.length && p.set(k, v.join(",")));
+    if (fromDate || toDate) { if (fromDate) p.set("from_date", fromDate); if (toDate) p.set("to_date", toDate); }
+    else if (fy) p.set("fy", fy);
+    setLoading(true);
+    api.get(`/accounting/ledger/combined?${p.toString()}`).then(({ data: d }) => setData(d))
+      .catch((e) => toast.error(e?.response?.data?.detail || "Could not load the ledger"))
+      .finally(() => setLoading(false));
+  }, [sel, fy, fromDate, toDate]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const accountCols = data ? [...new Set(data.by_vendor.flatMap((v) => Object.keys(v.accounts)))] : [];
+  const set = (k) => (v) => setSel((s0) => ({ ...s0, [k]: v }));
+  return (
+    <div className="space-y-4" data-testid="combined-ledger">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <MultiPick label="Project" testid="combined-projects" value={sel.project_ids} onChange={set("project_ids")} options={projects.map((x) => ({ id: x.id, label: x.name }))} />
+        <MultiPick label="Vendor" testid="combined-vendors" value={sel.vendor_ids} onChange={set("vendor_ids")} options={vendors.map((x) => ({ id: x.id, label: x.name }))} />
+        <MultiPick label="Client" testid="combined-clients" value={sel.client_ids} onChange={set("client_ids")} options={clients.map((x) => ({ id: x.id, label: x.name }))} />
+        <MultiPick label="Account" testid="combined-accounts" value={sel.account_ids} onChange={set("account_ids")}
+          options={accounts.filter((a) => ["income", "expense"].includes(a.type) && a.active !== false).map((a) => ({ id: a.id, label: a.name }))} />
+      </div>
+      <p className="text-[11px] text-[var(--ink-3)]">Pick any mix: a project plus several vendors shows what each vendor brought in on that project. Choices of the same kind are added together; different kinds narrow the result.</p>
+      {!any && <div className="text-sm text-[var(--ink-3)] py-6 text-center border border-dashed border-[var(--line)]">Choose at least one project, vendor, client or account.</div>}
+      {loading && <div className="overline">LOADING…</div>}
+      {data && !loading && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <KPI label="Income" value={CURRENCY(data.totals.income)} Icon={ArrowDown} tint="#1D633E" />
+            <KPI label="Expense" value={CURRENCY(data.totals.expense)} Icon={ArrowUp} tint="#B22B22" />
+            <KPI label="Net" value={CURRENCY(data.totals.net)} Icon={ChartLine} tint="#0A0A0A" />
+          </div>
+          {data.by_vendor.length > 0 && (
+            <div className="border border-[var(--line)] overflow-x-auto">
+              <table className="w-full text-sm" data-testid="combined-by-vendor">
+                <thead className="bg-[var(--surface-2)]"><tr className="overline text-left">
+                  <th className="p-2">By vendor</th>{accountCols.map((c) => <th key={c} className="p-2 text-right">{c}</th>)}<th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th>
+                </tr></thead>
+                <tbody>{data.by_vendor.map((v) => (
+                  <tr key={v.vendor_id || "none"} className="border-t border-[var(--line-soft)]">
+                    <td className="p-2 font-semibold">{v.vendor_name}</td>
+                    {accountCols.map((c) => <td key={c} className="p-2 text-right tabular-nums">{v.accounts[c] ? CURRENCY(v.accounts[c]) : "—"}</td>)}
+                    <td className="p-2 text-right tabular-nums text-[var(--success)]">{CURRENCY(v.income)}</td>
+                    <td className="p-2 text-right tabular-nums">{v.expense ? CURRENCY(v.expense) : "—"}</td>
+                  </tr>))}</tbody>
+              </table>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border border-[var(--line)]"><table className="w-full text-sm" data-testid="combined-by-project">
+              <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">By project</th><th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th></tr></thead>
+              <tbody>{data.by_project.map((x) => <tr key={x.project_id || "none"} className="border-t border-[var(--line-soft)]"><td className="p-2">{x.project_name}</td><td className="p-2 text-right tabular-nums">{CURRENCY(x.income)}</td><td className="p-2 text-right tabular-nums">{x.expense ? CURRENCY(x.expense) : "—"}</td></tr>)}</tbody>
+            </table></div>
+            <div className="border border-[var(--line)]"><table className="w-full text-sm" data-testid="combined-by-account">
+              <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">By account</th><th className="p-2 text-right">Amount</th></tr></thead>
+              <tbody>{data.by_account.map((x) => <tr key={x.account_id} className="border-t border-[var(--line-soft)]"><td className="p-2">{x.account_name}<span className="text-[10px] text-[var(--ink-3)] ml-1">{x.type}</span></td><td className="p-2 text-right tabular-nums">{CURRENCY(x.amount)}</td></tr>)}</tbody>
+            </table></div>
+          </div>
+          <div className="border border-[var(--line)] overflow-x-auto"><table className="w-full text-sm min-w-[720px]">
+            <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">Date</th><th className="p-2">Entry</th><th className="p-2">Project</th><th className="p-2">Vendor / client</th><th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th></tr></thead>
+            <tbody>{data.entries.map((e) => (
+              <tr key={e.id} className="border-t border-[var(--line-soft)]">
+                <td className="p-2 text-xs whitespace-nowrap">{formatDate(e.date)}</td>
+                <td className="p-2"><div>{e.narration}</div><div className="text-[10px] text-[var(--ink-3)]">{sourceLabel(e.source)}{e.share < 1 ? ` · ${Math.round(e.share * 100)}% of this receipt is for the chosen project(s)` : ""}</div></td>
+                <td className="p-2 text-xs">{e.project || "—"}</td>
+                <td className="p-2 text-xs">{e.vendor || e.client || "—"}</td>
+                <td className="p-2 text-right tabular-nums">{e.income ? CURRENCY(e.income) : "—"}</td>
+                <td className="p-2 text-right tabular-nums">{e.expense ? CURRENCY(e.expense) : "—"}</td>
+              </tr>))}
+              {data.entries.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-[var(--ink-3)]">Nothing booked for this selection in this period.</td></tr>}
+            </tbody>
+          </table></div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LedgersView({ clients, vendors, employees, projects, accounts = [], fy, fromDate, toDate }) {
   const [entityType, setEntityType] = useState("client");
   const [entityId, setEntityId] = useState("");
   const [ledger, setLedger] = useState(null);
@@ -1784,7 +1923,7 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
   useEffect(() => { setEntityId(""); setLedger(null); }, [entityType]);
 
   useEffect(() => {
-    if (!entityId) { setLedger(null); return; }
+    if (!entityId || entityType === "combined") { setLedger(null); return; }
     const cfg = ENTITY_TYPES.find((e) => e.id === entityType);
     const params = new URLSearchParams();
     if (fromDate || toDate) {
@@ -1813,8 +1952,12 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
               className={`px-3 py-1.5 text-xs ${entityType === e.id ? "bg-[var(--accent)] text-white" : "text-[var(--ink-2)] hover:bg-[var(--hover)]"}`}
             >{e.label}</button>
           ))}
+          <button onClick={() => setEntityType("combined")} data-testid="ledger-type-combined"
+            className={`px-3 py-1.5 text-xs ${entityType === "combined" ? "bg-[var(--accent)] text-white" : "text-[var(--ink-2)] hover:bg-[var(--hover)]"}`}>
+            Combined
+          </button>
         </div>
-        <select aria-label="Entity id"
+        {entityType !== "combined" && <select aria-label="Entity id"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
           className="border border-[var(--line)] px-3 py-1.5 text-sm bg-white min-w-[280px]"
@@ -1822,8 +1965,12 @@ function LedgersView({ clients, vendors, employees, projects, fy, fromDate, toDa
         >
           <option value="">Select {ENTITY_TYPES.find((e) => e.id === entityType)?.label}…</option>
           {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
+        </select>}
       </div>
+      {entityType === "combined" && (
+        <CombinedLedger clients={clients} vendors={vendors} projects={projects} accounts={accounts}
+          fy={fy} fromDate={fromDate} toDate={toDate} />
+      )}
 
       {loading && <div className="overline">LOADING LEDGER…</div>}
       {!loading && !ledger && entityId && <div className="text-sm text-[var(--ink-3)]">No data.</div>}

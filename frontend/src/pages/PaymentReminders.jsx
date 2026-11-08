@@ -82,7 +82,9 @@ export default function PaymentReminders() {
                   <td className="p-3 font-mono font-semibold">{r.number}<div className="text-[10px] font-normal text-[var(--ink-3)]">{formatDate(r.created_at)}</div></td>
                   <td className="p-3"><div className="font-semibold">{r.party_name || "—"}</div><div className="text-xs text-[var(--ink-2)]">{r.project_name || "No project"}</div></td>
                   <td className="p-3"><Link to={linkFor(r)} className="text-[var(--accent-strong)] hover:underline">{r.title || "Collection"}</Link></td>
-                  <td className="p-3 text-xs">{formatDate(r.due_by)}</td>
+                  <td className="p-3 text-xs">{formatDate(r.due_by)}
+                    {r.reminder_date && <div className="text-[10px] text-[var(--ink-3)]">Reminder {formatDate(r.reminder_date)} {r.reminder_time || ""}</div>}
+                    {r.auto && <div className="text-[10px] text-[var(--ink-3)]">From Collections Due</div>}</td>
                   <td className="p-3 text-right tabular-nums">{inr(r.amount_due)}</td>
                   <td className="p-3 text-right tabular-nums font-semibold">{inr(r.outstanding_now)}</td>
                   <td className="p-3"><span className={`status-chip ${chip}`}>{label}</span></td>

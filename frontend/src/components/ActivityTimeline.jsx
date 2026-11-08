@@ -12,7 +12,11 @@ const ACTION_LABELS = {
   "client.archive": "archived this client",
   "client.restore": "restored this client",
   "lead.convert": "converted the lead",
+  "project.site_visit": "checked in on site",
+  "project.site_visit_end": "finished a site visit",
 };
+
+const GEO_NOTE = { outside: "outside the site fence", no_fence: "site location not set" };
 
 const ACTION_COLORS = {
   create: "#1D633E", update: "#8B7F6A", stage_change: "#8B7F6A",
@@ -66,6 +70,10 @@ export default function ActivityTimeline({ entityType, entityId }) {
                     <span className="font-semibold">{r.actor_email?.split("@")[0] || "someone"}</span>{" "}
                     <span className="text-[var(--ink-2)]">{ACTION_LABELS[r.action] || r.action}</span>
                     {r.meta?.stage && <span className="ml-1 font-mono text-xs text-[var(--accent-strong)]">→ {r.meta.stage}</span>}
+                    {GEO_NOTE[r.meta?.geo_status] && <span className="ml-1 text-xs text-[var(--warning)]">· {GEO_NOTE[r.meta.geo_status]}</span>}
+                    {r.action === "project.site_visit_end" && r.meta?.photos > 0 && (
+                      <span className="ml-1 text-xs text-[var(--ink-3)]">· {r.meta.photos} photo{r.meta.photos === 1 ? "" : "s"}</span>
+                    )}
                   </div>
                   {r.meta?.fields && (
                     <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-3)] mt-0.5">

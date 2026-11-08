@@ -15,7 +15,13 @@ Workflow
                       ▼
          Auto JE:  DR Expense category    CR Bank/Cash
 """
-from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+import logging
+import re
+from datetime import timedelta
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, Request, Cookie, Header, UploadFile, File
+from fastapi.responses import FileResponse
 from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import date as _date
@@ -23,7 +29,7 @@ from datetime import date as _date
 from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
-from core.helpers import business_today, iso_now, new_id
+from core.helpers import business_today, iso, iso_now, new_id, now_utc
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
@@ -31,11 +37,22 @@ from core.audit import audit
 from core.locks import doc_lock
 from core.finance import require_asset_account
 from models.expense import (
-    ExpenseCreateIn, ApprovalDecisionIn, ReimburseIn, ExpensePolicyIn,
+    ExpenseCreateIn, ExpenseLineIn, ApprovalDecisionIn, ReimburseIn, ExpensePolicyIn,
 )
+from services.local_files import remove_upload, resolve_storage_key, save_upload
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Receipts are photos or PDFs only (no Word/Excel/CSV), checked by content as
+# well as extension in services.local_files.
+RECEIPT_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
+RECEIPT_ID_RE = re.compile(r"rcpt_[a-f0-9]{12}")
+# Receipts uploaded on the form but never saved on a claim are removed after
+# this many days, the next time the same person uploads one.
+RECEIPT_UNUSED_DAYS = 3
+MAX_RECEIPTS_PER_CLAIM = 25
 
 EXPENSE_STATUSES = {
     "receipt_required", "pending_l1", "pending_l2", "approved", "rejected", "reimbursed",
@@ -154,6 +171,208 @@ async def approvers(request: Request,
 
 
 # ------------------------------------------------------------
+# Receipt files (photo or PDF per claim line)
+# ------------------------------------------------------------
+def _receipt_url(receipt_id: str) -> str:
+    return f"/api/expenses/receipts/{receipt_id}/content"
+
+
+def _receipt_meta(receipt: dict) -> dict:
+    """What a claim line (and the browser) needs to show an attached receipt."""
+    return {
+        "id": receipt["id"], "url": _receipt_url(receipt["id"]),
+        "original_name": receipt.get("original_name") or "receipt",
+        "content_type": receipt.get("content_type"), "size": receipt.get("size"),
+    }
+
+
+async def _purge_unused_receipts(user: dict) -> None:
+    """Remove this person's own receipts that were uploaded but never saved on a claim."""
+    cutoff = iso(now_utc() - timedelta(days=RECEIPT_UNUSED_DAYS))
+    try:
+        rows = await sdb.expense_receipts.find(
+            {"uploaded_by": user["user_id"], "expense_id": None,
+             "created_at": {"$lt": cutoff}},
+            {"_id": 0, "id": 1, "storage_key": 1}).to_list(50)
+        for row in rows:
+            result = await sdb.expense_receipts.delete_one(
+                {"id": row["id"], "uploaded_by": user["user_id"], "expense_id": None})
+            if getattr(result, "deleted_count", 0) == 1:
+                remove_upload(row.get("storage_key"))
+    except Exception:
+        # Housekeeping must never block a new upload.
+        logger.exception("Unused expense receipt cleanup failed")
+
+
+@router.post("/expenses/receipts")
+async def upload_receipt(request: Request, upload: UploadFile = File(...),
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    """Store one receipt photo/PDF and return the reference a claim line carries."""
+    user = await require_user(request, session_token, authorization)
+    _require_expense_permission(user, "expenses.create", "expenses.update")
+    if Path(upload.filename or "").suffix.lower() not in RECEIPT_EXTENSIONS:
+        raise HTTPException(422, "A receipt must be a photo (JPG, PNG or WebP) or a PDF")
+    await _purge_unused_receipts(user)
+    try:
+        stored = await save_upload(upload, user_org_id(user))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except OSError as exc:
+        logger.exception("Expense receipt storage failed")
+        raise HTTPException(503, "File storage is unavailable") from exc
+
+    receipt_id = new_id("rcpt_")
+    doc = {
+        "id": receipt_id, "uploaded_by": user["user_id"],
+        "uploaded_by_name": user.get("name"), "expense_id": None,
+        "created_at": iso_now(), **stored,
+    }
+    try:
+        await sdb.expense_receipts.insert_one(dict(doc))
+    except Exception:
+        remove_upload(stored["storage_key"])
+        raise
+    await audit(user, "expense.receipt_upload", target=receipt_id,
+                target_type="expense_receipt",
+                meta={"size": stored["size"], "sha256": stored["sha256"],
+                      "content_type": stored["content_type"]})
+    return _receipt_meta(doc)
+
+
+async def _viewable_receipt(user: dict, receipt_id: str) -> dict:
+    """The uploader, or anyone who can see the claim it is attached to."""
+    if not RECEIPT_ID_RE.fullmatch(receipt_id or ""):
+        raise HTTPException(404, "Receipt not found")
+    receipt = await sdb.expense_receipts.find_one({"id": receipt_id}, {"_id": 0})
+    if not receipt:
+        raise HTTPException(404, "Receipt not found")
+    if receipt.get("uploaded_by") == user.get("user_id"):
+        return receipt
+    if receipt.get("expense_id"):
+        claim = await sdb.expenses.find_one(
+            _visible_expense_query(user, {"id": receipt["expense_id"]}),
+            {"_id": 0, "id": 1, "lines": 1})
+        if claim and any(line.get("receipt_file_id") == receipt_id
+                         for line in claim.get("lines") or []):
+            return receipt
+    raise HTTPException(404, "Receipt not found")
+
+
+@router.get("/expenses/receipts/{receipt_id}/content")
+async def receipt_content(receipt_id: str, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require_expense_permission(
+        user, "expenses.read", "expenses.create", "expenses.update",
+        "expenses.approve", "finance.read")
+    receipt = await _viewable_receipt(user, receipt_id)
+    try:
+        path = resolve_storage_key(receipt.get("storage_key") or "")
+    except ValueError as exc:
+        raise HTTPException(404, "Receipt not found") from exc
+    if not path.is_file():
+        raise HTTPException(404, "The receipt file is no longer on the server")
+    media_type = receipt.get("content_type") or "application/octet-stream"
+    inline = media_type == "application/pdf" or media_type.startswith("image/")
+    return FileResponse(
+        path, media_type=media_type,
+        filename=receipt.get("original_name") or "receipt",
+        content_disposition_type="inline" if inline else "attachment",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.delete("/expenses/receipts/{receipt_id}")
+async def delete_receipt(receipt_id: str, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    """Discard a receipt you uploaded on the form but have not saved on a claim."""
+    user = await require_user(request, session_token, authorization)
+    _require_expense_permission(user, "expenses.create", "expenses.update")
+    if not RECEIPT_ID_RE.fullmatch(receipt_id or ""):
+        raise HTTPException(404, "Receipt not found")
+    receipt = await sdb.expense_receipts.find_one(
+        {"id": receipt_id, "uploaded_by": user["user_id"]}, {"_id": 0})
+    if not receipt:
+        raise HTTPException(404, "Receipt not found")
+    if receipt.get("expense_id"):
+        raise HTTPException(409, "This receipt is on a saved claim. Edit the claim to remove it.")
+    result = await sdb.expense_receipts.delete_one(
+        {"id": receipt_id, "uploaded_by": user["user_id"], "expense_id": None})
+    if getattr(result, "deleted_count", 0) != 1:
+        raise HTTPException(409, "This receipt was just saved on a claim. Refresh and retry.")
+    remove_upload(receipt.get("storage_key"))
+    await audit(user, "expense.receipt_delete", target=receipt_id,
+                target_type="expense_receipt", meta={"size": receipt.get("size")})
+    return {"ok": True}
+
+
+async def _resolve_line_receipts(user: dict, lines: List[ExpenseLineIn],
+                                 expense_id: str) -> dict:
+    """Check every receipt a claim refers to; return them by id.
+
+    A receipt may be used only on the claim it is already attached to, or —
+    if not attached yet — by the person who uploaded it. That stops one claim
+    re-using another person's or another claim's receipt.
+    """
+    ids = sorted({line.receipt_file_id for line in lines if line.receipt_file_id})
+    if not ids:
+        return {}
+    if len(ids) > MAX_RECEIPTS_PER_CLAIM:
+        raise HTTPException(400, f"A claim can carry at most {MAX_RECEIPTS_PER_CLAIM} receipts")
+    rows = await sdb.expense_receipts.find(
+        {"id": {"$in": ids}}, {"_id": 0}).to_list(len(ids))
+    by_id = {row["id"]: row for row in rows}
+    for receipt_id in ids:
+        receipt = by_id.get(receipt_id)
+        if not receipt:
+            raise HTTPException(400, "A receipt on this claim was not found. Attach it again.")
+        attached_to = receipt.get("expense_id")
+        if attached_to == expense_id:
+            continue
+        if attached_to:
+            raise HTTPException(409, "A receipt on this claim is already on another claim.")
+        if receipt.get("uploaded_by") != user.get("user_id"):
+            raise HTTPException(403, "You can only attach receipts you uploaded yourself.")
+    return by_id
+
+
+async def _claim_receipts(user: dict, receipts: dict, expense_id: str) -> List[str]:
+    """Attach not-yet-attached receipts to `expense_id`; returns the ids it attached."""
+    new_ids = sorted(rid for rid, row in receipts.items() if row.get("expense_id") != expense_id)
+    if not new_ids:
+        return []
+    result = await sdb.expense_receipts.update_many(
+        {"id": {"$in": new_ids}, "uploaded_by": user["user_id"], "expense_id": None},
+        {"$set": {"expense_id": expense_id, "attached_at": iso_now()}})
+    if result.modified_count != len(new_ids):
+        await _release_receipts(expense_id, new_ids)
+        raise HTTPException(409, "A receipt was saved on another claim at the same moment. Refresh and retry.")
+    return new_ids
+
+
+async def _release_receipts(expense_id: str, receipt_ids: List[str]) -> None:
+    if receipt_ids:
+        await sdb.expense_receipts.update_many(
+            {"id": {"$in": list(receipt_ids)}, "expense_id": expense_id},
+            {"$set": {"expense_id": None, "attached_at": None}})
+
+
+def _line_has_receipt(line: ExpenseLineIn) -> bool:
+    return bool(line.receipt_url or line.receipt_file_id)
+
+
+def _line_row(line: ExpenseLineIn, receipts: dict) -> dict:
+    row = line.model_dump()
+    row["id"] = new_id("expl_")
+    row["receipt_file"] = (_receipt_meta(receipts[line.receipt_file_id])
+                           if line.receipt_file_id else None)
+    return row
+
+
+# ------------------------------------------------------------
 # Expense CRUD
 # ------------------------------------------------------------
 @router.get("/expenses")
@@ -259,6 +478,8 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
         if l.category not in allowed:
             raise HTTPException(400, f"Category '{l.category}' not allowed by policy")
 
+    exp_id = new_id("exp_")
+    receipts = await _resolve_line_receipts(user, payload.lines, exp_id)
     subtotal = 0.0
     tax = 0.0
     has_receipt = False
@@ -267,17 +488,12 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
         amt = float(l.amount)
         subtotal += amt
         tax += amt * float(l.tax_rate or 0) / 100.0
-        if l.receipt_url:
-            has_receipt = True
-        d = l.dict()
-        d["id"] = new_id("expl_")
-        lines_out.append(d)
+        has_receipt = has_receipt or _line_has_receipt(l)
+        lines_out.append(_line_row(l, receipts))
     total = round(subtotal + tax, 2)
     if total <= 0:
         raise HTTPException(400, "Expense total must be greater than zero")
     # Double-click / retry guard: identical claim from the same user within 30s.
-    from datetime import timedelta
-    from core.helpers import now_utc, iso
     recent = await sdb.expenses.find_one({
         "claimant_id": user["user_id"], "title": payload.title.strip(), "total": total,
         "created_at": {"$gte": iso(now_utc() - timedelta(seconds=30))},
@@ -285,7 +501,6 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
     if recent:
         raise HTTPException(409, "An identical expense was just submitted. Check your claims before resubmitting.")
     route = _decide_route(total, has_receipt, policy)
-    exp_id = new_id("exp_")
     doc = {
         "id": exp_id,
         "org_id": user_org_id(user),
@@ -320,8 +535,19 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
             "comment": f"Auto-approved (below ₹{policy['auto_approve_below']})",
         })
     try:
+        attached = await _claim_receipts(user, receipts, exp_id)
+    except HTTPException:
+        # A retry of the same request (same idempotency key) that is still in
+        # flight holds these receipts; answer with that claim instead.
+        if idem:
+            prior = await sdb.expenses.find_one({"request_key": request_key}, {"_id": 0})
+            if prior:
+                return prior
+        raise
+    try:
         await sdb.expenses.insert_one(dict(doc))
     except DuplicateKeyError:
+        await _release_receipts(exp_id, attached)
         if idem:
             prior = await sdb.expenses.find_one(
                 {"$or": [{"request_key": request_key},
@@ -330,8 +556,12 @@ async def submit_expense(payload: ExpenseCreateIn, request: Request,
             if prior:
                 return prior
         raise HTTPException(409, "This expense request was already submitted")
+    except Exception:
+        await _release_receipts(exp_id, attached)
+        raise
     await audit(user, "expense.submit", target=exp_id, target_type="expense",
-                meta={"title": doc["title"], "total": total, "status": doc["status"]})
+                meta={"title": doc["title"], "total": total, "status": doc["status"],
+                      "receipts": len(receipts)})
     return doc
 
 
@@ -340,8 +570,10 @@ def _can_change_expense(user: dict, exp: dict) -> bool:
             or has_any_permission(user, "*.*", "expenses.update"))
 
 
-async def _validated_expense_values(payload: ExpenseCreateIn, user: dict) -> dict:
+async def _validated_expense_values(payload: ExpenseCreateIn, user: dict,
+                                    receipts: Optional[dict] = None) -> dict:
     """Validate editable claim data and rebuild its derived totals/status."""
+    receipts = receipts or {}
     policy = await _get_policy(user)
     if payload.project_id and not await sdb.projects.find_one(
             {"id": payload.project_id}, {"_id": 1}):
@@ -364,10 +596,10 @@ async def _validated_expense_values(payload: ExpenseCreateIn, user: dict) -> dic
         amount = float(line.amount)
         subtotal += amount
         tax += amount * float(line.tax_rate or 0) / 100.0
-        has_receipt = has_receipt or bool(line.receipt_url)
-        row = line.model_dump()
-        row["id"] = new_id("expl_")
-        lines.append(row)
+        has_receipt = has_receipt or _line_has_receipt(line)
+        if line.receipt_file_id and line.receipt_file_id not in receipts:
+            raise HTTPException(400, "A receipt on this claim was not found. Attach it again.")
+        lines.append(_line_row(line, receipts))
     total = round(subtotal + tax, 2)
     if total <= 0:
         raise HTTPException(400, "Expense total must be greater than zero")
@@ -402,19 +634,31 @@ async def update_expense(exp_id: str, payload: ExpenseCreateIn, request: Request
                 409,
                 "Posted or cancelled expenses cannot be edited. Cancel the reimbursement and submit a corrected claim.",
             )
-        values = await _validated_expense_values(payload, user)
+        receipts = await _resolve_line_receipts(user, payload.lines, exp_id)
+        values = await _validated_expense_values(payload, user, receipts)
         values.update({
             "approval_trail": [], "approved_at": None, "rejected_at": None,
             "updated_at": iso_now(), "updated_by": user["user_id"],
             "resubmitted_at": iso_now(),
         })
-        result = await sdb.expenses.update_one(
-            {"id": exp_id, "status": exp.get("status")}, {"$set": values})
+        attached = await _claim_receipts(user, receipts, exp_id)
+        try:
+            result = await sdb.expenses.update_one(
+                {"id": exp_id, "status": exp.get("status")}, {"$set": values})
+        except Exception:
+            await _release_receipts(exp_id, attached)
+            raise
         if result.matched_count != 1:
+            await _release_receipts(exp_id, attached)
             raise HTTPException(409, "Expense changed while it was being edited. Refresh and retry.")
+        # Receipts taken off the claim in this edit go back to their uploader
+        # (and are cleaned up later if never used again).
+        await sdb.expense_receipts.update_many(
+            {"expense_id": exp_id, "id": {"$nin": sorted(receipts)}},
+            {"$set": {"expense_id": None, "attached_at": None}})
         await audit(user, "expense.update", target=exp_id, target_type="expense",
                     meta={"old_total": exp.get("total"), "new_total": values["total"],
-                          "status": values["status"]})
+                          "status": values["status"], "receipts": len(receipts)})
         return await sdb.expenses.find_one({"id": exp_id}, {"_id": 0, "_lock": 0, "_lock_at": 0})
 
 

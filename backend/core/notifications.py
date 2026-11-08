@@ -43,6 +43,7 @@ VALID_KINDS = {
     "attendance_pending", "attendance_decided", "payroll_due",
     "account_approved", "account_rejected",
     "meeting", "reminder",
+    "collection_reminder", "collection_due", "collection_overdue",
     "info",
 }
 
@@ -55,6 +56,7 @@ NOTIFICATION_CATEGORY_BY_KIND = {
     "leave_request": "attendance", "leave_decided": "attendance",
     "attendance_pending": "attendance", "attendance_decided": "attendance",
     "meeting": "calendar", "reminder": "calendar",
+    "collection_reminder": "finance", "collection_due": "finance", "collection_overdue": "finance",
 }
 
 # Account state messages must always reach the affected user.

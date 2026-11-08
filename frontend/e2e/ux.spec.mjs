@@ -264,7 +264,8 @@ test("geofence map loads keyless colour tiles and a drawn pin", async ({ page },
   const blocked = [];
   page.on("request", (r) => { if (r.url().includes("cartocdn")) blocked.push(r.url()); });
   await page.goto("/attendance");
-  await page.getByTestId("tab-geo").click();
+  await page.getByTestId("tab-settings").click();                     // geofence + policy live under Settings
+  await page.getByTestId("settings-section-policy").click();
   const map = page.getByTestId("geofence-map");
   await expect(map).toBeVisible();
   await map.click({ position: { x: 200, y: 150 } });                     // drop the pin

@@ -24,6 +24,7 @@ const INR_D = (n) =>
 
 // Tabs available per business mode. Consultancy stays commission-focused;
 // Turnkey unlocks the procurement side (bills + payments + full A/P ledger).
+const TAB_LABELS = { commissions: "incentives", commercial: "incentive terms" };
 const CONSULTANCY_TABS = ["overview", "commercial", "commissions", "projects", "documents", "performance"];
 const TURNKEY_TABS     = ["overview", "commercial", "ledger", "bills", "payments", "commissions", "projects", "documents", "performance"];
 
@@ -144,14 +145,14 @@ export default function VendorDetail() {
     } finally { setBusy(false); }
   };
   const reverseCommissionReceipt = async (receipt) => {
-    if (!await confirmAction(`Delete this ${INR_D(receipt.amount)} commission receipt?\n\nA balanced reversal will preserve the audit trail and correct all commission totals.`)) return;
+    if (!await confirmAction(`Delete this ${INR_D(receipt.amount)} vendor incentive receipt?\n\nA balanced reversal will preserve the audit trail and correct all vendor incentive totals.`)) return;
     setBusy(true);
     try {
       await api.delete(`/commission-settlements/${receipt.id}`);
       await refreshCommissions();
-      toast.success("Commission receipt deleted with accounting reversal");
+      toast.success("Vendor incentive receipt deleted with accounting reversal");
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Could not delete commission receipt");
+      toast.error(error?.response?.data?.detail || "Could not delete vendor incentive receipt");
     } finally { setBusy(false); }
   };
   const updateCommissionReceiptMetadata = async (receiptId, patch) => {
@@ -159,18 +160,18 @@ export default function VendorDetail() {
     try {
       await api.patch(`/commission-settlements/${receiptId}`, patch);
       await refreshCommissions();
-      toast.success("Commission receipt reference and notes updated");
+      toast.success("Vendor incentive receipt reference and notes updated");
     } finally { setBusy(false); }
   };
   const cancelExpectedCommission = async (row) => {
-    if (!await confirmAction("Cancel this expected commission? No posted accounting will be deleted.")) return;
+    if (!await confirmAction("Cancel this expected vendor incentive? No posted accounting will be deleted.")) return;
     setBusy(true);
     try {
       await api.delete(`/vendors/${id}/commissions/${row.id}`);
       await refreshCommissions();
-      toast.success("Expected commission cancelled");
+      toast.success("Expected vendor incentive cancelled");
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Could not cancel expected commission");
+      toast.error(error?.response?.data?.detail || "Could not cancel expected vendor incentive");
     } finally { setBusy(false); }
   };
   const saveExpectedCommission = async (form, commissionId) => {
@@ -185,9 +186,9 @@ export default function VendorDetail() {
       if (commissionId) await api.patch(`/vendors/${id}/commissions/${commissionId}`, payload);
       else await api.post(`/vendors/${id}/commissions`, payload);
       await refreshCommissions();
-      toast.success(commissionId ? "Expected commission updated" : "Expected commission added without posting accounting");
+      toast.success(commissionId ? "Expected vendor incentive updated" : "Expected vendor incentive added without posting accounting");
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Could not save expected commission");
+      toast.error(error?.response?.data?.detail || "Could not save expected vendor incentive");
       throw error;
     } finally { setBusy(false); }
   };
@@ -352,7 +353,7 @@ export default function VendorDetail() {
                 : "text-[var(--ink-2)] hover:text-[var(--ink)]"
             }`}
           >
-            {t}
+            {TAB_LABELS[t] || t}
           </button>
         ))}
       </div>
@@ -1029,7 +1030,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
     effective_from: cfg.effective_from || "",
     effective_to: cfg.effective_to || "",
     notes: cfg.notes || "",
-    income_label: cfg.income_label || "Vendor Commission Income",
+    income_label: cfg.income_label || "Vendor Incentive Income",
   });
 
   const setSlab = (i, k, v) => {
@@ -1045,7 +1046,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="commercial-tab">
       <div className="md:col-span-2 space-y-4">
-        <Card title="Commission agreement">
+        <Card title="Incentive agreement">
           <label className="flex items-center gap-2 text-sm mb-3">
             <input
               data-testid="cm-applicable"
@@ -1057,7 +1058,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
 
           <div className={f.applicable ? "" : "opacity-50 pointer-events-none"}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <select aria-label="Commission type" data-testid="cm-type" className="input-flat" value={t}
+              <select aria-label="Incentive type" data-testid="cm-type" className="input-flat" value={t}
                 onChange={(e) => setF({ ...f, type: e.target.value })}>
                 <option value="percentage">Percentage of purchase</option>
                 <option value="fixed">Fixed amount per bill</option>
@@ -1126,14 +1127,14 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
               onClick={() => onSave(f)}
               className="btn-primary mt-4" data-testid="cm-save"
             >
-              <Handshake size={13} /> {busy ? "Saving…" : "Save & recompute commissions"}
+              <Handshake size={13} /> {busy ? "Saving…" : "Save & recompute incentives"}
             </button>
           )}
         </Card>
       </div>
 
       <div className="space-y-3">
-        <Card title="Commission summary">
+        <Card title="Vendor incentive summary">
           {ledger?.totals ? (
             <>
               <Row label="Total purchase" value={INR(ledger.totals.total_purchase)} />
@@ -1149,7 +1150,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
         <Card title="How it works">
           <p className="text-xs text-[var(--ink-2)]">
             Whenever a bill is recorded against this vendor, we auto-book the earned commission.
-            Mark it received in the <b>Commissions</b> tab and we'll post an Income journal entry
+            Mark it received in the <b>Vendor incentives</b> tab and we'll post an Income journal entry
             (DR Bank · CR Commission Income) — it flows straight into P&amp;L, Cash Flow and the Dashboard.
           </p>
         </Card>
@@ -1229,7 +1230,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
       {canReceive && (
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setOpen(!open)} className="btn-primary" data-testid="receive-cm-btn">
-            <Plus size={14} /> {open ? "Cancel" : "Record commission received"}
+            <Plus size={14} /> {open ? "Cancel" : "Record vendor incentive received"}
           </button>
           <button onClick={downloadStatementPdf} className="btn-ghost" data-testid="cm-statement-pdf-btn">
             <DownloadSimple size={13} /> Statement PDF
@@ -1255,7 +1256,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
             <label className="text-xs md:col-span-2">Reference<input className="input-flat mt-1 w-full" value={plan.reference} onChange={(e) => setPlan({ ...plan, reference: e.target.value })} /></label>
             <label className="text-xs md:col-span-4">Notes<textarea className="input-flat mt-1 w-full" value={plan.notes} onChange={(e) => setPlan({ ...plan, notes: e.target.value })} /></label>
           </div>
-          <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : editingPlan ? "Save changes" : "Add expected commission"}</button>
+          <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : editingPlan ? "Save changes" : "Add expected vendor incentive"}</button>
         </form>
       )}
       {open && (
@@ -1296,7 +1297,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
 
           {openRows.length > 0 && (
             <div className="border border-[var(--line)] p-3 space-y-1">
-              <div className="overline">Settle specific commissions (optional — FIFO if empty)</div>
+              <div className="overline">Settle specific incentives (optional — FIFO if empty)</div>
               {openRows.map((r) => (
                 <label key={r.id} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={f.commission_ids.includes(r.id)}
@@ -1337,7 +1338,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
             {(ledger.entries || []).map((r) => (
               <tr key={r.id} className="border-b border-[var(--line-soft)]" data-testid={`cm-row-${r.id}`}>
                 <Td className="font-mono text-xs">{formatDate(r.due_date || r.bill_date)}</Td>
-                <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected commission"}</div><div className="text-[10px] text-[var(--ink-3)]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
+                <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected vendor incentive"}</div><div className="text-[10px] text-[var(--ink-3)]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
                 <Td className="text-right font-mono">{INR_D(r.purchase_amount)}</Td>
                 <Td>
                   <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--line-soft)]">
@@ -1347,10 +1348,10 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                 <Td className="text-right font-mono">{INR_D(r.amount)}</Td>
                 <Td className="text-right font-mono text-[var(--success)]">{INR_D(r.received_amount || 0)}</Td>
                 <Td><CommissionStatus s={r.status} /></Td>
-                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <RowActions label="expected commission" testid={`commission-actions-${r.id}`} actions={[
+                <Td>{r.origin === "manual_expected" && !["cancelled", "reversed", "received"].includes(r.status) ? <RowActions label="expected vendor incentive" testid={`commission-actions-${r.id}`} actions={[
                   { label: "Edit", icon: PencilSimple, hidden: !canEdit, onSelect: () => openPlan(r) },
                   { divider: true },
-                  { label: "Cancel expected commission", icon: Trash, danger: true, hidden: !canDelete, onSelect: () => onDeletePlan(r) },
+                  { label: "Cancel expected vendor incentive", icon: Trash, danger: true, hidden: !canDelete, onSelect: () => onDeletePlan(r) },
                 ]} /> : r.bill_id ? <span className="text-[10px] text-[var(--ink-3)]">Correct from bill</span> : "—"}</Td>
               </tr>
             ))}

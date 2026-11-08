@@ -27,6 +27,9 @@ const KIND_META = {
   other:            { label: "Other",       color: "#5C5C5C" },
 };
 const kindColor = (k) => (KIND_META[k] || KIND_META.other).color;
+// Feed items of kind "deadline" share the Deadlines chip.
+const kindKey = (k) => (k === "deadline" ? "project_deadline" : k);
+const LEGEND_KINDS = Object.keys(KIND_META).filter((k) => k !== "deadline" && k !== "other");
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -54,7 +57,7 @@ export default function CalendarPage() {
   const [cursor, setCursor] = useState(istTodayDate);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [hiddenKinds, setHiddenKinds] = useState({});   // kind -> true (hidden)
+  const [onlyKinds, setOnlyKinds] = useState([]);      // legend filter: [] = every kind
   const [scope, setScope] = useState("all");             // all | studio | project
   const [projectFilter, setProjectFilter] = useState("");
   const [selectedDay, setSelectedDay] = useState(null); // YYYY-MM-DD
@@ -154,9 +157,15 @@ export default function CalendarPage() {
     return true;
   }), [items, scope, projectFilter]);
   const visible = useMemo(
-    () => scoped.filter((i) => !hiddenKinds[i.kind === "deadline" ? "project_deadline" : i.kind]),
-    [scoped, hiddenKinds],
+    () => (onlyKinds.length ? scoped.filter((i) => onlyKinds.includes(kindKey(i.kind))) : scoped),
+    [scoped, onlyKinds],
   );
+  const kindCounts = useMemo(() => {
+    const m = {};
+    for (const i of scoped) m[kindKey(i.kind)] = (m[kindKey(i.kind)] || 0) + 1;
+    return m;
+  }, [scoped]);
+  const toggleKind = (k) => setOnlyKinds((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
   const scopeCounts = useMemo(() => ({
     all: items.length,
     studio: items.filter((i) => (i.scope || (i.project_id ? "project" : "studio")) === "studio").length,
@@ -306,21 +315,38 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Kind filters */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="kind-filters">
-        {Object.entries(KIND_META).filter(([k]) => k !== "deadline" && k !== "other").map(([k, meta]) => {
-          const off = hiddenKinds[k];
+      {/* Legend = filter: pick one or more kinds to see only those; "All" shows everything */}
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Show on calendar" data-testid="kind-filters">
+        <button type="button" onClick={() => setOnlyKinds([])} aria-pressed={onlyKinds.length === 0}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${onlyKinds.length === 0
+            ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--ink-3)]"}`}
+          data-testid="filter-all">
+          All <span className="tabular opacity-70">{scoped.length}</span>
+        </button>
+        {LEGEND_KINDS.map((k) => {
+          const meta = KIND_META[k];
+          const on = onlyKinds.includes(k);
+          const dimmed = onlyKinds.length > 0 && !on;
+          const n = kindCounts[k] || 0;
           return (
-            <button key={k}
-              onClick={() => setHiddenKinds((h) => ({ ...h, [k]: !h[k] }))}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition ${off ? "border-[var(--line)] text-[var(--ink-3)] line-through" : "border-transparent"}`}
-              style={off ? {} : { background: `${meta.color}14`, color: meta.color }}
+            <button key={k} type="button" onClick={() => toggleKind(k)} aria-pressed={on}
+              title={on ? `Showing ${meta.label.toLowerCase()} — click to remove` : `Show only ${meta.label.toLowerCase()}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${dimmed
+                ? "border-[var(--line)] text-[var(--ink-3)] bg-white hover:text-[var(--ink-2)]"
+                : on ? "shadow-[inset_0_0_0_1px_currentColor]" : "border-transparent"}`}
+              style={dimmed ? {} : { background: `${meta.color}${on ? "22" : "14"}`, color: meta.color, borderColor: on ? meta.color : "transparent" }}
               data-testid={`filter-${k}`}>
-              <span className="w-2 h-2 rounded-full" style={{ background: off ? "#C9C9C9" : meta.color }} />
+              <span className="w-2 h-2 rounded-full" style={{ background: dimmed ? "#C9C9C9" : meta.color }} />
               {meta.label}
+              <span className="tabular opacity-70" data-testid={`filter-count-${k}`}>{n}</span>
             </button>
           );
         })}
+        {onlyKinds.length > 0 && (
+          <span className="text-[11px] text-[var(--ink-3)]" data-testid="kind-filter-note">
+            Showing {visible.length} of {scoped.length}
+          </span>
+        )}
       </div>
 
       {loading && <div className="skeleton h-96 w-full" data-testid="calendar-loading" />}

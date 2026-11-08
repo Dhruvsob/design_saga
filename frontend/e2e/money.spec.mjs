@@ -26,33 +26,49 @@ test("invoice: issue, partial + full collection, idempotent retry, Cash/Bank gua
   const issue = await journals(ctx, { source: "invoice_issue", client_id: client.id });
   expect(issue, "sending posts no journal").toHaveLength(0);
 
+  // Invoices are client documents. Expected and received money is managed by
+  // the one Collections Due workflow, not by a second invoice-payment engine.
+  const direct = await ctx.post("/api/accounting/collections/receive", { data: {
+    source_type: "invoice", source_id: inv.id, amount: 10, date: today(),
+    bank_account_id: cash.id, payment_method: "cash",
+  } });
+  expect(direct.status(), "a new cash-basis invoice must first be added to Collections Due").toBe(409);
+  const incomeAccount = (await json(ctx.get("/api/accounts")))
+    .find((a) => a.type === "income" && /consult/i.test(a.name) && a.active !== false);
+  expect(incomeAccount, "consultancy income account exists").toBeTruthy();
+  const due = await json(ctx.post("/api/accounting/receivables", { data: {
+    invoice_id: inv.id, name: `Invoice ${inv.number}`, amount: inv.total,
+    due_date: today(), income_account_id: incomeAccount.id,
+  } }));
+
   // A "bank transfer" must never be booked into the Cash ledger.
   const wrong = await ctx.post("/api/accounting/collections/receive", { data: {
-    source_type: "invoice", source_id: inv.id, amount: 10, date: today(),
+    source_type: "other_receivable", source_id: due.id, amount: 10, date: today(),
     bank_account_id: cash.id, payment_method: "bank_transfer",
   } });
   expect(wrong.status(), "bank_transfer into Cash is rejected").toBe(400);
 
   const pay = (amount, key) => ctx.post("/api/accounting/collections/receive", {
     headers: { "Idempotency-Key": key },
-    data: { source_type: "invoice", source_id: inv.id, amount, date: today(),
+    data: { source_type: "other_receivable", source_id: due.id, amount, date: today(),
             bank_account_id: bank.id, payment_method: "bank_transfer", reference: inv.number },
   });
   const key = `e2e-${uid()}`;
   await json(pay(50, key));
   await pay(50, key); // double-click / network retry with the same key
-  let receipts = (await journals(ctx, { source: "invoice_payment", client_id: client.id }))
+  let receipts = (await journals(ctx, { client_id: client.id }))
     .filter((j) => !j.reversed);
   expect(receipts, "retry with same key posts once").toHaveLength(1);
 
-  let fresh = (await json(ctx.get("/api/invoices?doc_type=invoice"))).find((r) => r.id === inv.id);
-  expect(fresh.status).toBe("partially_paid");
-  expect(fresh.paid_amount).toBe(50);
+  let fresh = (await json(ctx.get("/api/accounting/receivables"))).rows
+    .find((r) => r.source_type === "other_receivable" && r.id === due.id);
+  expect([fresh.status, fresh.received_amount]).toEqual(["partially_received", 50]);
 
   await json(pay(68.01, `e2e-${uid()}`));
-  fresh = (await json(ctx.get("/api/invoices?doc_type=invoice"))).find((r) => r.id === inv.id);
-  expect(fresh.status).toBe("paid");
-  receipts = (await journals(ctx, { source: "invoice_payment", client_id: client.id }))
+  fresh = (await json(ctx.get("/api/accounting/receivables"))).rows
+    .find((r) => r.source_type === "other_receivable" && r.id === due.id);
+  expect([fresh.status, fresh.received_amount, fresh.outstanding]).toEqual(["received", 118.01, 0]);
+  receipts = (await journals(ctx, { client_id: client.id }))
     .filter((j) => !j.reversed);
   expect(receipts).toHaveLength(2);
   for (const je of receipts) {
@@ -67,10 +83,10 @@ test("invoice: issue, partial + full collection, idempotent retry, Cash/Bank gua
   const over = await pay(1, `e2e-${uid()}`);
   expect(over.status()).toBeGreaterThanOrEqual(400);
 
-  // The invoice list shows the same status the books imply.
+  // The invoice list mirrors the amount received by its linked collection.
   const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
   await page.goto("/invoices");
-  await expect(page.getByRole("row", { name: new RegExp(inv.number) })).toContainText(/paid/i);
+  await expect(page.getByRole("row", { name: new RegExp(inv.number) })).toContainText("118.01");
   await ctx.dispose();
 });
 

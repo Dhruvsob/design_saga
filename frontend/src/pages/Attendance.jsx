@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import GeoFenceMap from "../components/GeoFenceMap";
 import {
   SignIn, SignOut, CheckCircle, Warning, Plus, X, PaperPlaneRight,
-  Users, Broadcast, CurrencyInr, ClipboardText, Gear, MapPin,
+  CurrencyInr, ClipboardText, Gear, MapPin,
   DownloadSimple, Clock, ArrowsClockwise,
 } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
@@ -24,6 +25,8 @@ const WEEKDAYS = [
   { v: 4, l: "Fri" }, { v: 5, l: "Sat" }, { v: 6, l: "Sun" },
 ];
 const inr = (n) => formatINR(n);
+// Old tab ids (nine tabs before Phase 2) -> the five tabs now.
+const LEGACY_TABS = { me: "today", dashboard: "today", live: "today", setup: "settings", geo: "settings" };
 const capWords = (s) => (s || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 // Render a stored UTC ISO timestamp as HH:MM in IST
 const fmtT = (iso) => {
@@ -53,7 +56,20 @@ export default function Attendance() {
   const isHR = hasPerm("employees.read");
   const isHRWrite = hasPerm("employees.update");
   const isAdmin = hasPerm("*.*");
-  const [tab, setTab] = useState("me");
+  const canPayroll = hasPerm("payroll.read");
+  const navigate = useNavigate();
+  // Five tabs; links to the old nine (?tab=geo, ?tab=live ...) still land in the right place.
+  const [params, setParams] = useSearchParams();
+  const rawTab = params.get("tab") || "today";
+  const tab = LEGACY_TABS[rawTab] || rawTab;
+  const setTab = (id) => {
+    const next = new URLSearchParams(params);
+    if (id === "today") next.delete("tab"); else next.set("tab", id);
+    setParams(next, { replace: true });
+  };
+  const [todayView, setTodayView] = useState(rawTab === "dashboard" || rawTab === "live" ? "team" : "me");
+  const [settingsSection, setSettingsSection] = useState(rawTab === "geo" ? "policy" : "setup");
+  useEffect(() => { if (rawTab === "payroll") navigate("/payroll", { replace: true }); }, [rawTab, navigate]);
   const [today, setToday] = useState(null);
   const [summary, setSummary] = useState(null);
   const [mySalary, setMySalary] = useState(null);
@@ -120,10 +136,6 @@ export default function Attendance() {
   // Personal data reloads with the month, not on every tab switch.
   useEffect(() => { loadMe(); }, [ym]);
   useEffect(() => { if (isHR && tab === "monthly") loadMonthly(); }, [ym, tab]);
-  // An owner/admin with no employee profile has no "My" data: open the team view instead.
-  useEffect(() => {
-    if (noProfile && isHR && (tab === "me" || tab === "leaves")) setTab("dashboard");
-  }, [noProfile, isHR, tab]);
   useEffect(() => {
     if (siteVisit && projects.length === 1 && !siteForm.project_id) {
       setSiteForm((current) => ({ ...current, project_id: projects[0].id }));
@@ -266,28 +278,42 @@ export default function Attendance() {
     return { lateMinutes, grace, fineApplies: lateMinutes > grace && !!policy.late_fine_enabled };
   }, [policy, checkedIn]);
 
+  const visibleTabs = [
+    { id: "today", label: "Today" },
+    isHR && { id: "monthly", label: "Monthly sheet" },
+    (isHR || !noProfile) && { id: "leaves", label: "Leaves" },
+    isHR && { id: "requests", label: "Requests" },
+    (isHRWrite || isAdmin) && { id: "settings", label: "Settings" },
+  ].filter(Boolean);
+  const activeTab = visibleTabs.some((t) => t.id === tab) ? tab : "today";
+  // Someone with no employee profile has no "My day"; HR then sees the team.
+  const todayMode = isHR && (noProfile || todayView === "team") ? "team" : "me";
+  const activeSection = isHRWrite && isAdmin ? settingsSection : isHRWrite ? "setup" : "policy";
+
   return (
     <div className="space-y-6" data-testid="attendance-page">
       <PageHero
-        eyebrow="HR / ATTENDANCE & PAYROLL"
         title="Attendance"
-        kicker="Geo-fenced check-ins, leaves, salary impact — feeds straight into payroll."
-      />
+        kicker="Check-ins, leave and approvals. Payroll reads this attendance for every month."
+      >
+        {canPayroll && (
+          <Link to="/payroll" className="btn-ghost" data-testid="attendance-open-payroll">
+            <CurrencyInr size={14} /> Payroll
+          </Link>
+        )}
+      </PageHero>
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-x-1 border-b border-[var(--line)]">
-        {!(noProfile && isHR) && <TabBtn id="me" tab={tab} setTab={setTab} label="My Attendance" />}
-        {!(noProfile && isHR) && <TabBtn id="leaves" tab={tab} setTab={setTab} label="My Leaves" />}
-        {isHR && <TabBtn id="dashboard" tab={tab} setTab={setTab} label="Team Dashboard" />}
-        {isHR && <TabBtn id="live" tab={tab} setTab={setTab} label="Live Board" />}
-        {isHR && <TabBtn id="monthly" tab={tab} setTab={setTab} label="Monthly Sheet" />}
-        {isHR && <TabBtn id="payroll" tab={tab} setTab={setTab} label="Payroll" />}
-        {isHR && <TabBtn id="requests" tab={tab} setTab={setTab} label="Requests" />}
-        {isHRWrite && <TabBtn id="setup" tab={tab} setTab={setTab} label="Shift & Salary Setup" />}
-        {isAdmin && <TabBtn id="geo" tab={tab} setTab={setTab} label="Office & Leave Policy" />}
+      <div className="flex flex-wrap items-center gap-x-1 border-b border-[var(--line)]" role="tablist" aria-label="Attendance">
+        {visibleTabs.map((t) => <TabBtn key={t.id} id={t.id} tab={activeTab} setTab={setTab} label={t.label} />)}
       </div>
 
-      {tab === "me" && noProfile && (
+      {activeTab === "today" && isHR && !noProfile && (
+        <Segmented label="Today view" value={todayView} onChange={setTodayView} testid="today-view"
+                   options={[["me", "My day"], ["team", "Team"]]} />
+      )}
+
+      {activeTab === "today" && todayMode === "me" && noProfile && (
         <div className="card-flat" data-testid="attendance-no-profile">
           <div className="overline mb-2">MY ATTENDANCE</div>
           <p className="text-sm text-[var(--ink)]">
@@ -301,7 +327,7 @@ export default function Attendance() {
         </div>
       )}
 
-      {tab === "me" && !noProfile && (
+      {activeTab === "today" && todayMode === "me" && !noProfile && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="card-flat">
@@ -577,9 +603,10 @@ export default function Attendance() {
         </div>
       )}
 
-      {tab === "leaves" && (
-        <div className="space-y-4">
-          <div className="flex justify-end gap-2">
+      {activeTab === "leaves" && !noProfile && (
+        <div className="space-y-4" data-testid="my-leaves">
+          <div className="flex items-center justify-end gap-2">
+            {isHR && <div className="overline mr-auto">MY LEAVES</div>}
             <button onClick={() => { setShowCorrForm(!showCorrForm); setShowLeaveForm(false); }} className="btn-ghost" data-testid="new-correction-btn">
               <Clock size={14} /> {showCorrForm ? "Cancel" : "Request correction"}
             </button>
@@ -651,10 +678,11 @@ export default function Attendance() {
         </div>
       )}
 
-      {tab === "dashboard" && isHR && <TeamDashboardTab />}
-      {tab === "live" && isHR && <LiveBoardTab />}
+      {activeTab === "leaves" && isHR && <TeamLeavesCard />}
 
-      {tab === "monthly" && isHR && monthly && (
+      {activeTab === "today" && todayMode === "team" && <TeamTodayTab />}
+
+      {activeTab === "monthly" && isHR && monthly && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <MonthPicker ym={ym} setYm={setYm} />
@@ -666,7 +694,11 @@ export default function Attendance() {
                     data-testid={`monthly-view-${v}`}>{l}</button>
                 ))}
               </div>
-              <div className="text-xs font-mono text-[var(--ink-2)]">Ready for payroll</div>
+              {canPayroll
+                ? <Link to={`/payroll?month=${ym.y}-${String(ym.m).padStart(2, "0")}`} className="btn-ghost text-xs" data-testid="monthly-open-payroll">
+                    <CurrencyInr size={13} /> Open payroll for this month
+                  </Link>
+                : <div className="text-xs font-mono text-[var(--ink-2)]">Ready for payroll</div>}
             </div>
           </div>
 
@@ -706,10 +738,18 @@ export default function Attendance() {
         </div>
       )}
 
-      {tab === "payroll" && isHR && <PayrollTab />}
-      {tab === "requests" && isHR && <RequestsTab canWrite={isHRWrite} />}
-      {tab === "setup" && isHRWrite && <SetupTab policy={policy} onPolicySaved={loadMe} />}
-      {tab === "geo" && isAdmin && <GeoPolicyTab projects={projects} />}
+      {activeTab === "requests" && isHR && <RequestsTab canWrite={isHRWrite} />}
+
+      {activeTab === "settings" && (
+        <div className="space-y-5" data-testid="attendance-settings">
+          {isHRWrite && isAdmin && (
+            <Segmented label="Settings section" value={activeSection} onChange={setSettingsSection} testid="settings-section"
+                       options={[["setup", "Shifts & salary"], ["policy", "Office, geofence & leave policy"]]} />
+          )}
+          {activeSection === "setup" && isHRWrite && <SetupTab policy={policy} onPolicySaved={loadMe} />}
+          {activeSection === "policy" && isAdmin && <GeoPolicyTab projects={projects} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -818,21 +858,40 @@ function MonthlyGrid({ monthly, ym }) {
 }
 
 /* ==================================================
-   Team Dashboard — HR stats + today's punches
+   Today · Team — HR stats, live board, today's check-ins
    ================================================== */
-function TeamDashboardTab() {
+const LIVE_LABEL = {
+  checked_in: ["Checked In", "#1D633E"], late: ["Late", "#7A4E1A"],
+  checked_out: ["Checked Out", "#5C5C5C"], absent: ["Absent", "#B22B22"],
+  on_leave: ["On Leave", "#2B5299"], weekly_off: ["Weekly Off", "#6E6A63"],
+  holiday: ["Holiday", "#2B5299"],
+};
+function TeamTodayTab() {
   const [dash, setDash] = useState(null);
+  const [live, setLive] = useState(null);
   const [recs, setRecs] = useState([]);
+  const [mode, setMode] = useState("board");   // board | list
   const todayStr = dateForInput(new Date());
 
+  const loadLive = useCallback(() => {
+    api.get("/attendance/live").then((r) => setLive(r.data)).catch(() => {});
+  }, []);
   const load = useCallback(async () => {
     const [d, r] = await Promise.all([
-      api.get("/attendance/dashboard"),
-      api.get(`/attendance/records?start=${todayStr}&end=${todayStr}`),
+      api.get("/attendance/dashboard").catch(() => ({ data: null })),
+      api.get(`/attendance/records?start=${todayStr}&end=${todayStr}`).catch(() => ({ data: [] })),
     ]);
-    setDash(d.data); setRecs(r.data);
-  }, [todayStr]);
+    if (d.data) setDash(d.data);
+    setRecs(Array.isArray(r.data) ? r.data : []);
+    loadLive();
+  }, [todayStr, loadLive]);
   useEffect(() => { load(); }, [load]);
+  // The board refreshes itself every 15 seconds while it is open.
+  useEffect(() => {
+    if (mode !== "board") return undefined;
+    const t = setInterval(loadLive, 15000);
+    return () => clearInterval(t);
+  }, [mode, loadLive]);
 
   if (!dash) return <div className="skeleton h-64 w-full" />;
   const cards = [
@@ -856,42 +915,88 @@ function TeamDashboardTab() {
         ))}
       </div>
 
-      <div className="card-flat" data-testid="today-punches">
-        <div className="flex items-center justify-between mb-3">
-          <div className="overline">TODAY'S CHECK-IN / CHECK-OUT</div>
-          <button onClick={load} className="btn-ghost text-xs" data-testid="dash-refresh">
-            <ArrowsClockwise size={13} /> Refresh
-          </button>
+      <div className="card-flat" data-testid="team-today">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2 text-xs font-mono text-[var(--ink-2)]">
+            {mode === "board" && (
+              <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--success)] opacity-50" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--success)]" />
+              </span>
+            )}
+            {mode === "board"
+              ? <>LIVE{live?.generated_at ? ` · updated ${formatDateTime(live.generated_at)} IST` : ""} · auto-refresh 15s</>
+              : <>TODAY&apos;S CHECK-IN / CHECK-OUT</>}
+          </div>
+          <div className="flex items-center gap-2">
+            <Segmented label="Team view" value={mode} onChange={setMode} testid="team-view"
+                       options={[["board", "Live board"], ["list", "Check-in list"]]} />
+            <button onClick={load} className="btn-ghost text-xs" data-testid="dash-refresh">
+              <ArrowsClockwise size={13} /> Refresh
+            </button>
+          </div>
         </div>
-        {recs.length === 0 ? (
-          <div className="text-sm text-[var(--ink-3)] py-6 text-center">No employee has marked attendance today yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
-                <tr><th className="p-2 text-left">Employee</th><th className="p-2">In</th><th className="p-2">Out</th><th className="p-2">Status</th><th className="p-2">Fence</th></tr>
-              </thead>
-              <tbody>
-                {recs.map((r) => (
-                  <tr key={r.id} className="border-t border-[var(--line-soft)]" data-testid={`punch-${r.employee_id}`}>
-                    <td className="p-2 font-semibold">{r.employee_name}</td>
-                    <td className="p-2 text-center font-mono text-xs">{fmtT(r.check_in) || "—"}</td>
-                    <td className="p-2 text-center font-mono text-xs">{fmtT(r.check_out) || "—"}</td>
-                    <td className="p-2 text-center">
-                      <span className="status-chip" style={{ background: `${STATUS_COLORS[r.status]}15`, color: STATUS_COLORS[r.status] }}>
-                        {r.status?.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className="p-2 text-center text-xs">
-                      {r.check_in == null ? "—"
-                        : r.geo_inside === false
-                          ? <span className="text-[var(--warning)] font-semibold"><MapPin size={11} className="inline" /> Outside</span>
-                          : <span className="text-[var(--success)] font-semibold"><MapPin size={11} className="inline" /> In fence</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+        {mode === "board" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="live-board">
+            {!live && <div className="skeleton h-24 w-full col-span-full" />}
+            {(live?.people || []).map((p) => {
+              const [label, col] = LIVE_LABEL[p.status] || LIVE_LABEL.checked_out;
+              return (
+                <div key={p.employee_id} className="border border-[var(--line)] rounded-lg p-3 flex items-center justify-between" data-testid={`live-${p.employee_id}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full border border-[var(--line)] flex items-center justify-center font-display font-bold text-sm shrink-0">
+                      {(p.name || "?").charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm truncate">{p.name}</div>
+                      <div className="text-[11px] text-[var(--ink-3)] truncate">{p.department || "Staff"}{p.shift_start ? ` · ${p.shift_start}` : ""}</div>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <span className="status-chip" style={{ background: `${col}15`, color: col }}>{label}</span>
+                    {p.check_in && <div className="text-[10px] font-mono text-[var(--ink-3)] mt-0.5">in {p.check_in}{p.check_out ? ` · out ${p.check_out}` : ""}</div>}
+                  </div>
+                </div>
+              );
+            })}
+            {live && live.people.length === 0 && <div className="col-span-full text-center text-[var(--ink-3)] py-10">No employees yet.</div>}
+          </div>
+        )}
+
+        {mode === "list" && (
+          <div data-testid="today-punches">
+            {recs.length === 0 ? (
+              <div className="text-sm text-[var(--ink-3)] py-6 text-center">No employee has marked attendance today yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
+                    <tr><th className="p-2 text-left">Employee</th><th className="p-2">In</th><th className="p-2">Out</th><th className="p-2">Status</th><th className="p-2">Fence</th></tr>
+                  </thead>
+                  <tbody>
+                    {recs.map((r) => (
+                      <tr key={r.id} className="border-t border-[var(--line-soft)]" data-testid={`punch-${r.employee_id}`}>
+                        <td className="p-2 font-semibold">{r.employee_name}</td>
+                        <td className="p-2 text-center font-mono text-xs">{fmtT(r.check_in) || "—"}</td>
+                        <td className="p-2 text-center font-mono text-xs">{fmtT(r.check_out) || "—"}</td>
+                        <td className="p-2 text-center">
+                          <span className="status-chip" style={{ background: `${STATUS_COLORS[r.status]}15`, color: STATUS_COLORS[r.status] }}>
+                            {r.status?.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center text-xs">
+                          {r.check_in == null ? "—"
+                            : r.geo_inside === false
+                              ? <span className="text-[var(--warning)] font-semibold"><MapPin size={11} className="inline" /> Outside</span>
+                              : <span className="text-[var(--success)] font-semibold"><MapPin size={11} className="inline" /> In fence</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -900,167 +1005,75 @@ function TeamDashboardTab() {
 }
 
 /* ==================================================
-   Live Board — auto-refreshing who's in / out
+   Leaves · Team — everyone's leave, newest first
    ================================================== */
-const LIVE_LABEL = {
-  checked_in: ["Checked In", "#1D633E"], late: ["Late", "#7A4E1A"],
-  checked_out: ["Checked Out", "#5C5C5C"], absent: ["Absent", "#B22B22"],
-  on_leave: ["On Leave", "#2B5299"], weekly_off: ["Weekly Off", "#6E6A63"],
-  holiday: ["Holiday", "#2B5299"],
-};
-function LiveBoardTab() {
-  const [data, setData] = useState(null);
-  const load = useCallback(() => { api.get("/attendance/live").then((r) => setData(r.data)).catch(() => {}); }, []);
-  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [load]);
-  if (!data) return <div className="skeleton h-64 w-full" />;
-  const c = data.counts;
-  const chips = [
-    ["Checked In", c.checked_in, "#1D633E"], ["Late", c.late, "#7A4E1A"],
-    ["Absent", c.absent, "#B22B22"], ["On Leave", c.on_leave, "#2B5299"],
-    ["Checked Out", c.checked_out, "#5C5C5C"], ["Off / Holiday", c.off, "#2B5299"],
-  ];
+const LEAVE_FILTERS = [["", "All"], ["pending", "Pending"], ["approved", "Approved"], ["rejected", "Rejected"]];
+function TeamLeavesCard() {
+  const [rows, setRows] = useState(null);
+  const [status, setStatus] = useState("");
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    let alive = true;
+    setRows(null);
+    api.get(`/leaves${status ? `?status=${status}` : ""}`)
+      .then((r) => { if (alive) setRows(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => { if (alive) setRows([]); });
+    return () => { alive = false; };
+  }, [status]);
+  const s = q.trim().toLowerCase();
+  const shown = (rows || []).filter((l) => !s || [l.employee_name, l.reason, l.leave_type]
+    .filter(Boolean).some((v) => String(v).toLowerCase().includes(s)));
   return (
-    <div className="space-y-5" data-testid="live-board">
-      <div className="flex items-center gap-2 text-xs font-mono text-[var(--ink-2)]">
-        <span className="relative flex h-2.5 w-2.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--success)] opacity-50" />
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--success)]" />
-        </span>
-        LIVE · updated {formatDateTime(data.generated_at)} IST · auto-refresh 15s
-      </div>
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-        {chips.map(([l, v, col]) => (
-          <div key={l} className="card-flat text-center">
-            <div className="font-display font-bold text-2xl" style={{ color: col }}>{v}</div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)] mt-1">{l}</div>
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {data.people.map((p) => {
-          const [label, col] = LIVE_LABEL[p.status] || LIVE_LABEL.checked_out;
-          return (
-            <div key={p.employee_id} className="card-flat flex items-center justify-between" data-testid={`live-${p.employee_id}`}>
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-full border border-[var(--line)] flex items-center justify-center font-display font-bold text-sm shrink-0">
-                  {(p.name || "?").charAt(0)}
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm truncate">{p.name}</div>
-                  <div className="text-[11px] text-[var(--ink-3)] truncate">{p.department || "Staff"}{p.shift_start ? ` · ${p.shift_start}` : ""}</div>
-                </div>
-              </div>
-              <div className="text-right shrink-0 ml-2">
-                <span className="status-chip" style={{ background: `${col}15`, color: col }}>{label}</span>
-                {p.check_in && <div className="text-[10px] font-mono text-[var(--ink-3)] mt-0.5">in {p.check_in}{p.check_out ? ` · out ${p.check_out}` : ""}</div>}
-              </div>
-            </div>
-          );
-        })}
-        {data.people.length === 0 && <div className="col-span-full text-center text-[var(--ink-3)] py-10">No employees yet.</div>}
-      </div>
-    </div>
-  );
-}
-
-/* ==================================================
-   Payroll Preview — Jewellers engine (LOP + fines + short leave)
-   ================================================== */
-function PayrollTab() {
-  const [todayYear, todayMonth] = dateForInput(new Date()).split("-").map(Number);
-  const [ym, setYm] = useState({ y: todayYear, m: todayMonth });
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data: d } = await api.get(`/payroll/preview?year=${ym.y}&month=${ym.m}`);
-      setData(d);
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed to load payroll preview");
-    } finally { setLoading(false); }
-  }, [ym]);
-  useEffect(() => { load(); }, [load]);
-
-  return (
-    <div className="space-y-4" data-testid="payroll-tab">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <MonthPicker ym={ym} setYm={setYm} />
-        {data && (
-          <div className="text-sm text-[var(--ink-2)]">
-            Total net payable:{" "}
-            <span className="font-display font-bold text-xl text-[var(--ink)]" data-testid="payroll-total-net">
-              {inr(data.total_net_payable)}
-            </span>
-          </div>
-        )}
-      </div>
-      {data?.unconfigured_salary_count > 0 && (
-        <div className="border border-[var(--warning)] bg-[var(--warning-soft)] p-3 text-xs text-[var(--warning)] flex items-start gap-2" data-testid="payroll-unconfigured-warning">
-          <Warning size={14} className="shrink-0 mt-0.5" />
-          <span><b>{data.unconfigured_salary_count}</b> employee(s) have no salary configured — their net shows ₹0.
-          Set the salary structure on the employee profile or a flat monthly salary in <b>Shift & Salary Setup</b>.</span>
+    <div className="card-flat" data-testid="team-leaves">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div className="overline">TEAM LEAVE{rows ? ` · ${shown.length}` : ""}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or reason"
+                 aria-label="Search team leave" className="input-flat !w-56 !h-8 text-xs" data-testid="team-leaves-search" />
+          <Segmented label="Leave status" value={status} onChange={setStatus} testid="team-leaves-status" options={LEAVE_FILTERS} />
         </div>
-      )}
-      <div className="border border-[var(--line)] overflow-x-auto">
-        {loading ? <div className="skeleton h-40 w-full" /> : (
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
-              <tr>
-                <th className="p-2 text-left">Employee</th>
-                <th className="p-2 text-right">Salary</th>
-                <th className="p-2">Payable Days</th>
-                <th className="p-2">Present</th><th className="p-2">Absent</th>
-                <th className="p-2">LOP</th>
-                <th className="p-2 text-right">Fine / Hourly</th>
-                <th className="p-2 text-right">Deduction</th>
-                <th className="p-2 text-right">Net Payable</th>
-                <th className="p-2">Slip</th>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
+            <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">Type</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
+          </thead>
+          <tbody>
+            {rows === null && <tr><td colSpan={7} className="p-4"><div className="skeleton h-10 w-full" /></td></tr>}
+            {shown.map((l) => (
+              <tr key={l.id} className="border-t border-[var(--line-soft)]" data-testid={`team-leave-${l.id}`}>
+                <td className="p-2 font-semibold">{l.employee_name || "—"}</td>
+                <td className="p-2 text-xs">{capWords(l.leave_type) || "—"}</td>
+                <td className="p-2 font-mono text-xs">{formatDate(l.from_date)}</td>
+                <td className="p-2 font-mono text-xs">{formatDate(l.to_date)}</td>
+                <td className="p-2 font-mono">{l.days}</td>
+                <td className="p-2 text-xs text-[var(--ink-2)] truncate max-w-[300px]">{l.reason}</td>
+                <td className="p-2"><LeaveStatus s={l.status} /></td>
               </tr>
-            </thead>
-            <tbody>
-              {(data?.employees || []).map((r) => (
-                <tr key={r.employee_id} className="border-t border-[var(--line-soft)]" data-testid={`payroll-row-${r.employee_id}`}>
-                  <td className="p-2">
-                    <div className="font-semibold">{r.employee_name}</div>
-                    <div className="text-[11px] text-[var(--ink-3)]">{r.department || "Staff"}{r.already_paid ? " · PAID" : ""}</div>
-                  </td>
-                  <td className="p-2 text-right font-mono text-xs">
-                    {r.salary_configured ? inr(r.monthly_salary)
-                      : <span className="text-[var(--warning)] font-semibold" data-testid={`salary-not-set-${r.employee_id}`}>Not set</span>}
-                  </td>
-                  <td className="p-2 text-center font-mono font-semibold">{r.payable_days}</td>
-                  <td className="p-2 text-center font-mono text-[var(--success)]">{r.present + r.late}</td>
-                  <td className="p-2 text-center font-mono text-[var(--danger)]">{r.absent}</td>
-                  <td className="p-2 text-center font-mono text-[var(--warning)]">{r.lop_days}</td>
-                  <td className="p-2 text-right font-mono text-xs text-[var(--warning)]">
-                    {(r.late_fine || r.short_leave_deduction)
-                      ? inr((r.late_fine || 0) + (r.short_leave_deduction || 0))
-                      : "—"}
-                    {r.short_leave_hours ? <div className="text-[10px] text-[#0E7490]">{r.short_leave_hours}h</div> : null}
-                  </td>
-                  <td className="p-2 text-right font-mono text-xs text-[var(--danger)]">{inr(r.deduction)}</td>
-                  <td className="p-2 text-right font-mono font-bold" data-testid={`net-${r.employee_id}`}>{inr(r.net_payable)}</td>
-                  <td className="p-2 text-center">
-                    <button onClick={() => downloadPayslip(r.employee_id, ym.y, ym.m)}
-                      className="btn-ghost text-xs px-2" title="Download payslip PDF"
-                      data-testid={`payslip-${r.employee_id}`}>
-                      <DownloadSimple size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {(!data || data.employees.length === 0) && !loading && (
-                <tr><td colSpan={10} className="p-8 text-center text-[var(--ink-3)]">No employees.</td></tr>
-              )}
-            </tbody>
-          </table>
-        )}
+            ))}
+            {rows !== null && shown.length === 0 && (
+              <tr><td colSpan={7} className="p-8 text-center text-[var(--ink-3)] text-sm">No leave {status ? `marked ${status}` : "recorded"}{s ? " matches the search" : ""}.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
-      <div className="text-[11px] text-[var(--ink-3)] font-mono">
-        Net = monthly salary − (LOP deduction + late fines + short-leave hours). Actual payment posts a journal entry to Accounting from the employee profile.
-      </div>
+      <p className="text-[11px] text-[var(--ink-3)] mt-2">Approve or reject pending leave in Requests.</p>
+    </div>
+  );
+}
+
+/** Small two-to-four-way switch used inside a tab (views, sections, filters). */
+function Segmented({ label, value, onChange, options, testid }) {
+  return (
+    <div className="inline-flex flex-wrap rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-0.5" role="group" aria-label={label} data-testid={testid}>
+      {options.map(([id, text]) => (
+        <button key={id || "all"} type="button" aria-pressed={value === id} onClick={() => onChange(id)}
+                className={`px-3 h-8 rounded-md text-xs font-semibold transition-colors ${value === id
+                  ? "bg-white text-[var(--ink)] shadow-[0_1px_2px_rgba(17,17,17,0.06)]" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
+                data-testid={`${testid}-${id || "all"}`}>
+          {text}
+        </button>
+      ))}
     </div>
   );
 }
@@ -1851,7 +1864,7 @@ function GeoPolicyTab({ projects }) {
 
 function TabBtn({ id, tab, setTab, label }) {
   return (
-    <button onClick={() => setTab(id)} data-testid={`tab-${id}`}
+    <button type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
       className={`px-4 py-2.5 text-sm border-b-2 -mb-px transition whitespace-nowrap ${tab === id
         ? "border-[var(--accent)] text-[var(--accent-strong)] font-semibold"
         : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"}`}>

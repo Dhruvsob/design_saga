@@ -45,7 +45,7 @@ class CommissionConfig(FiniteModel):
     effective_to: Optional[str] = None
     notes: Optional[str] = None
     # Default income category label — surfaces on generated JEs.
-    income_label: Optional[str] = "Vendor Commission Income"
+    income_label: Optional[str] = "Vendor Incentive Income"
 
 
 class CommissionReceiveIn(FiniteModel):
@@ -93,6 +93,9 @@ class CommissionExpectedIn(FiniteModel):
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
     reminder_date: Optional[str] = None
+    reminder_time: Optional[str] = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    remind_before_days: Optional[int] = Field(default=None, ge=0, le=30)
+    repeat_every: Optional[Literal["none", "daily", "weekly"]] = None
 
     @field_validator("due_date", "reminder_date")
     @classmethod
@@ -114,6 +117,9 @@ class CommissionExpectedUpdate(FiniteModel):
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
     reminder_date: Optional[str] = None
+    reminder_time: Optional[str] = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    remind_before_days: Optional[int] = Field(default=None, ge=0, le=30)
+    repeat_every: Optional[Literal["none", "daily", "weekly"]] = None
 
     @field_validator("due_date", "reminder_date")
     @classmethod

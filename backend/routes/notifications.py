@@ -302,17 +302,7 @@ async def run_scan(caller_org):
             reminder = row.get("reminder_date") or ""
             party = (row.get("vendor_name") or row.get("name")
                      or row.get("reference") or "Expected collection")
-            if reminder == today and due != today:
-                key = f"collection_reminder:{source_type}:{row['id']}:{today}"
-                counts["collection_reminder"] += await emit_finance(
-                    "collection_reminder",
-                    f"Collection reminder · {party}",
-                    f"₹{amount:,.0f}" + (f" · due {_dmy(due)}" if due else ""),
-                    link="/accounting",
-                    meta={"source_type": source_type, "source_id": row["id"],
-                          "amount": amount},
-                    dedup_key=key, org_id=caller_org,
-                )
+            # Reminders fire at their own date/time from core.collection_reminders.
             if due and due < today:
                 key = f"collection_overdue:{source_type}:{row['id']}:{today}"
                 counts["collection_overdue"] += await emit_finance(
@@ -334,6 +324,14 @@ async def run_scan(caller_org):
                           "amount": amount},
                     dedup_key=key, org_id=caller_org,
                 )
+
+    # Keep calendar events, alerts and reminder documents in step with
+    # collections changed by other paths (reversals, older records).
+    try:
+        from core.collection_reminders import refresh_all_open
+        await refresh_all_open()
+    except Exception:  # noqa: BLE001 - a reminder refresh must not stop the scan
+        pass
 
     # ---- Overdue tasks (per assignee) -----------------------------------
     async for t in sdb.tasks.find(

@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import api from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { safeExternalUrl } from "../lib/url";
 import { formatDate, formatINR, statusLabel } from "../lib/format";
 import {
-  Receipt, Plus, Warning, Check, X, ArrowsClockwise, CurrencyInr, ThumbsUp, ThumbsDown, Wallet,
-  PencilSimple, Trash,
+  Receipt, Plus, Warning, Check, X, ThumbsUp, ThumbsDown, Wallet,
+  PencilSimple, Trash, Camera, Paperclip, LinkSimple, FilePdf,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
@@ -157,7 +157,73 @@ const CATEGORY_LABEL = {
   travel: "Travel", meals: "Meals", materials: "Materials", utilities: "Utilities",
   site: "Site spend", office: "Office", other: "Other",
 };
-const blankLine = () => ({ category: "travel", amount: "", description: "", receipt_url: "", tax_rate: 0 });
+let lineKeySeq = 0;
+const nextLineKey = () => `line-${++lineKeySeq}`;
+const blankLine = () => ({
+  _key: nextLineKey(), category: "travel", amount: "", description: "", tax_rate: 0,
+  receipt_url: "", receipt_file_id: null, receipt_file: null, link_mode: false,
+});
+
+// Receipts: a photo or PDF stored on our own server (see POST /expenses/receipts).
+const RECEIPT_ID = /^rcpt_[a-f0-9]{12}$/;
+const RECEIPT_TYPES = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "application/pdf": ".pdf" };
+const RECEIPT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
+const RECEIPT_ACCEPT = `${Object.keys(RECEIPT_TYPES).join(",")},${RECEIPT_EXTENSIONS.join(",")}`;
+const MAX_RECEIPT_BYTES = 15 * 1024 * 1024;
+const SHRINK_PHOTOS_ABOVE = 1.5 * 1024 * 1024;  // phone photos are often 4–12 MB
+const PHOTO_MAX_SIDE = 2000;                    // still sharp enough to read a bill
+
+const receiptHref = (file) =>
+  (file && RECEIPT_ID.test(file.id || "") ? `${API}/expenses/receipts/${file.id}/content` : null);
+
+const fileExtension = (name) => ((name || "").toLowerCase().match(/\.[a-z0-9]+$/) || [""])[0];
+
+function receiptTypeOk(file) {
+  return Boolean(RECEIPT_TYPES[file.type]) || RECEIPT_EXTENSIONS.includes(fileExtension(file.name));
+}
+
+/** The server decides the type from the file name's extension and contents; make sure there is one. */
+function withReceiptName(file) {
+  if (RECEIPT_EXTENSIONS.includes(fileExtension(file.name))) return file;
+  const extension = RECEIPT_TYPES[file.type] || ".jpg";
+  return new File([file], `receipt${extension}`, { type: file.type });
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable image")); };
+    img.src = url;
+  });
+}
+
+/** Big phone photos are re-saved as a smaller JPEG so they upload quickly on mobile data. */
+async function shrinkPhoto(file) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size <= SHRINK_PHOTOS_ABOVE) return file;
+  try {
+    const img = await loadImage(file);
+    const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#FFFFFF";  // transparent PNGs become white, not black
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob || blob.size >= file.size) return file;
+    const base = (file.name || "receipt").replace(/\.[^.]+$/, "") || "receipt";
+    return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return file;  // send the original; the server still checks it
+  }
+}
+
+const isTouchDevice = () => {
+  try { return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches); } catch { return false; }
+};
 
 function CreateExpense({ onClose, onCreated, initial = null, expenseId = null }) {
   const [f, setF] = useState({
@@ -166,20 +232,85 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
     vendor_id: initial?.vendor_id || null,
     reimburse_to_account_id: initial?.reimburse_to_account_id || null,
     lines: initial?.lines?.map((line) => ({
+      _key: nextLineKey(),
       category: line.category, amount: Number(line.amount || 0),
       description: line.description || "", receipt_url: line.receipt_url || "",
+      receipt_file_id: line.receipt_file_id || null, receipt_file: line.receipt_file || null,
+      link_mode: Boolean(line.receipt_url) && !line.receipt_file_id,
       tax_rate: Number(line.tax_rate || 0), date: line.date || null,
     })) || [blankLine()],
   });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const [receiptAbove, setReceiptAbove] = useState(null);
+  const [touch] = useState(isTouchDevice);
   const total = f.lines.reduce((s, l) => s + Number(l.amount || 0) + Number(l.amount || 0) * Number(l.tax_rate || 0)/100, 0);
+  const uploading = f.lines.some((line) => line._busy);
+  const hasAnyReceipt = f.lines.some((line) => line.receipt_file_id || (line.link_mode && safeExternalUrl(line.receipt_url)));
+  const needsReceipt = receiptAbove > 0 && total > receiptAbove && !hasAnyReceipt;
+
+  useEffect(() => {
+    let live = true;
+    api.get("/expense-policy")
+      .then(({ data }) => { if (live) setReceiptAbove(Number(data?.require_receipt_above) || 0); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+
+  const patchLine = (key, patch) =>
+    setF((s) => ({ ...s, lines: s.lines.map((x) => (x._key === key ? { ...x, ...patch } : x)) }));
+
+  // Receipts uploaded in this form but not saved on the claim yet can be thrown away.
+  const discardReceipt = (line) => {
+    if (line?._fresh && line.receipt_file_id) api.delete(`/expenses/receipts/${line.receipt_file_id}`).catch(() => {});
+  };
+  const close = () => { f.lines.forEach(discardReceipt); onClose(); };
+
+  const attachReceipt = async (key, picked) => {
+    if (!receiptTypeOk(picked)) {
+      patchLine(key, { _error: "Attach a photo (JPG, PNG or WebP) or a PDF. For iPhone HEIC photos, use Photo to take a fresh picture." });
+      return;
+    }
+    patchLine(key, { _busy: true, _progress: 0, _error: "" });
+    try {
+      const file = await shrinkPhoto(withReceiptName(picked));
+      if (file.size > MAX_RECEIPT_BYTES) throw new Error("This file is larger than 15 MB. Take the photo again or attach a smaller PDF.");
+      const form = new FormData();
+      form.append("upload", file, file.name);
+      const { data } = await api.post("/expenses/receipts", form, {
+        onUploadProgress: (event) => {
+          if (event.total) patchLine(key, { _progress: Math.min(99, Math.round((event.loaded * 100) / event.total)) });
+        },
+      });
+      patchLine(key, {
+        _busy: false, _progress: null, _fresh: true, receipt_file_id: data.id, receipt_file: data,
+        receipt_url: "", link_mode: false,
+      });
+    } catch (ex) {
+      patchLine(key, {
+        _busy: false, _progress: null,
+        _error: ex?.response
+          ? fmtErr(ex.response.data?.detail, "Upload failed")
+          : (ex?.message && !/network/i.test(ex.message) ? ex.message : "Upload failed. Check your connection and try again."),
+      });
+    }
+  };
+
+  const removeReceipt = (line) => {
+    discardReceipt(line);
+    patchLine(line._key, { receipt_file_id: null, receipt_file: null, _fresh: false, _error: "" });
+  };
 
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try {
       const body = {
         ...f,
-        lines: f.lines.map((line) => ({ ...line, amount: Number(line.amount) || 0, receipt_url: line.receipt_url || null })),
+        lines: f.lines.map((line) => ({
+          category: line.category, description: line.description, date: line.date || null,
+          tax_rate: Number(line.tax_rate) || 0, amount: Number(line.amount) || 0,
+          receipt_file_id: line.receipt_file_id || null,
+          receipt_url: line.link_mode ? (line.receipt_url || "").trim() || null : null,
+        })),
       };
       if (expenseId) await api.put(`/expenses/${expenseId}`, body);
       else await api.post("/expenses", body);
@@ -189,7 +320,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
     } finally { setBusy(false); }
   };
   return (
-    <Modal onClose={onClose} title={expenseId ? "Correct Expense Claim" : "Submit Expense Claim"} eyebrow={expenseId ? "EDIT CLAIM" : "NEW CLAIM"} wide>
+    <Modal onClose={close} title={expenseId ? "Correct Expense Claim" : "Submit Expense Claim"} eyebrow={expenseId ? "EDIT CLAIM" : "NEW CLAIM"} wide>
       <form onSubmit={submit} className="space-y-4" data-testid="exp-create-form">
         <F label="Title *"><input required data-testid="exp-title" className="input-flat w-full" value={f.title} onChange={(e) => setF({...f, title: e.target.value})} /></F>
         <F label="Payment mode">
@@ -207,13 +338,13 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
             <span className="col-span-2">Category</span>
             <span className="col-span-4">What it was for</span>
             <span className="col-span-2 text-right">Amount (₹)</span>
-            <span className="col-span-3">Receipt link</span>
+            <span className="col-span-3">Receipt</span>
           </div>
           <div className="space-y-2">
             {f.lines.map((l, i) => {
-              const setLine = (patch) => setF((s) => ({ ...s, lines: s.lines.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+              const setLine = (patch) => patchLine(l._key, patch);
               return (
-                <div key={i} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center rounded-lg md:rounded-none border md:border-0 border-[var(--line)] p-2 md:p-0" data-testid={`exp-line-${i}`}>
+                <div key={l._key} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center rounded-lg md:rounded-none border md:border-0 border-[var(--line)] p-2 md:p-0" data-testid={`exp-line-${i}`}>
                   <select aria-label="Category" className="input-flat col-span-1 md:col-span-2" value={l.category} onChange={(e) => setLine({ category: e.target.value })}>
                     {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>)}
                   </select>
@@ -222,12 +353,16 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
                     onChange={(e) => setLine({ amount: e.target.value })} />
                   <input aria-label="What it was for" placeholder="e.g. Auto to site, Andheri" className="input-flat col-span-2 md:col-span-4 md:order-2" value={l.description}
                     onChange={(e) => setLine({ description: e.target.value })} />
-                  <input aria-label="Receipt link" type="url" placeholder="Paste a photo or Drive link" className="input-flat col-span-2 md:col-span-3 md:order-4" value={l.receipt_url}
-                    onChange={(e) => setLine({ receipt_url: e.target.value })} />
+                  <div className="col-span-2 md:col-span-3 md:order-4 min-w-0">
+                    <ReceiptCell line={l} index={i} touch={touch}
+                      onPick={(file) => attachReceipt(l._key, file)}
+                      onRemove={() => removeReceipt(l)}
+                      onLink={(patch) => setLine(patch)} />
+                  </div>
                   <div className="col-span-2 md:col-span-1 md:order-5 flex justify-end">
                     {f.lines.length > 1 && (
                       <button type="button" aria-label={`Remove line ${i + 1}`} title="Remove line"
-                        onClick={() => setF((s) => ({ ...s, lines: s.lines.filter((_, j) => j !== i) }))}
+                        onClick={() => { discardReceipt(l); setF((s) => ({ ...s, lines: s.lines.filter((x) => x._key !== l._key) })); }}
                         className="p-2 rounded-md text-[var(--ink-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)]"><X size={14} /></button>
                     )}
                   </div>
@@ -236,7 +371,17 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
             })}
           </div>
           <button type="button" onClick={() => setF((s) => ({ ...s, lines: [...s.lines, blankLine()] }))} className="btn-ghost text-xs mt-2"><Plus size={11}/> Add another item</button>
-          <p className="text-[11px] text-[var(--ink-3)] mt-2">Bigger claims need a receipt link before they go for approval.</p>
+          <p className="text-[11px] text-[var(--ink-3)] mt-2">
+            {receiptAbove > 0
+              ? `Claims above ${fmtMoney(receiptAbove)} need a receipt before they go for approval. Take a photo of the bill or attach a PDF.`
+              : "Take a photo of each bill or attach a PDF so the approver can check it."}
+          </p>
+          {needsReceipt && (
+            <p className="text-[11px] text-[var(--warning)] mt-1" data-testid="exp-receipt-warning">
+              <Warning size={11} className="inline mr-1" />
+              This claim is above {fmtMoney(receiptAbove)} and has no receipt yet. It will wait as “{statusLabel("receipt_required")}” until you attach one.
+            </p>
+          )}
         </div>
 
         <F label="Notes"><textarea className="input-flat w-full h-16" value={f.notes} onChange={(e) => setF({...f, notes: e.target.value})} /></F>
@@ -247,11 +392,101 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
 
         {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
-          <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-          <button disabled={busy || !f.title || f.lines.length === 0 || f.lines.some((line) => !(Number(line.amount) > 0))} className="btn-primary" data-testid="exp-submit">{busy ? "Saving…" : expenseId ? "Save and restart approval" : "Submit claim"}</button>
+          <button type="button" onClick={close} className="btn-ghost">Cancel</button>
+          <button disabled={busy || uploading || !f.title || f.lines.length === 0 || f.lines.some((line) => !(Number(line.amount) > 0))} className="btn-primary" data-testid="exp-submit">{busy ? "Saving…" : uploading ? "Uploading receipt…" : expenseId ? "Save and restart approval" : "Submit claim"}</button>
         </div>
       </form>
     </Modal>
+  );
+}
+
+function ReceiptCell({ line, index, touch, onPick, onRemove, onLink }) {
+  const photoInput = useRef(null);
+  const fileInput = useRef(null);
+  const label = `line ${index + 1}`;
+  const pick = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";  // choosing the same file again still fires
+    if (file) onPick(file);
+  };
+  const error = line._error && (
+    <p role="alert" className="text-[11px] text-[var(--danger)] mt-1" data-testid={`exp-line-${index}-receipt-error`}>{line._error}</p>
+  );
+
+  if (line._busy) {
+    return (
+      <div className="h-[38px] flex items-center gap-2 text-xs text-[var(--ink-2)]" role="status" data-testid={`exp-line-${index}-receipt-uploading`}>
+        <span className="h-3 w-3 rounded-full border-2 border-[var(--line-strong)] border-t-[var(--accent-strong)] animate-spin" aria-hidden="true" />
+        Uploading receipt… {line._progress ? `${line._progress}%` : ""}
+      </div>
+    );
+  }
+  if (line.receipt_file) {
+    return (
+      <div>
+        <ReceiptChip file={line.receipt_file} testId={`exp-line-${index}-receipt`}
+          onRemove={onRemove} removeLabel={`Remove receipt from ${label}`} />
+        {error}
+      </div>
+    );
+  }
+  if (line.link_mode) {
+    return (
+      <div>
+        <div className="flex items-center gap-1">
+          <input aria-label="Receipt link" type="url" placeholder="Paste a photo or Drive link"
+            className="input-flat w-full min-w-0" value={line.receipt_url}
+            onChange={(e) => onLink({ receipt_url: e.target.value })} />
+          <button type="button" className="btn-icon shrink-0" aria-label={`Attach a file instead for ${label}`}
+            title="Attach a photo or PDF instead" onClick={() => onLink({ link_mode: false, receipt_url: "" })}><X size={13} /></button>
+        </div>
+        {error}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {touch && (
+          <button type="button" className="btn-ghost text-xs" aria-label={`Take a photo of the receipt for ${label}`}
+            onClick={() => photoInput.current?.click()} data-testid={`exp-line-${index}-photo`}>
+            <Camera size={14} /> Photo
+          </button>
+        )}
+        <button type="button" className="btn-ghost text-xs" aria-label={`Attach a receipt photo or PDF for ${label}`}
+          onClick={() => fileInput.current?.click()} data-testid={`exp-line-${index}-attach`}>
+          <Paperclip size={14} /> {touch ? "File" : "Attach receipt"}
+        </button>
+        <button type="button" className="btn-icon h-8 w-8" aria-label={`Paste a receipt link for ${label}`}
+          title="Paste a link instead" onClick={() => onLink({ link_mode: true })}><LinkSimple size={14} /></button>
+        <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden"
+          tabIndex={-1} aria-hidden="true" onChange={pick} data-testid={`exp-line-${index}-photo-input`} />
+        <input ref={fileInput} type="file" accept={RECEIPT_ACCEPT} className="hidden"
+          tabIndex={-1} aria-hidden="true" onChange={pick} data-testid={`exp-line-${index}-file-input`} />
+      </div>
+      {error}
+    </div>
+  );
+}
+
+function ReceiptChip({ file, testId, onRemove, removeLabel }) {
+  const href = receiptHref(file);
+  const isImage = String(file?.content_type || "").startsWith("image/");
+  const name = file?.original_name || (isImage ? "Receipt photo" : "Receipt");
+  if (!href) return <span className="text-[var(--ink-3)]">—</span>;
+  return (
+    <div className="flex items-center gap-2 min-w-0" data-testid={testId}>
+      <a href={href} target="_blank" rel="noreferrer" className="shrink-0" aria-label={`Open ${name}`}>
+        {isImage
+          ? <img src={href} alt="" loading="lazy" className="h-9 w-9 object-cover rounded border border-[var(--line)] bg-[var(--surface-2)]" />
+          : <span className="h-9 w-9 rounded border border-[var(--line)] bg-[var(--surface-2)] flex items-center justify-center"><FilePdf size={18} className="text-[var(--danger)]" /></span>}
+      </a>
+      <a href={href} target="_blank" rel="noreferrer" title={name} className="accent-blue text-xs truncate min-w-0">{name}</a>
+      {onRemove && (
+        <button type="button" aria-label={removeLabel} title="Remove receipt" onClick={onRemove}
+          className="p-1.5 rounded-md text-[var(--ink-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] shrink-0"><X size={12} /></button>
+      )}
+    </div>
   );
 }
 
@@ -323,6 +558,14 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
         </div>
       )}
 
+      {exp.status === "receipt_required" && (
+        <div className="border border-[var(--warning)] bg-[var(--warning-soft)] p-3 mb-4 text-sm text-[var(--warning)] flex flex-wrap items-center gap-2" data-testid="exp-receipt-required">
+          <Warning size={14} className="shrink-0" />
+          <span>This claim needs a receipt before it can go for approval.</span>
+          {canEdit && <button type="button" className="btn-ghost text-xs sm:ml-auto" onClick={() => onEdit(exp)}><Paperclip size={12}/> Attach receipt</button>}
+        </div>
+      )}
+
       <div className="overline mb-2">LINE ITEMS</div>
       <div className="border border-[var(--line)] mb-6 overflow-x-auto">
         <table className="w-full text-sm">
@@ -335,7 +578,13 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
                 <Td className="text-xs uppercase font-mono">{l.category}</Td>
                 <Td>{l.description || "—"}</Td>
                 <Td className="font-mono">{fmtMoney(l.amount)}</Td>
-                <Td>{safeExternalUrl(l.receipt_url) ? <a href={safeExternalUrl(l.receipt_url)} target="_blank" rel="noreferrer" className="accent-blue text-xs">View</a> : <span className="text-[var(--ink-3)]">—</span>}</Td>
+                <Td className="max-w-[220px]">
+                  {l.receipt_file
+                    ? <ReceiptChip file={l.receipt_file} testId={`exp-receipt-${l.id}`} />
+                    : safeExternalUrl(l.receipt_url)
+                      ? <a href={safeExternalUrl(l.receipt_url)} target="_blank" rel="noreferrer" className="accent-blue text-xs">View link</a>
+                      : <span className="text-[var(--ink-3)]">—</span>}
+                </Td>
               </tr>
             ))}
           </tbody>

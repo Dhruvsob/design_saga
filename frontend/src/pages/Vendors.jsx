@@ -96,7 +96,7 @@ export default function Vendors() {
   return (
     <div className="space-y-6" data-testid="vendors-page">
       <PageHero title="Vendors" count={loaded ? rows.length : undefined}
-        kicker="Contractors, agencies and suppliers, with their bills, payments, commissions and ratings.">
+        kicker="Contractors, agencies and suppliers, with their bills, payments, vendor incentives and ratings.">
         {canCreate && (
           <button
             onClick={() => setShowForm(!showForm)}

@@ -256,6 +256,8 @@ async def update_event(event_id: str, payload: EventUpdate, request: Request,
     row = await sdb.calendar_events.find_one({"id": event_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "Event not found")
+    if row.get("collection_reminder"):
+        raise HTTPException(409, "This reminder comes from Collections Due. Change or remove it there (Accounting > Collections Due).")
     admin_shared = row.get("visibility") == "org" and has_permission(user, "*.*")
     if row.get("created_by") != user["user_id"] and not admin_shared:
         raise HTTPException(403, "Only the creator or an Admin can edit this event")
@@ -293,6 +295,8 @@ async def delete_event(event_id: str, request: Request,
     row = await sdb.calendar_events.find_one({"id": event_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "Event not found")
+    if row.get("collection_reminder"):
+        raise HTTPException(409, "This reminder comes from Collections Due. Change or remove it there (Accounting > Collections Due).")
     admin_shared = row.get("visibility") == "org" and has_permission(user, "*.*")
     if row.get("created_by") != user["user_id"] and not admin_shared:
         raise HTTPException(403, "Only the creator or an Admin can delete this event")
@@ -528,6 +532,16 @@ async def calendar_reminders_due(request: Request, window: int = 5,
     user = await require_user(request, session_token, authorization)
     now_ist = datetime.now(IST)
     today = now_ist.date().isoformat()
+    collection_alerts = []
+    if has_permission(user, "finance.read"):
+        from core.collection_reminders import recent_alerts_for
+        for a in await recent_alerts_for(max(5, window)):
+            collection_alerts.append({
+                "id": a["id"], "title": a.get("title") or "Payment reminder",
+                "date": a["fire_at"][:10], "start_time": a["fire_at"][11:16],
+                "kind": "payment_reminder", "location": a.get("project_name"),
+                "minutes_until": 0, "reminder_minutes": 0, "link": "/invoices/reminders",
+            })
     q = merge_query({
         "date": today,
         "start_time": {"$nin": [None, ""]},
@@ -559,4 +573,4 @@ async def calendar_reminders_due(request: Request, window: int = 5,
                 "reminder_minutes": rm,
             })
     due.sort(key=lambda x: x["minutes_until"])
-    return {"count": len(due), "reminders": due}
+    return {"count": len(due) + len(collection_alerts), "reminders": due + collection_alerts}

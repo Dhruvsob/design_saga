@@ -7,7 +7,7 @@ import { dateForInput, empName, formatDate, statusLabel } from "../lib/format";
 import {
   Plus, X, Trash, DotsSixVertical, MagnifyingGlass, ListChecks,
   Table as TableIcon, SquaresFour, Warning, Bell, DownloadSimple,
-  CheckSquare, Square, CalendarBlank,
+  CheckSquare, Square, CalendarBlank, Funnel,
 } from "@phosphor-icons/react";
 import TaskCalendar from "../components/TaskCalendar";
 import SearchSelect from "../components/SearchSelect";
@@ -21,6 +21,11 @@ const LANES = [
   { id: "review", label: "Review", color: "#B87500" },
   { id: "done", label: "Done", color: "#1D633E" },
 ];
+
+// Each lane's default detailed status: on a status board it only repeats the column.
+const LANE_DEFAULT_STATUS = { todo: "Pending", in_progress: "In Progress", review: "Inspection Pending", done: "Completed" };
+const EMPTY_FILTERS = { project_id: "", area: "", category: "", priority: "", status_detail: "", assignee_id: "" };
+const MORE_FILTER_KEYS = ["area", "category", "priority", "status_detail"];
 
 const PRIORITY_COLORS = {
   low: "#5C5C5C", medium: "#0A0A0A", high: "#B87500",
@@ -58,7 +63,8 @@ export default function TasksBoard() {
   const [taskType, setTaskType] = useState("all");  // all | employee | vendor
   const [q, setQ] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
-  const [filters, setFilters] = useState({ project_id: "", area: "", category: "", priority: "", status_detail: "", assignee_id: "" });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_TASK);
   const [selected, setSelected] = useState(new Set());
@@ -210,6 +216,8 @@ export default function TasksBoard() {
     link.click();
   };
 
+  const moreCount = MORE_FILTER_KEYS.filter((k) => filters[k]).length;
+  const showMore = moreOpen || moreCount > 0;
   const today = dateForInput(new Date());
   const overdueCount = filtered.filter((t) => t.due_date && t.due_date < today && t.status !== "done").length;
   const areas = meta?.areas || [];
@@ -272,51 +280,67 @@ export default function TasksBoard() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="task-filters">
-        <div className="relative">
-          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, item, vendor…"
-            className="input-flat pl-9 !w-72" data-testid="task-search" />
-        </div>
-        <SearchSelect className="input-flat !w-auto min-w-[150px]" value={filters.project_id} onChange={(e) => setFilters({ ...filters, project_id: e.target.value })} data-testid="filter-project">
-          <option value="">All projects</option>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </SearchSelect>
-        <select aria-label="Area" className="input-flat !w-auto min-w-[120px]" value={filters.area} onChange={(e) => setFilters({ ...filters, area: e.target.value })} data-testid="filter-area">
-          <option value="">All areas</option>
-          {areas.map((a) => <option key={a}>{a}</option>)}
-        </select>
-        <select aria-label="Category" className="input-flat !w-auto min-w-[130px]" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} data-testid="filter-category">
-          <option value="">All categories</option>
-          {categories.map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select aria-label="Priority" className="input-flat !w-auto min-w-[120px]" value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority">
-          <option value="">All priorities</option>
-          {(meta?.priorities || []).map((p) => <option key={p}>{p}</option>)}
-        </select>
-        <select aria-label="Member" className="input-flat !w-auto min-w-[140px]" value={filters.assignee_id}
-                onChange={(e) => setFilters({ ...filters, assignee_id: e.target.value })} data-testid="filter-member">
-          <option value="">All members</option>
-          {employees.map((e) => <option key={e.id} value={e.id}>{empName(e)}</option>)}
-        </select>
-        <select aria-label="Status" className="input-flat !w-auto min-w-[120px]" value={filters.status_detail} onChange={(e) => setFilters({ ...filters, status_detail: e.target.value })} data-testid="filter-status">
-          <option value="">All statuses</option>
-          {(meta?.status_detail || []).map((s) => <option key={s}>{s}</option>)}
-        </select>
-        {(q || Object.values(filters).some(Boolean)) && (
-          <button onClick={() => { setQ(""); setFilters({ project_id: "", area: "", category: "", priority: "", status_detail: "" }); }}
-            className="btn-ghost text-xs" data-testid="clear-filters">
-            <X size={12} /> Clear
+      {/* Filters: the three used every day; the rest under "More filters" */}
+      <div className="space-y-2" data-testid="task-filters">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, item, vendor…"
+              aria-label="Search tasks" className="input-flat pl-9 w-full" data-testid="task-search" />
+          </div>
+          <SearchSelect className="input-flat !w-auto min-w-[150px]" value={filters.project_id} onChange={(e) => setFilters({ ...filters, project_id: e.target.value })} data-testid="filter-project">
+            <option value="">All projects</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </SearchSelect>
+          <select aria-label="Member" className="input-flat !w-auto min-w-[140px]" value={filters.assignee_id}
+                  onChange={(e) => setFilters({ ...filters, assignee_id: e.target.value })} data-testid="filter-member">
+            <option value="">All members</option>
+            {employees.map((e) => <option key={e.id} value={e.id}>{empName(e)}</option>)}
+          </select>
+          <button type="button" onClick={() => setMineOnly((v) => !v)} aria-pressed={mineOnly}
+            className={`text-xs px-3 h-9 rounded-md border transition ${mineOnly
+              ? "border-[var(--info)] bg-[var(--info-soft)] text-[var(--info)] font-semibold"
+              : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--info)]"}`}
+            data-testid="filter-assigned-to-me">
+            Assigned to me
           </button>
+          <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={showMore} aria-controls="task-more-filters"
+            className={`text-xs px-3 h-9 rounded-md border inline-flex items-center gap-1.5 transition ${showMore || moreCount
+              ? "border-[var(--accent)] text-[var(--ink)] font-semibold" : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--ink-3)]"}`}
+            data-testid="more-filters-btn">
+            <Funnel size={13} /> More filters
+            {moreCount > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--accent)] text-white text-[10px] leading-[18px] text-center tabular"
+                    data-testid="more-filters-count">{moreCount}</span>
+            )}
+          </button>
+          {(q || mineOnly || Object.values(filters).some(Boolean)) && (
+            <button type="button" onClick={() => { setQ(""); setMineOnly(false); setFilters(EMPTY_FILTERS); }}
+              className="btn-ghost text-xs" data-testid="clear-filters">
+              <X size={12} /> Clear
+            </button>
+          )}
+        </div>
+        {showMore && (
+          <div id="task-more-filters" className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-2" data-testid="more-filters">
+            <select aria-label="Area" className="input-flat !w-auto min-w-[120px]" value={filters.area} onChange={(e) => setFilters({ ...filters, area: e.target.value })} data-testid="filter-area">
+              <option value="">All areas</option>
+              {areas.map((a) => <option key={a}>{a}</option>)}
+            </select>
+            <select aria-label="Category" className="input-flat !w-auto min-w-[130px]" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} data-testid="filter-category">
+              <option value="">All categories</option>
+              {categories.map((c) => <option key={c}>{c}</option>)}
+            </select>
+            <select aria-label="Priority" className="input-flat !w-auto min-w-[120px]" value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority">
+              <option value="">All priorities</option>
+              {(meta?.priorities || []).map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
+            </select>
+            <select aria-label="Status" className="input-flat !w-auto min-w-[120px]" value={filters.status_detail} onChange={(e) => setFilters({ ...filters, status_detail: e.target.value })} data-testid="filter-status">
+              <option value="">All statuses</option>
+              {(meta?.status_detail || []).map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
         )}
-        <button onClick={() => setMineOnly((v) => !v)}
-          className={`text-xs px-3 py-2 rounded-md border transition ${mineOnly
-            ? "border-[var(--info)] bg-[var(--info-soft)] text-[var(--info)] font-semibold"
-            : "border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--info)]"}`}
-          data-testid="filter-assigned-to-me">
-          Assigned to me
-        </button>
       </div>
 
       {/* Bulk actions bar */}
@@ -352,6 +376,7 @@ export default function TasksBoard() {
           dragOver={dragOver} setDragOver={setDragOver}
           onOpen={(id) => navigate(`/tasks/${id}`)}
           selected={selected} onToggleSelect={toggleSelect}
+          statusLanes={groupBy === "status"}
         />
       ) : view === "calendar" ? (
         <TaskCalendar tasks={filtered} onOpen={(id) => navigate(`/tasks/${id}`)} onReschedule={reschedule} />
@@ -427,7 +452,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
 // ================================================================
 // Kanban view
 // ================================================================
-function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd, onDelete, onDragStart, onDrop, dragOver, setDragOver, onOpen, selected, onToggleSelect }) {
+function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd, onDelete, onDragStart, onDrop, dragOver, setDragOver, onOpen, selected, onToggleSelect, statusLanes = false }) {
   const today = dateForInput(new Date());
   const cols = lanes.length <= 4 ? "md:grid-cols-4" : "md:grid-flow-col md:auto-cols-[minmax(240px,1fr)] md:overflow-x-auto";
   return (
@@ -502,8 +527,8 @@ function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd
                     {t.assigned_to_me && t.assigned_by_name && (
                       <div className="text-[10px] text-[var(--accent-strong)] mt-1">Assigned by {t.assigned_by_name}</div>
                     )}
-                    {t.status_detail && (
-                      <div className="mt-2">
+                    {t.status_detail && !(statusLanes && LANE_DEFAULT_STATUS[t.status] === t.status_detail) && (
+                      <div className="mt-2" data-testid={`task-status-${t.id}`}>
                         <span className="text-[10px] font-mono px-1.5 py-0.5" style={{ background: `${STATUS_COLORS[t.status_detail] || "#000"}15`, color: STATUS_COLORS[t.status_detail] || "#000" }}>
                           {t.status_detail}
                         </span>

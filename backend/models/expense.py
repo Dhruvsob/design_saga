@@ -12,12 +12,23 @@ class ExpenseLineIn(FiniteModel):
     amount: float = Field(gt=0)
     date: Optional[str] = None
     receipt_url: Optional[str] = None
+    # Internal reference returned by POST /expenses/receipts (a photo or PDF
+    # stored on our own server). The route checks it belongs to this tenant and
+    # this claimant before the claim is saved.
+    receipt_file_id: Optional[str] = Field(default=None, pattern=r"^rcpt_[a-f0-9]{12}$")
     tax_rate: Optional[float] = Field(default=0, ge=0, le=100)
 
     @field_validator("receipt_url")
     @classmethod
     def validate_receipt_url(cls, value):
-        return external_http_url(value) if value is not None else None
+        if value is None or not str(value).strip():
+            return None
+        return external_http_url(value)
+
+    @field_validator("receipt_file_id", mode="before")
+    @classmethod
+    def blank_receipt_file_is_none(cls, value):
+        return None if value is None or (isinstance(value, str) and not value.strip()) else value
 
 
 class ExpenseCreateIn(FiniteModel):
