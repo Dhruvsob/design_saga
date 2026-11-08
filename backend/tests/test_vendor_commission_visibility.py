@@ -180,6 +180,12 @@ def test_commission_receipt_delete_posts_reversal_and_rebuilds_allocations(monke
 
     monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
     monkeypatch.setattr(vendors, "_refresh_commission_allocations", refresh)
+    import core.collection_reminders as reminders
+    reminded = []
+
+    async def remind(source_type, source_id, *_a):
+        reminded.append((source_type, source_id))
+    monkeypatch.setattr(reminders, "refresh", remind)
     monkeypatch.setattr(vendors, "audit", no_audit)
 
     user = {"user_id": "admin", "org_id": "org_a", "permissions": ["finance.delete"]}
@@ -190,6 +196,7 @@ def test_commission_receipt_delete_posts_reversal_and_rebuilds_allocations(monke
     assert reversed_call["hide_from_books"] is True
     assert reversed_call["reversal_date"] == "2026-10-31"
     assert refreshed == ["commission_1"]
+    assert reminded == [("vendor_commission", "commission_1")]   # due again -> reminder back
     assert fake.commission_settlements.rows[0]["status"] == "reversed"
     assert fake.commission_settlements.rows[0]["reversal_je_id"] == "je_reverse"
 

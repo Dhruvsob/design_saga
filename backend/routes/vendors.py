@@ -2307,6 +2307,10 @@ async def _reverse_commission_settlement_locked(user: dict, settlement_id: str) 
         row.get("id") for row in settlement.get("commissions") or [] if row.get("id")
     ]
     await _refresh_commission_allocations(commission_ids)
+    # The incentive is due again: bring back its reminder, calendar event and alerts.
+    from core.collection_reminders import refresh as refresh_reminders
+    for commission_id in commission_ids:
+        await refresh_reminders("vendor_commission", commission_id, user["user_id"])
     await audit(
         user, "vendor_commission_receipt.delete", target=settlement_id,
         target_type="commission_settlement",

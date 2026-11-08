@@ -1077,6 +1077,9 @@ async def _sync_other_receivable_after_reversal(journal_entry_id: str) -> None:
                                           default=None),
                   "updated_at": changed_at}},
     )
+    # Money is due again: bring back its alerts, calendar event and reminder.
+    from core.collection_reminders import refresh as refresh_reminders
+    await refresh_reminders("other_receivable", source_id)
 
 
 async def _reverse_journal_entry(user: dict, je: dict, *, action: str = "reverse",
@@ -2736,6 +2739,63 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
     from core.collection_reminders import refresh as refresh_reminders
     await refresh_reminders("other_receivable", payload.source_id)
     return receipt
+
+
+_COLLECTION_TYPES = {"other_receivable", "vendor_commission", "milestone", "invoice"}
+
+
+@router.get("/accounting/collections/{source_type}/{source_id}/entries")
+async def collection_entries(source_type: str, source_id: str, request: Request,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    """Receipts recorded against one collection, each with its accounting entry.
+
+    Read-only: corrections open the entry, whose Delete reverses the receipt
+    through the same source-aware path used everywhere else.
+    """
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.read"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+    if source_type not in _COLLECTION_TYPES:
+        raise HTTPException(status_code=400, detail="Unknown collection type")
+    receipts: list = []
+    if source_type == "other_receivable":
+        async for r in sdb.collection_receipts.find(
+                {"source_type": "other_receivable", "source_id": source_id}, {"_id": 0}).sort("date", 1):
+            receipts.append({"id": r["id"], "date": r.get("date"), "amount": r.get("amount"),
+                             "account_id": r.get("bank_account_id"), "method": r.get("payment_method"),
+                             "reference": r.get("reference"), "status": r.get("status"),
+                             "journal_id": r.get("journal_entry_id")})
+    elif source_type == "vendor_commission":
+        async for r in sdb.commission_settlements.find(
+                {"commissions.id": source_id}, {"_id": 0}).sort("received_date", 1):
+            applied = next((float(a.get("applied") or a.get("amount") or 0)
+                            for a in r.get("commissions") or [] if a.get("id") == source_id), None)
+            receipts.append({"id": r["id"], "date": r.get("received_date"),
+                             "amount": applied if applied is not None else r.get("amount"),
+                             "receipt_total": r.get("amount"), "account_id": r.get("bank_account_id"),
+                             "method": r.get("payment_method"), "reference": r.get("reference"),
+                             "status": r.get("status") or "received", "journal_id": r.get("journal_entry_id")})
+    else:
+        source = "milestone_payment" if source_type == "milestone" else "invoice_payment"
+        async for je in sdb.journal_entries.find(
+                {"source": source, "source_id": source_id}, {"_id": 0}).sort("date", 1):
+            cash = next((l for l in je.get("lines") or [] if float(l.get("debit") or 0) > 0), {})
+            receipts.append({"id": je["id"], "date": je.get("date"), "amount": je.get("total"),
+                             "account_id": cash.get("account_id"), "method": None,
+                             "reference": je.get("reference"),
+                             "status": "reversed" if je.get("reversed") else "received", "journal_id": je["id"]})
+    ids = [r["journal_id"] for r in receipts if r.get("journal_id")]
+    journals = {j["id"]: j async for j in sdb.journal_entries.find({"id": {"$in": ids}}, {"_id": 0})} if ids else {}
+    names = {a["id"]: a.get("name") async for a in sdb.accounts.find({}, {"_id": 0, "id": 1, "name": 1})}
+    for r in receipts:
+        je = journals.get(r.get("journal_id"))
+        r["account"] = names.get(r.get("account_id"))
+        r["journal"] = je
+        if je and je.get("reversed") and r.get("status") == "received":
+            r["status"] = "reversed"
+    return {"source_type": source_type, "source_id": source_id, "receipts": receipts,
+            "received": round(sum(float(r.get("amount") or 0) for r in receipts if r.get("status") == "received"), 2)}
 
 
 @router.get("/accounting/receivables")

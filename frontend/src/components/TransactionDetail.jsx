@@ -57,7 +57,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
   const canDelete = !isReversal && !isReinstatement && !isReversed && (
     (canDeletePermission && (
       (!entry.source_id && ["", "manual", "income", "expense", "non_operating"].includes(source)) ||
-      ["invoice_payment", "milestone_payment"].includes(source) || sourceDeleteSupported
+      ["invoice_payment", "milestone_payment", "other_receivable_income"].includes(source) || sourceDeleteSupported
     )) || (source === "payroll" && !!entry.source_id && canReversePayroll)
   );
   // Drill-through: open the most relevant source record.
@@ -65,6 +65,7 @@ export const TransactionDetail = ({ entry, onClose, onChanged }) => {
     if (source.startsWith("loan_")) return { label: "Open loan", path: `/loans/${entry.source_id || ""}` };
     if (["invoice_payment", "invoice"].includes(source)) return { label: "Open invoice", path: `/invoices` };
     if (["milestone_payment"].includes(source) && entry.project_id) return { label: "Open project", path: `/projects/${entry.project_id}` };
+    if (source === "other_receivable_income") return { label: "Open Collections Due", path: "/accounting?tab=receivables" };
     if (["commission_income", "commission_reversal"].includes(source) && entry.vendor_id) return { label: "Open vendor", path: `/vendors/${entry.vendor_id}` };
     if (source === "vendor_bill" || source === "vendor_payment") {
       if (entry.vendor_id) return { label: "Open vendor", path: `/vendors/${entry.vendor_id}` };

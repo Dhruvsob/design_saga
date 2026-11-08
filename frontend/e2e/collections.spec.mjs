@@ -307,3 +307,76 @@ test("adding a lead with a phone number already on file asks before creating a d
   expect(same, "cancel keeps a single lead").toHaveLength(1);
   await ctx.dispose();
 });
+
+test("a wrong collection receipt is corrected from Receipts & entries: reversed once, due again, reminder back", async ({ browser }) => {
+  const ctx = await api("admin");
+  const { cash } = await accounts(ctx);
+  const client = await json(ctx.post("/api/clients", { data: { name: `Fix ${uid()}`, phone: "9825000003" } }));
+  const tomorrow = new Date(Date.now() + 5.5 * 3600e3 + 86400e3).toISOString().slice(0, 10);
+  const recv = await json(ctx.post("/api/accounting/receivables", { data: {
+    name: "Design fee", amount: 40000, client_id: client.id, due_date: tomorrow,
+    income_account_id: (await incomeAcc(ctx, /consult/i)).id, reminder_date: tomorrow, reminder_time: "12:00" } }));
+  await json(receive(ctx, "other_receivable", recv.id, 40000, cash));          // typed the full amount by mistake
+  expect((await rowFor(ctx, "other_receivable", recv.id)).status).toBe("received");
+  const before = (await json(ctx.get("/api/accounting/reminders"))).find((r) => r.source_id === recv.id);
+  expect(before.state).toBe("settled");
+
+  const entries = await json(ctx.get(`/api/accounting/collections/other_receivable/${recv.id}/entries`));
+  expect(entries.receipts).toHaveLength(1);
+  expect(entries.receipts[0].journal.source).toBe("other_receivable_income");
+  const staff = await api("employee");
+  expect((await staff.get(`/api/accounting/collections/other_receivable/${recv.id}/entries`)).status()).toBe(403);
+  await staff.dispose();
+
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/accounting?tab=receivables");
+  await page.getByTestId("collections-filter-history").click({ timeout: 20000 });
+  await page.getByTestId(`collection-actions-${recv.id}`).click();
+  await page.getByTestId(`collection-entries-${recv.id}`).click();
+  await expect(page.getByTestId("collection-entries-table")).toContainText("40,000");
+  await page.getByTestId(`collection-entry-open-${entries.receipts[0].id}`).click();
+  await page.getByRole("button", { name: /^Delete$/ }).click();
+  await page.getByTestId("txn-delete-confirm").click();
+  await expect(page.getByTestId("collection-entries-table")).toContainText("Reversed", { timeout: 20000 });
+
+  const row = await rowFor(ctx, "other_receivable", recv.id);
+  expect([row.received_amount, row.outstanding]).toEqual([0, 40000]);
+  expect(row.status).not.toBe("received");
+  const after = (await json(ctx.get("/api/accounting/reminders"))).find((r) => r.source_id === recv.id);
+  expect(after.state, "reminder reopened").toBe("open");
+  const feed = await json(ctx.get(`/api/calendar/feed?start=${tomorrow}&end=${tomorrow}`));
+  expect(feed.items.some((i) => (i.title || "").includes(client.name)), "calendar event back").toBe(true);
+  const inc = (await journals(ctx, { client_id: client.id })).filter((j) => !j.voided_from_view);
+  expect(inc, "removed pair leaves the books").toHaveLength(0);
+  // Received Payments links straight to the entry
+  await json(receive(ctx, "other_receivable", recv.id, 15000, cash));
+  await page.goto("/invoices/received");
+  const payRow = page.getByRole("row", { name: new RegExp(client.name) });
+  await expect(payRow).toContainText("15,000", { timeout: 20000 });
+  await payRow.getByRole("button", { name: /payment/ }).click();
+  await page.getByRole("menuitem", { name: "Open entry" }).click();
+  await expect(page.getByTestId("txn-detail-modal")).toContainText("Collection received");
+  await ctx.dispose();
+});
+
+test("deleting a vendor incentive receipt makes it due again and brings its reminder back", async () => {
+  const ctx = await api("admin");
+  const { bank } = await accounts(ctx);
+  const vendor = await json(ctx.post("/api/vendors", { data: { name: `Tiles ${uid()}`, phone: "9825000004" } }));
+  const vid = vendor.id || vendor.vendor?.id;
+  const tomorrow = new Date(Date.now() + 5.5 * 3600e3 + 86400e3).toISOString().slice(0, 10);
+  const plan = await json(ctx.post(`/api/vendors/${vid}/commissions`, { data: {
+    amount: 9000, due_date: tomorrow, reminder_date: tomorrow, reminder_time: "15:30" } }));
+  await json(receive(ctx, "vendor_commission", plan.id, 9000, bank));
+  const reminder = async () => (await json(ctx.get("/api/accounting/reminders"))).find((r) => r.source_id === plan.id);
+  expect((await reminder()).state).toBe("settled");
+  const { receipts } = await json(ctx.get(`/api/accounting/collections/vendor_commission/${plan.id}/entries`));
+  expect(receipts).toHaveLength(1);
+  expect(receipts[0].amount).toBe(9000);
+  await json(ctx.delete(`/api/commission-settlements/${receipts[0].id}`));
+  expect((await reminder()).state, "reminder reopened").toBe("open");
+  expect((await rowFor(ctx, "vendor_commission", plan.id)).outstanding).toBe(9000);
+  const again = await json(ctx.get(`/api/accounting/collections/vendor_commission/${plan.id}/entries`));
+  expect(again.receipts[0].status).toBe("reversed");
+  await ctx.dispose();
+});

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { Daybook } from "../components/Daybook";
@@ -6,6 +7,7 @@ import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
 import { TransactionDetail } from "../components/TransactionDetail";
 import { DataChecks } from "../components/DataChecks";
 import PeriodClose from "../components/PeriodClose";
+import CollectionEntries from "../components/CollectionEntries";
 import { useAuth } from "../context/AuthContext";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
@@ -982,6 +984,8 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
   const [saving, setSaving] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
+  const [entriesFor, setEntriesFor] = useState(null);
+  const navigate = useNavigate();
   const [plan, setPlan] = useState(emptyPlan);
   const [receipt, setReceipt] = useState({
     date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
@@ -1281,19 +1285,19 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
                       <BellRinging size={12} /> Remind
                     </button>
                   )}
-                  {row.vendor_id ? <a href={`/vendors/${row.vendor_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
-                    : row.project_id ? <a href={`/projects/${row.project_id}`} className="btn-ghost text-xs">Open <CaretRight size={12} /></a>
-                    : null}
-                  {row.origin === "manual_expected" && row.received_amount <= 0 && (
-                    <RowActions label={row.name || "collection"} testid={`collection-actions-${row.id}`} actions={[
-                      { label: "Edit", icon: PencilSimple, onSelect: () => editPlan(row) },
-                      { divider: true },
-                      { label: "Cancel this collection", icon: Trash, danger: true, onSelect: () => cancelPlan(row) },
-                    ]} />
-                  )}
+                  <RowActions label={row.name || "collection"} testid={`collection-actions-${row.id}`} actions={[
+                    { label: "Receipts & entries", icon: Notebook, hidden: !(row.received_amount > 0),
+                      onSelect: () => setEntriesFor(row), testid: `collection-entries-${row.id}` },
+                    { label: "Open vendor", icon: CaretRight, hidden: !row.vendor_id, onSelect: () => navigate(`/vendors/${row.vendor_id}`) },
+                    { label: "Open project", icon: CaretRight, hidden: row.vendor_id || !row.project_id, onSelect: () => navigate(`/projects/${row.project_id}`) },
+                    { label: "Edit", icon: PencilSimple, hidden: !(row.origin === "manual_expected" && row.received_amount <= 0), onSelect: () => editPlan(row) },
+                    { label: "Cancel this collection", icon: Trash, danger: true, divider: true,
+                      hidden: !(row.origin === "manual_expected" && row.received_amount <= 0), onSelect: () => cancelPlan(row) },
+                  ]} />
                 </td>
               </tr>
             ))}
+            {entriesFor && <CollectionEntries row={entriesFor} onClose={() => setEntriesFor(null)} onChanged={() => { load(); onSaved && onSaved(); }} />}
             {rows.length === 0 && (
               <tr><td colSpan={7} className="p-10 text-center text-[var(--ink-3)]">
                 {isHistory ? "Nothing received yet in this view." : filter === "active" && !term
