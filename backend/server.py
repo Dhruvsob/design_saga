@@ -5507,6 +5507,8 @@ api.include_router(finance_extras_router)
 api.include_router(money_in_router)
 from routes.site_visits import router as site_visits_router  # noqa: E402
 api.include_router(site_visits_router)
+from routes.period_close import router as period_close_router  # noqa: E402
+api.include_router(period_close_router)
 
 app.include_router(api)
 

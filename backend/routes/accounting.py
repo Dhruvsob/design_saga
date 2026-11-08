@@ -31,6 +31,7 @@ from core.locks import doc_lock
 from models.base import FiniteModel
 from pymongo.errors import DuplicateKeyError
 from core.limits import MAX_LIST_ROWS
+from core.period_lock import assert_period_open
 from core.finance import (
     resolve_period, current_fy_label, fy_choices, fy_range, require_asset_account,
 )
@@ -664,6 +665,7 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
         _date.fromisoformat(date)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Journal date must be YYYY-MM-DD")
+    await assert_period_open(date)
     if not str(narration or "").strip():
         raise HTTPException(status_code=400, detail="Journal narration is required")
     if len(lines or []) < 2:
@@ -1094,6 +1096,8 @@ async def _reverse_journal_entry(user: dict, je: dict, *, action: str = "reverse
             status_code=409,
             detail="Change the invoice to Draft or Cancelled so its receivable is reversed safely.",
         )
+    if hide_from_books:
+        await assert_period_open(je.get("date"))
 
     rev_lines = [
         {
@@ -1170,6 +1174,8 @@ async def _hide_reversed_pair(user: dict, je: dict, reason: str) -> None:
     reversal = await sdb.journal_entries.find_one({"id": je["reversal_je_id"]}, {"_id": 0})
     if not reversal or reversal.get("undone"):
         raise HTTPException(status_code=409, detail="This reversal was undone; administrator review required")
+    await assert_period_open(je.get("date"))
+    await assert_period_open(reversal.get("date"), "Its reversal")
     await sdb.journal_entries.update_many(
         {"id": {"$in": [je["id"], reversal["id"]]}},
         {"$set": {"voided_from_view": True, "voided_at": iso_now(),
@@ -3150,8 +3156,18 @@ async def accounting_source_integrity(request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "*.*"):
         raise HTTPException(403, "Admin only")
+    return await source_integrity_report()
+
+
+async def source_integrity_report(as_of: Optional[str] = None) -> dict:
+    """Read-only checks shared by the integrity page and the period close.
+
+    `as_of` limits every check to records dated on or before that day (used
+    when closing a period: later problems don't affect the closed books)."""
+    def upto(field: str) -> dict:
+        return {field: {"$lte": as_of}} if as_of else {}
     journals = await sdb.journal_entries.find(
-        {}, {"_id": 0, "id": 1, "date": 1, "source": 1, "source_id": 1, "total": 1,
+        upto("date"), {"_id": 0, "id": 1, "date": 1, "source": 1, "source_id": 1, "total": 1,
              "lines.debit": 1, "lines.credit": 1, "reversed": 1, "reversal_je_id": 1,
              "voided_from_view": 1}).to_list(None)
     wanted: dict = {}
@@ -3169,11 +3185,11 @@ async def accounting_source_integrity(request: Request,
                 found.add(row["id"])
         existing[collection] = found
     paid_payroll = await sdb.payroll_runs.find(
-        {"status": "paid"},
+        {"status": "paid", **upto("payment_date")},
         {"_id": 0, "id": 1, "employee_id": 1, "month": 1, "year": 1, "journal_id": 1},
     ).to_list(None)
     vendor_payments = await sdb.vendor_payments.find(
-        {"status": {"$ne": "reversed"}},
+        {"status": {"$ne": "reversed"}, **upto("payment_date")},
         {"_id": 0, "id": 1, "vendor_id": 1, "payment_date": 1, "journal_entry_id": 1},
     ).to_list(None)
     report = _evaluate_source_integrity(journals, existing, paid_payroll, vendor_payments)
@@ -3186,7 +3202,7 @@ async def accounting_source_integrity(request: Request,
         e["id"]: " ".join(x for x in [e.get("first_name"), e.get("last_name")] if x) or e.get("employee_id")
         async for e in sdb.employees.find({}, {"_id": 0, "id": 1, "first_name": 1,
                                                 "last_name": 1, "employee_id": 1})}
-    async for run in sdb.payroll_runs.find({"status": "paid"}, {"_id": 0}):
+    async for run in sdb.payroll_runs.find({"status": "paid", **upto("payment_date")}, {"_id": 0}):
         records.append({"kind": "payroll_run", "id": run.get("id"),
                         "date": run.get("payment_date") or str(run.get("paid_at") or "")[:10],
                         "amount": run.get("net"), "method": run.get("payment_method"),
@@ -3194,27 +3210,27 @@ async def accounting_source_integrity(request: Request,
                         "party": f"{employee_names.get(run.get('employee_id')) or run.get('employee_id')} "
                                  f"- salary {run.get('month')}/{run.get('year')}",
                         "journal_id": run.get("journal_id")})
-    async for pmt in sdb.vendor_payments.find({"status": {"$ne": "reversed"}}, {"_id": 0}):
+    async for pmt in sdb.vendor_payments.find({"status": {"$ne": "reversed"}, **upto("payment_date")}, {"_id": 0}):
         records.append({"kind": "vendor_payment", "id": pmt.get("id"), "date": pmt.get("payment_date"),
                         "amount": pmt.get("amount"), "method": pmt.get("payment_method"),
                         "account_id": pmt.get("paid_from_account_id"),
                         "party": pmt.get("vendor_name") or pmt.get("vendor_id"),
                         "journal_id": pmt.get("journal_entry_id")})
     async for st in sdb.commission_settlements.find(
-            {"status": {"$nin": ["reversed", "cancelled"]}}, {"_id": 0}):
+            {"status": {"$nin": ["reversed", "cancelled"]}, **upto("received_date")}, {"_id": 0}):
         records.append({"kind": "commission_receipt", "id": st.get("id"), "date": st.get("received_date"),
                         "amount": st.get("amount"), "method": st.get("payment_method"),
                         "account_id": st.get("bank_account_id"),
                         "party": st.get("vendor_name") or st.get("vendor_id"),
                         "journal_id": st.get("journal_entry_id")})
-    async for rc in sdb.collection_receipts.find({"status": "received"}, {"_id": 0}):
+    async for rc in sdb.collection_receipts.find({"status": "received", **upto("date")}, {"_id": 0}):
         records.append({"kind": "collection_receipt", "id": rc.get("id"), "date": rc.get("date"),
                         "amount": rc.get("amount"), "method": rc.get("payment_method"),
                         "account_id": rc.get("bank_account_id"), "party": rc.get("source_type"),
                         "journal_id": rc.get("journal_entry_id")})
     async for je in sdb.journal_entries.find(
             {"source": {"$in": ["income", "expense", "invoice_payment", "milestone_payment"]},
-             "reversed": {"$ne": True}, "voided_from_view": {"$ne": True}},
+             "reversed": {"$ne": True}, "voided_from_view": {"$ne": True}, **upto("date")},
             {"_id": 0, "id": 1, "date": 1, "total": 1, "source": 1, "narration": 1, "lines": 1}):
         inferred = _journal_method_record(je)
         if inferred:
@@ -3934,9 +3950,16 @@ async def restate_invoice_cash_basis(user: dict, invoice_id: str) -> dict:
     total = float(inv.get("total") or 0)
     tax = float(inv.get("tax") or 0)
 
-    accrual_ids = [row["id"] for row in await sdb.journal_entries.find(
+    accrual_rows = await sdb.journal_entries.find(
         {"source": "invoice_issue", "source_id": invoice_id, "reversed": {"$ne": True}},
-        {"_id": 0, "id": 1}).to_list(None)]
+        {"_id": 0, "id": 1, "date": 1}).to_list(None)
+    accrual_ids = [row["id"] for row in accrual_rows]
+    async for row in sdb.journal_entries.find(
+            {"source": "invoice_payment", "source_id": invoice_id, "reversed": {"$ne": True}},
+            {"_id": 0, "date": 1}):
+        await assert_period_open(row.get("date"), "A payment on this invoice")
+    for row in accrual_rows:
+        await assert_period_open(row.get("date"), "This invoice's accrual entry")
     # The general reversal refuses invoice_issue on purpose (invoices are reversed
     # through their own workflow); this is that workflow. Each pair is then hidden.
     await reverse_receipt_je(user, source="invoice_issue", source_id=invoice_id,

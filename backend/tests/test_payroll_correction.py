@@ -86,6 +86,7 @@ def _wire(monkeypatch, runs, journal, accounts):
     monkeypatch.setattr(payroll, "sdb", SimpleNamespace(
         payroll_runs=Runs(), journal_entries=Journals(), accounts=Accounts()))
     monkeypatch.setattr(payroll, "doc_lock", unlocked)
+    monkeypatch.setattr(payroll, "assert_period_open", noop)  # books open in these cases
     monkeypatch.setattr(payroll, "audit", noop)
     monkeypatch.setattr(payroll, "_post_journal", post)
     monkeypatch.setattr(accounting, "_reverse_journal_entry", reverse)
@@ -192,3 +193,18 @@ def test_salary_journals_cannot_be_reversed_from_the_daybook(monkeypatch):
     with pytest.raises(HTTPException) as err:
         asyncio.run(accounting.reverse_journal("je_1", None))
     assert err.value.status_code == 409
+
+
+def test_editing_a_salary_in_closed_books_is_refused_before_anything_changes(monkeypatch):
+    runs = [_run()]
+    journal = {"id": "je_1", "date": "2026-03-28", "source": "payroll", "source_id": "run_1"}
+    calls = _wire(monkeypatch, runs, journal, CASH)
+
+    async def closed(day, what="This entry"):
+        if day <= "2026-03-31":
+            raise HTTPException(status_code=409, detail=f"{what} is in closed books")
+    monkeypatch.setattr(payroll, "assert_period_open", closed)
+    with pytest.raises(HTTPException) as exc:
+        _correct(payment_date="2026-04-05")
+    assert exc.value.status_code == 409 and "salary being edited" in exc.value.detail
+    assert runs == [_run()] and calls["posted"] == [] and calls["reversed"] == []

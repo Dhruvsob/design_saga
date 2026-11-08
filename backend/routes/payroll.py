@@ -19,6 +19,7 @@ from pymongo.errors import DuplicateKeyError
 
 from core.pdf_brand import brand_primary_hex
 from core.db import db
+from core.period_lock import assert_period_open
 from core.scoped_db import sdb
 from core.helpers import business_today, now_utc, iso_now, new_id
 from core.deps import require_user
@@ -552,6 +553,10 @@ async def correct_salary_payment(run_id: str, payload: SalaryCorrectionIn, reque
             {"id": run.get("journal_id"), "source": "payroll", "source_id": run_id}, {"_id": 0})
         if not journal:
             raise HTTPException(status_code=409, detail="Linked payroll journal is missing; administrator review required")
+        # The old payment leaves the books on its own date: refuse up front if
+        # that period is closed, before the replacement is written.
+        await assert_period_open(journal.get("date"), "The salary being edited")
+        await assert_period_open(payload.payment_date, "The corrected salary")
         paid_from = await sdb.accounts.find_one(
             {"id": payload.paid_from_account_id},
             {"_id": 0, "id": 1, "type": 1, "name": 1, "is_bank": 1, "active": 1})

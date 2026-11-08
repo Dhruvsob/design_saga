@@ -5,6 +5,7 @@ import { Daybook } from "../components/Daybook";
 import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
 import { TransactionDetail } from "../components/TransactionDetail";
 import { DataChecks } from "../components/DataChecks";
+import PeriodClose from "../components/PeriodClose";
 import { useAuth } from "../context/AuthContext";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
@@ -20,7 +21,7 @@ import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { MoneyInTabs, useReminderFlow } from "../components/MoneyIn";
-import { BellRinging } from "@phosphor-icons/react";
+import { BellRinging, LockSimple } from "@phosphor-icons/react";
 
 // Journal "source" codes in plain words for the dashboard.
 const SOURCE_LABELS = {
@@ -60,6 +61,7 @@ const TABS = [
   { id: "balance",   label: "Balance Sheet", Icon: Scales, group: "reports" },
   { id: "cashflow",  label: "Cash Flow", Icon: Waves, group: "reports" },
   { id: "coa",       label: "Chart of Accounts", Icon: ListDashes, group: "setup" },
+  { id: "close",     label: "Close & export", Icon: LockSimple, group: "setup" },
 ];
 
 // Sections grouped by what the user is doing, not by accounting jargon.
@@ -361,6 +363,11 @@ export default function Accounting() {
           accounts={accounts} clients={clients} vendors={vendors}
           projects={projects} employees={employees}
         />
+      )}
+
+      {tab === "close" && (
+        <PeriodClose isAdmin={hasPerm("*.*")} currentFy={fyOptions.find((o) => o.is_current)?.label}
+          fyChoices={fyOptions.filter((o) => o.from <= new Date().toISOString().slice(0, 10)).map((o) => o.label).reverse()} />
       )}
 
       {tab === "coa" && (
