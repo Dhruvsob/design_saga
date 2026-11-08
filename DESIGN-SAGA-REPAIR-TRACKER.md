@@ -1,15 +1,25 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-11-05 (Asia/Kolkata)
+Last updated: 2026-11-08 (Asia/Kolkata)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; all committed repair batches are pushed at the current branch HEAD. The accumulated release is ready for production deployment after the current verified batch is committed.
-- Production checkout: `/opt/design-saga-git`; runtime commit `3b15e23` was the last verified deployment before VPS access became unavailable.
+- Local checkout: `codex/repair-release`; verified repair commit `842d243` is ready for production deployment.
+- Production checkout: `/opt/design-saga-git`; runtime/source commit `c2f09bd` was verified on `srv2020574.hstgr.cloud` before this deployment.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
-- Caddy, web, backend, FerretDB and PostgreSQL were healthy at the last deployment verification. Direct SSH currently times out before authentication and the Hostinger web console disconnects after briefly opening a root shell, so no newer repair commit has been deployed.
-- Checksummed backup `/opt/design-saga-backups/20261024T122407Z` completed before the latest frontend replacement.
-- Current action: restore stable VPS access, deploy the accumulated repair release with backup and health checks, then live-verify vendor/expense/loan/PO corrections. Continue the P1 route-by-route authorization and business-integrity audit without repeating completed attendance work.
+- SSH key access works over the host's IPv6 address. Caddy, web, backend, FerretDB and PostgreSQL are running; PostgreSQL, FerretDB, backend and web report healthy. The public site returns 200 and unauthenticated auth returns 401.
+- The scheduled backup timer is active/enabled; the newest pre-existing backup is `/opt/design-saga-backups/20261107T185301Z`. A fresh verified backup is mandatory immediately before deployment.
+- Current action: deploy the verified repair release with the tracked updater, preserve the VPS-only Caddy files, and live-verify the changed attendance, site-visit, collection, expense and payroll workflows.
+
+### DS-110: Attendance/site operations, connected expenses/payroll and release-gate repair
+
+- Added attendance-linked site visits, project/site selection, check-in map, live admin map, visit photos/reports and tenant/role/location privacy controls. The attendance-only project policy still lets Site Execution/Site Supervisor staff inspect every active tenant project without broadening ordinary project visibility.
+- Consolidated salary payment UI into the authoritative payroll workflow; employee history and accounting share the same run/journal. Expense claims gained receipt correction/storage and linked financial controls.
+- Unified Collection Due reminders across calendar, notifications and Google queue without posting a journal at reminder creation. Receipt posting remains idempotent and is the only money event.
+- Fixed shared row actions so a divider before `Cancel/Delete` no longer hides the action, fixed direct site-photo selection, removed a duplicate empty-state invoice CTA, and repaired Calendar filter contrast.
+- Verification on a disposable local database: 469 canonical backend security/integrity tests passed; frontend lint, production build, JSX import check and 5 logic tests passed. The four new E2E suites passed on desktop (23), mobile (21 with 2 intentional skips) and laptop (10 with 13 intentional skips). A wider 117-case regression produced 61 passes, 51 expected cross-project skips and five failures; all five root causes were corrected and reran successfully (4 desktop + 1 mobile).
+- Dependency audits remain enforced in GitHub CI. The workstation's package-manager audit requests were blocked by its local TLS issuer chain; TLS verification was not disabled. The prior 08/11 review recorded zero production dependency advisories after upgrading fpdf2.
+- Database effect before deployment: none. Tests used only disposable local QA data.
 
 ### DS-109: Security review + pentest, signature on PDFs, cash-basis restatement, Phase 1 leftovers
 
