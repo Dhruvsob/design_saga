@@ -4,12 +4,13 @@ Last updated: 2026-11-08 (Asia/Kolkata)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; verified repair commit `842d243` is ready for production deployment.
-- Production checkout: `/opt/design-saga-git`; runtime/source commit `c2f09bd` was verified on `srv2020574.hstgr.cloud` before this deployment.
+- Local checkout: `codex/repair-release`; release and evidence commits `842d243` / `e3a855a` are pushed to `origin/codex/repair-release`.
+- Production checkout: `/opt/design-saga-git`; runtime/source commit `e3a855aba0ff48545c839da24d95ab584e8850e4` is deployed on `srv2020574.hstgr.cloud`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
-- SSH key access works over the host's IPv6 address. Caddy, web, backend, FerretDB and PostgreSQL are running; PostgreSQL, FerretDB, backend and web report healthy. The public site returns 200 and unauthenticated auth returns 401.
-- The scheduled backup timer is active/enabled; the newest pre-existing backup is `/opt/design-saga-backups/20261107T185301Z`. A fresh verified backup is mandatory immediately before deployment.
-- Current action: deploy the verified repair release with the tracked updater, preserve the VPS-only Caddy files, and live-verify the changed attendance, site-visit, collection, expense and payroll workflows.
+- SSH key access works. Caddy, web, backend, FerretDB and PostgreSQL are running; PostgreSQL, FerretDB, backend and web report healthy. Public `/` and `/api/` return 200; unauthenticated auth, site-visit, attendance-project, payroll-run and receivables routes return 401.
+- Verified backups were created immediately before and during deployment at `/opt/design-saga-backups/20261108T082420Z` and `/opt/design-saga-backups/20261108T082550Z`. The scheduled backup and monitor timers are active; the latest monitor result is successful.
+- Deployment used a SHA-256-verified Git bundle and the guarded updater. It fast-forwarded `c2f09bd` to `e3a855a`, rebuilt/recreated only backend and web, preserved the VPS-only Caddy files byte-for-byte, and produced no observed post-deploy backend 5xx/traceback signature.
+- Current action: obtain an authenticated user session for non-destructive live workflow checks when available. Do not create/delete production QA data merely to claim browser coverage. External credential rotation, alerting and off-server backups remain owner/provider actions.
 
 ### DS-110: Attendance/site operations, connected expenses/payroll and release-gate repair
 
@@ -18,8 +19,9 @@ Last updated: 2026-11-08 (Asia/Kolkata)
 - Unified Collection Due reminders across calendar, notifications and Google queue without posting a journal at reminder creation. Receipt posting remains idempotent and is the only money event.
 - Fixed shared row actions so a divider before `Cancel/Delete` no longer hides the action, fixed direct site-photo selection, removed a duplicate empty-state invoice CTA, and repaired Calendar filter contrast.
 - Verification on a disposable local database: 469 canonical backend security/integrity tests passed; frontend lint, production build, JSX import check and 5 logic tests passed. The four new E2E suites passed on desktop (23), mobile (21 with 2 intentional skips) and laptop (10 with 13 intentional skips). A wider 117-case regression produced 61 passes, 51 expected cross-project skips and five failures; all five root causes were corrected and reran successfully (4 desktop + 1 mobile).
-- Dependency audits remain enforced in GitHub CI. The workstation's package-manager audit requests were blocked by its local TLS issuer chain; TLS verification was not disabled. The prior 08/11 review recorded zero production dependency advisories after upgrading fpdf2.
+- Dependency audits remain enforced in GitHub CI. Secure production-only audits were rerun in ephemeral containers after deployment: `npm audit --omit=dev --audit-level=high` found 0 vulnerabilities and `pip-audit -r requirements.production.txt` found no known vulnerabilities. The complete development/build npm tree still reports three advisories (1 moderate, 2 high), tracked with the legacy CRA/toolchain modernization work; they are not shipped in the production runtime image.
 - Database effect before deployment: none. Tests used only disposable local QA data.
+- Production evidence: release `e3a855a` is live; all five containers are running and the four application/data containers report healthy; public security headers remain present; protected repaired routes reject anonymous requests; Caddy configuration hash and protected working-tree files are unchanged.
 
 ### DS-109: Security review + pentest, signature on PDFs, cash-basis restatement, Phase 1 leftovers
 
