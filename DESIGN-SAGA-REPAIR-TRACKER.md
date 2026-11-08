@@ -386,10 +386,10 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Deployed `e3a855a` on 08/11 via verified bundle; backend/web healthy and protected Caddy files preserved | Continue guarded bundle releases while provider outbound IPv4 remains unreliable |
+| OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Runtime deployed at `6ec8745` on 09/11 via verified bundle; backend/web healthy and protected Caddy files preserved | Continue guarded bundle releases while provider outbound IPv4 remains unreliable |
 | OPS-02 | P1 | Encrypted off-server backup replication + alerting | Externally Blocked (destination/credentials) | Owner chooses provider |
 | OPS-03 | P1 | External alert delivery (uptime/5xx/TLS/disk/backup) | Externally Blocked | Owner chooses webhook/email target |
-| OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Implemented and locally verified; production deployment pending | Pinned Trivy HIGH/CRITICAL gate, fresh `--pull` builds and revision-labelled immutable release tags |
+| OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Deployed and live-verified at `6ec8745` | Pinned Trivy HIGH/CRITICAL gate, fresh `--pull` builds and revision-labelled immutable release tags |
 | OPS-05 | P2 | Log retention/rotation evidence | Live Verified 08/11: journald 1 GB/7 days, Docker 10 MB x 3, exact legacy-container rule active; 1.5 GB compressed without downtime | Verify on host |
 | OPS-06 | P2 | No repeatable browser E2E or disposable-DB integration harness locally or in CI | Deployed (DS-075; Playwright desktop/laptop/mobile + disposable DB in quality workflow) | Add a CI job with a Mongo service + Playwright smoke for login and core journeys |
 
@@ -403,9 +403,9 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 ### Execution order
 
 1. Completed and deployed: ACC-01/04/09, SEC-03/04, UX-01..05, PRJ-01,
-   OPS-01/05/06 and the DS-110 repair release.
-2. Next independent engineering work after the OPS-04 deployment: DB-01 measured
-   query/index audit. Do not tune indexes without production-like traces.
+   OPS-01/04/05/06 and the DS-110 repair release.
+2. Next independent engineering work: DB-01 measured query/index audit. Do not
+   tune indexes without production-like traces.
 3. Owner/accountant decisions remain required for SEC-02/06, ACC-02/05/06 and HR-02/03.
 
 ### OPS-04 verification evidence (09/11/2026)
@@ -423,6 +423,13 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
   tests and production build passed. Focused Playwright journeys passed for period
   close/export/reopen and collection/commission receipt correction (desktop and
   mobile where applicable): 5 passed, 1 intentionally skipped on mobile.
+- Live verification at `6ec8745`: all five containers are healthy; the public site
+  and API return 200; protected auth, integrity and period-close routes return 401;
+  CSP/HSTS/frame/content-type/referrer/permissions headers are present; no
+  `gamaa.in` 5xx or backend exception appeared after deployment. The running backend
+  release tag and OCI revision match `6ec8745`; Trivy reports zero fixable
+  HIGH/CRITICAL findings in both deployed images. Read-only source-integrity checks
+  for both Design Saga organization records are clean across every reported count.
 
 ### DS-084: Form safety, non-blocking errors and new-firm setup checklist (UX-05, PROD-01)
 
