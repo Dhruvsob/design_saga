@@ -6,6 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Apply Debian security updates that may land between upstream slim-image
+# rebuilds. Trivy currently reports a fixed high-severity zlib update here.
+RUN apt-get update \
+    && apt-get install --only-upgrade -y zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY backend/requirements.production.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 

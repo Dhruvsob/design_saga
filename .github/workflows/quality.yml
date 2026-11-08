@@ -118,6 +118,40 @@ jobs:
         run: node --test src/lib/frontend-logic.test.mjs
       - run: npm run build
 
+  container-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build production images from fresh base layers
+        run: |
+          docker build --pull \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -t "design-saga-backend:${GITHUB_SHA}" -f backend/Dockerfile .
+          docker build --pull \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -t "design-saga-web:${GITHUB_SHA}" -f frontend/Dockerfile .
+      - name: Scan backend image for fixable high/critical vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: design-saga-backend:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          timeout: 10m
+      - name: Scan web image for fixable high/critical vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: design-saga-web:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          timeout: 10m
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25

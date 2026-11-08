@@ -63,14 +63,23 @@ build_service() {
   service=$1
   build_network=${DESIGN_SAGA_BUILD_NETWORK:-host}
   case "$service" in
-    backend) docker build --network="$build_network" -t design-saga-backend:latest -f backend/Dockerfile . ;;
-    web) docker build --network="$build_network" -t design-saga-web:latest -f frontend/Dockerfile . ;;
+    backend) docker build --pull --network="$build_network" \
+      --label "org.opencontainers.image.revision=$new_rev" \
+      -t design-saga-backend:latest -f backend/Dockerfile . ;;
+    web) docker build --pull --network="$build_network" \
+      --label "org.opencontainers.image.revision=$new_rev" \
+      -t design-saga-web:latest -f frontend/Dockerfile . ;;
     *) echo "Unsupported service build: $service" >&2; return 1 ;;
   esac
 }
 
 deploy_service() {
   service=$1
+  release_image="design-saga-${service}:release-${new_rev}"
+  if docker image inspect "$release_image" >/dev/null 2>&1; then
+    echo "Immutable release image already exists: $release_image" >&2
+    exit 1
+  fi
   docker tag "design-saga-${service}:latest" "design-saga-${service}:rollback-${rollback}"
   build_service "$service"
   docker compose up -d --no-deps --force-recreate "$service"
@@ -82,6 +91,7 @@ deploy_service() {
     echo "$service deployment failed and was rolled back" >&2
     exit 1
   fi
+  docker tag "design-saga-${service}:latest" "$release_image"
 }
 
 if [ "$backend" = true ]; then deploy_service backend; fi

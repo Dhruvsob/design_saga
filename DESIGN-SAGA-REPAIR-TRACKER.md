@@ -389,7 +389,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Deployed `e3a855a` on 08/11 via verified bundle; backend/web healthy and protected Caddy files preserved | Continue guarded bundle releases while provider outbound IPv4 remains unreliable |
 | OPS-02 | P1 | Encrypted off-server backup replication + alerting | Externally Blocked (destination/credentials) | Owner chooses provider |
 | OPS-03 | P1 | External alert delivery (uptime/5xx/TLS/disk/backup) | Externally Blocked | Owner chooses webhook/email target |
-| OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Confirmed | Add to quality workflow |
+| OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Implemented and locally verified; production deployment pending | Pinned Trivy HIGH/CRITICAL gate, fresh `--pull` builds and revision-labelled immutable release tags |
 | OPS-05 | P2 | Log retention/rotation evidence | Live Verified 08/11: journald 1 GB/7 days, Docker 10 MB x 3, exact legacy-container rule active; 1.5 GB compressed without downtime | Verify on host |
 | OPS-06 | P2 | No repeatable browser E2E or disposable-DB integration harness locally or in CI | Deployed (DS-075; Playwright desktop/laptop/mobile + disposable DB in quality workflow) | Add a CI job with a Mongo service + Playwright smoke for login and core journeys |
 
@@ -404,9 +404,25 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 1. Completed and deployed: ACC-01/04/09, SEC-03/04, UX-01..05, PRJ-01,
    OPS-01/05/06 and the DS-110 repair release.
-2. Next independent engineering work: OPS-04 container/image supply-chain gate and
-   DB-01 measured query/index audit. Do not tune indexes without production-like traces.
+2. Next independent engineering work after the OPS-04 deployment: DB-01 measured
+   query/index audit. Do not tune indexes without production-like traces.
 3. Owner/accountant decisions remain required for SEC-02/06, ACC-02/05/06 and HR-02/03.
+
+### OPS-04 verification evidence (09/11/2026)
+
+- The backend runtime base contained two fixable HIGH `zlib1g` findings
+  (CVE-2026-76844 and CVE-2026-85091). The Dockerfile now installs the current
+  Debian security update during the image build; a disposable rebuilt image scans
+  with zero HIGH/CRITICAL findings. The web image also scans clean.
+- CI builds fresh backend and web images and scans both with the Trivy action pinned
+  to an immutable commit. Any fixed HIGH/CRITICAL finding fails the workflow.
+- The production updater builds with `--pull`, records the Git revision as an OCI
+  image label, creates non-overwritable `release-<commit>` tags and retains its
+  existing change-aware, rollback-safe deployment behaviour.
+- Current branch validation: 473 backend tests passed; frontend ESLint, five logic
+  tests and production build passed. Focused Playwright journeys passed for period
+  close/export/reopen and collection/commission receipt correction (desktop and
+  mobile where applicable): 5 passed, 1 intentionally skipped on mobile.
 
 ### DS-084: Form safety, non-blocking errors and new-firm setup checklist (UX-05, PROD-01)
 
