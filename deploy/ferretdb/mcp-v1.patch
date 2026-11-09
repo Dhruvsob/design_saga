@@ -1,0 +1,90 @@
+diff --git a/internal/mcp/find.go b/internal/mcp/find.go
+index 19d3162..8d3b586 100644
+--- a/internal/mcp/find.go
++++ b/internal/mcp/find.go
+@@ -30,16 +30,17 @@ type findArgs struct {
+ }
+ 
+ // find returns documents from the collection.
+-func (s *server) find(ctx context.Context, _ *mcp.ServerSession, params *mcp.CallToolParamsFor[findArgs]) (*mcp.CallToolResult, error) { //nolint:lll // for readability
++func (s *server) find(ctx context.Context, _ *mcp.CallToolRequest, args findArgs) (*mcp.CallToolResult, any, error) { //nolint:lll // for readability
+ 	if s.l.Enabled(ctx, slog.LevelDebug) {
+-		s.l.DebugContext(ctx, "find", slog.Any("params", params))
++		s.l.DebugContext(ctx, "find", slog.Any("arguments", args))
+ 	}
+ 
+ 	req := wirebson.MustDocument(
+-		"find", params.Arguments.Collection,
+-		"limit", params.Arguments.Limit,
+-		"$db", params.Arguments.Database,
++		"find", args.Collection,
++		"limit", args.Limit,
++		"$db", args.Database,
+ 	)
+ 
+-	return s.handle(ctx, req)
++	res, err := s.handle(ctx, req)
++	return res, nil, err
+ }
+diff --git a/internal/mcp/listcollections.go b/internal/mcp/listcollections.go
+index 7a13533..659a32f 100644
+--- a/internal/mcp/listcollections.go
++++ b/internal/mcp/listcollections.go
+@@ -28,15 +28,16 @@ type listCollectionsArgs struct {
+ }
+ 
+ // find returns documents from the collection.
+-func (s *server) listCollections(ctx context.Context, _ *mcp.ServerSession, params *mcp.CallToolParamsFor[listCollectionsArgs]) (*mcp.CallToolResult, error) { //nolint:lll // for readability
++func (s *server) listCollections(ctx context.Context, _ *mcp.CallToolRequest, args listCollectionsArgs) (*mcp.CallToolResult, any, error) { //nolint:lll // for readability
+ 	if s.l.Enabled(ctx, slog.LevelDebug) {
+-		s.l.DebugContext(ctx, "listCollections", slog.Any("params", params))
++		s.l.DebugContext(ctx, "listCollections", slog.Any("arguments", args))
+ 	}
+ 
+ 	req := wirebson.MustDocument(
+ 		"listCollections", int64(1),
+-		"$db", params.Arguments.Database,
++		"$db", args.Database,
+ 	)
+ 
+-	return s.handle(ctx, req)
++	res, err := s.handle(ctx, req)
++	return res, nil, err
+ }
+diff --git a/internal/mcp/listdatabases.go b/internal/mcp/listdatabases.go
+index 78e4b13..0dde54b 100644
+--- a/internal/mcp/listdatabases.go
++++ b/internal/mcp/listdatabases.go
+@@ -23,9 +23,9 @@ import (
+ )
+ 
+ // listDatabases returns a list of databases.
+-func (s *server) listDatabases(ctx context.Context, _ *mcp.ServerSession, params *mcp.CallToolParamsFor[any]) (*mcp.CallToolResult, error) { //nolint:lll // for readability
++func (s *server) listDatabases(ctx context.Context, _ *mcp.CallToolRequest, args any) (*mcp.CallToolResult, any, error) { //nolint:lll // for readability
+ 	if s.l.Enabled(ctx, slog.LevelDebug) {
+-		s.l.DebugContext(ctx, "listDatabases", slog.Any("params", params))
++		s.l.DebugContext(ctx, "listDatabases", slog.Any("arguments", args))
+ 	}
+ 
+ 	req := wirebson.MustDocument(
+@@ -33,5 +33,6 @@ func (s *server) listDatabases(ctx context.Context, _ *mcp.ServerSession, param
+ 		"$db", "admin",
+ 	)
+ 
+-	return s.handle(ctx, req)
++	res, err := s.handle(ctx, req)
++	return res, nil, err
+ }
+diff --git a/internal/mcp/server.go b/internal/mcp/server.go
+index 0fb1607..5a8cb1c 100644
+--- a/internal/mcp/server.go
++++ b/internal/mcp/server.go
+@@ -92,7 +92,7 @@ func (s *server) handle(ctx context.Context, reqDoc *wirebson.Document) (*mcp.Ca
+ 		return nil, err
+ 	}
+ 
+-	res := &mcp.CallToolResultFor[any]{
++	res := &mcp.CallToolResult{
+ 		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+ 		IsError: !resp.OK(),
+ 	}
