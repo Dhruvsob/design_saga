@@ -5556,6 +5556,8 @@ from routes.period_close import router as period_close_router  # noqa: E402
 api.include_router(period_close_router)
 from routes.drawings import router as drawings_router  # noqa: E402
 api.include_router(drawings_router)
+from routes.snags import router as snags_router  # noqa: E402
+api.include_router(snags_router)
 
 app.include_router(api)
 

@@ -13,6 +13,12 @@ Last updated: 2026-11-08 (Asia/Kolkata)
 - Host log retention is now verified: journald is capped at 1 GB / 7 days; new Docker containers inherit 10 MB x 3-file rotation; an exact-path logrotate rule covers the three older containers without restarting them. Existing PostgreSQL/FerretDB logs were compressed from about 1.5 GB to 115 MB archived, disk use fell from 73% to 70%, and every container stayed healthy.
 - Current action: obtain an authenticated user session for non-destructive live workflow checks when available. Do not create/delete production QA data merely to claim browser coverage. External credential rotation, alerting and off-server backups remain owner/provider actions.
 
+### DS-116: Site snags with photo evidence and verified closure (PRJ-02)
+
+- Project › **Snags**: raise (title, area, priority, fix-by date, team member and/or vendor responsible, photo taken on the phone camera and shrunk on the device) → assignee or manager **Mark fixed** with a required photo of the fix → manager **Verify & close**, or **Reopen** / **Won't fix** with a reason. Numbering SN-001 per project; filters Open & to verify / Assigned to me / To verify / Closed / All; photos and full history in one dialog.
+- Rules (server): raising needs `tasks.create|tasks.update|projects.update` and project visibility; only the assignee or a manager can mark fixed; only `projects.update` can close/reopen/won't-fix; closing requires a fixed snag; assignee/vendor must belong to the tenant; delete only for an open snag with no fix photo or reopen history (removes its photos), otherwise Won't fix; compare-and-set on status; audit rows for every step. Photos use the shared upload service (same type/size checks, storage and backups as site-visit photos) and are served only to users who can see the project.
+- Verified: 477 backend tests (new `test_snags.py`); E2E `snags.spec.mjs` (raise with photo → staff cannot verify or read photos → close refused before fix → fixed with photo → verify & close → reopen with reason → history and both photos) passed; drawings/site-visits rerun green.
+
 ### DS-115: One project per job across lead → quotation → project (CRM-01)
 
 - Audit found the chain created duplicates: converting a lead creates the client and a project; converting the accepted quotation for that client always created a **second** project.
@@ -356,7 +362,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
 | PRJ-01 | P2 | Generic stages; no configurable architecture phase templates with fee/dates/deliverables | Deployed (DS-085; `e3a855a`) | Smallest slice: per-tenant phase template applied at project creation, editable |
-| PRJ-02 | P2 | Site diary / issue / snag with photo evidence and closure is missing (supervisors use tasks) | Confirmed gap | First architecture vertical slice candidate after PRJ-01 |
+| PRJ-02 | P2 | Site diary / issue / snag with photo evidence and closure is missing (supervisors use tasks) | Tested (DS-116) | Snag list with issue/fix photos and verified closure; site diary covered by site visits (DS-110) |
 | PRJ-03 | P3 | Timesheets, capacity planning, planned-vs-actual hours | Confirmed gap | Later; depends on PRJ-01 |
 
 ### 5. CRM, clients, quotations, invoices and collections

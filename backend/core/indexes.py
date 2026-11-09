@@ -161,6 +161,9 @@ _INDEXES = [
     # Drawing register: one row per drawing number per project
     ("drawings",           [("org_id", 1), ("project_id", 1), ("number", 1)],
                             {"name": "drawing_number_unique", "unique": True}),
+    # Site snags
+    ("snags",              [("org_id", 1), ("project_id", 1), ("created_at", -1)], {}),
+    ("snags",              [("org_id", 1), ("assignee_user_id", 1), ("status", 1)], {}),
 ]
 
 

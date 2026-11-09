@@ -61,7 +61,7 @@ function deviceLabel() {
 
 // Phone photos are 3-12 MB; send a 1600 px JPEG instead (also normalises HEIC
 // from the camera on browsers that can decode it). Falls back to the original.
-async function shrinkPhoto(file, maxSide = 1600) {
+export async function shrinkPhoto(file, maxSide = 1600) {
   const toJpeg = (source, w, h) => new Promise((resolve) => {
     const scale = Math.min(1, maxSide / Math.max(w, h));
     const canvas = document.createElement("canvas");
