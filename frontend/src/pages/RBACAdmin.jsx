@@ -545,7 +545,7 @@ function ResetPasswordModal({ userId, user, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="bg-white p-6 max-w-md w-full border border-[var(--line)] space-y-3" data-testid="reset-pwd-modal">
+        className="bg-white p-6 max-w-md w-full border border-[var(--line)] rounded-xl space-y-3" data-testid="reset-pwd-modal">
         <div className="overline">RESET PASSWORD</div>
         <div className="font-display font-bold tracking-tight text-2xl">{user?.name || "User"}</div>
         <div className="text-xs text-[var(--ink-2)]">{user?.email} · {user?.employee_id}</div>

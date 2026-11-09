@@ -329,7 +329,7 @@ export default function VendorDetail() {
           <div className="flex flex-wrap items-center gap-2">
             {canEditVendor && <button type="button" className="btn-ghost" onClick={openVendorEdit}><PencilSimple size={13}/> Edit</button>}
             {canDeleteVendor && <button type="button" className="btn-ghost text-[var(--danger)]" onClick={archiveVendor}><Archive size={13}/> Archive</button>}
-            <div className="px-3 py-2 border border-[var(--line)]">
+            <div className="px-3 py-2 border border-[var(--line)] rounded-xl">
               <div className="overline text-[9px]">RATING</div>
               <div className="flex items-center gap-1">
                 <Star size={14} weight="fill" className="text-[#F5B800]" />
@@ -337,7 +337,7 @@ export default function VendorDetail() {
                 <span className="text-xs text-[var(--ink-3)]">/ 5 · {v.rating_count || 0} ratings</span>
               </div>
             </div>
-            <div className="px-3 py-2 border border-[var(--line)]">
+            <div className="px-3 py-2 border border-[var(--line)] rounded-xl">
               <div className="overline text-[9px]">OUTSTANDING</div>
               <div className={`font-display font-bold text-lg ${s.outstanding > 0 ? "text-[var(--danger)]" : ""}`}>
                 {INR(s.outstanding || 0)}
@@ -433,7 +433,7 @@ function VendorEditModal({ form, setForm, onSave, onClose, busy }) {
   );
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <form onSubmit={onSave} onClick={(e) => e.stopPropagation()} className="bg-white border border-[var(--line)] p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto space-y-4">
+      <form onSubmit={onSave} onClick={(e) => e.stopPropagation()} className="bg-white border border-[var(--line)] rounded-xl p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto space-y-4">
         <div className="flex justify-between items-start"><div><div className="overline">VENDOR MASTER</div><h2 className="font-display font-bold text-3xl">Edit vendor</h2></div><button type="button" className="btn-ghost" onClick={onClose}>×</button></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {field("name", "Vendor name")}{field("company", "Company")}
@@ -837,7 +837,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
           <input className="input-flat w-full" placeholder="Reference (UTR / cheque # / txn id)"
             value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
           {openBills.length > 0 && (
-            <div className="border border-[var(--line)] p-3 space-y-1">
+            <div className="border border-[var(--line)] rounded-md p-3 space-y-1">
               <div className="overline">Settle bills (optional — FIFO if empty)</div>
               {openBills.map((b) => (
                 <label key={b.id} className="flex items-center gap-2 text-sm">
@@ -992,7 +992,7 @@ function Documents({ v, canEdit, onAdd, onEdit, onDelete, busy }) {
           <div className="text-sm text-[var(--ink-3)] col-span-2">No documents on file.</div>
         )}
         {(v.documents || []).map((d) => (
-          <div key={d.id} className="border border-[var(--line)] p-4 flex items-start gap-3">
+          <div key={d.id} className="border border-[var(--line)] rounded-lg p-4 flex items-start gap-3">
             <FileText size={22} className="text-[var(--accent-strong)]" />
             <div className="flex-1 min-w-0">
               {safeFileUrl(d.url) ? (
@@ -1139,7 +1139,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
             </div>
 
             {t === "slab" && (
-              <div className="mt-4 border border-[var(--line)] p-3">
+              <div className="mt-4 border border-[var(--line)] rounded-md p-3">
                 <div className="overline mb-2">SLABS</div>
                 {f.slabs.map((s, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 mb-2">
@@ -1340,7 +1340,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
             value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
 
           {openRows.length > 0 && (
-            <div className="border border-[var(--line)] p-3 space-y-1">
+            <div className="border border-[var(--line)] rounded-md p-3 space-y-1">
               <div className="overline">Settle specific incentives (optional — FIFO if empty)</div>
               {openRows.map((r) => (
                 <label key={r.id} className="flex items-center gap-2 text-sm">

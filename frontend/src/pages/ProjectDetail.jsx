@@ -303,7 +303,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Stage tracker: one progress line; click a stage to move the project */}
-      <div className="border border-[var(--line)] bg-white px-5 py-4" data-testid="stage-tracker">
+      <div className="border border-[var(--line)] rounded-xl bg-white px-5 py-4" data-testid="stage-tracker">
         <div className="flex items-center justify-between mb-3">
           <div className="overline">LIFECYCLE</div>
           <div className="text-xs text-[var(--ink-2)]">Stage {currentIdx + 1} of {STAGES.length} · <span className="font-semibold text-[var(--ink)]">{STAGES[currentIdx] || p.stage}</span></div>
@@ -377,7 +377,7 @@ export default function ProjectDetail() {
                             onOpen={(t) => setTab(t)} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[var(--line)]" data-testid="project-financials">
+            <div className="grid grid-cols-2 md:grid-cols-5 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-financials">
               <MiniStat label="Project value" value={inr(money.project_value ?? fin.budget)} />
               <MiniStat label="Invoiced" value={inr(money.invoiced ?? fin.invoiced)} />
               <MiniStat label="Received" value={inr(money.received ?? fin.collected)} accent="#1D633E" />
@@ -385,7 +385,7 @@ export default function ProjectDetail() {
               {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-t border-l border-[var(--line)]" data-testid="project-operational-stats">
+            <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-operational-stats">
               <MiniStat label="Tasks" value={`${(p.tasks || []).length}`} />
               <MiniStat label="Team" value={`${(p.team || []).length + (p.project_manager ? 1 : 0)}`} />
               <MiniStat label="Files" value={`${(p.files || []).length}`} />
@@ -395,7 +395,7 @@ export default function ProjectDetail() {
 
           <div className="grid grid-cols-1 gap-6">
             {/* team */}
-            <div className="border border-[var(--line)] p-5">
+            <div className="border border-[var(--line)] rounded-lg p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="overline"><UsersThree size={12} className="inline mr-1" /> TEAM</div>
                 {hasPerm("projects.update") && (
@@ -420,7 +420,7 @@ export default function ProjectDetail() {
                   <div className="flex flex-wrap gap-1.5">
                     {(p.team || []).map((m) => (
                       <Link key={m.id} to={`/employees/${m.id}`}
-                        className="text-xs border border-[var(--line)] px-2 py-1 hover:border-[var(--ink)] transition">
+                        className="text-xs border border-[var(--line)] px-2 py-1 rounded-md hover:border-[var(--ink)] transition">
                         {m.name} {m.designation && <span className="text-[var(--ink-3)]">· {m.designation}</span>}
                       </Link>
                     ))}
@@ -443,7 +443,7 @@ export default function ProjectDetail() {
           {(p.tasks || []).length === 0 && <Empty text="No tasks yet. Add them from the Tasks page." />}
           {(p.tasks || []).map((t) => (
             <button key={t.id} onClick={() => navigate(`/tasks/${t.id}`)}
-              className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition"
+              className="w-full text-left border border-[var(--line)] rounded-lg p-3 flex items-center justify-between hover:border-[var(--ink)] transition"
               data-testid={`project-task-${t.id}`}>
               <div>
                 <div className="font-semibold text-sm">{t.title}</div>
@@ -506,7 +506,7 @@ export default function ProjectDetail() {
           )}
           {(p.milestones || []).length === 0 && <Empty text="No payment milestones yet." />}
           {(p.milestones || []).map((m) => (
-            <div key={m.id} className="border border-[var(--line)] p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
+            <div key={m.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
               <div>
                 <div className="font-semibold text-sm">{m.name}</div>
                 <div className="text-xs text-[var(--ink-2)]">Due {formatDate(m.due_date)}{m.percent ? ` · ${m.percent}% of project value` : ""}{Number(m.paid_amount || 0) > 0 && m.status !== "paid" ? ` · ${inr(m.paid_amount)} received` : ""}</div>
@@ -528,7 +528,7 @@ export default function ProjectDetail() {
             <div className="space-y-2">
               {(p.purchase_orders || []).map((po) => (
                 <button key={po.id} onClick={() => navigate("/purchase-orders")}
-                  className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
+                  className="w-full text-left border border-[var(--line)] rounded-lg p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div>
                     <div className="font-mono font-semibold text-sm">{po.po_number}</div>
                     <div className="text-xs text-[var(--ink-2)]">{po.vendor_name || "—"}</div>
@@ -547,7 +547,7 @@ export default function ProjectDetail() {
             <div className="space-y-2">
               {(p.vendor_bills || []).map((b) => (
                 <button key={b.id} onClick={() => b.vendor_id && navigate(`/vendors/${b.vendor_id}`)}
-                  className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
+                  className="w-full text-left border border-[var(--line)] rounded-lg p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div>
                     <div className="font-mono font-semibold text-sm">{b.bill_number || b.id}</div>
                     <div className="text-xs text-[var(--ink-2)]">{b.vendor_name || "—"} · {formatDate(b.bill_date)}</div>
@@ -585,7 +585,7 @@ export default function ProjectDetail() {
           )}
           {(p.files || []).length === 0 && <Empty text="No files yet." />}
           {(p.files || []).map((f) => (
-            <div key={f.id} className="border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition group">
+            <div key={f.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between hover:border-[var(--ink)] transition group">
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm">{f.name}</div>
                 <div className="text-xs text-[var(--ink-2)]">{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
@@ -615,7 +615,7 @@ export default function ProjectDetail() {
         <div className="space-y-2">
           {(p.invoices || []).length === 0 && <Empty text="No invoices yet." />}
           {(p.invoices || []).map((i) => (
-            <div key={i.id} className="border border-[var(--line)] p-3 flex items-center justify-between">
+            <div key={i.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
                 <div className="text-xs text-[var(--ink-2)]">{i.doc_type} · Due {formatDate(i.due_date)}</div>

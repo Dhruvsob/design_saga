@@ -606,7 +606,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       {canDecide && (
-        <div className="border border-[var(--line)] p-3 mb-4 bg-[var(--surface-2)]">
+        <div className="border border-[var(--line)] rounded-lg p-3 mb-4 bg-[var(--surface-2)]">
           <div className="overline mb-2">MY DECISION</div>
           <textarea className="input-flat w-full h-16 mb-2" placeholder="Optional comment" value={comment} onChange={(e) => setComment(e.target.value)} data-testid="dec-comment" />
           <div className="flex gap-2">
@@ -617,7 +617,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       {canReimburse && (
-        <div className="border border-[var(--line)] p-3 bg-[var(--hover)]">
+        <div className="border border-[var(--line)] rounded-lg p-3 bg-[var(--hover)]">
           <div className="overline mb-2">REIMBURSE</div>
           <div className="flex flex-wrap gap-2 items-center">
             <select aria-label="Pay from" className="input-flat" value={payFrom} onChange={(e) => setPayFrom(e.target.value)} data-testid="pay-from">
@@ -643,7 +643,7 @@ function F({ label, children }) { return <label className="block"><div className
 function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-5xl" : "max-w-2xl"}`}>
+      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[var(--line)] rounded-xl max-h-[92vh] overflow-y-auto ${wide ? "max-w-5xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>{eyebrow && <div className="overline mb-1">{eyebrow}</div>}<div className="font-display font-bold tracking-tighter text-3xl">{title}</div></div>
           <button onClick={onClose} className="btn-ghost"><X size={13}/></button>

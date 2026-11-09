@@ -411,7 +411,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
   };
 
   return (
-    <div className="border border-[var(--ink)] bg-[var(--ink)] text-white px-4 py-3 scale-in space-y-2" data-testid="bulk-bar">
+    <div className="border border-[var(--ink)] rounded-lg bg-[var(--ink)] text-white px-4 py-3 scale-in space-y-2" data-testid="bulk-bar">
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <ListChecks size={16} />
         <span className="font-mono text-xs tracking-wider">{count} SELECTED</span>
@@ -475,7 +475,7 @@ function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd
                 <div className="overline">{c.label}</div>
               </div>
               <div className="flex items-center gap-1">
-                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)]">{items.length}</div>
+                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)] rounded">{items.length}</div>
                 {onQuickAdd && <QuickAdd lane={c.id} label={c.label} onAdd={onQuickAdd} />}
               </div>
             </div>
@@ -490,7 +490,7 @@ function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd
                     draggable
                     onDragStart={() => onDragStart(t.id)}
                     onClick={() => onOpen(t.id)}
-                    className={`border p-3 bg-white cursor-grab active:cursor-grabbing transition-all hover:-translate-y-0.5 group ${
+                    className={`border p-3 rounded-lg bg-white cursor-grab active:cursor-grabbing transition-all hover:-translate-y-0.5 group ${
                       isSel ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" :
                       overdue ? "border-[var(--danger)]" : "border-[var(--line)] hover:border-[var(--ink)]"}`}
                     data-testid={`task-${t.id}`}

@@ -773,7 +773,7 @@ function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-           className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-4xl" : "max-w-2xl"}`}>
+           className={`bg-white p-6 w-full border border-[var(--line)] rounded-xl max-h-[92vh] overflow-y-auto ${wide ? "max-w-4xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>
             {eyebrow && <div className="overline mb-1">{eyebrow}</div>}
@@ -855,11 +855,11 @@ function OrgHealthModal({ org, onClose, onSaved }) {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <div className="border border-[var(--line)] p-3">
+              <div className="border border-[var(--line)] rounded-md p-3">
                 <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">USERS</div>
                 <div className="font-mono text-lg">{health.usage.users.used}<span className="text-xs text-[var(--ink-3)]"> / {health.usage.users.limit ?? "∞"}</span></div>
               </div>
-              <div className="border border-[var(--line)] p-3">
+              <div className="border border-[var(--line)] rounded-md p-3">
                 <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">PROJECTS</div>
                 <div className="font-mono text-lg">{health.usage.projects.used}<span className="text-xs text-[var(--ink-3)]"> / {health.usage.projects.limit ?? "∞"}</span></div>
               </div>

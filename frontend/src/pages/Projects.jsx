@@ -294,7 +294,7 @@ export default function Projects() {
               <div className="overline mb-2">
                 {p.project_type}
                 {p.engagement_type && (
-                  <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
+                  <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
                     p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[#5F5A4B]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
                   }`}>{p.engagement_type}</span>
                 )}

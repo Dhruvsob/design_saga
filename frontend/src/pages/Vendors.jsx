@@ -117,7 +117,7 @@ export default function Vendors() {
 
       {/* FILTERS */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-1 max-w-md px-3 py-2 border border-[var(--line)] focus-within:border-[var(--accent)] transition">
+        <div className="flex items-center gap-2 flex-1 max-w-md px-3 py-2 border border-[var(--line)] rounded-md focus-within:border-[var(--accent)] transition">
           <MagnifyingGlass size={15} className="text-[var(--ink-2)]" />
           <input
             data-testid="vendor-search"

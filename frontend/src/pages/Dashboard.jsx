@@ -265,7 +265,7 @@ export default function Dashboard() {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {sources.map((s) => (
-                <div key={s.source} className="border border-[var(--line)] p-4 hover:border-[var(--ink)] hover:-translate-y-0.5 transition cursor-pointer">
+                <div key={s.source} className="border border-[var(--line)] rounded-lg p-4 hover:border-[var(--ink)] hover:-translate-y-0.5 transition cursor-pointer">
                   <div className="overline">{statusLabel(s.source)}</div>
                   <div className="font-display font-bold text-3xl tracking-tighter mt-1">{s.count}</div>
                   <div className="mt-2 h-0.5 bg-[var(--accent)]" style={{ width: `${Math.min(100, s.count * 25)}%` }} />

@@ -407,7 +407,7 @@ function References({ task, onSave }) {
           <button onClick={addLink} className="btn-primary" data-testid="ref-add"><Plus size={14} /></button>
         </div>
         {(task.reference_links || []).map((l, i) => (
-          <div key={i} className="flex items-center justify-between text-xs border border-[var(--line)] p-2" data-testid={`ref-${i}`}>
+          <div key={i} className="flex items-center justify-between text-xs border border-[var(--line)] rounded-md p-2" data-testid={`ref-${i}`}>
             {safeExternalUrl(l) ? <a href={safeExternalUrl(l)} target="_blank" rel="noreferrer" className="truncate flex-1 text-[var(--accent-strong)] hover:underline">{l}</a> : <span className="truncate flex-1 text-[var(--ink-3)]">Invalid link</span>}
             <button onClick={() => delLink(i)} className="text-[var(--danger)] ml-2"><Trash size={12} /></button>
           </div>
@@ -429,7 +429,7 @@ function References({ task, onSave }) {
         </div>
         <button onClick={addAtt} className="btn-primary w-full" data-testid="att-add"><Plus size={14} /> Add attachment</button>
         {(task.attachments || []).map((a, i) => (
-          <div key={i} className="flex items-center justify-between text-xs border border-[var(--line)] p-2" data-testid={`att-${i}`}>
+          <div key={i} className="flex items-center justify-between text-xs border border-[var(--line)] rounded-md p-2" data-testid={`att-${i}`}>
             <div className="flex items-center gap-2 truncate flex-1">
               <PaperclipHorizontal size={12} />
               {safeExternalUrl(a.url) ? (

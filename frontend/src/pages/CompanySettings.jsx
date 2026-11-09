@@ -275,7 +275,7 @@ export default function CompanySettings() {
             <div className="card-flat sticky top-24">
               <div className="overline mb-3">LIVE PREVIEW</div>
               {/* Sidebar preview */}
-              <div className="border border-[var(--line)] p-4 flex items-center gap-3 mb-4">
+              <div className="border border-[var(--line)] rounded-lg p-4 flex items-center gap-3 mb-4">
                 {branding.logo_url && !logoBroken ? (
                   <img src={branding.logo_url} alt="" onError={() => setLogoBroken(true)} className="h-10 w-auto max-w-[64px] object-contain" />
                 ) : (
@@ -296,7 +296,7 @@ export default function CompanySettings() {
               {/* Invoice header preview */}
               <div>
                 <div className="overline mb-2 text-[9px]">INVOICE HEADER</div>
-                <div className="border border-[var(--line)] p-3">
+                <div className="border border-[var(--line)] rounded-md p-3">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-sm font-display font-bold" style={{ color: pdfColour }}>
@@ -388,7 +388,7 @@ function ColorField({ label, value, onChange, testid }) {
   return (
     <div>
       <label className="block text-xs text-[var(--ink-2)] mb-1">{label}</label>
-      <div className="flex items-center gap-2 border border-[var(--line)] p-1 bg-white">
+      <div className="flex items-center gap-2 border border-[var(--line)] p-1 rounded-md bg-white">
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} picker`}
                className="w-10 h-10 border-none cursor-pointer" data-testid={`${testid}-picker`} />
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} hex code`}

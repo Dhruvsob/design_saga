@@ -711,3 +711,84 @@ select.input-flat { border-radius: 12px; }
   .btn-primary:hover, .btn-ghost:hover { transform: none; }
   [data-testid="app-pin-lock"] [aria-label="PIN keypad"] button:hover { transform: none; }
 }
+
+/* ============================================================
+   TACTILE PASS 3 — Detail page polish & micro-interactions
+   (09/11/2026)
+   ============================================================ */
+
+/* Inner bordered content sections (team card, details card, file section, etc.) */
+main .border.border-\[var\(--line\)\].p-5:not(:has(> table)),
+main .border.border-\[var\(--line\)\].p-4:not(:has(> table)),
+main .border.border-\[var\(--line\)\].p-6:not(:has(> table)) {
+  border-radius: var(--radius-lg);
+}
+
+/* Highlighted background panel (pay controls, alert panels) */
+main .bg-\[var\(--surface-2\)\].border.border-\[var\(--line\)\] {
+  border-radius: var(--radius-lg);
+}
+
+/* Scroll-bounded table containers */
+main .border.border-\[var\(--line\)\]:has(> .overflow-x-auto),
+main .border.border-\[var\(--line\)\].overflow-y-auto {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* Dashed empty-state borders */
+main [class*="border-dashed"] { border-radius: var(--radius); }
+
+/* Inline mono-uppercase status badges (schedule table, etc.) */
+main table span.font-mono.uppercase { border-radius: 100px; }
+
+/* Tab buttons — smooth active-indicator transition */
+[role="tablist"] > button {
+  transition: color 150ms ease, border-color 150ms ease !important;
+}
+
+/* Progress bar tracks and fills — rounded capsule */
+.h-1.bg-\[var\(--line-soft\)\] { border-radius: 100px; overflow: hidden; }
+.h-1.bg-\[var\(--line-soft\)\] .bg-\[var\(--accent\)\] { border-radius: 100px; }
+
+/* Stage filter pills in list/grid pages — hover depth */
+[role="tablist"] > button:not([aria-selected="true"]):hover,
+button.rounded-full:not(.btn-primary):not(.btn-ghost):hover {
+  box-shadow: var(--elev-1);
+}
+
+/* Form validation error messages */
+main [class*="border-[var(--danger)]"][class*="bg-[var(--danger-soft)]"] {
+  border-radius: var(--radius);
+}
+
+/* Chip/badge inline tags (engagement type, loan status) */
+main button span.font-mono.uppercase,
+main span.font-mono.uppercase.px-1\.5 { border-radius: 4px; }
+
+/* Grouped stat grids (collections aging, divide-x/y panels) */
+main .border.border-\[var\(--line\)\][role="group"] {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* Individual inner cards/tiles that sit in a gap-3 grid */
+main .card-flat { transition: box-shadow 180ms ease, transform 120ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  [role="tablist"] > button { transition: none !important; }
+  main .card-flat { transition: none; }
+}
+
+/* TACTILE PASS 5 — table scroll wrappers, search bars, remaining panels (10/11/2026) */
+/* Round all overflow-x-auto table containers */
+main .border.border-\[var\(--line\)\].overflow-x-auto { border-radius: var(--radius-lg); }
+/* Round fixed-overlay modal panels (max-w constrained + bg-white) */
+.fixed .bg-white.border.border-\[var\(--line\)\][class*="max-w-"],
+.fixed .bg-white.border.border-\[var\(--ink\)\][class*="max-w-"] { border-radius: var(--radius-lg); }
+/* Round list-wrappers that use divide-y without overflow-x-auto */
+main .border.border-\[var\(--line\)\].divide-y { border-radius: var(--radius-lg); overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  main .border.border-\[var\(--line\)\].overflow-x-auto,
+  main .border.border-\[var\(--line\)\].divide-y { transition: none; }
+}
