@@ -93,10 +93,31 @@ export default function QuotationBuilder() {
   };
 
   const convert = async () => {
-    if (!await confirmAction("Convert this quotation into a project? Tasks will be auto-created.")) return;
+    // One project per job: if this client already has a project (e.g. from the
+    // converted lead), offer to link the accepted quotation to it.
+    let existing = [];
+    if (q.client_id) {
+      try {
+        const { data } = await api.get("/projects");
+        existing = (Array.isArray(data) ? data : data.items || []).filter((p) =>
+          p.client_id === q.client_id && !p.from_quotation_id && !p.archived && p.status !== "archived");
+      } catch { existing = []; }
+    }
+    let body;
+    if (existing.length) {
+      const v = await askForm({
+        title: "Accepted quotation → project",
+        body: `${q.client_name || "This client"} already has ${existing.length === 1 ? "a project" : `${existing.length} projects`}. Link the quotation to it so there is one project for this job, or start a new one. Tasks from the quotation's phases are added either way.`,
+        fields: [{ name: "project_id", label: "Project", required: true, defaultValue: existing[0].id,
+          options: [...existing.map((p) => ({ value: p.id, label: `Link to ${p.name}` })), { value: "__new__", label: "Create a new project" }] }],
+        confirmLabel: "Continue",
+      });
+      if (!v) return;
+      body = v.project_id === "__new__" ? undefined : { project_id: v.project_id };
+    } else if (!await confirmAction("Convert this quotation into a project? Tasks will be auto-created.")) return;
     try {
-      const { data } = await api.post(`/quotations-adv/${id}/convert-to-project`);
-      toast.success("Project created from this quotation");
+      const { data } = await api.post(`/quotations-adv/${id}/convert-to-project`, body);
+      toast.success(data.linked_existing ? "Quotation linked to the existing project" : "Project created from this quotation");
       navigate(`/projects/${data.project_id}`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to convert");

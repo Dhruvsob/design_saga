@@ -13,6 +13,13 @@ Last updated: 2026-11-08 (Asia/Kolkata)
 - Host log retention is now verified: journald is capped at 1 GB / 7 days; new Docker containers inherit 10 MB x 3-file rotation; an exact-path logrotate rule covers the three older containers without restarting them. Existing PostgreSQL/FerretDB logs were compressed from about 1.5 GB to 115 MB archived, disk use fell from 73% to 70%, and every container stayed healthy.
 - Current action: obtain an authenticated user session for non-destructive live workflow checks when available. Do not create/delete production QA data merely to claim browser coverage. External credential rotation, alerting and off-server backups remain owner/provider actions.
 
+### DS-115: One project per job across lead → quotation → project (CRM-01)
+
+- Audit found the chain created duplicates: converting a lead creates the client and a project; converting the accepted quotation for that client always created a **second** project.
+- `POST /quotations-adv/{id}/convert-to-project` now accepts `{project_id}` to link the accepted quotation to an existing project of the same client (needs `projects.update` on that project instead of `projects.create`): sets `from_quotation_id`, keeps an already-agreed project value (fills it from the quotation only when empty), adds the quotation's phase/BOQ tasks. Refuses a project already linked to a quotation (409), an archived project (409) or another client's project (400). Rollback removes only the tasks this conversion created and unlinks the project; audit row `quotation.convert`.
+- Quotation screen: Convert offers the client's existing unlinked projects first ("Link to <project>"), with "Create a new project" still available.
+- Verified: 476 backend tests; new E2E `crm-chain.spec.mjs` (lead → convert → second convert 409 → quotation approved → UI link → still one project, quotation converted to it → relink 409 → second quotation: same project 409, other client's project 400, new project OK); proposal/pdf specs 4/4.
+
 ### DS-114: Drawing register on every project (DOC-01)
 
 - Project › **Drawings**: numbered drawings (unique per project, e.g. A-101) with discipline and scale; **Issue rev A/B/C…** uploads the PDF through the existing project Files upload (one file engine, same storage/backup/permissions) or picks an existing project file; purpose For review / approval / construction (GFC) / as built / information; issued to; what changed.
@@ -356,7 +363,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| CRM-01 | P2 | Lead → quotation → project chain not verified end to end on current code | Audit Needed | Disposable-DB E2E (OPS-06) |
+| CRM-01 | P2 | Lead → quotation → project chain not verified end to end on current code | Tested (DS-115) | Duplicate-project defect fixed; E2E added |
 | CRM-02 | P3 | Duplicate lead merge, source attribution | Confirmed gap | Later |
 
 ### 6. Vendors, procurement, bills, payments and commissions

@@ -3736,15 +3736,30 @@ async def adv_change_order(qid: str, payload: ChangeOrderIn, request: Request,
     return co
 
 
+class QuoteConvertIn(BaseModel):
+    # Link the accepted quotation to this client's existing project (e.g. the one
+    # created when the lead was converted) instead of creating a second project.
+    project_id: Optional[str] = None
+
+
 @api.post("/quotations-adv/{qid}/convert-to-project")
-async def adv_convert(qid: str, request: Request, session_token: Optional[str] = Cookie(default=None),
+async def adv_convert(qid: str, request: Request, payload: Optional[QuoteConvertIn] = None,
+                      session_token: Optional[str] = Cookie(default=None),
                       authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require_perm(user, "quotations.update")
     # Conversion is a composite create operation. Quotation edit rights alone
     # must not bypass the normal project/task creation permissions.
-    _require_perm(user, "projects.create")
+    target_id = (payload.project_id if payload else None) or None
+    _require_perm(user, "projects.update" if target_id else "projects.create")
     _require_perm(user, "tasks.create")
+    target = None
+    if target_id:
+        target = await get_visible_project(user, target_id, permission="projects.update")
+        if target.get("from_quotation_id"):
+            raise HTTPException(status_code=409, detail="That project already has an accepted quotation linked.")
+        if target.get("archived") or target.get("status") == "archived":
+            raise HTTPException(status_code=409, detail="Restore the project before linking a quotation to it.")
     conversion_claim = uuid.uuid4().hex
     q = await sdb.quotations_adv.find_one_and_update(
         {
@@ -3770,9 +3785,20 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
             raise HTTPException(status_code=409, detail="Quotation conversion is already in progress")
         raise HTTPException(status_code=400, detail="Quotation must be approved (or near-final) to convert")
 
+    async def release_claim():
+        await sdb.quotations_adv.update_one(
+            {"id": qid, "conversion_claim": conversion_claim},
+            {"$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
+        )
+
     # reuse client or create
     client_id = q.get("client_id")
     created_client = False
+    if target is not None:
+        if client_id and target.get("client_id") and target["client_id"] != client_id:
+            await release_claim()
+            raise HTTPException(status_code=400, detail="That project belongs to a different client.")
+        client_id = client_id or target.get("client_id")
     if not client_id:
         if not has_permission(user, "clients.create"):
             await sdb.quotations_adv.update_one(
@@ -3789,8 +3815,8 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
         )
         raise HTTPException(status_code=400, detail="Quotation client no longer exists")
 
-    project_id = new_id("prj_")
-    project = {
+    project_id = target["id"] if target is not None else new_id("prj_")
+    project = target or {
         "id": project_id,
         "name": q.get("project_title"),
         "client_id": client_id,
@@ -3804,6 +3830,8 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
         "created_by": user["user_id"],
         "from_quotation_id": qid,
     }
+    created_task_ids: list = []
+    linked_fields: dict = {}
     try:
         if created_client:
             await sdb.clients.insert_one({
@@ -3812,15 +3840,26 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
                 "address": q.get("project_location"), "created_at": iso(now_utc()),
                 "from_quotation_id": qid,
             })
-        await sdb.projects.insert_one(dict(project))
+        if target is None:
+            await sdb.projects.insert_one(dict(project))
+        else:
+            # One project per job: attach the quotation; keep a value already agreed on the project.
+            linked_fields = {"from_quotation_id": qid, "updated_at": iso(now_utc())}
+            if not float(target.get("budget") or 0):
+                linked_fields["budget"] = (q.get("cost") or {}).get("grand_total", 0)
+            linked = await sdb.projects.update_one(
+                {"id": project_id, "from_quotation_id": {"$in": [None, ""]}}, {"$set": linked_fields})
+            if not linked.matched_count:
+                raise HTTPException(status_code=409, detail="That project already has an accepted quotation linked.")
 
         # Auto-create tasks from BOQ categories + timeline phases.
         from core.helpers import business_today
         today = business_today()
         for i, cat in enumerate(q.get("boq", []) or []):
             due = (today + timedelta(days=14 + i * 7)).isoformat()
+            created_task_ids.append(new_id("tsk_"))
             await sdb.tasks.insert_one({
-                "id": new_id("tsk_"), "title": f"Procure & finalise: {cat.get('category')}",
+                "id": created_task_ids[-1], "title": f"Procure & finalise: {cat.get('category')}",
                 "description": f"From quotation {q.get('number')}", "project_id": project_id,
                 "project_name": project["name"], "assignee_id": user["user_id"],
                 "assignee_name": user["name"], "priority": "medium", "status": "todo",
@@ -3828,8 +3867,9 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
             })
         for ph in q.get("timeline", []) or []:
             due = (today + timedelta(weeks=ph.get("start_offset_weeks", 0) + ph.get("duration_weeks", 0))).isoformat()
+            created_task_ids.append(new_id("tsk_"))
             await sdb.tasks.insert_one({
-                "id": new_id("tsk_"), "title": f"Phase: {ph.get('phase')}",
+                "id": created_task_ids[-1], "title": f"Phase: {ph.get('phase')}",
                 "description": f"Auto-generated milestone task. Duration {ph.get('duration_weeks')} weeks.",
                 "project_id": project_id, "project_name": project["name"],
                 "assignee_id": user["user_id"], "assignee_name": user["name"],
@@ -3846,16 +3886,21 @@ async def adv_convert(qid: str, request: Request, session_token: Optional[str] =
         if finalized.matched_count == 0:
             raise RuntimeError("Quotation conversion claim was lost")
     except Exception:
-        await sdb.tasks.delete_many({"project_id": project_id})
-        await sdb.projects.delete_one({"id": project_id})
+        if created_task_ids:
+            await sdb.tasks.delete_many({"id": {"$in": created_task_ids}})
+        if target is None:
+            await sdb.projects.delete_one({"id": project_id})
+        elif linked_fields:
+            await sdb.projects.update_one(
+                {"id": project_id, "from_quotation_id": qid},
+                {"$set": {"from_quotation_id": None, "budget": target.get("budget")}})
         if created_client:
             await sdb.clients.delete_one({"id": client_id})
-        await sdb.quotations_adv.update_one(
-            {"id": qid, "conversion_claim": conversion_claim},
-            {"$unset": {"conversion_claim": "", "conversion_claimed_at": ""}},
-        )
+        await release_claim()
         raise
-    return {"project_id": project_id, "client_id": client_id}
+    await audit_log(user, "quotation.convert", target=qid, target_type="quotation",
+                    meta={"project_id": project_id, "linked_existing": target is not None})
+    return {"project_id": project_id, "client_id": client_id, "linked_existing": target is not None}
 
 
 @api.post("/quotations-adv/{qid}/cost-vs-actual")
