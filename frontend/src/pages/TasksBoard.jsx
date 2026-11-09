@@ -411,7 +411,7 @@ function BulkBar({ count, meta, employees, onApply, onClear }) {
   };
 
   return (
-    <div className="border border-[var(--ink)] bg-[var(--ink)] text-white px-4 py-3 scale-in space-y-2" data-testid="bulk-bar">
+    <div className="border border-[var(--ink)] rounded-lg bg-[var(--ink)] text-white px-4 py-3 scale-in space-y-2" data-testid="bulk-bar">
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <ListChecks size={16} />
         <span className="font-mono text-xs tracking-wider">{count} SELECTED</span>

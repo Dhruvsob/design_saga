@@ -536,7 +536,7 @@ export default function Attendance() {
               {summary && (
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                   {Object.entries(summary.counts).map(([k, v]) => (
-                    <div key={k} className="border border-[var(--line)] p-3" data-testid={`count-${k}`}>
+                    <div key={k} className="border border-[var(--line)] rounded-lg p-3" data-testid={`count-${k}`}>
                       <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: STATUS_COLORS[k] }}>{k}</div>
                       <div className="font-display font-bold text-2xl">{v}</div>
                     </div>
@@ -687,7 +687,7 @@ export default function Attendance() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <MonthPicker ym={ym} setYm={setYm} />
             <div className="flex items-center gap-3">
-              <div className="flex items-center border border-[var(--line)]" data-testid="monthly-view-toggle">
+              <div className="flex items-center border border-[var(--line)] rounded-md overflow-hidden" data-testid="monthly-view-toggle">
                 {[["grid", "Day-by-day"], ["summary", "Summary"]].map(([v, l]) => (
                   <button key={v} onClick={() => setMonthlyView(v)}
                     className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${monthlyView === v ? "bg-[var(--ink)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}

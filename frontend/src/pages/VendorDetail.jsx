@@ -837,7 +837,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
           <input className="input-flat w-full" placeholder="Reference (UTR / cheque # / txn id)"
             value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
           {openBills.length > 0 && (
-            <div className="border border-[var(--line)] p-3 space-y-1">
+            <div className="border border-[var(--line)] rounded-md p-3 space-y-1">
               <div className="overline">Settle bills (optional — FIFO if empty)</div>
               {openBills.map((b) => (
                 <label key={b.id} className="flex items-center gap-2 text-sm">
@@ -992,7 +992,7 @@ function Documents({ v, canEdit, onAdd, onEdit, onDelete, busy }) {
           <div className="text-sm text-[var(--ink-3)] col-span-2">No documents on file.</div>
         )}
         {(v.documents || []).map((d) => (
-          <div key={d.id} className="border border-[var(--line)] p-4 flex items-start gap-3">
+          <div key={d.id} className="border border-[var(--line)] rounded-lg p-4 flex items-start gap-3">
             <FileText size={22} className="text-[var(--accent-strong)]" />
             <div className="flex-1 min-w-0">
               {safeFileUrl(d.url) ? (
@@ -1139,7 +1139,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
             </div>
 
             {t === "slab" && (
-              <div className="mt-4 border border-[var(--line)] p-3">
+              <div className="mt-4 border border-[var(--line)] rounded-md p-3">
                 <div className="overline mb-2">SLABS</div>
                 {f.slabs.map((s, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 mb-2">
@@ -1340,7 +1340,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
             value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
 
           {openRows.length > 0 && (
-            <div className="border border-[var(--line)] p-3 space-y-1">
+            <div className="border border-[var(--line)] rounded-md p-3 space-y-1">
               <div className="overline">Settle specific incentives (optional — FIFO if empty)</div>
               {openRows.map((r) => (
                 <label key={r.id} className="flex items-center gap-2 text-sm">

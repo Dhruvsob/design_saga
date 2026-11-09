@@ -163,7 +163,7 @@ export default function ClientDetail() {
           {(c.projects || []).length === 0 && <Empty text="No projects for this client yet." />}
           {(c.projects || []).map((p) => (
             <button key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
-              className="w-full text-left border border-[var(--line)] p-4 hover:border-[var(--ink)] transition flex items-center justify-between"
+              className="w-full text-left border border-[var(--line)] rounded-lg p-4 hover:border-[var(--ink)] transition flex items-center justify-between"
               data-testid={`client-project-${p.id}`}>
               <div>
                 <div className="font-semibold">{p.name}</div>
@@ -182,7 +182,7 @@ export default function ClientDetail() {
         <div className="space-y-2">
           {(c.invoices || []).length === 0 && <Empty text="No invoices for this client yet." />}
           {(c.invoices || []).map((i) => (
-            <div key={i.id} className="border border-[var(--line)] p-4 flex items-center justify-between">
+            <div key={i.id} className="border border-[var(--line)] rounded-md p-4 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
                 <div className="text-xs text-[var(--ink-2)] mt-0.5">{i.doc_type} · {i.project_name || "—"} · Due {formatDate(i.due_date)}</div>

@@ -326,7 +326,7 @@ export default function Leads() {
             <div className="border-t border-[var(--line)] pt-3 space-y-3" data-testid="lead-notes-section">
               <div className="overline flex items-center gap-2">
                 <NotePencil size={13} /> Notes &amp; History
-                <span className="font-mono text-[10px] bg-[var(--hover)] px-1.5 py-0.5 border border-[var(--line)]" data-testid="lead-notes-count">{notes.length}</span>
+                <span className="font-mono text-[10px] bg-[var(--hover)] px-1.5 py-0.5 border border-[var(--line)] rounded" data-testid="lead-notes-count">{notes.length}</span>
               </div>
 
               {canUpdate && <div className="flex items-start gap-2">
@@ -356,7 +356,7 @@ export default function Leads() {
                   </div>
                 )}
                 {notes.map((n) => (
-                  <div key={n.id} className="border border-[var(--line)] bg-[var(--surface-2)] p-3" data-testid={`lead-note-${n.id}`}>
+                  <div key={n.id} className="border border-[var(--line)] rounded-md bg-[var(--surface-2)] p-3" data-testid={`lead-note-${n.id}`}>
                     {editNoteId === n.id ? (
                       <div className="space-y-2">
                         <textarea
