@@ -10,15 +10,19 @@ Endpoints
 - GET  /api/purchase-orders/{id}/match       (3-way match report)
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header
+from fastapi.responses import StreamingResponse
 from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import date as _date
 import hashlib
+import io
 
 from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.scoped_db import sdb
 from core.helpers import business_today, iso_now, new_id
+from core.downloads import content_disposition
+from core.financial_pdfs import generate_purchase_order_pdf
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import user_org_id
@@ -115,6 +119,27 @@ async def get_po(po_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     await require_module(user, "purchase_orders")
     return await get_visible_purchase_order(user, po_id)
+
+
+@router.get("/purchase-orders/{po_id}/pdf")
+async def purchase_order_pdf(po_id: str, request: Request,
+                             session_token: Optional[str] = Cookie(default=None),
+                             authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    await require_module(user, "purchase_orders")
+    if not has_permission(user, "purchase_orders.read"):
+        raise HTTPException(403, "Missing permission: purchase_orders.read")
+    po = await get_visible_purchase_order(user, po_id)
+    vendor = await sdb.vendors_acc.find_one({"id": po.get("vendor_id")}, {"_id": 0}) \
+        if po.get("vendor_id") else None
+    project = await sdb.projects.find_one({"id": po.get("project_id")}, {"_id": 0}) \
+        if po.get("project_id") else None
+    org = await db.organizations.find_one(
+        {"org_id": user_org_id(user) or "org_default"}, {"_id": 0}) or {}
+    data = generate_purchase_order_pdf(po, org, vendor=vendor, project=project)
+    filename = f"{po.get('po_number') or po_id}.pdf"
+    return StreamingResponse(io.BytesIO(data), media_type="application/pdf", headers={
+        "Content-Disposition": content_disposition("inline", filename, "purchase-order.pdf")})
 
 
 @router.post("/purchase-orders")

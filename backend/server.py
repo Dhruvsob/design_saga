@@ -1522,6 +1522,17 @@ async def get_project(project_id: str, request: Request,
     p["milestones"] = (await sdb.payment_milestones.find(
         {"project_id": project_id}, {"_id": 0}).to_list(MAX_LIST_ROWS) if can_invoice else [])
     if can_invoice:
+        linked_invoice_receipts: dict[str, float] = {}
+        invoice_ids = [row.get("id") for row in p["invoices"] if row.get("id")]
+        if invoice_ids:
+            receipt_rows = await sdb.collection_receivables.find(
+                    {"invoice_id": {"$in": invoice_ids}, "status": {"$ne": "cancelled"}},
+                    {"_id": 0, "invoice_id": 1, "received_amount": 1}).to_list(MAX_LIST_ROWS)
+            for row in receipt_rows:
+                invoice_id = row.get("invoice_id")
+                linked_invoice_receipts[invoice_id] = round(
+                    linked_invoice_receipts.get(invoice_id, 0.0)
+                    + float(row.get("received_amount") or 0), 2)
         received = 0.0
         for je in await sdb.journal_entries.find(
                 {"project_id": project_id, "voided_from_view": {"$ne": True},
@@ -1540,7 +1551,8 @@ async def get_project(project_id: str, request: Request,
             received -= sum(float(l.get("credit") or 0) for l in je.get("lines") or []
                             if l.get("account_type") == "asset"
                             and l.get("account_name") != "Accounts Receivable")
-        p["money"] = _project_money(p, p["invoices"], p["milestones"], received)
+        p["money"] = _project_money(
+            p, p["invoices"], p["milestones"], received, linked_invoice_receipts)
     p["purchase_orders"] = (await sdb.purchase_orders.find(
         {"project_id": project_id}, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
         if can_procurement else [])
@@ -1571,11 +1583,13 @@ async def get_project(project_id: str, request: Request,
     ms_paid = sum(float(m.get("paid_amount") or (m.get("amount") if m.get("status") == "paid" else 0) or 0)
                   for m in p["milestones"])
     if can_invoice:
+        invoice_collected = round(
+            max(0.0, p["money"]["invoiced"] - p["money"]["billed_unpaid"]), 2)
         financials = {
             "budget": p.get("budget", 0) or 0,
             "invoiced": round(inv_total, 2),
-            "collected": round(inv_paid, 2),
-            "outstanding": round(inv_total - inv_paid, 2),
+            "collected": invoice_collected,
+            "outstanding": p["money"]["billed_unpaid"],
             "milestones_value": round(ms_total, 2),
             "milestones_collected": round(ms_paid, 2),
         }
@@ -1674,13 +1688,25 @@ async def _rescale_percent_milestones(project_id: str, budget: float) -> None:
                 {"id": ms["id"]}, {"$set": {"amount": amount, "updated_at": iso(now_utc())}})
 
 
-def _project_money(project: dict, invoices: list, milestones: list, received: float) -> dict:
+def _project_money(project: dict, invoices: list, milestones: list, received: float,
+                   linked_invoice_receipts: Optional[dict[str, float]] = None) -> dict:
     """Keep contract value, billing, receivable and cash received apart."""
     value = round(float(project.get("budget") or 0), 2)
     live = [i for i in invoices if i.get("doc_type", "invoice") == "invoice"
             and i.get("status") not in ("draft", "cancelled")]
     invoiced = round(sum(float(i.get("total") or 0) for i in live), 2)
-    invoice_received = round(sum(float(i.get("paid_amount") or 0) for i in live), 2)
+    linked_invoice_receipts = linked_invoice_receipts or {}
+    invoice_received = 0.0
+    for invoice in live:
+        total = float(invoice.get("total") or 0)
+        direct = (total if invoice.get("status") == "paid" and not invoice.get("paid_amount")
+                  else float(invoice.get("paid_amount") or 0))
+        # Collections Due is a separate source record. A receipt made there
+        # must reduce the same invoice balance without mutating the invoice or
+        # counting more than its total.
+        linked = float(linked_invoice_receipts.get(invoice.get("id"), 0) or 0)
+        invoice_received += min(total, max(0.0, direct + linked))
+    invoice_received = round(invoice_received, 2)
     return {
         "project_value": value,
         "scheduled": round(sum(float(m.get("amount") or 0) for m in milestones

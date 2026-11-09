@@ -15,7 +15,7 @@ from datetime import date as _date
 from typing import Literal, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Cookie, Header, HTTPException, Request
+from fastapi import APIRouter, Cookie, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,7 @@ from core.db import db
 from core.deps import require_user
 from core.downloads import content_disposition
 from core.helpers import business_today, iso_now, new_id, next_sequence
+from core.financial_pdfs import generate_client_statement_pdf, generate_payment_receipt_pdf
 from core.rbac import has_permission
 from core.scoped_db import current_org_id, sdb
 from core.tenancy import user_org_id
@@ -338,6 +339,180 @@ async def reminder_pdf(reminder_id: str, request: Request,
     data = generate_reminder_pdf(reminder, await _org())
     return StreamingResponse(io.BytesIO(data), media_type="application/pdf", headers={
         "Content-Disposition": content_disposition("inline", f"{reminder['number']}.pdf", "reminder.pdf")})
+
+
+async def _payment_receipt_document(receipt_id: str) -> dict:
+    """Resolve a visible Money In row to one tenant-scoped receipt document."""
+    collection_receipt = await sdb.collection_receipts.find_one(
+        {"id": receipt_id}, {"_id": 0})
+    settlement = None
+    journal_id = (collection_receipt or {}).get("journal_entry_id")
+    if not journal_id:
+        settlement = await sdb.commission_settlements.find_one(
+            {"id": receipt_id}, {"_id": 0})
+        journal_id = (settlement or {}).get("journal_entry_id")
+    journal = await sdb.journal_entries.find_one(
+        {"id": journal_id or receipt_id, "source": {"$in": list(MONEY_IN_SOURCES)}},
+        {"_id": 0},
+    )
+    if not journal:
+        raise HTTPException(status_code=404, detail="Payment receipt not found")
+
+    source = journal.get("source")
+    source_record: dict = {}
+    if source == "invoice_payment":
+        source_record = await sdb.invoices.find_one(
+            {"id": journal.get("source_id")}, {"_id": 0}) or {}
+    elif source == "milestone_payment":
+        source_record = await sdb.payment_milestones.find_one(
+            {"id": journal.get("source_id")}, {"_id": 0}) or {}
+    elif source == "other_receivable_income":
+        collection_receipt = collection_receipt or await sdb.collection_receipts.find_one(
+            {"journal_entry_id": journal["id"]}, {"_id": 0}) or {}
+        source_record = await sdb.collection_receivables.find_one(
+            {"id": collection_receipt.get("source_id")}, {"_id": 0}) or {}
+    elif source == "commission_income":
+        settlement = settlement or await sdb.commission_settlements.find_one(
+            {"journal_entry_id": journal["id"]}, {"_id": 0}) or {}
+
+    client_id = journal.get("client_id") or source_record.get("client_id")
+    vendor_id = journal.get("vendor_id") or source_record.get("vendor_id") \
+        or (settlement or {}).get("vendor_id")
+    project_id = journal.get("project_id") or source_record.get("project_id")
+    client = await sdb.clients.find_one({"id": client_id}, {"_id": 0}) if client_id else None
+    vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0}) if vendor_id else None
+    project = await sdb.projects.find_one({"id": project_id}, {"_id": 0}) if project_id else None
+    cash_lines = [line for line in journal.get("lines") or []
+                  if line.get("account_type") == "asset"
+                  and line.get("account_name") != "Accounts Receivable"
+                  and float(line.get("debit") or 0) > 0]
+    amount = round(sum(float(line.get("debit") or 0) for line in cash_lines), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=409, detail="This entry is not an active money receipt")
+    method = (collection_receipt or {}).get("payment_method") or (settlement or {}).get("payment_method")
+    account_name = ", ".join(sorted({line.get("account_name") or "" for line in cash_lines if line.get("account_name")}))
+    if not method:
+        method = "cash" if account_name.lower() in {"cash", "petty cash"} else "bank_transfer"
+    collection_name = (source_record.get("number") or source_record.get("name")
+                       or (settlement or {}).get("reference") or SOURCE_LABELS.get(source))
+    status = "reversed" if journal.get("reversed") or journal.get("voided_from_view") else "received"
+    return {
+        "id": receipt_id if receipt_id != journal["id"] else journal["id"],
+        "number": (collection_receipt or {}).get("id") or (settlement or {}).get("id") or journal["id"],
+        "date": journal.get("date"), "amount": amount, "status": status,
+        "party_name": (client or {}).get("name") or (vendor or {}).get("name"),
+        "project_name": (project or {}).get("name"),
+        "collection_name": collection_name,
+        "source_label": SOURCE_LABELS.get(source, "Money in"),
+        "payment_method": method,
+        "payment_method_label": str(method).replace("_", " ").title(),
+        "account_name": account_name,
+        "reference": (collection_receipt or {}).get("reference")
+            or (settlement or {}).get("reference") or journal.get("reference"),
+        "notes": (collection_receipt or {}).get("notes") or (settlement or {}).get("notes"),
+        "narration": journal.get("narration"),
+    }
+
+
+@router.get("/accounting/collections/receipts/{receipt_id}/pdf")
+async def collection_receipt_pdf(receipt_id: str, request: Request,
+                                 session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require_finance_read(user)
+    receipt = await _payment_receipt_document(receipt_id)
+    data = generate_payment_receipt_pdf(receipt, await _org())
+    return StreamingResponse(io.BytesIO(data), media_type="application/pdf", headers={
+        "Content-Disposition": content_disposition(
+            "inline", f"payment-receipt-{receipt['number']}.pdf", "payment-receipt.pdf")})
+
+
+def _date_param(value: Optional[str], label: str) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        return _date.fromisoformat(value).isoformat()
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{label} must be YYYY-MM-DD")
+
+
+async def _client_statement(client_id: str, from_date: Optional[str], to_date: Optional[str]) -> tuple[list, dict]:
+    transactions: list[dict] = []
+    invoice_query: dict = {
+        "client_id": client_id,
+        "doc_type": {"$ne": "quotation"},
+        "status": {"$nin": ["draft", "cancelled"]},
+    }
+    if to_date:
+        invoice_query["date"] = {"$lte": to_date}
+    async for invoice in sdb.invoices.find(invoice_query, {"_id": 0}).sort("date", 1):
+        transactions.append({
+            "date": str(invoice.get("date") or invoice.get("created_at") or "")[:10],
+            "detail": f"Invoice {invoice.get('number') or invoice['id']}",
+            "reference": invoice.get("number"), "debit": float(invoice.get("total") or 0),
+            "credit": 0.0, "order": 0,
+        })
+    journal_query: dict = {
+        "client_id": client_id, "source": {"$in": list(MONEY_IN_SOURCES)},
+        "reversed": {"$ne": True}, "voided_from_view": {"$ne": True},
+    }
+    if to_date:
+        journal_query["date"] = {"$lte": to_date}
+    async for journal in sdb.journal_entries.find(journal_query, {"_id": 0}).sort("date", 1):
+        amount = round(sum(float(line.get("debit") or 0) for line in journal.get("lines") or []
+                           if line.get("account_type") == "asset"
+                           and line.get("account_name") != "Accounts Receivable"), 2)
+        if amount <= 0:
+            continue
+        transactions.append({
+            "date": journal.get("date"), "detail": SOURCE_LABELS.get(journal.get("source"), "Payment received"),
+            "reference": journal.get("reference"), "debit": 0.0,
+            "credit": amount, "order": 1,
+        })
+    transactions.sort(key=lambda row: (row.get("date") or "", row.get("order", 0)))
+    opening = 0.0
+    rows = []
+    for row in transactions:
+        movement = float(row.get("debit") or 0) - float(row.get("credit") or 0)
+        if from_date and (row.get("date") or "") < from_date:
+            opening += movement
+            continue
+        rows.append(row)
+    running = round(opening, 2)
+    debit = credit = 0.0
+    for row in rows:
+        debit += float(row.get("debit") or 0)
+        credit += float(row.get("credit") or 0)
+        running = round(running + float(row.get("debit") or 0) - float(row.get("credit") or 0), 2)
+        row["balance"] = running
+        row.pop("order", None)
+    return rows, {
+        "opening_balance": round(opening, 2), "debit": round(debit, 2),
+        "credit": round(credit, 2), "closing_balance": running,
+    }
+
+
+@router.get("/clients/{client_id}/statement.pdf")
+async def client_statement_pdf(client_id: str, request: Request,
+                               from_date: Optional[str] = Query(default=None, alias="from"),
+                               to_date: Optional[str] = Query(default=None, alias="to"),
+                               session_token: Optional[str] = Cookie(default=None),
+                               authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require_finance_read(user)
+    from_date = _date_param(from_date, "From date")
+    to_date = _date_param(to_date, "To date")
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=400, detail="From date cannot be after to date")
+    client = await sdb.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    rows, summary = await _client_statement(client_id, from_date, to_date)
+    data = generate_client_statement_pdf(
+        client, rows, summary, await _org(), from_date=from_date, to_date=to_date)
+    filename = f"client-statement-{client.get('name') or client_id}.pdf"
+    return StreamingResponse(io.BytesIO(data), media_type="application/pdf", headers={
+        "Content-Disposition": content_disposition("inline", filename, "client-statement.pdf")})
 
 
 @router.get("/accounting/received-payments")

@@ -215,6 +215,7 @@ def test_project_detail_separates_invoice_procurement_and_vendor_cost_access(mon
     collections = SimpleNamespace(
         tasks=_Collection(), files=_Collection(), employees=_Collection(),
         invoices=_Collection([{"id": "invoice_1", "total": 1000, "status": "sent"}]),
+        collection_receivables=_Collection(),
         payment_milestones=_Collection([{"id": "milestone_1", "amount": 500}]),
         purchase_orders=_Collection([{"id": "po_1", "grand_total": 600}]),
         vendor_bills=_Collection([{"id": "bill_1", "total": 400, "status": "received"}]),

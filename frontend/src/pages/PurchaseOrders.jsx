@@ -5,7 +5,7 @@ import { formatDate, roundPaise, formatINR, statusLabel } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import {
   Package, Plus, Warning, CheckSquare, PaperPlaneTilt, X, ArrowsClockwise, Truck, ClipboardText,
-  PencilSimple, Trash,
+  PencilSimple, Trash, FilePdf,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
@@ -13,6 +13,7 @@ import RowActions from "../components/RowActions";
 import { toast } from "sonner";
 import { ArrowSquareOut, XCircle, Receipt } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
+import PdfPreviewModal from "../components/PdfPreview";
 
 const fmtMoney = (n) => formatINR(n);
 function fmtErr(d, fb = "Failed") {
@@ -39,6 +40,7 @@ export default function PurchaseOrders() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [preview, setPreview] = useState(null);
   const canUpdate = hasPerm("purchase_orders.update");
   const canBill = hasPerm("finance.create");
   const navigate = useNavigate();
@@ -104,6 +106,7 @@ export default function PurchaseOrders() {
                   <td className="px-4 py-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
                     <RowActions label={po.po_number} testid={`po-actions-${po.id}`} actions={[
                       { label: "Open", icon: ArrowSquareOut, onSelect: () => setDetail(po.id) },
+                      { label: "Purchase order PDF", icon: FilePdf, onSelect: () => setPreview(po) },
                       { label: "Record vendor bill", icon: Receipt, hidden: !(canBill && ["partial", "received"].includes(po.status)),
                         onSelect: () => recordBill(po), testid: `po-bill-${po.id}` },
                       { label: "Mark as sent to vendor", icon: PaperPlaneTilt, hidden: !(canUpdate && po.status === "draft"),
@@ -126,6 +129,9 @@ export default function PurchaseOrders() {
         canReverseGrn={hasPerm("purchase_orders.update") && hasPerm("finance.update")}
         canBill={canBill}
         onClose={() => setDetail(null)} onChange={load} />}
+      {preview && <PdfPreviewModal path={`/purchase-orders/${preview.id}/pdf`}
+        title={`Purchase order ${preview.po_number}`} filename={`${preview.po_number}.pdf`}
+        onClose={() => setPreview(null)} />}
     </div>
   );
 }
@@ -211,6 +217,7 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, canBill, onClose
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [err, setErr] = useState("");
+  const [preview, setPreview] = useState(false);
 
   const load = async () => {
     try {
@@ -273,6 +280,7 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, canBill, onClose
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
+        <button type="button" onClick={() => setPreview(true)} className="btn-ghost text-xs"><FilePdf size={12}/> PDF</button>
         {canUpdate && !["closed", "cancelled"].includes(po.status) && <button type="button" onClick={startEdit} className="btn-ghost text-xs"><PencilSimple size={12}/> Edit PO</button>}
         {canBill && ["partial", "received"].includes(po.status) && (
           <button type="button" className="btn-ghost text-xs" data-testid="po-detail-bill"
@@ -379,6 +387,9 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, canBill, onClose
       )}
 
       {showGRN && <RecordGRN po={po} onClose={() => setShowGRN(false)} onSaved={() => { setShowGRN(false); load(); onChange && onChange(); }} />}
+      {preview && <PdfPreviewModal path={`/purchase-orders/${po.id}/pdf`}
+        title={`Purchase order ${po.po_number}`} filename={`${po.po_number}.pdf`}
+        onClose={() => setPreview(false)} />}
     </Modal>
   );
 }

@@ -93,6 +93,31 @@ def test_project_money_keeps_value_billing_and_cash_apart():
                      "billed_unpaid": 590000, "received": 10000, "still_to_receive": 590000}
 
 
+def test_project_money_counts_collections_due_receipts_against_linked_invoice():
+    money = server._project_money(
+        {"budget": 600000},
+        [{"id": "inv_1", "total": 600000, "paid_amount": 10000,
+          "status": "partially_paid"}],
+        [],
+        received=110000,
+        linked_invoice_receipts={"inv_1": 100000},
+    )
+    assert money["received"] == 110000
+    assert money["billed_unpaid"] == 490000
+
+
+def test_project_money_caps_direct_and_linked_receipts_at_invoice_total():
+    money = server._project_money(
+        {},
+        [{"id": "inv_1", "total": 5000, "paid_amount": 4000,
+          "status": "partially_paid"}],
+        [],
+        received=6000,
+        linked_invoice_receipts={"inv_1": 2000},
+    )
+    assert money["billed_unpaid"] == 0
+
+
 def test_marking_a_milestone_paid_is_refused(monkeypatch):
     class Milestones:
         async def find_one(self, *_a, **_k):

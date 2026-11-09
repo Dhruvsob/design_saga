@@ -7,9 +7,10 @@ import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import { formatDate, formatINR, statusLabel } from "../lib/format";
 import {
-  ArrowLeft, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X, Warning, Plus,
+  ArrowLeft, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X, Warning, Plus, FilePdf,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import PdfPreviewModal from "../components/PdfPreview";
 
 const TABS = ["Projects", "Invoices", "Ledger", "Activity"];
 const inr = (n) => formatINR(n);
@@ -30,6 +31,7 @@ export default function ClientDetail() {
   const [ledger, setLedger] = useState(null);
   const [ledgerErr, setLedgerErr] = useState("");
   const [err, setErr] = useState("");
+  const [statementOpen, setStatementOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -119,6 +121,11 @@ export default function ClientDetail() {
           {c.notes && <p className="mt-2 text-sm text-[var(--ink-2)] max-w-2xl border-l-2 border-[var(--line)] pl-3">{c.notes}</p>}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {hasPerm("finance.read") && (
+            <button onClick={() => setStatementOpen(true)} className="btn-ghost" data-testid="client-statement-pdf">
+              <FilePdf size={14} /> Statement PDF
+            </button>
+          )}
           {hasPerm("quotations.create") && !c.archived && (
             <button onClick={() => navigate(`/quotations?client=${c.id}`)} className="btn-primary" data-testid="client-new-quotation">
               <Plus size={14} /> New quotation
@@ -273,6 +280,9 @@ export default function ClientDetail() {
           </form>
         </div>
       )}
+      {statementOpen && <PdfPreviewModal path={`/clients/${id}/statement.pdf`}
+        title={`Client statement · ${c.name}`} filename={`client-statement-${c.name || id}.pdf`}
+        onClose={() => setStatementOpen(false)} />}
     </div>
   );
 }

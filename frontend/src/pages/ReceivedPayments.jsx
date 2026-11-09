@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { HandCoins, ArrowSquareOut, Notebook } from "@phosphor-icons/react";
+import { HandCoins, ArrowSquareOut, Notebook, FilePdf } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { formatDate } from "../lib/format";
@@ -11,6 +11,7 @@ import { usePaged } from "../components/Pager";
 import { MoneyInTabs, inr } from "../components/MoneyIn";
 import RowActions from "../components/RowActions";
 import { TransactionDetail } from "../components/TransactionDetail";
+import PdfPreviewModal from "../components/PdfPreview";
 
 /** Money that actually arrived (posted once by Record Payment / Money In). Read-only. */
 export default function ReceivedPayments() {
@@ -18,6 +19,7 @@ export default function ReceivedPayments() {
   const [query, setQuery] = useState("");
   const [range, setRange] = useState({ from: "", to: "" });
   const [detail, setDetail] = useState(null);
+  const [receipt, setReceipt] = useState(null);
   const navigate = useNavigate();
 
   const load = () => {
@@ -81,6 +83,7 @@ export default function ReceivedPayments() {
                   <td className="p-3 text-right">
                     <RowActions label={`payment ${r.reference || r.id}`} testid={`received-actions-${r.id}`} actions={[
                       { label: "Open entry", icon: Notebook, onSelect: () => openEntry(r), testid: `received-open-${r.id}` },
+                      { label: "Payment receipt PDF", icon: FilePdf, onSelect: () => setReceipt(r), testid: `received-pdf-${r.id}` },
                       { label: r.source_label ? `Open ${r.source_label.toLowerCase()}` : "Open source", icon: ArrowSquareOut,
                         hidden: !link, onSelect: () => navigate(link) },
                     ]} />
@@ -92,6 +95,9 @@ export default function ReceivedPayments() {
         </table>{pager}
       </div>
       {detail && <TransactionDetail entry={detail} onClose={() => setDetail(null)} onChanged={() => { setDetail(null); load(); }} />}
+      {receipt && <PdfPreviewModal path={`/accounting/collections/receipts/${receipt.id}/pdf`}
+        title={`Payment receipt · ${receipt.reference || formatDate(receipt.date)}`}
+        filename={`payment-receipt-${receipt.reference || receipt.id}.pdf`} onClose={() => setReceipt(null)} />}
     </div>
   );
 }

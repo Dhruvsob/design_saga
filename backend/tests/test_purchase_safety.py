@@ -10,6 +10,7 @@ from starlette.requests import Request
 
 from core import access_control
 from core.indexes import _INDEXES
+from core.financial_pdfs import generate_purchase_order_pdf
 from routes import purchase
 from models.purchase import GRNCreateIn
 
@@ -229,3 +230,19 @@ def test_purchase_project_visibility_query_is_indexed():
         collection == "purchase_orders" and keys == [("org_id", 1), ("project_id", 1)]
         for collection, keys, _options in _INDEXES
     )
+
+
+def test_purchase_order_pdf_renders_vendor_project_lines_and_totals():
+    pdf = generate_purchase_order_pdf(
+        {
+            "id": "po_1", "po_number": "PO-2026-0001", "order_date": "2026-11-09",
+            "expected_delivery": "2026-11-20", "status": "sent", "payment_terms": "Net 30",
+            "lines": [{"item_name": "Plywood", "description": "18 mm", "quantity": 10,
+                       "unit": "sheet", "unit_price": 2000, "tax_rate": 18}],
+            "subtotal": 20000, "tax_total": 3600, "grand_total": 23600,
+        },
+        {"display_name": "Sample Studio", "branding": {"primary_color": "#8B7F6A"}},
+        vendor={"name": "Vendor One", "phone": "9999999999"},
+        project={"name": "Residence"},
+    )
+    assert pdf.startswith(b"%PDF") and len(pdf) > 1800
