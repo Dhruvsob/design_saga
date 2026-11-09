@@ -225,7 +225,7 @@ export default function Leads() {
                   <div className="w-2 h-2 rounded-full" style={{ background: stageColor }} />
                   <div className="overline">{stage}</div>
                 </div>
-                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)]">{items.length}</div>
+                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)] rounded">{items.length}</div>
               </div>
               <div className="p-3 flex-1 space-y-3">
                 {items.map((l) => (
@@ -233,7 +233,7 @@ export default function Leads() {
                     key={l.id}
                     draggable={canUpdate}
                     onDragStart={() => setDragId(l.id)}
-                    className="border border-[var(--line)] p-3 bg-white hover:border-[var(--ink)] hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition-all group"
+                    className="border border-[var(--line)] p-3 rounded-lg bg-white hover:border-[var(--ink)] hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition-all group"
                     data-testid={`lead-${l.id}`}
                   >
                     <div className="flex items-start justify-between mb-1">
@@ -300,7 +300,7 @@ export default function Leads() {
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
-          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] w-full max-w-2xl p-6 space-y-3 max-h-[90vh] overflow-y-auto" data-testid="lead-edit-modal">
+          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] rounded-xl w-full max-w-2xl p-6 space-y-3 max-h-[90vh] overflow-y-auto" data-testid="lead-edit-modal">
             <div className="flex items-center justify-between">
               <div className="overline">{canUpdate ? "EDIT LEAD" : "LEAD DETAILS"}</div>
               <button type="button" onClick={() => setEditing(null)} className="btn-ghost p-1"><X size={14} /></button>

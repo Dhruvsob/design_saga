@@ -461,7 +461,7 @@ export default function EmployeeDetail() {
               <div className="font-display font-bold">Total deductions</div>
               <div className="font-mono font-bold">{fmt(s.total_deductions)}</div>
             </div>
-            <div className="mt-3 border border-[var(--ink)] p-4 bg-[var(--surface-2)]">
+            <div className="mt-3 border border-[var(--ink)] p-4 rounded-lg bg-[var(--surface-2)]">
               <div className="overline mb-1">NET / MONTH</div>
               <div className="font-display font-bold text-3xl tracking-tighter accent-blue">{fmt(s.net_monthly)}</div>
               <div className="text-xs text-[var(--ink-2)] mt-1">CTC · {fmt(s.ctc_annual)} / year</div>
@@ -893,7 +893,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       </div>
 
       {open && (
-        <div className="border border-[var(--ink)] p-4 mb-4 space-y-3" data-testid="salary-revision-form">
+        <div className="border border-[var(--ink)] p-4 mb-4 rounded-lg space-y-3" data-testid="salary-revision-form">
           {correctingId && <div className="text-xs border border-[var(--warning)] bg-[var(--warning-soft)] p-2">
             This correction preserves the original revision as superseded and creates a replacement.
           </div>}

@@ -388,7 +388,7 @@ function ColorField({ label, value, onChange, testid }) {
   return (
     <div>
       <label className="block text-xs text-[var(--ink-2)] mb-1">{label}</label>
-      <div className="flex items-center gap-2 border border-[var(--line)] p-1 bg-white">
+      <div className="flex items-center gap-2 border border-[var(--line)] p-1 rounded-md bg-white">
         <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} picker`}
                className="w-10 h-10 border-none cursor-pointer" data-testid={`${testid}-picker`} />
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)} aria-label={`${label} hex code`}

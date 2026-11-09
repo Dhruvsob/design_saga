@@ -163,7 +163,7 @@ export default function QuotationBuilder() {
       </Link>
 
       {/* Header */}
-      <div className="border border-[var(--line)] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
+      <div className="border border-[var(--line)] p-6 rounded-xl flex flex-wrap gap-6 items-start justify-between bg-white">
         <div className="flex-1 min-w-[280px]">
           <div className="overline mb-2 flex items-center gap-3">
             {q.number} · {TYPE_LABELS[q.type]} · {q.version_label}

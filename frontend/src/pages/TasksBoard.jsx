@@ -475,7 +475,7 @@ function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd
                 <div className="overline">{c.label}</div>
               </div>
               <div className="flex items-center gap-1">
-                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)]">{items.length}</div>
+                <div className="font-mono text-xs font-semibold bg-white px-1.5 border border-[var(--line)] rounded">{items.length}</div>
                 {onQuickAdd && <QuickAdd lane={c.id} label={c.label} onAdd={onQuickAdd} />}
               </div>
             </div>
@@ -490,7 +490,7 @@ function KanbanView({ tasks, lanes = LANES, laneOf = (t) => t.status, onQuickAdd
                     draggable
                     onDragStart={() => onDragStart(t.id)}
                     onClick={() => onOpen(t.id)}
-                    className={`border p-3 bg-white cursor-grab active:cursor-grabbing transition-all hover:-translate-y-0.5 group ${
+                    className={`border p-3 rounded-lg bg-white cursor-grab active:cursor-grabbing transition-all hover:-translate-y-0.5 group ${
                       isSel ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" :
                       overdue ? "border-[var(--danger)]" : "border-[var(--line)] hover:border-[var(--ink)]"}`}
                     data-testid={`task-${t.id}`}
