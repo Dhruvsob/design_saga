@@ -275,7 +275,7 @@ export default function CompanySettings() {
             <div className="card-flat sticky top-24">
               <div className="overline mb-3">LIVE PREVIEW</div>
               {/* Sidebar preview */}
-              <div className="border border-[var(--line)] p-4 flex items-center gap-3 mb-4">
+              <div className="border border-[var(--line)] rounded-lg p-4 flex items-center gap-3 mb-4">
                 {branding.logo_url && !logoBroken ? (
                   <img src={branding.logo_url} alt="" onError={() => setLogoBroken(true)} className="h-10 w-auto max-w-[64px] object-contain" />
                 ) : (
@@ -296,7 +296,7 @@ export default function CompanySettings() {
               {/* Invoice header preview */}
               <div>
                 <div className="overline mb-2 text-[9px]">INVOICE HEADER</div>
-                <div className="border border-[var(--line)] p-3">
+                <div className="border border-[var(--line)] rounded-md p-3">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-sm font-display font-bold" style={{ color: pdfColour }}>

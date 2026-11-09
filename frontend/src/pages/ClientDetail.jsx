@@ -251,7 +251,7 @@ export default function ClientDetail() {
       {editOpen && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditOpen(false); }}>
-          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] w-full max-w-lg p-6 space-y-3" data-testid="client-edit-modal">
+          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] rounded-xl w-full max-w-lg p-6 space-y-3" data-testid="client-edit-modal">
             <div className="flex items-center justify-between">
               <div className="overline">EDIT CLIENT</div>
               <button type="button" onClick={() => setEditOpen(false)} className="btn-ghost p-1"><X size={14} /></button>

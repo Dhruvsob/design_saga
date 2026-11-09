@@ -288,7 +288,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
         {canDelete && loan.status !== "archived" && <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={archiveLoan}><Archive size={12}/> Archive loan</button>}
       </div>
       {editing && (
-        <form onSubmit={saveEdit} className="border border-[var(--line)] bg-[var(--surface-2)] p-3 mb-4 space-y-3">
+        <form onSubmit={saveEdit} className="border border-[var(--line)] rounded-xl bg-[var(--surface-2)] p-3 mb-4 space-y-3">
           <div className="overline">EDIT NON-FINANCIAL DETAILS</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <input className="input-flat" placeholder="Lender contact" value={editForm.lender_contact} onChange={(e) => setEditForm({...editForm, lender_contact: e.target.value})}/>
@@ -403,7 +403,7 @@ function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-           className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
+           className={`bg-white p-6 w-full border border-[var(--line)] rounded-xl max-h-[92vh] overflow-y-auto ${wide ? "max-w-6xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>
             {eyebrow && <div className="overline mb-1">{eyebrow}</div>}

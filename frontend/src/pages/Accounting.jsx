@@ -909,7 +909,7 @@ function Dashboard({ d, onRefresh, onOpenCollections }) {
         <div className="card-flat">
           <div className="overline mb-3">DUE TO COLLECT · next 30 days</div>
           {d.kpis?.unplanned_invoices?.count > 0 && (
-            <a href="/invoices" className="block mb-3 text-xs border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 hover:border-[var(--accent-strong)]" data-testid="unplanned-invoices">
+            <a href="/invoices" className="block mb-3 text-xs border border-[var(--line)] rounded-md bg-[var(--surface-2)] px-3 py-2 hover:border-[var(--accent-strong)]" data-testid="unplanned-invoices">
               {d.kpis.unplanned_invoices.count} sent invoice{d.kpis.unplanned_invoices.count === 1 ? "" : "s"} ({CURRENCY(d.kpis.unplanned_invoices.amount)}) not yet in Collections Due. Open Invoices › ⋮ › Add to Collections Due.
             </a>
           )}
@@ -1357,7 +1357,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 
       {collecting && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <form onSubmit={saveReceipt} className="bg-white border border-[var(--line)] w-full max-w-lg p-5 space-y-4">
+          <form onSubmit={saveReceipt} className="bg-white border border-[var(--line)] rounded-xl w-full max-w-lg p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="overline">RECORD COLLECTION RECEIPT</div>

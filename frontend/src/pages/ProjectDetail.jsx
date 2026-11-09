@@ -303,7 +303,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Stage tracker: one progress line; click a stage to move the project */}
-      <div className="border border-[var(--line)] bg-white px-5 py-4" data-testid="stage-tracker">
+      <div className="border border-[var(--line)] rounded-xl bg-white px-5 py-4" data-testid="stage-tracker">
         <div className="flex items-center justify-between mb-3">
           <div className="overline">LIFECYCLE</div>
           <div className="text-xs text-[var(--ink-2)]">Stage {currentIdx + 1} of {STAGES.length} · <span className="font-semibold text-[var(--ink)]">{STAGES[currentIdx] || p.stage}</span></div>
@@ -395,7 +395,7 @@ export default function ProjectDetail() {
 
           <div className="grid grid-cols-1 gap-6">
             {/* team */}
-            <div className="border border-[var(--line)] p-5">
+            <div className="border border-[var(--line)] rounded-lg p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="overline"><UsersThree size={12} className="inline mr-1" /> TEAM</div>
                 {hasPerm("projects.update") && (

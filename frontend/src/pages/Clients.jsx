@@ -137,7 +137,7 @@ export default function Clients() {
 
       {/* filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 px-3 py-2 border border-[var(--line)] focus-within:border-[var(--accent)] transition flex-1 max-w-sm">
+        <div className="flex items-center gap-2 px-3 py-2 border border-[var(--line)] rounded-md focus-within:border-[var(--accent)] transition flex-1 max-w-sm">
           <MagnifyingGlass size={14} className="text-[var(--ink-2)]" />
           <input className="flex-1 outline-none text-sm bg-transparent" placeholder="Search name, company, email, phone…"
             value={query} onChange={(e) => setQuery(e.target.value)} data-testid="clients-search" />

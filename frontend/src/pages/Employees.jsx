@@ -132,7 +132,7 @@ export default function Employees() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md px-3 py-2 border border-[var(--line)] focus-within:border-[var(--accent)] transition">
+        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md px-3 py-2 border border-[var(--line)] rounded-md focus-within:border-[var(--accent)] transition">
           <MagnifyingGlass size={15} className="text-[var(--ink-2)]" />
           <input
             data-testid="emp-search"

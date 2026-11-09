@@ -737,7 +737,7 @@ main .border.border-\[var\(--line\)\].overflow-y-auto {
 }
 
 /* Dashed empty-state borders */
-main [class*="border-dashed"] { border-radius: var(--radius-md); }
+main [class*="border-dashed"] { border-radius: var(--radius); }
 
 /* Inline mono-uppercase status badges (schedule table, etc.) */
 main table span.font-mono.uppercase { border-radius: 100px; }
@@ -759,7 +759,7 @@ button.rounded-full:not(.btn-primary):not(.btn-ghost):hover {
 
 /* Form validation error messages */
 main [class*="border-[var(--danger)]"][class*="bg-[var(--danger-soft)]"] {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius);
 }
 
 /* Chip/badge inline tags (engagement type, loan status) */
@@ -778,4 +778,17 @@ main .card-flat { transition: box-shadow 180ms ease, transform 120ms ease; }
 @media (prefers-reduced-motion: reduce) {
   [role="tablist"] > button { transition: none !important; }
   main .card-flat { transition: none; }
+}
+
+/* TACTILE PASS 5 — table scroll wrappers, search bars, remaining panels (10/11/2026) */
+/* Round all overflow-x-auto table containers */
+main .border.border-\[var\(--line\)\].overflow-x-auto { border-radius: var(--radius-lg); }
+/* Round fixed-overlay modal panels (max-w constrained + bg-white) */
+.fixed .bg-white.border.border-\[var\(--line\)\][class*="max-w-"],
+.fixed .bg-white.border.border-\[var\(--ink\)\][class*="max-w-"] { border-radius: var(--radius-lg); }
+/* Round list-wrappers that use divide-y without overflow-x-auto */
+main .border.border-\[var\(--line\)\].divide-y { border-radius: var(--radius-lg); overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  main .border.border-\[var\(--line\)\].overflow-x-auto,
+  main .border.border-\[var\(--line\)\].divide-y { transition: none; }
 }

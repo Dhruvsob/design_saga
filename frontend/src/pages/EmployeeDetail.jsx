@@ -221,7 +221,7 @@ export default function EmployeeDetail() {
       </Link>
 
       {/* Header */}
-      <div className="border border-[var(--line)] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
+      <div className="border border-[var(--line)] rounded-xl p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
         <div className="flex items-start gap-5 flex-1 min-w-[280px]">
           {emp.photo ? (
             <img src={emp.photo} alt="" className="w-20 h-20 object-cover ring-1 ring-[var(--line)]" />

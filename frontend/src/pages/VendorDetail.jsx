@@ -433,7 +433,7 @@ function VendorEditModal({ form, setForm, onSave, onClose, busy }) {
   );
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <form onSubmit={onSave} onClick={(e) => e.stopPropagation()} className="bg-white border border-[var(--line)] p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto space-y-4">
+      <form onSubmit={onSave} onClick={(e) => e.stopPropagation()} className="bg-white border border-[var(--line)] rounded-xl p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto space-y-4">
         <div className="flex justify-between items-start"><div><div className="overline">VENDOR MASTER</div><h2 className="font-display font-bold text-3xl">Edit vendor</h2></div><button type="button" className="btn-ghost" onClick={onClose}>×</button></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {field("name", "Vendor name")}{field("company", "Company")}

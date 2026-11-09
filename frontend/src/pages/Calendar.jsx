@@ -305,7 +305,7 @@ export default function CalendarPage() {
                   data-testid="cal-sound-toggle">
             {soundOn ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} className="text-[var(--ink-3)]" />}
           </button>
-          <div className="flex items-center gap-1 border border-[var(--line)]">
+          <div className="flex items-center gap-1 border border-[var(--line)] rounded-md overflow-hidden">
             {["month", "week", "agenda"].map((v) => (
               <button key={v} onClick={() => setView(v)}
                 className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${view === v ? "bg-[var(--ink)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
@@ -682,7 +682,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
 
         {/* Assignment / tagging */}
         {canAssign && (
-          <div className="border border-[var(--line)] p-3 space-y-3" data-testid="event-assign-section">
+          <div className="border border-[var(--line)] rounded-lg p-3 space-y-3" data-testid="event-assign-section">
             <div className="overline flex items-center gap-1.5"><Users size={12} /> Assign / tag</div>
 
             {opts.employees.length > 0 && (

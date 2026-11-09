@@ -290,7 +290,7 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, canBill, onClose
       </div>
 
       {editing && editForm && (
-        <form onSubmit={saveEdit} className="border border-[var(--line)] bg-[var(--surface-2)] p-3 mb-6 space-y-3">
+        <form onSubmit={saveEdit} className="border border-[var(--line)] rounded-xl bg-[var(--surface-2)] p-3 mb-6 space-y-3">
           <div className="overline">EDIT PURCHASE ORDER</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <input type="date" className="input-flat" value={editForm.expected_delivery} onChange={(e) => setEditForm({...editForm, expected_delivery: e.target.value})}/>
