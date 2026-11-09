@@ -311,14 +311,14 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 text-xs">
-        <div className="border border-[var(--line)] p-2">Principal paid: <b className="font-mono">{fmtMoney(t.principal_paid)}</b></div>
-        <div className="border border-[var(--line)] p-2">Interest paid: <b className="font-mono">{fmtMoney(t.interest_paid)}</b></div>
-        <div className="border border-[var(--line)] p-2">Principal pending: <b className="font-mono">{fmtMoney(t.principal_pending)}</b></div>
-        <div className="border border-[var(--line)] p-2">Interest pending: <b className="font-mono">{fmtMoney(t.interest_pending)}</b></div>
+        <div className="border border-[var(--line)] p-2 rounded-lg">Principal paid: <b className="font-mono">{fmtMoney(t.principal_paid)}</b></div>
+        <div className="border border-[var(--line)] p-2 rounded-lg">Interest paid: <b className="font-mono">{fmtMoney(t.interest_paid)}</b></div>
+        <div className="border border-[var(--line)] p-2 rounded-lg">Principal pending: <b className="font-mono">{fmtMoney(t.principal_pending)}</b></div>
+        <div className="border border-[var(--line)] p-2 rounded-lg">Interest pending: <b className="font-mono">{fmtMoney(t.interest_pending)}</b></div>
       </div>
 
       {/* Pay controls */}
-      {canTransact && <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[var(--surface-2)] border border-[var(--line)]">
+      {canTransact && <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl">
         <div className="flex-1 min-w-[220px]">
           <label className="overline text-[10px] mb-1 block">Pay from</label>
           <select aria-label="Pay from" className="input-flat w-full" value={payFrom} onChange={(e) => setPayFrom(e.target.value)}>
@@ -393,7 +393,7 @@ function F({ label, children }) {
 }
 function MiniStat({ label, value, tone = "#0A0A0A" }) {
   return (
-    <div className="border border-[var(--line)] p-3">
+    <div className="border border-[var(--line)] p-3 rounded-xl">
       <div className="overline text-[10px] mb-1">{label}</div>
       <div className="font-mono font-bold text-base" style={{ color: tone }}>{value}</div>
     </div>

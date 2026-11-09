@@ -329,7 +329,7 @@ export default function VendorDetail() {
           <div className="flex flex-wrap items-center gap-2">
             {canEditVendor && <button type="button" className="btn-ghost" onClick={openVendorEdit}><PencilSimple size={13}/> Edit</button>}
             {canDeleteVendor && <button type="button" className="btn-ghost text-[var(--danger)]" onClick={archiveVendor}><Archive size={13}/> Archive</button>}
-            <div className="px-3 py-2 border border-[var(--line)]">
+            <div className="px-3 py-2 border border-[var(--line)] rounded-xl">
               <div className="overline text-[9px]">RATING</div>
               <div className="flex items-center gap-1">
                 <Star size={14} weight="fill" className="text-[#F5B800]" />
@@ -337,7 +337,7 @@ export default function VendorDetail() {
                 <span className="text-xs text-[var(--ink-3)]">/ 5 · {v.rating_count || 0} ratings</span>
               </div>
             </div>
-            <div className="px-3 py-2 border border-[var(--line)]">
+            <div className="px-3 py-2 border border-[var(--line)] rounded-xl">
               <div className="overline text-[9px]">OUTSTANDING</div>
               <div className={`font-display font-bold text-lg ${s.outstanding > 0 ? "text-[var(--danger)]" : ""}`}>
                 {INR(s.outstanding || 0)}

@@ -377,7 +377,7 @@ export default function ProjectDetail() {
                             onOpen={(t) => setTab(t)} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[var(--line)]" data-testid="project-financials">
+            <div className="grid grid-cols-2 md:grid-cols-5 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-financials">
               <MiniStat label="Project value" value={inr(money.project_value ?? fin.budget)} />
               <MiniStat label="Invoiced" value={inr(money.invoiced ?? fin.invoiced)} />
               <MiniStat label="Received" value={inr(money.received ?? fin.collected)} accent="#1D633E" />
@@ -385,7 +385,7 @@ export default function ProjectDetail() {
               {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-t border-l border-[var(--line)]" data-testid="project-operational-stats">
+            <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-operational-stats">
               <MiniStat label="Tasks" value={`${(p.tasks || []).length}`} />
               <MiniStat label="Team" value={`${(p.team || []).length + (p.project_manager ? 1 : 0)}`} />
               <MiniStat label="Files" value={`${(p.files || []).length}`} />
@@ -420,7 +420,7 @@ export default function ProjectDetail() {
                   <div className="flex flex-wrap gap-1.5">
                     {(p.team || []).map((m) => (
                       <Link key={m.id} to={`/employees/${m.id}`}
-                        className="text-xs border border-[var(--line)] px-2 py-1 hover:border-[var(--ink)] transition">
+                        className="text-xs border border-[var(--line)] px-2 py-1 rounded-md hover:border-[var(--ink)] transition">
                         {m.name} {m.designation && <span className="text-[var(--ink-3)]">· {m.designation}</span>}
                       </Link>
                     ))}
