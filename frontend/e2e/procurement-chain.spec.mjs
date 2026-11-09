@@ -1,6 +1,8 @@
 // Vendor -> project -> PO -> GRN -> bill -> payment -> journals -> vendor/project/accounting views.
 import { test, expect } from "@playwright/test";
-import { api, json, accounts, today, uid } from "./helpers.mjs";
+import { api, json, accounts, today, uid, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;

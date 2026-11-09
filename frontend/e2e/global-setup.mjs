@@ -69,4 +69,27 @@ export default async function globalSetup() {
   await ensurePin(employee);
   await employee.storageState({ path: fileURLToPath(new URL("employee.json", AUTH_DIR)) });
   await employee.dispose();
+
+  // The App PIN locks a session after 5 minutes without activity (server-side). Every test
+  // shares these two sessions, and pages that only navigate send no activity, so a long run
+  // would meet the lock screen at a random point. Keep both sessions active for the run,
+  // as a person working would; the lock itself is covered by the backend tests.
+  const keep = [];
+  for (const role of ["admin", "employee"]) {
+    keep.push(await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL },
+      storageState: fileURLToPath(new URL(`${role}.json`, AUTH_DIR)) }));
+  }
+  const renew = async () => {
+    for (const ctx of keep) {
+      try {
+        const res = await ctx.post("/api/auth/pin/touch");
+        if (res.status() === 423) await ctx.post("/api/auth/pin/unlock", { data: { pin: qaPin() } });
+      } catch { /* server restarting; next tick retries */ }
+    }
+  };
+  const timer = setInterval(renew, 60_000);
+  return async () => {
+    clearInterval(timer);
+    await Promise.all(keep.map((ctx) => ctx.dispose()));
+  };
 }

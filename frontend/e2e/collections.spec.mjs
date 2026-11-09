@@ -1,6 +1,8 @@
 // Invoices vs reminders vs collections vs accounting — the money-in workflow end to end.
 import { test, expect } from "@playwright/test";
-import { api, json, accounts, journals, balanced, today, uid, authFile, baseURL } from "./helpers.mjs";
+import { api, json, accounts, journals, balanced, today, uid, authFile, baseURL, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 test.describe.configure({ mode: "serial" });
 
@@ -279,7 +281,8 @@ test("1st and 4th Saturdays are added as holidays in one go, without duplicates"
   await page.goto("/holidays");
   await page.getByTestId("holiday-saturdays").click();
   await page.getByTestId("confirm-ok").click();                       // defaults: 1, 4 from 1 Jan
-  await expect(page.getByText(/Added \d+ Saturday holidays/)).toBeVisible({ timeout: 30000 });
+  // Desktop and mobile share one tenant per run: whichever project runs second finds them already added.
+  await expect(page.getByText(/Added \d+ Saturday holidays|Those Saturdays were already added/)).toBeVisible({ timeout: 30000 });
   const ctx = await api("admin");
   const year = new Date().getFullYear();
   const list = (await json(ctx.get(`/api/holidays?year=${year}`))).holidays.filter((h) => /Saturday$/.test(h.name));
@@ -287,7 +290,9 @@ test("1st and 4th Saturdays are added as holidays in one go, without duplicates"
   for (const h of list) expect(new Date(`${h.date}T00:00:00Z`).getUTCDay()).toBe(6);
   await page.getByTestId("holiday-saturdays").click();
   await page.getByTestId("confirm-ok").click();
-  await expect(page.getByText("Those Saturdays were already added")).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText("Those Saturdays were already added").last()).toBeVisible({ timeout: 30000 });
+  const again = (await json(ctx.get(`/api/holidays?year=${year}`))).holidays.filter((h) => /Saturday$/.test(h.name));
+  expect(again.length).toBe(24);                                      // the repeat added nothing
   await ctx.dispose();
 });
 
@@ -386,15 +391,24 @@ test("Collections Due shows money by how late it is; a bucket filters the list",
   const client = await json(ctx.post("/api/clients", { data: { name: `Aging ${uid()}` } }));
   const ist = (days) => new Date(Date.now() + 5.5 * 3600e3 + days * 86400e3).toISOString().slice(0, 10);
   const consult = (await incomeAcc(ctx, /consult/i)).id;
+  // Desktop and mobile share one tenant per run, so measure the bucket's change, not its total.
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  const bucketRupees = async () => {
+    const text = await page.getByTestId("aging-d60").innerText();
+    const m = text.match(/₹\s*([\d,]+)/);
+    return m ? Number(m[1].replace(/,/g, "")) : 0;
+  };
+  await page.goto("/accounting?tab=receivables");
+  await page.waitForLoadState("networkidle");
+  // The strip only renders when something is due; a fresh tenant may have nothing yet.
+  const before = (await page.getByTestId("collections-aging").count()) ? await bucketRupees() : 0;
   const late = await json(ctx.post("/api/accounting/receivables", { data: {
     name: `Old fee ${uid()}`, amount: 45000, client_id: client.id, due_date: ist(-45), income_account_id: consult } }));
   const soon = await json(ctx.post("/api/accounting/receivables", { data: {
     name: `Next fee ${uid()}`, amount: 5000, client_id: client.id, due_date: ist(10), income_account_id: consult } }));
-  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
-  await page.goto("/accounting?tab=receivables");
-  const strip = page.getByTestId("collections-aging");
-  await expect(strip).toBeVisible({ timeout: 20000 });
-  await expect(page.getByTestId("aging-d60")).toContainText("45,000");
+  await page.reload();
+  await expect(page.getByTestId("collections-aging")).toBeVisible({ timeout: 20000 });
+  await expect.poll(bucketRupees).toBe(before + 45000);
   await page.getByTestId("aging-d60").click();
   await expect(page.getByText(late.name)).toBeVisible();
   await expect(page.getByText(soon.name)).toHaveCount(0);

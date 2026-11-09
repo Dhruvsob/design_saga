@@ -1,17 +1,26 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-11-08 (Asia/Kolkata)
+Last updated: 2026-11-09 (Asia/Kolkata)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/repair-release`; release and evidence commits `842d243` / `e3a855a` are pushed to `origin/codex/repair-release`.
+- Local checkout: `claude/ux-product-refinement`; integrated base `b2d6a99` (Codex `397c530` + Claude `d16579b`); DS-119 UX changes ready for push and deploy.
 - Production checkout: `/opt/design-saga-git`; runtime/source commit `e3a855aba0ff48545c839da24d95ab584e8850e4` is deployed on `srv2020574.hstgr.cloud`.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - SSH key access works. Caddy, web, backend, FerretDB and PostgreSQL are running; PostgreSQL, FerretDB, backend and web report healthy. Public `/` and `/api/` return 200; unauthenticated auth, site-visit, attendance-project, payroll-run and receivables routes return 401.
 - Verified backups were created immediately before and during deployment at `/opt/design-saga-backups/20261108T082420Z` and `/opt/design-saga-backups/20261108T082550Z`. The scheduled backup and monitor timers are active; the latest monitor result is successful.
 - Deployment used a SHA-256-verified Git bundle and the guarded updater. It fast-forwarded `c2f09bd` to `e3a855a`, rebuilt/recreated only backend and web, preserved the VPS-only Caddy files byte-for-byte, and produced no observed post-deploy backend 5xx/traceback signature.
 - Host log retention is now verified: journald is capped at 1 GB / 7 days; new Docker containers inherit 10 MB x 3-file rotation; an exact-path logrotate rule covers the three older containers without restarting them. Existing PostgreSQL/FerretDB logs were compressed from about 1.5 GB to 115 MB archived, disk use fell from 73% to 70%, and every container stayed healthy.
-- Current action: obtain an authenticated user session for non-destructive live workflow checks when available. Do not create/delete production QA data merely to claim browser coverage. External credential rotation, alerting and off-server backups remain owner/provider actions.
+- Current action: deploy DS-119 UX batch to gamaa.in; then continue with tenant management work.
+
+### DS-119: UX integration — enhanced tactile, login redesign, e2e harness root-cause fix (09/11)
+
+- **Integration**: merged Codex security hardening `397c530` with Claude UX `d16579b` into `b2d6a99`; all conflicts resolved.
+- **UX-18 (table overflow regression) fixed**: The soft-tactile table-frame CSS rule used `overflow: hidden`, which prevented horizontal scroll on 28 wrapper elements that are both the border frame and the scroll container (Collections Due, Daybook, Invoices, attendance sheets). Fixed with selective `overflow-x: auto` on non-scroll frames; existing `overflow-x-auto` / `table-scroll` classes keep their own overflow untouched. Verified at 390 px: Collections Due `scrollWidth ≈ 950` inside a `356 px` frame, `border-radius 14 px`, scroll works.
+- **Enhanced tactile Pass 2** (`src/index.css`): full pill on all action buttons (`border-radius: 100px`); richer cream background (deeper layered radial gradients); cards at 18 px radius with `--elev-1` + edge-light; table frame radii matched to cards; inputs at 12 px radius; sidebar active item gets `--elev-1` raised-pill shadow; KPI grids converted from shared-border to floating tiles via `.kpi-grid` hook class (gap 12 px, each child gets its own border + radius + shadow); PIN lock screen restyle (warmer overlay, rounded card, brown icon gradient, raised keypad buttons with press-in feedback). `Dashboard.jsx` and `ClientDetail.jsx` both updated with `kpi-grid` class.
+- **Login page complete redesign** (`Login.jsx`): scrapped the original form. Two-panel CSS-only layout: left = cream form panel (`--app` solid background; brand `DS` logotype in gradient tile; `Design Saga / Architecture ERP · by Gamaa` identity; Google SSO primary + Studio ID secondary form; © Gamaa footer); right = brand-brown gradient panel (`#76705E → #5F5A4B → #2C2820`; architectural grid SVG at 7% opacity; feature list of all 6 modules; Jakob Nielsen design quote). Mobile shows form-only panel. No external images. `data-testid` attributes preserved.
+- **E2e harness root-cause fix**: 26 `browser.newContext()` windows across 10 specs were never closed. After 5 min their `checkIdle` posted `POST /api/auth/pin/lock`, intermittently locking the shared session for all running tests. Fix: `closeExtraContexts` exported from `helpers.mjs`, called via `test.afterEach` in all 10 spec files; global-setup keep-alive touches the session every 60 s and unlocks on 423.
+- **Verified**: lint/JSX/logic tests/production build: clean. E2E desktop + mobile full suite (all spec files): **125 passed, 27 intentional skips, 0 failed** (baseline was 123; 2 additional cases now pass with the orphan-context fix). Exit code 0.
 
 ### DS-118: Acceptance pass 09/11 - one "still to collect" figure, large-tenant fixes, UX polish
 
@@ -329,14 +338,14 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 | ID | Module | Exact location | Current problem | Change | Pri | Depends | Status |
 |---|---|---|---|---|---|---|---|
-| INV-01 | Collections | `TransactionDetail.jsx` `canDelete` | Receipts on Collections Due rows (`other_receivable_income`, now the path for every new invoice collection) could not be deleted/reversed anywhere in the UI although the API supports it | Allow Delete (reversal) + "Open Collections Due" drill-through | P1 | — | Tested (DS-112) |
-| INV-02 | Reminders | `_sync_other_receivable_after_reversal`, `_reverse_commission_settlement_locked` | Reversing a receipt made money due again but left its reminder, calendar/Google event and alerts closed | Refresh reminders on both reversal paths | P1 | — | Tested (DS-112) |
-| INV-03 | Received Payments | `ReceivedPayments.jsx` | Page says "correct from the Daybook" but gives no link to the entry | Row ⋮: Open entry, Open source | P1 | — | Tested (DS-112) |
-| INV-04 | Collections Due | `Accounting.jsx` CollectionsDue row | ⋮ only on unreceived manual plans; no view of receipts behind a collection; inline "Open" did a full page reload | Always-on ⋮: Receipts & entries, Open vendor/project, Edit/Cancel when allowed | P1 | — | Tested (DS-112) |
+| INV-01 | Collections | `TransactionDetail.jsx` `canDelete` | Receipts on Collections Due rows (`other_receivable_income`, now the path for every new invoice collection) could not be deleted/reversed anywhere in the UI although the API supports it | Allow Delete (reversal) + "Open Collections Due" drill-through | P1 | — | Deployed (DS-112, `82202e4`) |
+| INV-02 | Reminders | `_sync_other_receivable_after_reversal`, `_reverse_commission_settlement_locked` | Reversing a receipt made money due again but left its reminder, calendar/Google event and alerts closed | Refresh reminders on both reversal paths | P1 | — | Deployed (DS-112, `82202e4`) |
+| INV-03 | Received Payments | `ReceivedPayments.jsx` | Page says "correct from the Daybook" but gives no link to the entry | Row ⋮: Open entry, Open source | P1 | — | Deployed (DS-112, `82202e4`) |
+| INV-04 | Collections Due | `Accounting.jsx` CollectionsDue row | ⋮ only on unreceived manual plans; no view of receipts behind a collection; inline "Open" did a full page reload | Always-on ⋮: Receipts & entries, Open vendor/project, Edit/Cancel when allowed | P1 | — | Deployed (DS-112, `82202e4`) |
 | INV-05 | Accounting | — | No period close, lock or Excel export | Close & export workflow | P1 | — | Deployed (DS-111, `6ccdd8f`) |
-| INV-06 | Received Payments API | `money_in.py` `received_payments` `to_list(5000)` | Silent 5,000-row cap (R1 regression) | Read all rows (money); display lists use MAX_LIST_ROWS | P2 | — | Tested (DS-113) |
-| INV-07 | Collections | Collections Due | No receivable aging (0-30/31-60/61-90/90+) by client/project | Aging strip + filter on the existing queue | P2 | — | Tested (DS-113) |
-| INV-08 | Lists | Expenses, Loans, Purchase orders | Row actions only inside the detail panel (U1) | PO row ⋮ (send/cancel); Expenses/Loans keep row-opens-panel by decision | P2 | — | Tested (DS-113) |
+| INV-06 | Received Payments API | `money_in.py` `received_payments` `to_list(5000)` | Silent 5,000-row cap (R1 regression) | Read all rows (money); display lists use MAX_LIST_ROWS | P2 | — | Deployed (DS-113, `c7aaf2f`) |
+| INV-07 | Collections | Collections Due | No receivable aging (0-30/31-60/61-90/90+) by client/project | Aging strip + filter on the existing queue | P2 | — | Deployed (DS-113, `c7aaf2f`) |
+| INV-08 | Lists | Expenses, Loans, Purchase orders | Row actions only inside the detail panel (U1) | PO row ⋮ (send/cancel); Expenses/Loans keep row-opens-panel by decision | P2 | — | Deployed (DS-113, `c7aaf2f`) |
 | INV-09 | Performance | `Accounting.jsx` (~2,100 lines), `Attendance.jsx`, `VendorDetail.jsx` | One bundle per page (R6) | Measured: routes already lazy; 174 KB gzip shell | P3 | Analyser | Measured (DS-113) |
 | INV-10 | Navigation | `Layout.jsx` NAV | Sidebar already groups Sales · Projects · Procurement · Finance · People · Administration, permission-filtered (DS-074/096) — matches the requested Project → Finance → People → Admin hierarchy | No move needed; keep URLs | — | — | Verified |
 | INV-11 | Retention | Close & export | Purge of exported years | Only after owner/CA decision + off-server backup (ACC-10, OPS-02) | P2 | Owner | Decision Needed |

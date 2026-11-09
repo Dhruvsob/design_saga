@@ -138,7 +138,7 @@ export default function ClientDetail() {
       </div>
 
       {/* summary strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)]">
+      <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)] kpi-grid">
         <Stat label="Projects" value={s.projects ?? 0} />
         <Stat label="Invoiced" value={inr(s.total_invoiced)} />
         <Stat label="Collected" value={inr(s.total_paid)} accent="#1D633E" />
@@ -202,7 +202,7 @@ export default function ClientDetail() {
           {!ledger && !ledgerErr && <div className="overline">LOADING LEDGER…</div>}
           {ledger && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)]">
+              <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)] kpi-grid">
                 <Stat label="Opening" value={inr(ledger.opening_balance)} />
                 <Stat label="Inflow" value={inr(ledger.inflow)} accent="#1D633E" />
                 <Stat label="Outflow" value={inr(ledger.outflow)} accent="#B22B22" />

@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
-import { api } from "./helpers.mjs";
+import { api, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 const auth = (role) => fileURLToPath(new URL(`./.auth/${role}.json`, import.meta.url));
 

@@ -1,7 +1,9 @@
 // UX batch (DS-088..DS-090): collections queue vs history, styled confirms,
 // leave privacy and salary working.
 import { test, expect } from "@playwright/test";
-import { api, json, uid, authFile, accounts, today } from "./helpers.mjs";
+import { api, json, uid, authFile, accounts, today, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 test.use({ storageState: authFile("admin") });
 test.beforeEach(async ({ browserName }, testInfo) => {

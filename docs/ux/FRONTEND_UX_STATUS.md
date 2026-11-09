@@ -50,6 +50,8 @@ brand tokens unchanged (`src/index.css`: #8B7F6A, #76705E, #F5F4F0, #FAF9F6, #8B
 | UX-16 | All forms | 13 "open form" buttons showed a **+** next to "Cancel" | Cancel shows ✕; the + only on the create action |
 | UX-17 | Whole app | Owner shared five reference boards (soft/tactile "neo" UI kits) and asked for that detailing in our brown/cream tone across the ERP | **Soft tactile detailing**, CSS only, brand colours unchanged (see §3a) |
 | PDF-04 | Vendor incentive statement PDF | Two-line title, period printed twice, direct incentives as "-, -, Rs. 0.00" | "Incentive statement"; period once; Date / From ("Direct incentive" or "Bill …") / Bill value columns |
+| UX-19 | Whole app | Owner asked to push the reference-board look further: pill buttons, creamier wash, floating KPI tiles, raised sidebar pill, rounder inputs, PIN screen restyle | **Enhanced tactile Pass 2**, CSS only (see §3b) |
+| UX-20 | Login | Original login (plain Google + password form on cream; Unsplash architecture photo background) looked amateur and the background image was rejected as "very bad" | **Login complete redesign**: two-panel CSS-only layout (cream form + brand-brown gradient marketing panel); "Architecture ERP · by Gamaa" identity; Google SSO primary + Studio ID secondary; six module feature list; Jakob Nielsen quote; no external images (see §3c) |
 
 PDF changes are presentation-only (labels, colours, layout); no amount, query or calculation changed.
 They touch shared backend files — `server.py` (invoice + quotation PDF builders), `routes/money_in.py` (`generate_reminder_pdf`), `routes/finance_extras.py` (statement) — please merge with care (CDX-05).
@@ -73,6 +75,38 @@ All of it lives in the `SOFT TACTILE DETAILING` block at the end of `src/index.c
 | menus, dialogs, toasts | `--elev-3`, 14–16 px radius, dialog backdrop blur 3 px |
 
 Brand tokens are unchanged. `prefers-reduced-motion` turns off the hover lift.
+
+### 3b. Enhanced tactile Pass 2 (UX-19, owner feedback 09/11/2026)
+
+Owner: "keep the brown shade kind of creamy background and brown buttons and all that, which is similar to the pictures which I have shared."
+
+Changes layered on top of UX-17 (all in `src/index.css`; no component changes except `kpi-grid` class in `Dashboard.jsx` and `ClientDetail.jsx`):
+
+| Change | Detail |
+|---|---|
+| Pill buttons | All `.btn-primary` and `.btn-ghost` gain `border-radius: 100px`; icon buttons become circles (`50%`) |
+| Richer cream wash | Three deeper radial gradients over `--app` for a warmer parchment feel |
+| Rounder cards | `.card-flat` and table frames at 18 px; inputs at 12 px |
+| Sidebar active pill | `aria-current="page"` gets `--elev-1` + `--edge-light` raised shadow |
+| KPI floating tiles | `.kpi-grid` hook class: `border-top/left: none; gap: 12px` on container; each child gets `border-radius: 18px; box-shadow; border` — shared-border grid becomes a row of floating cards |
+| PIN screen restyle | Warmer overlay (`rgba(243,240,235,.97)`); card `border-radius: 24px` + `--elev-3`; lock icon: brown gradient + circle; keypad buttons: 14 px radius, raised at rest, press-in on active |
+
+### 3c. Login complete redesign (UX-20, owner request 09/11/2026)
+
+Owner: "change the whole id pass google login and add gamaa… It should be completely 100% changed… look like a professional login page of ERP system… The main software company is Gamma for the architecture." Then: "background image of loginpage is very bad."
+
+Previous design: single-panel cream page with an Unsplash architecture exterior photo, gradient overlay, plain form. Problems: photo was low-quality, text readability poor, no brand identity.
+
+Replacement (`Login.jsx`): pure CSS two-panel split, no external images.
+
+| Panel | Detail |
+|---|---|
+| Left — cream form | Solid `--app` background; `DS` logotype tile (brown gradient + live-dot); "Design Saga / Architecture ERP · by Gamaa" header; "Studio Login" overline; "Your studio, in one place." headline; tagline; Google SSO primary button; `or Studio ID` divider; email/Employee-ID + password form with Phosphor icons; © Gamaa / Privacy / v0.2 footer |
+| Right — brand brown | CSS gradient `#76705E → #5F5A4B → #2C2820`; architectural grid SVG 7% opacity; six module feature list; Jakob Nielsen design quote; `aria-hidden="true"` |
+
+Mobile (< lg breakpoint): only the cream form panel. All `data-testid` attributes preserved. Auth logic (`handleGoogle`, `loginWithPassword`) unchanged.
+
+**UX-18 regression found during integration and fixed (09/11).** The first version of the table-frame rule used `overflow: hidden`. 28 wrappers are both the bordered frame and the scroller (`overflow-x-auto`, `table-scroll`), e.g. Collections Due, Daybook, Invoices and the attendance sheets. On phones those tables could no longer be scrolled sideways (the ⋮ column was out of reach), and `table-scroll` lost its vertical scroll and sticky header. The 390 px overflow sweep could not see this, because hidden overflow is exactly what hides it. Fix: existing scrollers keep their own overflow, and other frames use `overflow-x: auto`, which still clips to the rounded corners. Verified at 390 px: Collections Due, Daybook and Invoices report `overflow auto`, scrollWidth ≈ 950 inside a 356 px frame, radius 14 px. Found by the mobile ⋮ tests in `collections.spec` and `ux.spec` failing with "td intercepts pointer events".
 
 ## 4. Open frontend work (next batches, in order)
 
@@ -111,6 +145,23 @@ E2E_BASE_URL=http://127.0.0.1:5174 node e2e/tools/pdf-samples.mjs <outDir>      
 - Playwright desktop + mobile (phases, drawings, snags, site-visits, ux, smoke, a11y, navigation, pdf, collections, crm-chain): 82 passed, 15 intentional skips, 2 timeouts that passed on rerun (clients paging, Saturday holidays).
 - `ux-sweep.mjs` after the batch: no page/console errors, no horizontal overflow at 390 px.
 
+Integration 09/11 (Codex `397c530` + this branch). The intermittent failures were investigated rather than accepted as rerun passes:
+
+| Failure | Root cause | Fix |
+|---|---|---|
+| Lock screen mid-test (`ux.spec` employee dialogs, `smoke` primary pages) | The server keeps a session unlocked for 5 min after the last `/auth/pin/touch`; all tests share one session, and navigation-only tests send no activity | `global-setup` keeps both QA sessions active for the run (touch every 60 s, unlock on 423); `api()` also renews. Lock behaviour stays covered by backend tests |
+| Saturday holidays (mobile) | Order-dependent: desktop and mobile share one tenant per run, so the second project always gets "already added" | Accept either first message; assert the count stays 24 after the repeat |
+| Collections aging (mobile) | Same shared-tenant cause: bucket held both projects' ₹45,000 | Measure the bucket's change, not its absolute total |
+| ⋮ in Collections Due (mobile) | Real regression, UX-18 above | CSS fixed |
+| Lock screen mid-test (run #3: `site-visits.spec` live map, `ux.spec` clients paging) | Real root cause found: 26 `browser.newContext()` windows across 10 specs were never closed. After 5 min idle their `checkIdle` interval posts `POST /api/auth/pin/lock`, locking the shared admin session for all running tests. | `closeExtraContexts` added to `helpers.mjs` and called via `test.afterEach` in all 10 specs; global keep-alive (touch every 60 s) also added to `global-setup.mjs`. |
+| File upload "socket hang up" (pdf, once) | The request never reached the API (no log line); Windows asyncio `ConnectionResetError` at that moment, from a keep-alive socket reused by the local vite proxy just as uvicorn closed it | Not applicable in production: nginx has no upstream keep-alive pool, so every request opens a fresh connection to the backend |
+
+All 27 skips are deliberate viewport de-duplication (`test.skip(project !== "desktop", "... viewport independent")` and phone-only checks), each with its reason in the spec.
+
 Batch 2 (UX-11, UX-14, UX-15, UX-16, UX-17):
 - Lint, JSX scan, frontend logic tests, production build: clean.
 - Playwright desktop + mobile (ux, smoke, a11y, navigation, forms, phases, proposal, crm-chain, drawings, snags, money, procurement-chain, pdf, collections): 92 passed, 23 intentional skips. 2 failures were environmental: the 5-minute idle PIN lock appeared mid-run (the failure screenshot is the lock screen) and the known Saturday-holidays mongod stall. Both, plus the 5 serial tests that did not run after the first one, passed on a rerun on their own (17/17 desktop ux, 1/1 mobile Saturdays).
+
+Batch 3 (DS-119: Codex integration + UX-18 fix + UX-19 Enhanced Tactile Pass 2 + UX-20 Login redesign + e2e harness fix):
+- Lint, JSX scan, frontend logic tests, production build: clean.
+- Playwright desktop + mobile **full suite** (all spec files): **125 passed, 27 intentional skips, 0 failed**. Exit code 0. The 2 run-#3 lock-screen failures no longer appear; `closeExtraContexts` afterEach in all 10 specs eliminated the orphan-context PIN lock. The mobile `ux.spec:231` clients-paging test that previously timed out also passed this run.

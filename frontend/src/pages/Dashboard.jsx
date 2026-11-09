@@ -92,7 +92,7 @@ export default function Dashboard() {
 
       {/* ============== KPI ROW ============== */}
       <div className="fade-up">
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${kpiGrid} border-t border-l border-[var(--line)]`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${kpiGrid} border-t border-l border-[var(--line)] kpi-grid`}>
           {canSeeRevenue && (
             <Kpi
               label="Revenue collected"

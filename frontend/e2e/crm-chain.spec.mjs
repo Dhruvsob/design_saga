@@ -1,6 +1,8 @@
 // Lead -> client + project -> quotation -> accepted -> linked to the SAME project (no duplicate).
 import { test, expect } from "@playwright/test";
-import { api, json, uid, authFile, baseURL } from "./helpers.mjs";
+import { api, json, uid, authFile, baseURL, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;

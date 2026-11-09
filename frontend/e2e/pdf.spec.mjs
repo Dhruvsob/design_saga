@@ -4,7 +4,9 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { api, json, accounts, today, uid } from "./helpers.mjs";
+import { api, json, accounts, today, uid, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 const LOGO = fs.readFileSync(fileURLToPath(new URL("./fixtures/qa-test-logo.png", import.meta.url)));
 const OUT = process.env.E2E_PDF_DIR || "";

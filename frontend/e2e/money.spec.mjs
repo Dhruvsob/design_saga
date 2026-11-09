@@ -2,7 +2,9 @@
 // consistently in every linked module (invoice/collections, payroll,
 // vendor commissions). API-driven so each linked record can be asserted.
 import { test, expect } from "@playwright/test";
-import { api, json, accounts, journals, balanced, listOf, today, uid, authFile, baseURL } from "./helpers.mjs";
+import { api, json, accounts, journals, balanced, listOf, today, uid, authFile, baseURL, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;

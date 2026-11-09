@@ -1,6 +1,8 @@
 // Site snags: raise with a photo -> mark fixed with a photo -> verify & close; reopen needs a reason.
 import { test, expect } from "@playwright/test";
-import { api, json, uid, authFile, baseURL, openProjectTab } from "./helpers.mjs";
+import { api, json, uid, authFile, baseURL, openProjectTab, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;

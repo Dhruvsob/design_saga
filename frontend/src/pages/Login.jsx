@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { ArrowRight, GoogleLogo, LockKey, User, Warning } from "@phosphor-icons/react";
+import { GoogleLogo, LockKey, User, Warning } from "@phosphor-icons/react";
 
 function extractError(detail, fallback = "Something went wrong.") {
   if (!detail) return fallback;
@@ -42,7 +42,7 @@ export default function Login() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--app)" }}>
         <div className="overline live-dot">LOADING</div>
       </div>
     );
@@ -54,81 +54,90 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-white">
-      {/* ============== LEFT: form ============== */}
-      <div className="flex flex-col justify-between p-10 lg:p-16 border-r border-[var(--line)] relative overflow-hidden">
-        <div className="absolute inset-0 dotted-bg opacity-30 pointer-events-none" />
+    <div className="min-h-screen flex flex-col lg:flex-row">
 
-        <div className="relative flex items-center justify-between fade-up">
+      {/* ===== LEFT PANEL: cream — form ===== */}
+      <div
+        className="flex flex-col justify-between w-full lg:max-w-[520px] min-h-screen p-10 lg:p-14 fade-up"
+        style={{ background: "var(--app)" }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative w-9 h-9 bg-[var(--accent)] flex items-center justify-center">
-              <span className="text-white font-display font-bold text-sm">DS</span>
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--success)] rounded-full" style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }} />
+            <div
+              className="relative w-10 h-10 flex items-center justify-center rounded-xl"
+              style={{
+                background: "linear-gradient(145deg, #9A8F7A 0%, #76705E 100%)",
+                boxShadow: "0 4px 14px -4px rgba(91,78,58,0.5), inset 0 1px 0 rgba(255,255,255,0.22)",
+              }}
+            >
+              <span className="text-white font-display font-bold text-sm select-none">DS</span>
+              <span
+                className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--success)] rounded-full border-2 border-white"
+                style={{ animation: "pulse-dot 2s ease-in-out infinite" }}
+              />
             </div>
-            <span className="font-display font-bold tracking-tighter text-lg">DESIGN SAGA</span>
+            <div>
+              <div className="font-display font-bold tracking-tight text-[18px] leading-tight text-[var(--ink)]">Design Saga</div>
+              <div className="text-[9px] font-mono tracking-[0.18em] uppercase text-[var(--ink-3)]">Architecture ERP · by Gamaa</div>
+            </div>
           </div>
-          <div className="overline hidden md:flex items-center gap-2 live-dot">SYSTEM ONLINE</div>
+          <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" style={{ animation: "pulse-dot 2s ease-in-out infinite" }} />
+            System Online
+          </div>
         </div>
 
-        <div className="relative max-w-md fade-up" style={{ animationDelay: "120ms" }}>
-          <div className="overline mb-6 flex items-center gap-3">
-            <span className="font-bold">01 / STUDIO LOGIN</span>
-            <span className="h-px flex-1 bg-[var(--line)]" />
-          </div>
-
-          <h1 className="font-display font-bold tracking-tighter text-5xl lg:text-6xl leading-[0.92] mb-6">
-            Run your<br/>
-            design studio<br/>
-            like a <span className="accent-blue relative inline-block">masterpiece
-              <span className="absolute -bottom-2 left-0 right-0 h-1 bg-[var(--accent)]" />
-            </span>.
+        {/* Form section */}
+        <div className="max-w-[400px]">
+          <div className="overline mb-4 text-[var(--accent-strong)]">Studio Login</div>
+          <h1 className="font-display font-bold tracking-tighter text-[2.5rem] leading-[1.1] mb-3 text-[var(--ink)]">
+            Your studio,<br />in one place.
           </h1>
-
-          <p className="text-[var(--ink-2)] text-base leading-relaxed mb-8 max-w-sm">
-            CRM, projects, drawings, invoices and AI — one calm, editorial command centre for architecture &amp; interior firms.
+          <p className="text-sm text-[var(--ink-2)] leading-relaxed mb-8 max-w-[320px]">
+            Projects, clients, finances and team — a single calm workspace for architecture &amp; interior design firms.
           </p>
 
-          {/* Google button */}
+          {/* Google SSO */}
           <button
             data-testid="login-google-btn"
             type="button"
             onClick={handleGoogle}
-            className="btn-primary w-full justify-center text-base py-3.5 group"
+            className="btn-primary w-full justify-center gap-2.5 py-3 mb-5"
             style={{ fontSize: 14 }}
           >
-            <GoogleLogo size={18} weight="bold" />
-            Sign in with Google
-            <ArrowRight size={14} className="ml-1 transition-transform group-hover:translate-x-1" />
+            <GoogleLogo size={17} weight="bold" />
+            Continue with Google
           </button>
 
           {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
+          <div className="flex items-center gap-3 mb-5">
             <div className="h-px flex-1 bg-[var(--line)]" />
-            <div className="overline text-[10px]">OR STUDIO ID</div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)]">or Studio ID</span>
             <div className="h-px flex-1 bg-[var(--line)]" />
           </div>
 
-          {/* Password form */}
+          {/* ID + Password form */}
           <form onSubmit={handlePasswordLogin} className="space-y-3" data-testid="password-login-form">
-            <div className="flex items-center gap-2 border border-[var(--line)] px-3 py-2.5 focus-within:border-[var(--accent)] transition bg-white">
-              <User size={14} className="text-[var(--ink-2)]" />
+            <div className="relative">
+              <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-3)] pointer-events-none" />
               <input
                 required
                 data-testid="login-identifier"
-                className="flex-1 outline-none text-sm bg-transparent"
+                className="input-flat w-full pl-9"
                 placeholder="Email or Employee ID (e.g. DS0001)"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 autoComplete="username"
               />
             </div>
-            <div className="flex items-center gap-2 border border-[var(--line)] px-3 py-2.5 focus-within:border-[var(--accent)] transition bg-white">
-              <LockKey size={14} className="text-[var(--ink-2)]" />
+            <div className="relative">
+              <LockKey size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-3)] pointer-events-none" />
               <input
                 required
                 type="password"
                 data-testid="login-password"
-                className="flex-1 outline-none text-sm bg-transparent"
+                className="input-flat w-full pl-9"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -137,8 +146,9 @@ export default function Login() {
             </div>
             {err && (
               <div
-                className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 flex items-center gap-2"
+                className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 rounded-lg flex items-center gap-2"
                 data-testid="login-error"
+                role="alert"
               >
                 <Warning size={13} /> {err}
               </div>
@@ -147,50 +157,80 @@ export default function Login() {
               type="submit"
               disabled={busy}
               data-testid="login-password-btn"
-              className="w-full py-2.5 bg-[var(--ink)] text-white text-sm font-semibold hover:bg-[var(--accent)] transition disabled:opacity-60"
+              className="btn-ghost w-full justify-center py-2.5"
             >
               {busy ? "Signing in…" : "Sign in with password"}
             </button>
           </form>
-
         </div>
 
-        <div className="relative flex items-center gap-4 text-xs text-[var(--ink-2)] font-mono tracking-wider fade-up" style={{ animationDelay: "240ms" }}>
-          <span>© {new Date().getFullYear()} DESIGN SAGA</span>
-          <Link to="/privacy" className="underline-offset-4 hover:underline">PRIVACY</Link>
+        {/* Footer */}
+        <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)]">
+          <span>© {new Date().getFullYear()} Gamaa</span>
+          <span className="h-3 w-px bg-[var(--line)]" />
+          <Link to="/privacy" className="hover:text-[var(--ink)] transition-colors">Privacy</Link>
+          <span className="h-3 w-px bg-[var(--line)]" />
+          <span>v0.2</span>
         </div>
       </div>
 
-      {/* ============== RIGHT: hero image ============== */}
-      <div className="hidden lg:block relative overflow-hidden">
-        <img
-          src="https://images.unsplash.com/photo-1771450092348-3185c8fb889a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBtaW5pbWFsaXN0JTIwYXJjaGl0ZWN0dXJlJTIwaW50ZXJpb3J8ZW58MHx8fHwxNzc2NDM1MDg3fDA&ixlib=rb-4.1.0&q=85"
-          alt="Studio"
-          className="absolute inset-0 w-full h-full object-cover scale-105"
-          style={{ animation: "fade-in 1200ms ease-out" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#8B7F6A]/30 via-transparent to-black/60" />
+      {/* ===== RIGHT PANEL: brand brown — marketing ===== */}
+      <div
+        className="hidden lg:flex flex-1 flex-col justify-between p-14 relative overflow-hidden"
+        style={{ background: "linear-gradient(150deg, #76705E 0%, #5F5A4B 45%, #2C2820 100%)" }}
+        aria-hidden="true"
+      >
+        {/* Subtle pattern: faint architectural grid lines */}
+        <svg className="absolute inset-0 w-full h-full opacity-[0.07]" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+              <path d="M 48 0 L 0 0 0 48" fill="none" stroke="white" strokeWidth="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
 
-        <div className="absolute top-10 left-10 right-10 flex items-center justify-between">
-          <div className="overline text-white/90">REEL · 001</div>
-          <div className="overline text-white/90 flex items-center gap-2">
-            <span className="w-2 h-2 bg-[var(--danger)] rounded-full" style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }} />
-            REC
+        {/* Top: tagline */}
+        <div>
+          <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/50 mb-3">Architecture ERP</div>
+          <div className="text-sm text-white/70 font-mono leading-relaxed">
+            Manage every project from first brief<br />to final handover — in one system.
           </div>
         </div>
 
-        <div className="absolute bottom-10 left-10 right-10 text-white fade-up" style={{ animationDelay: "300ms" }}>
-          <div className="overline text-white/70 mb-3 flex items-center gap-3">
-            THE SAGA <span className="h-px w-12 bg-white/40" />
-          </div>
-          <p className="font-display tracking-tighter text-3xl xl:text-4xl leading-tight max-w-md">
-            "Good design is obvious.<br/>Great design is transparent."
+        {/* Middle: feature list */}
+        <div className="space-y-3">
+          {[
+            { label: "Project & Phase Management", desc: "Full lifecycle from concept to delivery" },
+            { label: "CRM & Collections", desc: "Clients, quotations, invoices, reminders" },
+            { label: "Design Studio", desc: "Drawings, files, site visits & snag lists" },
+            { label: "Procurement & Vendors", desc: "POs, bills, vendor incentives, payouts" },
+            { label: "Team & Payroll", desc: "Attendance, leaves, payroll & expense claims" },
+            { label: "Full Accounting", desc: "Books, reports, period close & GST ready" },
+          ].map((f) => (
+            <div key={f.label} className="flex items-start gap-3">
+              <span className="mt-[3px] w-1.5 h-1.5 rounded-full bg-[var(--accent-soft)] shrink-0" />
+              <div>
+                <div className="text-sm font-semibold text-white/90">{f.label}</div>
+                <div className="text-xs text-white/50">{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom: quote */}
+        <div>
+          <div className="h-px bg-white/20 mb-6 max-w-xs" />
+          <p className="font-display tracking-tighter text-2xl xl:text-3xl leading-tight text-white/90 max-w-sm mb-4">
+            &ldquo;Good design is obvious.<br />Great design is&nbsp;transparent.&rdquo;
           </p>
-          <p className="mt-4 text-sm text-white/80 font-mono tracking-widest">— J. NIELSEN</p>
+          <p className="text-xs text-white/50 font-mono tracking-widest">— Jakob Nielsen</p>
+          <p className="mt-6 text-[10px] font-mono uppercase tracking-widest text-white/30">
+            Trusted by architecture &amp; interior design studios
+          </p>
         </div>
-
-        <div className="absolute inset-6 border border-white/15 pointer-events-none" />
       </div>
+
     </div>
   );
 }

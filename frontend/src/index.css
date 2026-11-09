@@ -559,7 +559,11 @@ html, body, #root {
   transition: box-shadow 180ms var(--ease), border-color 180ms var(--ease);
 }
 main table { background: var(--surface); }
-main .border.border-\[var\(--line\)\]:has(> table) { border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--elev-1); }
+main .border.border-\[var\(--line\)\]:has(> table) { border-radius: var(--radius-lg); box-shadow: var(--elev-1); }
+/* Round the frame without ever taking away scrolling: wrappers that already scroll
+   (overflow-x-auto / table-scroll, incl. sticky headers) keep their own overflow; the rest
+   scroll sideways when wider than the screen instead of being clipped. */
+main .border.border-\[var\(--line\)\]:has(> table):not(.overflow-x-auto):not(.overflow-auto):not(.table-scroll) { overflow-x: auto; }
 
 /* Buttons: soft pill-ish, lift on hover, press in */
 .btn-primary {
@@ -610,6 +614,100 @@ main table tbody tr[aria-selected="true"] { background: var(--accent-soft); box-
 [role="tablist"] > button[aria-selected="true"].rounded-full,
 [role="tab"][aria-selected="true"].rounded-full { box-shadow: var(--elev-1), inset 0 1px 0 rgba(255, 255, 255, 0.18); }
 
+/* ============================================================
+   ENHANCED TACTILE PASS 2 (09/11/2026)
+   Pill buttons, creamier wash, floating KPI tiles, raised sidebar pill,
+   rounder cards & inputs, styled PIN screen. Brand hex values unchanged.
+   ============================================================ */
+
+/* Full pill on all action buttons */
+.btn-primary, .btn-ghost { border-radius: 100px; }
+.btn-primary.text-xs, .btn-ghost.text-xs { border-radius: 100px; }
+.btn-icon { border-radius: 50%; }
+
+/* Richer cream background: warmer, slightly more saturated wash */
+html, body, #root {
+  background:
+    radial-gradient(ellipse 1300px 600px at 10% -5%, rgba(255, 252, 248, 1.0), transparent 62%),
+    radial-gradient(ellipse 1000px 540px at 96% 0%, rgba(243, 237, 228, 0.98), transparent 58%),
+    radial-gradient(ellipse 700px 420px at 50% 100%, rgba(237, 230, 218, 0.45), transparent 65%),
+    var(--app);
+  background-attachment: fixed;
+}
+
+/* Cards: rounder floating tiles */
+.card-flat { border-radius: 18px; }
+a.card-flat:hover, button.card-flat:hover, .card-link:hover {
+  box-shadow: var(--elev-2), var(--edge-light);
+}
+
+/* Table frames: match the rounder card radius */
+main .border.border-\[var\(--line\)\]:has(> table) { border-radius: 18px; }
+
+/* Inputs: rounder sunken wells */
+.input-flat { border-radius: 12px; }
+textarea.input-flat { border-radius: 12px; }
+select.input-flat { border-radius: 12px; }
+
+/* Sidebar active item: raised white pill with a soft shadow */
+[data-testid="app-sidebar"] a[aria-current="page"] {
+  box-shadow: var(--elev-1), var(--edge-light);
+}
+
+/* KPI floating tiles — activate by adding class "kpi-grid" to the grid container
+   that uses the shared-border pattern (border-t border-l on the parent, border-r border-b
+   on each child). The class converts it to gap-based floating cards.               */
+.kpi-grid {
+  border-top: none !important;
+  border-left: none !important;
+  gap: 12px;
+}
+.kpi-grid > * {
+  border-radius: 18px !important;
+  border: 1px solid rgba(232, 230, 225, 0.9) !important;
+  box-shadow: var(--elev-1), var(--edge-light) !important;
+  background: var(--surface) !important;
+}
+.kpi-grid > *:hover { box-shadow: var(--elev-2), var(--edge-light) !important; }
+
+/* PIN lock / setup screen: warmer overlay, rounded card, brown icon, raised keypad */
+[data-testid="app-pin-lock"],
+[data-testid="app-pin-setup-required"] {
+  background: rgba(243, 240, 235, 0.97) !important;
+}
+[data-testid="app-pin-lock"] form,
+[data-testid="app-pin-setup-required"] form {
+  border-radius: 24px !important;
+  box-shadow: var(--elev-3), var(--edge-light) !important;
+  border-color: rgba(232, 230, 225, 0.6) !important;
+  background: #FFFEFC !important;
+}
+/* Lock / shield icon: round + brown gradient instead of black square */
+[data-testid="app-pin-lock"] form .bg-\[var\(--ink\)\],
+[data-testid="app-pin-setup-required"] form .bg-\[var\(--ink\)\] {
+  background: linear-gradient(180deg, #9A8F7A 0%, var(--accent-strong) 100%) !important;
+  border-radius: 50% !important;
+  box-shadow: var(--elev-2), inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+}
+/* Keypad keys: rounded raised tile, presses in on tap */
+[data-testid="app-pin-lock"] [aria-label="PIN keypad"] button {
+  border-radius: 14px !important;
+  box-shadow: var(--elev-1), var(--edge-light) !important;
+  background: var(--surface) !important;
+  transition: box-shadow 110ms ease, transform 90ms ease, background-color 110ms ease;
+}
+[data-testid="app-pin-lock"] [aria-label="PIN keypad"] button:hover {
+  background: var(--hover) !important;
+  box-shadow: var(--elev-2), var(--edge-light) !important;
+  transform: translateY(-1px);
+}
+[data-testid="app-pin-lock"] [aria-label="PIN keypad"] button:active {
+  box-shadow: var(--sunken) !important;
+  transform: translateY(1px) !important;
+  background: var(--surface-2) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .btn-primary:hover, .btn-ghost:hover { transform: none; }
+  [data-testid="app-pin-lock"] [aria-label="PIN keypad"] button:hover { transform: none; }
 }

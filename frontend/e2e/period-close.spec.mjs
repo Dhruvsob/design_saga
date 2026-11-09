@@ -1,6 +1,8 @@
 // Close & export: check -> Excel export -> close (lock) -> reopen with reason.
 import { test, expect } from "@playwright/test";
-import { api, json, accounts, today, uid, authFile, baseURL } from "./helpers.mjs";
+import { api, json, accounts, today, uid, authFile, baseURL, closeExtraContexts } from "./helpers.mjs";
+
+test.afterEach(closeExtraContexts);  // see helpers: forgotten windows lock the shared session
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;

@@ -13,6 +13,14 @@ export async function api(role) {
   if (status.locked) {
     const res = await ctx.post("/api/auth/pin/unlock", { data: { pin: process.env.QA_PIN } });
     if (!res.ok()) throw new Error(`PIN unlock failed: ${res.status()}`);
+  } else {
+    // Browser tabs share this session; renew the 5-minute window so a test that starts just
+    // before it ends does not meet the lock screen on its next page load.
+    const res = await ctx.post("/api/auth/pin/touch");
+    if (res.status() === 423) {
+      const unlock = await ctx.post("/api/auth/pin/unlock", { data: { pin: process.env.QA_PIN } });
+      if (!unlock.ok()) throw new Error(`PIN unlock failed: ${unlock.status()}`);
+    }
   }
   return ctx;
 }
@@ -56,4 +64,14 @@ const PROJECT_TAB_GROUP = { Overview: "overview", Activity: "overview", Phases: 
 export async function openProjectTab(page, name, options = {}) {
   await page.getByTestId(`tab-group-${PROJECT_TAB_GROUP[name]}`).click(options);
   await page.getByTestId(`tab-${name}`).click(options);
+}
+
+/**
+ * Close the extra browser windows a test opened with browser.newContext(). The browser lives for
+ * the whole run; a forgotten window keeps running the app, and after 5 minutes without input its
+ * idle timer calls /auth/pin/lock on the shared QA session, locking whatever test runs then.
+ * Use as: test.afterEach(closeExtraContexts);
+ */
+export async function closeExtraContexts({ browser, context }) {
+  await Promise.all(browser.contexts().filter((c) => c !== context).map((c) => c.close().catch(() => {})));
 }
