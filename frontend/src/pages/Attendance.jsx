@@ -1036,14 +1036,13 @@ function TeamLeavesCard() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
-            <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">Type</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
+            <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
           </thead>
           <tbody>
-            {rows === null && <tr><td colSpan={7} className="p-4"><div className="skeleton h-10 w-full" /></td></tr>}
+            {rows === null && <tr><td colSpan={6} className="p-4"><div className="skeleton h-10 w-full" /></td></tr>}
             {shown.map((l) => (
               <tr key={l.id} className="border-t border-[var(--line-soft)]" data-testid={`team-leave-${l.id}`}>
                 <td className="p-2 font-semibold">{l.employee_name || "—"}</td>
-                <td className="p-2 text-xs">{capWords(l.leave_type) || "—"}</td>
                 <td className="p-2 font-mono text-xs">{formatDate(l.from_date)}</td>
                 <td className="p-2 font-mono text-xs">{formatDate(l.to_date)}</td>
                 <td className="p-2 font-mono">{l.days}</td>
@@ -1052,7 +1051,7 @@ function TeamLeavesCard() {
               </tr>
             ))}
             {rows !== null && shown.length === 0 && (
-              <tr><td colSpan={7} className="p-8 text-center text-[var(--ink-3)] text-sm">No leave {status ? `marked ${status}` : "recorded"}{s ? " matches the search" : ""}.</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-[var(--ink-3)] text-sm">No leave {status ? `marked ${status}` : "recorded"}{s ? " matches the search" : ""}.</td></tr>
             )}
           </tbody>
         </table>
@@ -1936,7 +1935,7 @@ function LeaveAllowance({ value, onChange }) {
         </label>
       </div>
       <ul className="text-xs text-[var(--ink-2)] space-y-1 list-disc ml-4">
-        <li>Counts approved casual, sick and earned leave. The allowance resets every month and does not carry forward.</li>
+        <li>Counts every approved leave day. One leave a month is free; it resets every month and does not carry forward.</li>
         <li>Leave beyond {allowance} in the same month is unpaid and deducted at the employee&apos;s per-day rate.</li>
         <li>Leave marked &quot;unpaid&quot; is always deducted. Maternity, paternity and comp-off are not counted against this allowance.</li>
       </ul>

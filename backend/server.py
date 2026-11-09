@@ -5610,6 +5610,12 @@ async def _ensure_required_indexes():
     """Establish integrity indexes or fail startup before serving traffic."""
     from core.indexes import ensure_indexes
     await ensure_indexes()
+    # Owner's terminology rule: no "commission" account names (labels only).
+    try:
+        from core.terminology_migration import rename_commission_accounts
+        await rename_commission_accounts(db)
+    except Exception as exc:  # noqa: BLE001 - a label rename must never block startup
+        logger.warning("Account terminology rename skipped: %s", type(exc).__name__)
 
 
 @app.on_event("startup")
