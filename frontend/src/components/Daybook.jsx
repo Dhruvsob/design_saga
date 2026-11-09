@@ -262,7 +262,7 @@ export const Daybook = ({ accounts = [], clients = [], vendors = [], projects = 
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder='Try "Rent", "Tea", a name, a project, or 30000…'
-              className="input-flat w-full pl-9"
+              className="input-flat w-full !pl-9"
               data-testid="daybook-search"
             />
           </div>

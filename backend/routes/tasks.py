@@ -749,3 +749,62 @@ async def delete_project_category(project_id: str, name: str, request: Request,
         {"$pull": {"custom_categories": {"name": name}}},
     )
     return {"ok": True}
+
+
+@router.get("/dashboard/my-day")
+async def my_day(request: Request,
+                 session_token: Optional[str] = Cookie(default=None),
+                 authorization: Optional[str] = Header(default=None)):
+    """The signed-in person's own day: open tasks, today's attendance, leave this month.
+
+    Reads only the caller's own records (tasks assigned to any of their
+    identities, their own attendance and leave), so every role can use it.
+    """
+    from core.access_control import user_identity_ids
+    user = await require_user(request, session_token, authorization)
+    ids = [i for i in await user_identity_ids(user) if i]
+    today = business_today().isoformat()
+    open_tasks = await sdb.tasks.find(
+        {"assignee_id": {"$in": ids}, "status": {"$nin": ["done", "cancelled", "archived"]},
+         "archived": {"$ne": True}},
+        {"_id": 0, "id": 1, "title": 1, "due_date": 1, "priority": 1, "status": 1,
+         "project_id": 1, "project_name": 1},
+    ).to_list(MAX_LIST_ROWS)
+    overdue = [t for t in open_tasks if t.get("due_date") and t["due_date"] < today]
+    due_today = [t for t in open_tasks if t.get("due_date") == today]
+    upcoming = sorted((t for t in open_tasks if (t.get("due_date") or "9999") >= today),
+                      key=lambda t: (t.get("due_date") or "9999-12-31", t.get("title") or ""))
+    focus = (sorted(overdue, key=lambda t: t["due_date"]) + [t for t in upcoming if t not in overdue])[:6]
+
+    emp = await sdb.employees.find_one(
+        {"$or": [{"user_id": user["user_id"]}] + ([{"email": user["email"]}] if user.get("email") else [])},
+        {"_id": 0, "id": 1})
+    attendance = None
+    leave = None
+    if emp:
+        rec = await sdb.attendance.find_one({"employee_id": emp["id"], "date": today}, {"_id": 0})
+        attendance = {
+            "checked_in": bool(rec and rec.get("check_in")),
+            "checked_out": bool(rec and rec.get("check_out")),
+            "check_in": (rec or {}).get("check_in"), "status": (rec or {}).get("status"),
+        }
+        month_start = today[:8] + "01"
+        _bt = business_today()
+        month_end = ((_bt.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)).isoformat()
+        used = 0.0
+        async for lv in sdb.leaves.find(
+                {"employee_id": emp["id"], "status": "approved",
+                 "from_date": {"$lte": month_end}, "to_date": {"$gte": month_start}},
+                {"_id": 0, "days": 1, "from_date": 1, "to_date": 1}):
+            # only the part of the leave that falls in this month
+            start, end = max(lv["from_date"], month_start), min(lv["to_date"], month_end)
+            try:
+                from datetime import date as _d
+                overlap = (_d.fromisoformat(end) - _d.fromisoformat(start)).days + 1
+            except ValueError:
+                overlap = float(lv.get("days") or 0)
+            used += min(float(lv.get("days") or 0), max(0, overlap))
+        leave = {"used_this_month": used, "free_per_month": 1, "free_left": max(0.0, 1 - used)}
+    return {"date": today, "tasks": {"open": len(open_tasks), "overdue": len(overdue),
+                                     "due_today": len(due_today), "focus": focus},
+            "attendance": attendance, "leave": leave}

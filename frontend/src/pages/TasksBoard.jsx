@@ -286,7 +286,7 @@ export default function TasksBoard() {
           <div className="relative flex-1 min-w-[200px] max-w-xs">
             <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, item, vendor…"
-              aria-label="Search tasks" className="input-flat pl-9 w-full" data-testid="task-search" />
+              aria-label="Search tasks" className="input-flat !pl-9 w-full" data-testid="task-search" />
           </div>
           <SearchSelect className="input-flat !w-auto min-w-[150px]" value={filters.project_id} onChange={(e) => setFilters({ ...filters, project_id: e.target.value })} data-testid="filter-project">
             <option value="">All projects</option>

@@ -52,7 +52,11 @@ export default function VendorDetail() {
     .filter((name) => canFinanceRead || !financeTabs.has(name))
     .filter((name) => canSeeContacts || name !== "overview");
   const [v, setV] = useState(null);
-  const [tab, setTab] = useState(canSeeContacts ? "overview" : "projects");
+  const [tab, setTab] = useState(() => {
+    const wanted = searchParams.get("tab");
+    return wanted && TABS.includes(wanted) ? wanted : (canSeeContacts ? "overview" : "projects");
+  });
+  const billForPo = searchParams.get("po") || "";
   const groups = VENDOR_GROUPS
     .map((g) => ({ ...g, tabs: g.tabs.filter((t) => TABS.includes(t)) }))
     .filter((g) => g.tabs.length);
@@ -392,7 +396,7 @@ export default function VendorDetail() {
       )}
       {tab === "ledger" && <Ledger data={ledger} />}
       {tab === "bills" && (
-        <Bills v={v} accounts={accounts} purchaseOrders={purchaseOrders}
+        <Bills v={v} accounts={accounts} purchaseOrders={purchaseOrders} initialPoId={billForPo}
           canBill={canBill} canEdit={hasPerm("finance.update")}
           canDelete={hasPerm("finance.delete")} onCreate={submitBill}
           onUpdate={updateBill} onDelete={deleteBill} busy={busy} />
@@ -563,8 +567,9 @@ function Ledger({ data }) {
 }
 
 /* -------------------- BILLS -------------------- */
-function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCreate, onUpdate, onDelete, busy }) {
+function Bills({ v, accounts, purchaseOrders, initialPoId, canBill, canEdit, canDelete, onCreate, onUpdate, onDelete, busy }) {
   const [open, setOpen] = useState(false);
+  const [poApplied, setPoApplied] = useState(false);
   const [editing, setEditing] = useState(null);
   const expenseAccounts = accounts.filter((a) => a.type === "expense" && a.active !== false);
   const [f, setF] = useState({ bill_date: today(), due_date: "", items: [emptyItem()], tax_rate: 18, tds_rate: 0, notes: "", project_id: "", po_id: "", expense_account_id: "" });
@@ -573,6 +578,22 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
     const sub = roundPaise(f.items.reduce((s, it) => s + roundPaise(Number(it.quantity || 0) * Number(it.rate || 0)), 0));
     return roundPaise(sub + roundPaise(sub * Number(f.tax_rate || 0) / 100) - roundPaise(sub * Number(f.tds_rate || 0) / 100));
   }, [f]);
+
+  const linesFromPo = (po) => (po.lines || []).map((line) => ({
+    po_line_id: line.id,
+    description: line.item_name || line.description || "PO item",
+    quantity: line.received_qty_total ?? line.quantity,   // bill what was received (three-way match)
+    rate: line.unit_price,
+  }));
+  // Opened from a purchase order ("Record bill" there): same bill form, PO filled in.
+  useEffect(() => {
+    if (poApplied || !initialPoId || !canBill) return;
+    const po = purchaseOrders.find((row) => row.id === initialPoId);
+    if (!po) return;
+    setF((cur) => ({ ...cur, po_id: po.id, project_id: po.project_id || cur.project_id, expense_account_id: "", items: linesFromPo(po) }));
+    setOpen(true);
+    setPoApplied(true);
+  }, [initialPoId, purchaseOrders, canBill, poApplied]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-4">
@@ -599,14 +620,18 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
           }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <input required type="date" className="input-flat" value={f.bill_date}
-              onChange={(e) => setF({ ...f, bill_date: e.target.value })} data-testid="bf-date" />
-            <input type="date" className="input-flat" placeholder="Due date" value={f.due_date}
-              onChange={(e) => setF({ ...f, due_date: e.target.value })} />
-            <input type="number" min="0" step="0.01" className="input-flat" placeholder="GST %" value={f.tax_rate}
-              onChange={(e) => setF({ ...f, tax_rate: parseFloat(e.target.value) || 0 })} />
-            <input type="number" min="0" step="0.01" className="input-flat" placeholder="TDS %" value={f.tds_rate}
-              onChange={(e) => setF({ ...f, tds_rate: parseFloat(e.target.value) || 0 })} />
+            <label className="text-xs text-[var(--ink-2)]">Bill date
+              <input required type="date" className="input-flat w-full mt-1" value={f.bill_date}
+                onChange={(e) => setF({ ...f, bill_date: e.target.value })} data-testid="bf-date" /></label>
+            <label className="text-xs text-[var(--ink-2)]">Pay by (optional)
+              <input type="date" className="input-flat w-full mt-1" value={f.due_date}
+                onChange={(e) => setF({ ...f, due_date: e.target.value })} /></label>
+            <label className="text-xs text-[var(--ink-2)]">GST %
+              <input type="number" min="0" step="0.01" className="input-flat w-full mt-1" value={f.tax_rate}
+                onChange={(e) => setF({ ...f, tax_rate: parseFloat(e.target.value) || 0 })} /></label>
+            <label className="text-xs text-[var(--ink-2)]">TDS % (deducted)
+              <input type="number" min="0" step="0.01" className="input-flat w-full mt-1" value={f.tds_rate}
+                onChange={(e) => setF({ ...f, tds_rate: parseFloat(e.target.value) || 0 })} /></label>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <select aria-label="Purchase order" className="input-flat" value={f.po_id}
@@ -617,12 +642,7 @@ function Bills({ v, accounts, purchaseOrders, canBill, canEdit, canDelete, onCre
                   po_id: e.target.value,
                   project_id: po?.project_id || f.project_id,
                   expense_account_id: e.target.value ? "" : f.expense_account_id,
-                  items: po ? (po.lines || []).map((line) => ({
-                    po_line_id: line.id,
-                    description: line.item_name || line.description || "PO item",
-                    quantity: line.received_qty_total || line.quantity,
-                    rate: line.unit_price,
-                  })) : [emptyItem()],
+                  items: po ? linesFromPo(po) : [emptyItem()],
                 });
               }}>
               <option value="">Not linked to a purchase order</option>

@@ -283,12 +283,11 @@ export default function Projects() {
             <div key={p.id} className="fade-up relative border-r border-b border-[var(--line)] group hover:bg-[var(--surface-2)] transition">
             <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
               {pinned.includes(p.id) && <PushPin size={13} weight="fill" className="text-[var(--accent-strong)]" aria-label="Pinned" />}
-              <span className="font-mono text-[10px] text-[var(--ink-3)] tracking-widest">{p.project_type || ""}</span>
               {menuFor(p)}
             </div>
             <button
               onClick={() => navigate(`/projects/${p.id}`)}
-              className="w-full text-left p-6 pr-24"
+              className="w-full text-left p-6 pr-12"
               data-testid={`project-card-${p.id}`}
             >
 
@@ -317,7 +316,7 @@ export default function Projects() {
               </div>
 
               <div className="mt-5 flex items-center justify-between">
-                <div className="font-mono text-sm font-semibold tabular-nums">{formatINR(p.budget)}</div>
+                <div className="font-mono text-sm font-semibold tabular-nums">{Number(p.budget) > 0 ? formatINR(p.budget) : <span className="font-sans font-normal text-xs text-[var(--ink-3)]">Fee not set</span>}</div>
                 <div className="overline flex items-center gap-1 group-hover:text-[var(--accent-strong)] transition-colors">
                   OPEN <CaretRight size={10} weight="bold" className="transition-transform group-hover:translate-x-0.5" />
                 </div>

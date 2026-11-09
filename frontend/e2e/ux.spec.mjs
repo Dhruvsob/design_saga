@@ -341,3 +341,28 @@ test("row actions use the ⋮ menu: expected collection (was a crash) and employ
   await expect(page.getByTestId("form-field-reason")).toHaveValue("Late submission");
   await page.getByTestId("confirm-cancel").click();
 });
+
+test("My day lists my own overdue task first; staff dashboard has no sales or team widgets", async ({ browser }) => {
+  const { api: mkApi, json: j, uid: u, authFile: af, baseURL: base } = await import("./helpers.mjs");
+  const ctx = await mkApi("admin");
+  const me = await j(ctx.get("/api/auth/me"));
+  const myId = me.user_id || me.user?.user_id;
+  const past = new Date(Date.now() + 5.5 * 3600e3 - 3 * 86400e3).toISOString().slice(0, 10);
+  const title = `Revise elevation ${u()}`;
+  await j(ctx.post("/api/tasks", { data: { title, assignee_id: myId, due_date: past, priority: "high" } }));
+  const day = await j(ctx.get("/api/dashboard/my-day"));
+  expect(day.tasks.overdue).toBeGreaterThanOrEqual(1);
+  expect(day.tasks.focus[0].due_date <= past).toBe(true);
+  const admin = await (await browser.newContext({ baseURL: base, storageState: af("admin") })).newPage();
+  await admin.goto("/dashboard");
+  await expect(admin.getByTestId("my-day")).toContainText(title, { timeout: 20000 });
+  await expect(admin.getByTestId("my-day")).toContainText("was due");
+  await expect(admin.getByTestId("pipeline-funnel")).toBeVisible();
+  const staff = await (await browser.newContext({ baseURL: base, storageState: af("employee") })).newPage();
+  await staff.goto("/dashboard");
+  await expect(staff.getByTestId("alerts-panel")).toBeVisible({ timeout: 20000 });
+  await expect(staff.getByTestId("pipeline-funnel")).toHaveCount(0);
+  await expect(staff.getByTestId("utilization")).toHaveCount(0);
+  await expect(staff.getByTestId("add-lead-btn")).toHaveCount(0);
+  await ctx.dispose();
+});

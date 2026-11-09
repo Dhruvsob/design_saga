@@ -34,12 +34,20 @@ export default function Invoices({ docType = "invoice" }) {
   const legacyMoney = (r) => Number(r.paid_amount || 0) > 0 || Boolean(r.accrual_journal_id) || ["paid", "partially_paid"].includes(r.status);
   const [incomeAccounts, setIncomeAccounts] = useState([]);
   const [planned, setPlanned] = useState({});   // invoice_id -> {planned, received}
+  // Money actually received for an invoice: on the invoice (older invoices)
+  // plus everything received through its Collections Due rows.
+  const receivedFor = (r) => roundPaise(Number(r.paid_amount || 0) + Number(planned[r.id]?.received || 0));
+  const moneyState = (r) => {
+    if (["draft", "cancelled"].includes(r.status)) return r.status;
+    const got = receivedFor(r), total = Number(r.total || 0);
+    return total > 0 && got + 0.01 >= total ? "paid" : got > 0 ? "partially_paid" : "unpaid";
+  };
   const visibleRows = useMemo(() => rows.filter((r) => {
-    if (statusFilter === "unpaid" && !["sent", "overdue", "partially_paid"].includes(r.status)) return false;
-    if (statusFilter !== "all" && statusFilter !== "unpaid" && r.status !== statusFilter) return false;
+    if (statusFilter !== "all" && (docType === "invoice" ? moneyState(r) : r.status) !== statusFilter
+        && !(statusFilter === "unpaid" && docType === "invoice" && moneyState(r) === "partially_paid")) return false;
     const t = search.trim().toLowerCase();
     return !t || `${r.number} ${r.client_name || ""} ${r.project_name || ""}`.toLowerCase().includes(t);
-  }), [rows, search, statusFilter]);
+  }), [rows, search, statusFilter, planned]);   // eslint-disable-line react-hooks/exhaustive-deps
   const { pageRows: rowsPage, pager: rowsPager } = usePaged(visibleRows, { key: "invoices" });
   const [startReminder, reminderModal] = useReminderFlow();
   const [milestones, setMilestones] = useState([]);
@@ -406,8 +414,8 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
                 <Td className="font-mono font-semibold">₹{(r.total || 0).toLocaleString("en-IN")}</Td>
                 {docType === "invoice" && <>
                   <Td className="font-mono">{planned[r.id]?.planned ? `₹${planned[r.id].planned.toLocaleString("en-IN")}` : "—"}</Td>
-                  <Td className="font-mono text-[var(--success)]">{(Number(r.paid_amount || 0) + (planned[r.id]?.received || 0)) > 0
-                    ? `₹${(Number(r.paid_amount || 0) + (planned[r.id]?.received || 0)).toLocaleString("en-IN")}` : "—"}</Td>
+                  <Td className="font-mono text-[var(--success)]">{receivedFor(r) > 0
+                    ? <>₹{receivedFor(r).toLocaleString("en-IN")}{moneyState(r) === "paid" && <span className="ml-1 text-[10px] font-sans uppercase tracking-wider" data-testid={`invoice-full-${r.id}`}>· in full</span>}</> : "—"}</Td>
                 </>}
                 <Td>
                   {canUpdate && !["paid", "partially_paid"].includes(r.status) ? <select aria-label="Status" className={`status-chip chip-${r.status}`} value={r.status} onChange={(e) => changeStatus(r.id, e.target.value)}>

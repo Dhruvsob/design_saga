@@ -467,6 +467,7 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn,
     )
     received_date = payload.received_date or business_today().isoformat()
     je = None
+    grn_number = await _next_grn_number()
     if value > 0:
         journal_key = f"{user_org_id(user) or 'org_default'}:grn:{grn_id}"
         je = await sdb.journal_entries.find_one(
@@ -475,21 +476,21 @@ async def _create_grn_locked(user: dict, payload: GRNCreateIn,
         if not je:
             je = await _post_journal(
                 user, received_date,
-                f"GRN {payload.po_id} – {po.get('vendor_name')}",
+                f"Goods received {grn_number} – {po.get('po_number')} – {po.get('vendor_name')}",
                 [
                     {"account_id": inv_acc_id, "debit": round(value, 2), "credit": 0,
                      "description": f"Goods received against {po['po_number']}"},
                     {"account_id": grn_clearing_id, "debit": 0, "credit": round(value, 2),
                      "description": "GRN clearing"},
                 ],
-                reference=payload.delivery_challan_no or f"GRN-{grn_id}",
+                reference=payload.delivery_challan_no or grn_number,
                 source="grn", source_id=grn_id,
             )
 
     grn_doc = {
         "id": grn_id,
         "org_id": user_org_id(user),
-        "grn_number": await _next_grn_number(),
+        "grn_number": grn_number,
         "po_id": payload.po_id,
         "po_number": po["po_number"],
         "vendor_id": po["vendor_id"],

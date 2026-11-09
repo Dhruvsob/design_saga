@@ -112,3 +112,41 @@ test("invoice preview loads inside the app under production security headers", a
   await expect(page.getByTestId("pdf-preview")).toHaveCount(0);
   await context.close();
 });
+
+test("quotation preview and an uploaded project file open under production security headers", async ({ browser }) => {
+  const { authFile, baseURL } = await import("./helpers.mjs");
+  const ctx = await api("admin");
+  const quote = await json(ctx.post("/api/quotations-adv", { data: { type: "consultancy", project_title: `Preview flat ${uid()}` } }));
+  const client = await json(ctx.post("/api/clients", { data: { name: `Doc ${uid()}` } }));
+  const project = await json(ctx.post("/api/projects", { data: { name: `Doc ${uid()}`, client_id: client.id, engagement_type: "consultancy" } }));
+  const pdf = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
+  const file = await json(ctx.post("/api/files/upload", { multipart: {
+    project_id: project.id, name: "Site plan", upload: { name: "site-plan.pdf", mimeType: "application/pdf", buffer: pdf } } }));
+  const content = await ctx.get(`/api/files/${file.id}/content`);
+  expect(content.status()).toBe(200);
+  expect(content.headers()["content-type"]).toContain("application/pdf");
+  expect(content.headers()["x-content-type-options"]).toBe("nosniff");
+  const staff = await api("employee");
+  expect([403, 404]).toContain((await staff.get(`/api/files/${file.id}/content`)).status());
+  await staff.dispose();
+  await ctx.dispose();
+
+  const csp = fs.readFileSync(fileURLToPath(new URL("../../deploy/nginx.conf", import.meta.url)), "utf8")
+    .match(/Content-Security-Policy "([^"]+)"/)[1];
+  const context = await browser.newContext({ baseURL, storageState: authFile("admin") });
+  await context.route(`${baseURL}/**`, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, headers: { ...response.headers(), "content-security-policy": csp, "x-frame-options": "DENY" } });
+  });
+  const page = await context.newPage();
+  const violations = [];
+  page.on("console", (msg) => { if (/Content Security Policy|Refused to (frame|display)/i.test(msg.text())) violations.push(msg.text()); });
+  await page.goto(`/quotations/${quote.id}`);
+  await page.getByTestId("tab-Preview").click({ timeout: 20000 });
+  const frame = page.getByTestId("pdf-frame");
+  await expect(frame).toBeVisible({ timeout: 20000 });
+  expect(await frame.getAttribute("src")).toMatch(/^blob:/);
+  await page.waitForTimeout(1500);
+  expect(violations, violations.join("\n")).toEqual([]);
+  await context.close();
+});

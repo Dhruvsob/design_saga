@@ -902,18 +902,14 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
                     revenue += float(l.get("credit", 0)) - float(l.get("debit", 0))
         revenue = round(revenue, 2)
 
-    # Collection due: sum of sent+overdue
+    # Collection due: the same figure Collections Due shows (BR-010).
     collection_due = None
+    unplanned = None
     if can_view_collections:
-        due_cursor = sdb.invoices.find(
-            {"status": {"$in": ["sent", "overdue", "partially_paid"]},
-             "doc_type": "invoice"},
-            {"_id": 0, "total": 1, "paid_amount": 1},
-        )
-        collection_due = 0.0
-        async for inv in due_cursor:
-            collection_due += max(0.0, float(inv.get("total") or 0)
-                                  - float(inv.get("paid_amount") or 0))
+        from routes.accounting import collections_summary
+        summary = await collections_summary()
+        collection_due = summary["outstanding"]
+        unplanned = summary["unplanned_invoices"]
 
     # Overdue tasks
     from core.helpers import business_today
@@ -941,9 +937,17 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
     # Alerts
     alerts = []
     if overdue_tasks > 0:
-        alerts.append({"level": "high", "message": f"{overdue_tasks} tasks overdue"})
+        alerts.append({"level": "high", "message": f"{overdue_tasks} task{'' if overdue_tasks == 1 else 's'} overdue",
+                       "link": "/tasks"})
+    from routes.money_in import _inr as _inr_text
     if collection_due is not None and collection_due > 0:
-        alerts.append({"level": "medium", "message": f"₹{collection_due:,.0f} pending collection"})
+        alerts.append({"level": "medium", "message": f"₹{_inr_text(collection_due)} still to collect",
+                       "link": "/accounting?tab=receivables"})
+    if unplanned and unplanned["count"]:
+        alerts.append({"level": "medium", "message": (
+            f"{unplanned['count']} sent invoice{'' if unplanned['count'] == 1 else 's'} worth ₹{_inr_text(unplanned['amount'])} "
+            f"{'is' if unplanned['count'] == 1 else 'are'} not in Collections Due yet"),
+            "link": "/invoices"})
 
     # Team utilization — real signal: weighted open tasks (urgent=3, high=2, medium=1, low=1)
     # per active employee. Not a percentage — a workload index the studio owner can eyeball.

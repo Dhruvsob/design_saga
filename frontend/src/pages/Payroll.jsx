@@ -159,7 +159,7 @@ export default function Payroll() {
           </button>
           <label className="relative">
             <span className="sr-only">Month</span>
-            <input type="month" className="input-flat !h-8 !border-0 !w-[150px] text-sm font-semibold text-center bg-transparent"
+            <input type="month" className="input-flat !h-8 !border-0 !w-[190px] text-sm font-semibold text-center bg-transparent"
                    value={`${ym.y}-${String(ym.m).padStart(2, "0")}`}
                    onChange={(e) => { const [y, m] = e.target.value.split("-").map(Number); if (y && m) setMonth({ y, m }); }}
                    data-testid="payroll-month-input" />
@@ -203,7 +203,7 @@ export default function Payroll() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, code or department"
-                 className="input-flat pl-9 w-full" aria-label="Search employees" data-testid="payroll-search" />
+                 className="input-flat !pl-9 w-full" aria-label="Search employees" data-testid="payroll-search" />
         </div>
         <div className="flex rounded-lg border border-[var(--line)] bg-[var(--surface-2)] p-0.5" role="group" aria-label="Show">
           {[["all", "All", rows.length], ["unpaid", "To pay", rows.filter((r) => !r.run).length], ["paid", "Paid", totals.paidCount]].map(([id, label, n]) => (

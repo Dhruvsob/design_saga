@@ -53,6 +53,7 @@ jobs:
           tests/test_drawings.py
           tests/test_snags.py
           tests/test_terminology_migration.py
+          tests/test_ledger_large.py
           tests/test_sweep_fixes.py
           tests/test_financial_read_permissions.py
           tests/test_invoice_pdf_format.py

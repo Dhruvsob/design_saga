@@ -1832,6 +1832,9 @@ def _movement_for(acc_type: str, debit: float, credit: float) -> float:
     return credit - debit
 
 
+LEDGER_DISPLAY_ROWS = 5000
+
+
 @router.get("/accounting/ledger/account/{acc_id}")
 async def account_ledger(acc_id: str, request: Request,
                          from_date: Optional[str] = None, to_date: Optional[str] = None,
@@ -1848,14 +1851,12 @@ async def account_ledger(acc_id: str, request: Request,
         if from_date: d["$gte"] = from_date
         if to_date: d["$lte"] = to_date
         q["date"] = d
-    entries = []
-    async for entry in sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1):
-        entries.append(entry)
-        if len(entries) > 10000:
-            raise HTTPException(
-                status_code=413,
-                detail="Ledger contains more than 10,000 entries; select a narrower date range",
-            )
+    # Every entry is read so totals and the running balance are exact; only the
+    # newest LEDGER_DISPLAY_ROWS lines are sent to the screen (DB-01: a busy bank
+    # account used to fail with 413 on "All time").
+    entries = await sdb.journal_entries.find(
+        q, {"_id": 0, "id": 1, "date": 1, "narration": 1, "reference": 1, "source": 1, "lines": 1,
+            "project_id": 1, "client_id": 1, "vendor_id": 1}).sort([("date", 1), ("created_at", 1)]).to_list(None)
 
     opening = float(acc.get("opening_balance") or 0)
     if from_date:
@@ -1885,10 +1886,12 @@ async def account_ledger(acc_id: str, request: Request,
             })
     total_debit = sum(r["debit"] for r in rows)
     total_credit = sum(r["credit"] for r in rows)
+    hidden = max(0, len(rows) - LEDGER_DISPLAY_ROWS)
     return {"account": acc, "opening_balance": round(opening, 2),
             "closing_balance": round(running, 2),
             "total_debit": round(total_debit, 2), "total_credit": round(total_credit, 2),
-            "rows": rows}
+            "line_count": len(rows), "earlier_lines_hidden": hidden,
+            "rows": rows[hidden:]}
 
 
 @router.get("/accounting/ledger/account/{acc_id}/csv")
@@ -2382,6 +2385,8 @@ async def finance_dashboard(request: Request,
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     today = business_today().isoformat()
     month_start = business_today().replace(day=1).isoformat()   # India date, not server UTC
+    _ms = business_today().replace(day=1)
+    month_end = ((_ms.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)).isoformat()
 
     # Cash / Bank balances (asset accounts flagged as is_bank OR Cash)
     accs = await sdb.accounts.find({"$or": [{"is_bank": True}, {"name": "Cash"}, {"name": "Petty Cash"}]},
@@ -2405,7 +2410,8 @@ async def finance_dashboard(request: Request,
 
     # This month P&L (income & expense from journal source)
     entries_month = await sdb.journal_entries.find(
-        {"date": {"$gte": month_start}, "voided_from_view": {"$ne": True}}, {"_id": 0}).to_list(None)
+        {"date": {"$gte": month_start, "$lte": month_end}, "voided_from_view": {"$ne": True}},
+        {"_id": 0}).to_list(None)
     income_month = 0.0
     expense_month = 0.0
     salary_month = 0.0
@@ -2427,49 +2433,15 @@ async def finance_dashboard(request: Request,
     # was paid (an October salary paid on 31 Oct or on 5 Nov is still October).
     salary_period = await _latest_salary_period(month_start[:7])
 
-    # Outstanding = unpaid invoices + pending milestones (single consistent
-    # definition used everywhere: dashboard, clients, projects, accounting).
-    outstanding_invoices = 0.0
-    overdue_invoices = 0.0
-    billed_milestones = set()
-    async for inv in sdb.invoices.find(
-        {"status": {"$in": ["sent", "overdue", "partially_paid"]},
-         "doc_type": {"$ne": "quotation"}},
-        {"_id": 0, "total": 1, "paid_amount": 1, "due_date": 1, "status": 1, "milestone_id": 1},
-    ):
-        left = max(0.0, float(inv.get("total") or 0) - float(inv.get("paid_amount") or 0))
-        outstanding_invoices += left
-        if inv.get("due_date") and inv["due_date"] < today:
-            overdue_invoices += left
-        if inv.get("milestone_id"):
-            billed_milestones.add(inv["milestone_id"])
-    ms = await sdb.payment_milestones.find(
-        {"status": {"$nin": ["paid", "cancelled"]}},
-        {"_id": 0, "id": 1, "amount": 1, "paid_amount": 1, "due_date": 1,
-         "status": 1, "project_id": 1, "name": 1},
-    ).to_list(None)
-    ms = [m for m in ms if m.get("id") not in billed_milestones]   # its invoice already counts it
-    outstanding_ms = sum(max(0.0, float(m.get("amount") or 0)
-                             - float(m.get("paid_amount") or 0)) for m in ms)
-    outstanding = round(outstanding_invoices + outstanding_ms, 2)
-    overdue = round(overdue_invoices + sum(max(0.0, float(m.get("amount") or 0)
-                                - float(m.get("paid_amount") or 0)) for m in ms
-                       if (m.get("due_date") or "") and (m.get("due_date") or "") < today), 2)
-
-    # Upcoming payments (next 30 days)
-    horizon = (business_today() + timedelta(days=30)).isoformat()
-    upcoming = [m for m in ms if today <= (m.get("due_date") or "") <= horizon]
-    # These are client fee instalments still to collect: show the project and what is left.
-    pids = sorted({m["project_id"] for m in upcoming if m.get("project_id")})
-    names = {}
-    if pids:
-        names = {p["id"]: p.get("name") for p in await sdb.projects.find(
-            {"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}).to_list(None)}
-    upcoming = sorted(({
-        **m,
-        "project_name": names.get(m.get("project_id")),
-        "outstanding": round(max(0.0, float(m.get("amount") or 0) - float(m.get("paid_amount") or 0)), 2),
-    } for m in upcoming), key=lambda m: m.get("due_date") or "")
+    # Outstanding / overdue / next 30 days: the Collections Due rows, so the
+    # dashboard, Collections Due, clients and projects agree (BR-010).
+    summary = await collections_summary()
+    outstanding = summary["outstanding"]
+    overdue = summary["overdue"]
+    upcoming = [{"id": r["id"], "name": r.get("name"), "due_date": r.get("due_date"),
+                 "project_name": r.get("project_name"), "amount": r.get("amount"),
+                 "outstanding": r.get("outstanding"), "source_type": r.get("source_type")}
+                for r in summary["upcoming"]]
 
     # Recent transactions
     recent = await sdb.journal_entries.find(
@@ -2488,6 +2460,7 @@ async def finance_dashboard(request: Request,
             "outstanding": outstanding,
             "overdue": overdue,
             "today_collections": round(today_collections, 2),
+            "unplanned_invoices": summary["unplanned_invoices"],
         },
         "upcoming_payments": upcoming,
         "recent_transactions": recent,
@@ -2934,6 +2907,36 @@ async def collection_rows() -> dict:
     return {"as_of": today.isoformat(), "horizon": horizon.isoformat(),
             "totals": {key: round(value, 2) for key, value in totals.items()},
             "count": len(rows), "rows": rows}
+
+
+async def collections_summary() -> dict:
+    """Money still to collect, from the same rows Collections Due shows.
+
+    Used by both dashboards so "outstanding" means one thing everywhere. Also
+    reports invoices sent to clients that are not yet (fully) planned in
+    Collections Due, so they are not forgotten.
+    """
+    data = await collection_rows()
+    totals = data["totals"]
+    planned: dict = {}
+    async for r in sdb.collection_receivables.find(
+            {"invoice_id": {"$nin": [None, ""]}, "status": {"$ne": "cancelled"}},
+            {"_id": 0, "invoice_id": 1, "amount": 1}):
+        planned[r["invoice_id"]] = planned.get(r["invoice_id"], 0.0) + float(r.get("amount") or 0)
+    unplanned_count, unplanned_amount = 0, 0.0
+    async for inv in sdb.invoices.find(
+            {"status": {"$in": ["sent", "overdue"]}, "doc_type": {"$ne": "quotation"}},
+            {"_id": 0, "id": 1, "total": 1, "paid_amount": 1, "accrual_journal_id": 1, "status": 1}):
+        if invoice_collects_money(inv):
+            continue            # legacy invoice: already a Collections Due row
+        left = float(inv.get("total") or 0) - float(inv.get("paid_amount") or 0) - planned.get(inv["id"], 0.0)
+        if left > 0.01:
+            unplanned_count += 1
+            unplanned_amount += left
+    upcoming = [r for r in data["rows"] if r["status"] in ("due_today", "upcoming")]
+    return {"outstanding": totals["all"], "overdue": totals["overdue"], "due_30": totals["due_30"],
+            "received": totals["received"], "upcoming": upcoming,
+            "unplanned_invoices": {"count": unplanned_count, "amount": round(unplanned_amount, 2)}}
 
 
 # ==================================================

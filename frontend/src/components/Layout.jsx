@@ -320,8 +320,10 @@ export default function Layout({ children }) {
             className="flex items-center gap-2 flex-1 max-w-md mx-2 lg:mx-8 px-3 h-9 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] hover:bg-white hover:border-[var(--line-strong)] transition-colors text-left"
             data-testid="top-search"
           >
-            <MagnifyingGlass size={15} className="text-[var(--ink-2)]" />
-            <span className="flex-1 text-sm text-[var(--ink-3)]">Search projects, clients, invoices…</span>
+            <MagnifyingGlass size={15} className="text-[var(--ink-2)] shrink-0" />
+            <span className="flex-1 min-w-0 truncate whitespace-nowrap text-sm text-[var(--ink-3)]">
+              <span className="sm:hidden">Search</span><span className="hidden sm:inline">Search projects, clients, invoices…</span>
+            </span>
             <kbd className="hidden md:inline-block px-1.5 py-0.5 rounded bg-[var(--hover)] border border-[var(--line)] font-mono text-[10px] text-[var(--ink-2)]">⌘K</kbd>
           </button>
 

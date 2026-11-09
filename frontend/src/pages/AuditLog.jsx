@@ -94,7 +94,7 @@ export default function AuditLog() {
 
       <div className="relative mb-4 max-w-lg">
         <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
-        <input className="input-field pl-9 w-full" value={query} onChange={(e) => setQuery(e.target.value)}
+        <input className="input-field !pl-9 w-full" value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder="Search action, actor or record" data-testid="audit-search" />
       </div>
 

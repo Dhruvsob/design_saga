@@ -33,7 +33,10 @@ const SOURCE_LABELS = {
   vendor_payment: "Vendor payment", vendor_bill: "Vendor bill", expense: "Expense", income: "Income",
   expense_reimbursement: "Expense claim paid", loan_emi: "Loan EMI", loan_disbursement: "Loan received",
   capital: "Capital", owner_withdrawal: "Owner withdrawal", transfer: "Transfer", manual: "Manual entry",
-  opening_balance: "Opening balance",
+  opening_balance: "Opening balance", grn: "Goods received", grn_reversal: "Goods received (reversed)",
+  vendor_bill_reversal: "Vendor bill reversed", vendor_payment_reversal: "Vendor payment reversed",
+  manual_reversal: "Correction (reversal)", income_reversal: "Income reversed", expense_reversal: "Expense reversed",
+  other_receivable_income_reversal: "Collection reversed", commission_reversal: "Vendor incentive reversed",
 };
 const sourceLabel = (code) => {
   if (!code) return "—";
@@ -194,13 +197,15 @@ export default function Accounting() {
       <PageHero
         eyebrow="FINANCE / ACCOUNTING"
         title="Accounting"
-        kicker="Double-entry bookkeeping wired into projects, clients, and payroll. For staff reimbursement claims, use the Expenses module."
+        kicker="Money that actually came in or went out. Every entry here updates the ledgers, reports and the project, client, vendor or employee it belongs to. Follow up money due in Collections Due; staff claims go through Expense claims."
       >
         <button onClick={() => { setShowForm({ kind: "income" }); setTab("income"); }}
+          title="One-off money received. For an expected payment (invoice, fee, vendor incentive) use Receive in Collections Due so it is not counted twice."
           className="btn-primary bg-[var(--success)]" data-testid="quick-income-btn">
           <ArrowDown size={14} /> Record income
         </button>
         <button onClick={() => { setShowForm({ kind: "expense" }); setTab("expense"); }}
+          title="Money paid out. Salaries are paid from Payroll and vendor bills from the vendor, so each payment is recorded once."
           className="btn-primary bg-[var(--danger)]" data-testid="quick-expense-btn">
           <ArrowUp size={14} /> Record expense
         </button>
@@ -317,7 +322,7 @@ export default function Accounting() {
       {tab === "dashboard" && (
         <>
           <FavoriteAccountsStrip onOpen={setLedgerAccount} />
-          {dashboard && <Dashboard d={dashboard} onRefresh={loadDashboard} />}
+          {dashboard && <Dashboard d={dashboard} onRefresh={loadDashboard} onOpenCollections={() => setTab("receivables")} />}
         </>
       )}
 
@@ -866,15 +871,15 @@ function CashFlowView({ cf, onDownload, periodQs }) {
 }
 
 // ================================================================
-function Dashboard({ d, onRefresh }) {
+function Dashboard({ d, onRefresh, onOpenCollections }) {
   const k = d.kpis;
   return (
     <div className="space-y-6" data-testid="dashboard-tab">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <KPI label="Cash & Bank" value={CURRENCY(k.cash_bank)} Icon={Wallet} tint="#8B7F6A" testid="kpi-cash" />
-        <KPI label="This month P&L" value={CURRENCY(k.profit_month)} Icon={ChartLine} tint={k.profit_month >= 0 ? "#1D633E" : "#B22B22"} testid="kpi-profit" />
-        <KPI label="Outstanding" value={CURRENCY(k.outstanding)} Icon={TrendDown} tint="#A86400" testid="kpi-outstanding" />
-        <KPI label="Overdue" value={CURRENCY(k.overdue)} Icon={TrendDown} tint="#B22B22" testid="kpi-overdue" />
+        <KPI label="Cash & Bank" hint="Balance in all cash and bank accounts" value={CURRENCY(k.cash_bank)} Icon={Wallet} tint="#8B7F6A" testid="kpi-cash" />
+        <KPI label="Profit this month" hint="Income minus expenses recorded this month" value={CURRENCY(k.profit_month)} Icon={ChartLine} tint={k.profit_month >= 0 ? "#1D633E" : "#B22B22"} testid="kpi-profit" />
+        <KPI label="Still to collect" hint="Everything open in Collections Due" value={CURRENCY(k.outstanding)} Icon={TrendDown} tint="#A86400" testid="kpi-outstanding" onClick={() => onOpenCollections && onOpenCollections()} />
+        <KPI label="Overdue" hint="Past its due date and not yet received" value={CURRENCY(k.overdue)} Icon={TrendDown} tint="#B22B22" testid="kpi-overdue" onClick={() => onOpenCollections && onOpenCollections()} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -904,7 +909,12 @@ function Dashboard({ d, onRefresh }) {
 
         <div className="card-flat">
           <div className="overline mb-3">DUE TO COLLECT · next 30 days</div>
-          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[var(--ink-3)]">Nothing due from clients in the next 30 days.</div>}
+          {d.kpis?.unplanned_invoices?.count > 0 && (
+            <a href="/invoices" className="block mb-3 text-xs border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 hover:border-[var(--accent-strong)]" data-testid="unplanned-invoices">
+              {d.kpis.unplanned_invoices.count} sent invoice{d.kpis.unplanned_invoices.count === 1 ? "" : "s"} ({CURRENCY(d.kpis.unplanned_invoices.amount)}) not yet in Collections Due. Open Invoices › ⋮ › Add to Collections Due.
+            </a>
+          )}
+          {d.upcoming_payments.length === 0 && <div className="text-center py-6 text-sm text-[var(--ink-3)]">Nothing due in the next 30 days.</div>}
           {d.upcoming_payments.slice(0, 8).map((m, i) => (
             <div key={m.id ?? i} className="flex items-center justify-between gap-3 border-b border-[var(--line-soft)] py-2 text-sm">
               <div className="min-w-0">
@@ -942,15 +952,18 @@ function Dashboard({ d, onRefresh }) {
   );
 }
 
-function KPI({ label, value, Icon, tint, testid }) {
+function KPI({ label, value, Icon, tint, testid, hint, onClick }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div className="card-flat" data-testid={testid}>
+    <Tag type={onClick ? "button" : undefined} onClick={onClick}
+      className={`card-flat text-left w-full ${onClick ? "hover:border-[var(--accent-strong)] transition cursor-pointer" : ""}`} data-testid={testid}>
       <div className="flex items-center justify-between">
         <div className="overline">{label}</div>
         <Icon size={16} style={{ color: tint }} />
       </div>
       <div className="font-display font-bold text-3xl mt-2 tracking-tight" style={{ color: tint }}>{value}</div>
-    </div>
+      {hint && <div className="text-[11px] text-[var(--ink-3)] mt-1">{hint}</div>}
+    </Tag>
   );
 }
 

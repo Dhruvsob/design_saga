@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import GettingStarted from "../components/GettingStarted";
+import MyDay from "../components/MyDay";
 import { formatDate, formatINR, statusLabel } from "../lib/format";
 import {
   ArrowUpRight, TrendUp, Warning, Clock, Money, Briefcase, Sparkle,
@@ -49,6 +50,9 @@ export default function Dashboard() {
   const canSeeCollections = (hasPerm("finance.read") || hasPerm("invoices.read"))
     && stats?.financial_visibility?.collections === true;
   const kpiCount = 2 + Number(canSeeRevenue) + Number(canSeeCollections);
+  // Sales and team widgets only for the roles that act on them.
+  const showSales = hasPerm("leads.create");
+  const showTeam = hasPerm("tasks.create") || hasPerm("projects.update");
   const kpiGrid = kpiCount === 4
     ? "lg:grid-cols-4"
     : kpiCount === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2";
@@ -76,13 +80,15 @@ export default function Dashboard() {
           <button onClick={() => navigate("/tasks")} className="btn-ghost" data-testid="go-tasks-btn">
             <Lightning size={14} /> Task board
           </button>
-          <button onClick={() => navigate("/crm")} className="btn-primary" data-testid="add-lead-btn">
+          {showSales && <button onClick={() => navigate("/crm")} className="btn-primary" data-testid="add-lead-btn">
             <ArrowUpRight size={14} /> New lead
-          </button>
+          </button>}
         </div>
       </div>
 
       <GettingStarted />
+
+      <MyDay />
 
       {/* ============== KPI ROW ============== */}
       <div className="fade-up">
@@ -125,7 +131,7 @@ export default function Dashboard() {
               Icon={Clock}
               accent="#8B7F6A"
               trend={kpis.collection_due > 0 ? "FOLLOW UP" : "—"}
-              onClick={() => navigate("/invoices")}
+              onClick={() => navigate("/accounting?tab=receivables")}
               testid="kpi-collection"
             />
           )}
@@ -133,8 +139,8 @@ export default function Dashboard() {
       </div>
 
       {/* ============== ROW 2 ============== */}
-      <div className="fade-up grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card-flat lg:col-span-2" data-testid="pipeline-funnel">
+      <div className={`fade-up grid grid-cols-1 ${showSales ? "lg:grid-cols-3" : ""} gap-6`}>
+        {showSales && <div className="card-flat lg:col-span-2" data-testid="pipeline-funnel">
           <div className="flex items-center justify-between mb-2">
             <div>
               <div className="overline mb-1">PIPELINE / FUNNEL</div>
@@ -153,7 +159,7 @@ export default function Dashboard() {
                   <span className="text-xs font-mono tracking-wider uppercase text-[var(--ink-2)] group-hover:text-[var(--ink)] transition">{s.stage}</span>
                 </div>
                 <div className="flex-1 h-9 bg-[var(--hover)] relative overflow-hidden rounded-md border border-[#EFEDE7]">
-                  <div
+                  {s.count > 0 && <div
                     className="h-full transition-all duration-700 ease-out flex items-center px-3"
                     style={{
                       width: `${(s.count / maxFunnel) * 100}%`,
@@ -161,12 +167,10 @@ export default function Dashboard() {
                       animation: "width-in 700ms cubic-bezier(0.16, 1, 0.3, 1)",
                     }}
                   >
-                    {s.count > 0 && (
-                      <span className="text-xs font-mono font-semibold text-white whitespace-nowrap">
-                        {s.count} {s.count === 1 ? "lead" : "leads"}
-                      </span>
-                    )}
-                  </div>
+                    <span className="text-xs font-mono font-semibold text-white whitespace-nowrap">
+                      {s.count} {s.count === 1 ? "lead" : "leads"}
+                    </span>
+                  </div>}
                 </div>
                 <div className="w-12 text-right font-mono font-semibold tabular-nums">{s.count}</div>
               </div>
@@ -175,7 +179,7 @@ export default function Dashboard() {
               <p className="text-sm text-[var(--ink-2)] py-4 text-center">No leads yet. Add your first enquiry with "New lead" to see the pipeline here.</p>
             )}
           </div>
-        </div>
+        </div>}
 
         <div className="card-flat card-bordered-accent" data-testid="alerts-panel">
           <div className="flex items-center justify-between mb-4">
@@ -192,10 +196,15 @@ export default function Dashboard() {
               {alerts.map((a, i) => (
                 <div
                   key={i}
-                  className="border-l-2 pl-3 py-2 hover:bg-[var(--surface-2)] transition"
+                  role={a.link ? "link" : undefined}
+                  tabIndex={a.link ? 0 : undefined}
+                  onClick={a.link ? () => navigate(a.link) : undefined}
+                  onKeyDown={a.link ? (e) => { if (e.key === "Enter") navigate(a.link); } : undefined}
+                  className={`border-l-2 pl-3 py-2 hover:bg-[var(--surface-2)] transition ${a.link ? "cursor-pointer" : ""}`}
                   style={{ borderColor: a.level === "high" ? "#B22B22" : "#8B7F6A" }}
+                  data-testid={a.link ? "alert-link" : undefined}
                 >
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--ink-2)]">{a.level}</div>
+                  <div className={`text-[10px] font-mono uppercase tracking-widest ${a.level === "high" ? "text-[var(--danger)]" : "text-[var(--ink-2)]"}`}>{a.level === "high" ? "Needs attention" : "Follow up"}</div>
                   <div className="text-sm font-medium">{a.message}</div>
                 </div>
               ))}
@@ -205,8 +214,8 @@ export default function Dashboard() {
       </div>
 
       {/* ============== ROW 3 ============== */}
-      <div className="fade-up grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card-flat" data-testid="utilization">
+      {(showTeam || showSales) && <div className={`fade-up grid grid-cols-1 ${showTeam && showSales ? "lg:grid-cols-2" : ""} gap-6`}>
+        {showTeam && <div className="card-flat" data-testid="utilization">
           <div className="flex items-center justify-between mb-4">
             <div className="overline">TEAM / UTILIZATION</div>
             <div className="overline">{util.length} {util.length === 1 ? "PERSON" : "PEOPLE"}</div>
@@ -242,9 +251,9 @@ export default function Dashboard() {
               })}
             </div>
           )}
-        </div>
+        </div>}
 
-        <div className="card-flat" data-testid="sources">
+        {showSales && <div className="card-flat" data-testid="sources">
           <div className="flex items-center justify-between mb-4">
             <div className="overline">LEADS / BY SOURCE</div>
             <button onClick={() => navigate("/crm")} className="overline hover:text-[var(--accent-strong)] flex items-center gap-1 transition">
@@ -264,8 +273,8 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </div>}
+      </div>}
 
     </div>
   );

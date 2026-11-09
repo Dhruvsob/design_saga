@@ -155,10 +155,15 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           </div>
         </div>
 
+        {data?.earlier_lines_hidden > 0 && (
+          <div className="px-5 py-2 text-xs bg-[var(--surface-2)] border-b border-[var(--line)]" data-testid="ledger-trimmed">
+            Showing the latest {(data.rows || []).length.toLocaleString("en-IN")} of {data.line_count.toLocaleString("en-IN")} lines. Balances and totals cover the whole period; choose dates or download CSV to see earlier lines.
+          </div>
+        )}
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--line)] border-b border-[var(--line)]">
           <SummaryCell label="Closing balance" value={CURRENCY(data?.closing_balance)} strong testid="ledger-closing" />
-          <SummaryCell label="Transactions" value={loading ? "…" : String(rows.length)} testid="ledger-count" />
+          <SummaryCell label="Transactions" value={loading ? "…" : String(data?.line_count ?? rows.length)} testid="ledger-count" />
           <SummaryCell label="Total in (Dr)" value={CURRENCY(data?.total_debit)} tint="#1D633E" testid="ledger-debit" />
           <SummaryCell label="Total out (Cr)" value={CURRENCY(data?.total_credit)} tint="#B22B22" testid="ledger-credit" />
         </div>
@@ -244,7 +249,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search description, reference or amount…"
-              className="input-flat w-full pl-9"
+              className="input-flat w-full !pl-9"
               data-testid="ledger-search"
             />
           </div>

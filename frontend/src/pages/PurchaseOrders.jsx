@@ -11,7 +11,8 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { toast } from "sonner";
-import { ArrowSquareOut, XCircle } from "@phosphor-icons/react";
+import { ArrowSquareOut, XCircle, Receipt } from "@phosphor-icons/react";
+import { useNavigate } from "react-router-dom";
 
 const fmtMoney = (n) => formatINR(n);
 function fmtErr(d, fb = "Failed") {
@@ -39,6 +40,10 @@ export default function PurchaseOrders() {
   const [showCreate, setShowCreate] = useState(false);
   const [detail, setDetail] = useState(null);
   const canUpdate = hasPerm("purchase_orders.update");
+  const canBill = hasPerm("finance.create");
+  const navigate = useNavigate();
+  // Bills are recorded in one place (the vendor's Bills tab); this opens it with the PO filled in.
+  const recordBill = (po) => navigate(`/vendors/${po.vendor_id}?tab=bills&po=${po.id}`);
   // Same server actions as the PO panel; the server refuses a cancel once goods are received.
   const quick = async (po, action) => {
     if (action === "cancel" && !await confirmAction(`Cancel ${po.po_number}?`)) return;
@@ -99,6 +104,8 @@ export default function PurchaseOrders() {
                   <td className="px-4 py-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
                     <RowActions label={po.po_number} testid={`po-actions-${po.id}`} actions={[
                       { label: "Open", icon: ArrowSquareOut, onSelect: () => setDetail(po.id) },
+                      { label: "Record vendor bill", icon: Receipt, hidden: !(canBill && ["partial", "received"].includes(po.status)),
+                        onSelect: () => recordBill(po), testid: `po-bill-${po.id}` },
                       { label: "Mark as sent to vendor", icon: PaperPlaneTilt, hidden: !(canUpdate && po.status === "draft"),
                         onSelect: () => quick(po, "send") },
                       { label: "Cancel PO", icon: XCircle, danger: true, divider: true,
@@ -117,6 +124,7 @@ export default function PurchaseOrders() {
       {detail && <PODetail poId={detail} canUpdate={hasPerm("purchase_orders.update")}
         canReceive={hasPerm("purchase_orders.create")}
         canReverseGrn={hasPerm("purchase_orders.update") && hasPerm("finance.update")}
+        canBill={canBill}
         onClose={() => setDetail(null)} onChange={load} />}
     </div>
   );
@@ -194,7 +202,8 @@ function CreatePO({ vendors, onClose, onCreated }) {
   );
 }
 
-function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChange }) {
+function PODetail({ poId, canUpdate, canReceive, canReverseGrn, canBill, onClose, onChange }) {
+  const navigate = useNavigate();
   const [po, setPo] = useState(null);
   const [grns, setGrns] = useState([]);
   const [match, setMatch] = useState(null);
@@ -265,6 +274,10 @@ function PODetail({ poId, canUpdate, canReceive, canReverseGrn, onClose, onChang
 
       <div className="flex flex-wrap gap-2 mb-6">
         {canUpdate && !["closed", "cancelled"].includes(po.status) && <button type="button" onClick={startEdit} className="btn-ghost text-xs"><PencilSimple size={12}/> Edit PO</button>}
+        {canBill && ["partial", "received"].includes(po.status) && (
+          <button type="button" className="btn-ghost text-xs" data-testid="po-detail-bill"
+            onClick={() => navigate(`/vendors/${po.vendor_id}?tab=bills&po=${po.id}`)}><Receipt size={12}/> Record vendor bill</button>
+        )}
         {canUpdate && po.status === "draft" && (
           <button onClick={sendPO} className="btn-primary text-xs" data-testid="po-send"><PaperPlaneTilt size={12}/> Send to vendor</button>
         )}
