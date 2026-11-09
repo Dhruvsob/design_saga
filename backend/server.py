@@ -5509,6 +5509,8 @@ from routes.site_visits import router as site_visits_router  # noqa: E402
 api.include_router(site_visits_router)
 from routes.period_close import router as period_close_router  # noqa: E402
 api.include_router(period_close_router)
+from routes.drawings import router as drawings_router  # noqa: E402
+api.include_router(drawings_router)
 
 app.include_router(api)
 

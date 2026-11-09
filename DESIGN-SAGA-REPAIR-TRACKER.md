@@ -13,6 +13,22 @@ Last updated: 2026-11-08 (Asia/Kolkata)
 - Host log retention is now verified: journald is capped at 1 GB / 7 days; new Docker containers inherit 10 MB x 3-file rotation; an exact-path logrotate rule covers the three older containers without restarting them. Existing PostgreSQL/FerretDB logs were compressed from about 1.5 GB to 115 MB archived, disk use fell from 73% to 70%, and every container stayed healthy.
 - Current action: obtain an authenticated user session for non-destructive live workflow checks when available. Do not create/delete production QA data merely to claim browser coverage. External credential rotation, alerting and off-server backups remain owner/provider actions.
 
+### DS-114: Drawing register on every project (DOC-01)
+
+- Project › **Drawings**: numbered drawings (unique per project, e.g. A-101) with discipline and scale; **Issue rev A/B/C…** uploads the PDF through the existing project Files upload (one file engine, same storage/backup/permissions) or picks an existing project file; purpose For review / approval / construction (GFC) / as built / information; issued to; what changed.
+- New revision supersedes the previous one (a rejected revision keeps "Changes asked"); only the current revision can be Approved / sent back (reason required) / commented, by users with `projects.update`; issuing needs `files.create`; reading needs `files.read` + project visibility. Number is fixed once issued; issued drawings are archived, never deleted; never-issued drawings can be deleted. Compare-and-set on `rev_count` stops two people issuing the same letter; unique index `(org_id, project_id, number)`. Audit rows for create/update/archive/issue/decision.
+- Register counts (approved / awaiting decision / issued for construction), discipline filter, revision history, Excel export (register + full revision history).
+- Also in this batch: vendor incentive journal fallback now uses the rename-tolerant account lookup (it looked up the old "Vendor Commission Income" name, which fails for tenants that renamed the account, e.g. DESIGN SAGA); remaining visible "commission" wording in two errors and the Collections Due subtitle changed to incentive.
+- Verified locally: 476 backend tests (new `test_drawings.py`: letters A…Z→AA, number validation, duplicate 409, foreign-project file refused, rejection needs reason, supersession, only-current decisions, number lock, archive-not-delete, Excel). E2E `drawings.spec.mjs` (add → issue A for approval → ask for changes → issue B for construction → staff 403 → approve → counts → history → Excel) passed; collections/money/smoke/site-visits rerun 12/12 + 20/20. Production timing check: 231 requests in 24 h, none over 1 s (the two local E2E timeouts were 10-second stalls of the workstation's test database, not the code).
+
+### DS-113: No silent caps on money lists; overdue-age strip; PO quick actions; Vendor 360 groups
+
+- INV-06: `received_payments` read every row (money total; was `to_list(5000)`); Payment Reminders and a project's site-visit history use the shared `MAX_LIST_ROWS` instead of 2,000 / 200.
+- INV-07: Collections Due shows **money due by age** (Not yet due · 1-30 · 31-60 · 61-90 · Over 90 · No due date) for the selected category; clicking a bucket filters the queue, clicking again clears it.
+- INV-08: Purchase-order rows get ⋮ Open · Mark as sent · Cancel PO (same server actions as the panel; the server still refuses a cancel after goods are received). Decided not to add ⋮ to Expense claims and Loans: the whole row opens the panel that already holds the role- and state-dependent actions (approve/reject/reimburse/EMI), and a menu with only "Open" would repeat it.
+- Vendor 360: up to nine flat tabs grouped as **Overview** (Details, Performance) · **Money** (Ledger, Bills, Payments, Vendor incentives, Incentive terms) · **Projects** · **Documents**; tab ids, permissions and consultancy/turnkey filtering unchanged.
+- INV-09 measured instead of refactored: every page is already a lazy route chunk (Accounting 45 KB gzip); the shared start-up bundle is 174 KB gzip. Splitting the 2,168-line Accounting file would not speed up first load; revisit only with a bundle analyser.
+
 ### DS-112: Collection receipts correctable from where they are seen; reminders come back on reversal
 
 - INV-01..04 above. Collections Due rows have an always-on ⋮ with **Receipts & entries** (new read-only `GET /accounting/collections/{type}/{id}/entries`, finance.read; lists receipts for manual/invoice-linked collections, vendor incentives — the applied share of each settlement — milestones and legacy invoices, each with its journal). Each opens the standard entry panel, whose **Delete** now covers `other_receivable_income` and reverses through the existing source-aware path. Received Payments rows get **Open entry** / **Open source**.
@@ -287,10 +303,10 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | INV-03 | Received Payments | `ReceivedPayments.jsx` | Page says "correct from the Daybook" but gives no link to the entry | Row ⋮: Open entry, Open source | P1 | — | Tested (DS-112) |
 | INV-04 | Collections Due | `Accounting.jsx` CollectionsDue row | ⋮ only on unreceived manual plans; no view of receipts behind a collection; inline "Open" did a full page reload | Always-on ⋮: Receipts & entries, Open vendor/project, Edit/Cancel when allowed | P1 | — | Tested (DS-112) |
 | INV-05 | Accounting | — | No period close, lock or Excel export | Close & export workflow | P1 | — | Deployed (DS-111, `6ccdd8f`) |
-| INV-06 | Received Payments API | `money_in.py` `received_payments` `to_list(5000)` | Silent 5,000-row cap (R1 regression) | Page/flag truncation like DS-100 lists | P2 | — | Open |
-| INV-07 | Collections | Collections Due | No receivable aging (0-30/31-60/61-90/90+) by client/project | Aging strip + filter on the existing queue | P2 | — | Open |
-| INV-08 | Lists | Expenses, Loans, Purchase orders | Row actions only inside the detail panel (U1) | Row ⋮ reusing the panel's actions | P2 | — | Open |
-| INV-09 | Performance | `Accounting.jsx` (~2,100 lines), `Attendance.jsx`, `VendorDetail.jsx` | One bundle per page (R6) | Lazy sections, URLs/tabs unchanged | P2 | — | Open (Close & export and collection receipts already split into components) |
+| INV-06 | Received Payments API | `money_in.py` `received_payments` `to_list(5000)` | Silent 5,000-row cap (R1 regression) | Read all rows (money); display lists use MAX_LIST_ROWS | P2 | — | Tested (DS-113) |
+| INV-07 | Collections | Collections Due | No receivable aging (0-30/31-60/61-90/90+) by client/project | Aging strip + filter on the existing queue | P2 | — | Tested (DS-113) |
+| INV-08 | Lists | Expenses, Loans, Purchase orders | Row actions only inside the detail panel (U1) | PO row ⋮ (send/cancel); Expenses/Loans keep row-opens-panel by decision | P2 | — | Tested (DS-113) |
+| INV-09 | Performance | `Accounting.jsx` (~2,100 lines), `Attendance.jsx`, `VendorDetail.jsx` | One bundle per page (R6) | Measured: routes already lazy; 174 KB gzip shell | P3 | Analyser | Measured (DS-113) |
 | INV-10 | Navigation | `Layout.jsx` NAV | Sidebar already groups Sales · Projects · Procurement · Finance · People · Administration, permission-filtered (DS-074/096) — matches the requested Project → Finance → People → Admin hierarchy | No move needed; keep URLs | — | — | Verified |
 | INV-11 | Retention | Close & export | Purge of exported years | Only after owner/CA decision + off-server backup (ACC-10, OPS-02) | P2 | Owner | Decision Needed |
 
@@ -354,7 +370,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| DOC-01 | P2 | No drawing register (number, revision, issue purpose, supersession, transmittal) | Confirmed gap | Ranked after PRJ-01/PRJ-02 |
+| DOC-01 | P2 | No drawing register (number, revision, issue purpose, supersession, transmittal) | Tested (DS-114) | Register + revisions + approvals + Excel; transmittal PDF still open |
 | DOC-02 | P3 | RFIs/submittals, client selections, change orders | Confirmed gap | Validate demand first |
 
 ### 8. Frontend information architecture and UI/UX

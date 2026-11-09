@@ -261,7 +261,7 @@ def test_commission_receipt_method_matches_cash_or_bank_account():
     vendors._validate_commission_receipt_account("cash", {"name": "Cash"})
     vendors._validate_commission_receipt_account(
         "upi", {"name": "HDFC Current", "is_bank": True})
-    with pytest.raises(HTTPException, match=r"Cash (commission )?receipts"):
+    with pytest.raises(HTTPException, match=r"Cash (commission |vendor incentive )?receipts"):
         vendors._validate_commission_receipt_account(
             "cash", {"name": "HDFC Current", "is_bank": True})
     with pytest.raises(HTTPException, match="Non-cash"):

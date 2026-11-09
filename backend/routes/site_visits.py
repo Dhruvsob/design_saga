@@ -536,7 +536,7 @@ async def project_site_visits(project_id: str, request: Request,
         scope, label = await visit_scope(user)
     rows = await sdb.site_visits.find(
         merge_query({"project_id": project_id}, scope), {"_id": 0},
-    ).sort("check_in_at", -1).to_list(200)
+    ).sort("check_in_at", -1).to_list(MAX_LIST_ROWS)
 
     can_check_in = False
     if has_permission(user, "attendance.create") or att._can_edit_punches(user):

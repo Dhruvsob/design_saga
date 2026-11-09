@@ -47,6 +47,8 @@ test("detail pages render without runtime errors", async ({ page }) => {
   }
   await page.goto(`/vendors/${vendor.id}`);
   for (const tab of ["commercial", "commissions", "projects", "documents"]) {
+    const money = page.getByTestId("vendor-group-money");
+    if (["commercial", "commissions"].includes(tab) && await money.count()) await money.click();
     const button = page.getByTestId(`vendor-tab-${tab}`);
     if (await button.count()) {
       await button.click();

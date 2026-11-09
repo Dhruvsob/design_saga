@@ -25,6 +25,15 @@ const INR_D = (n) =>
 // Tabs available per business mode. Consultancy stays commission-focused;
 // Turnkey unlocks the procurement side (bills + payments + full A/P ledger).
 const TAB_LABELS = { commissions: "incentives", commercial: "incentive terms" };
+// Vendor 360: what a studio checks about a vendor, in four places.
+const VENDOR_GROUPS = [
+  { id: "overview", label: "Overview", tabs: ["overview", "performance"] },
+  { id: "money", label: "Money", tabs: ["ledger", "bills", "payments", "commissions", "commercial"] },
+  { id: "projects", label: "Projects", tabs: ["projects"] },
+  { id: "documents", label: "Documents", tabs: ["documents"] },
+];
+const SUB_LABELS = { overview: "Details", performance: "Performance", ledger: "Ledger", bills: "Bills",
+  payments: "Payments", commissions: "Vendor incentives", commercial: "Incentive terms" };
 const CONSULTANCY_TABS = ["overview", "commercial", "commissions", "projects", "documents", "performance"];
 const TURNKEY_TABS     = ["overview", "commercial", "ledger", "bills", "payments", "commissions", "projects", "documents", "performance"];
 
@@ -44,6 +53,10 @@ export default function VendorDetail() {
     .filter((name) => canSeeContacts || name !== "overview");
   const [v, setV] = useState(null);
   const [tab, setTab] = useState(canSeeContacts ? "overview" : "projects");
+  const groups = VENDOR_GROUPS
+    .map((g) => ({ ...g, tabs: g.tabs.filter((t) => TABS.includes(t)) }))
+    .filter((g) => g.tabs.length);
+  const activeGroup = groups.find((g) => g.tabs.includes(tab)) || groups[0];
   const [ledger, setLedger] = useState(null);
   const [perf, setPerf] = useState(null);
   const [commissionLedger, setCommissionLedger] = useState(null);
@@ -340,23 +353,35 @@ export default function VendorDetail() {
         <Kpi label="Projects touched" value={s.project_count || 0} />
       </div>
 
-      {/* TABS */}
-      <div className="flex items-center gap-1 border-b border-[var(--line)] overflow-x-auto no-scrollbar">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            data-testid={`vendor-tab-${t}`}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition ${
-              tab === t
-                ? "text-[var(--accent-strong)] border-b-2 border-[var(--accent)] -mb-px"
-                : "text-[var(--ink-2)] hover:text-[var(--ink)]"
-            }`}
-          >
-            {TAB_LABELS[t] || t}
-          </button>
-        ))}
+      {/* TABS: four groups (Overview · Money · Projects · Documents); Money has its own row. */}
+      <div className="border-b border-[var(--line)]">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar" role="tablist" aria-label="Vendor sections">
+          {groups.map((g) => (
+            <button key={g.id} type="button" role="tab" aria-selected={activeGroup?.id === g.id}
+              data-testid={g.tabs.length === 1 ? `vendor-tab-${g.tabs[0]}` : `vendor-group-${g.id}`}
+              onClick={() => { if (!g.tabs.includes(tab)) setTab(g.tabs[0]); }}
+              className={`px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition ${
+                activeGroup?.id === g.id
+                  ? "text-[var(--accent-strong)] border-b-2 border-[var(--accent)] -mb-px"
+                  : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}>
+              {g.label}
+            </button>
+          ))}
+        </div>
       </div>
+      {activeGroup && activeGroup.tabs.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 -mt-2" role="tablist" aria-label={`${activeGroup.label} sections`}>
+          {activeGroup.tabs.map((t) => (
+            <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`vendor-tab-${t}`}
+              onClick={() => setTab(t)}
+              className={`px-3 py-1.5 text-xs border rounded-full transition ${tab === t
+                ? "bg-[var(--ink)] text-white border-[var(--ink)]"
+                : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent-strong)]"}`}>
+              {SUB_LABELS[t] || TAB_LABELS[t] || t}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* TAB PANELS */}
       {tab === "overview" && <Overview v={v} onRate={submitRating} busy={busy} canRate={hasPerm("vendors.update")} />}
@@ -1053,7 +1078,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
               type="checkbox" checked={f.applicable}
               onChange={(e) => setF({ ...f, applicable: e.target.checked })}
             />
-            This vendor pays us a commission / incentive
+            This vendor pays us an incentive
           </label>
 
           <div className={f.applicable ? "" : "opacity-50 pointer-events-none"}>

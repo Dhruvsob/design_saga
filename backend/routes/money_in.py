@@ -19,6 +19,7 @@ from fastapi import APIRouter, Cookie, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from core.limits import MAX_LIST_ROWS
 from core.audit import audit
 from core.db import db
 from core.deps import require_user
@@ -205,7 +206,7 @@ async def list_reminders(request: Request, source_type: Optional[str] = None,
         q["source_type"] = source_type
     if source_id:
         q["source_id"] = source_id
-    rows = await sdb.payment_reminders.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    rows = await sdb.payment_reminders.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
     from routes.accounting import collection_rows
     live = {(r["source_type"], r["id"]): r for r in (await collection_rows())["rows"]}
     org = await _org()
@@ -353,7 +354,7 @@ async def received_payments(request: Request, from_date: Optional[str] = None,
                "voided_from_view": {"$ne": True}}
     if from_date or to_date:
         q["date"] = {k: v for k, v in (("$gte", from_date), ("$lte", to_date)) if v}
-    entries = await sdb.journal_entries.find(q, {"_id": 0}).sort("date", -1).to_list(5000)
+    entries = await sdb.journal_entries.find(q, {"_id": 0}).sort("date", -1).to_list(None)   # money: never capped
     client_ids = {e.get("client_id") for e in entries if e.get("client_id")}
     vendor_ids = {e.get("vendor_id") for e in entries if e.get("vendor_id")}
     project_ids = {e.get("project_id") for e in entries if e.get("project_id")}

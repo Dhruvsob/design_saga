@@ -50,6 +50,7 @@ jobs:
           tests/test_money_in.py
           tests/test_collection_reminders.py
           tests/test_period_close.py
+          tests/test_drawings.py
           tests/test_sweep_fixes.py
           tests/test_financial_read_permissions.py
           tests/test_invoice_pdf_format.py

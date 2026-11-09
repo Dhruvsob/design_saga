@@ -9,6 +9,9 @@ import {
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import RowActions from "../components/RowActions";
+import { toast } from "sonner";
+import { ArrowSquareOut, XCircle } from "@phosphor-icons/react";
 
 const fmtMoney = (n) => formatINR(n);
 function fmtErr(d, fb = "Failed") {
@@ -35,6 +38,16 @@ export default function PurchaseOrders() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [detail, setDetail] = useState(null);
+  const canUpdate = hasPerm("purchase_orders.update");
+  // Same server actions as the PO panel; the server refuses a cancel once goods are received.
+  const quick = async (po, action) => {
+    if (action === "cancel" && !await confirmAction(`Cancel ${po.po_number}?`)) return;
+    try {
+      await api.post(`/purchase-orders/${po.id}/${action}`);
+      toast.success(action === "send" ? `${po.po_number} marked as sent` : `${po.po_number} cancelled`);
+      load();
+    } catch (e) { toast.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : "Could not update the PO"); }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -71,7 +84,7 @@ export default function PurchaseOrders() {
           <table className="w-full min-w-[900px]" data-testid="po-table">
             <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]"><tr className="text-left">
               <Th>PO #</Th><Th>Vendor</Th><Th>Order Date</Th><Th>Expected</Th>
-              <Th>Grand Total</Th><Th>Status</Th>
+              <Th>Grand Total</Th><Th>Status</Th><Th />
             </tr></thead>
             <tbody>
               {pos.map((po) => (
@@ -83,9 +96,18 @@ export default function PurchaseOrders() {
                   <Td className="font-mono text-xs">{po.expected_delivery || "—"}</Td>
                   <Td className="font-mono text-sm">{fmtMoney(po.grand_total)}</Td>
                   <Td><span className={`text-[10px] font-mono uppercase px-2 py-0.5 ${STATUS_TONE[po.status] || "bg-[var(--line-soft)]"}`}>{statusLabel(po.status)}</span></Td>
+                  <td className="px-4 py-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
+                    <RowActions label={po.po_number} testid={`po-actions-${po.id}`} actions={[
+                      { label: "Open", icon: ArrowSquareOut, onSelect: () => setDetail(po.id) },
+                      { label: "Mark as sent to vendor", icon: PaperPlaneTilt, hidden: !(canUpdate && po.status === "draft"),
+                        onSelect: () => quick(po, "send") },
+                      { label: "Cancel PO", icon: XCircle, danger: true, divider: true,
+                        hidden: !(canUpdate && ["draft", "sent"].includes(po.status)), onSelect: () => quick(po, "cancel") },
+                    ]} />
+                  </td>
                 </tr>
               ))}
-              {pos.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-[var(--ink-2)]">No purchase orders yet.</td></tr>}
+              {pos.length === 0 && <tr><td colSpan={7} className="p-12 text-center text-[var(--ink-2)]">No purchase orders yet.</td></tr>}
             </tbody>
           </table>
         </div>

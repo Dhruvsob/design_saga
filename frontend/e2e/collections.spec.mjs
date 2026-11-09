@@ -380,3 +380,45 @@ test("deleting a vendor incentive receipt makes it due again and brings its remi
   expect(again.receipts[0].status).toBe("reversed");
   await ctx.dispose();
 });
+
+test("Collections Due shows money by how late it is; a bucket filters the list", async ({ browser }) => {
+  const ctx = await api("admin");
+  const client = await json(ctx.post("/api/clients", { data: { name: `Aging ${uid()}` } }));
+  const ist = (days) => new Date(Date.now() + 5.5 * 3600e3 + days * 86400e3).toISOString().slice(0, 10);
+  const consult = (await incomeAcc(ctx, /consult/i)).id;
+  const late = await json(ctx.post("/api/accounting/receivables", { data: {
+    name: `Old fee ${uid()}`, amount: 45000, client_id: client.id, due_date: ist(-45), income_account_id: consult } }));
+  const soon = await json(ctx.post("/api/accounting/receivables", { data: {
+    name: `Next fee ${uid()}`, amount: 5000, client_id: client.id, due_date: ist(10), income_account_id: consult } }));
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/accounting?tab=receivables");
+  const strip = page.getByTestId("collections-aging");
+  await expect(strip).toBeVisible({ timeout: 20000 });
+  await expect(page.getByTestId("aging-d60")).toContainText("45,000");
+  await page.getByTestId("aging-d60").click();
+  await expect(page.getByText(late.name)).toBeVisible();
+  await expect(page.getByText(soon.name)).toHaveCount(0);
+  await page.getByTestId("aging-d60").click();          // toggle off
+  await expect(page.getByText(soon.name)).toBeVisible();
+  await ctx.dispose();
+});
+
+test("purchase order row menu: mark sent, then cancel, without opening the panel", async ({ browser }) => {
+  const ctx = await api("admin");
+  const vendor = await json(ctx.post("/api/vendors", { data: { name: `Marble ${uid()}` } }));
+  const vid = vendor.id || vendor.vendor?.id;
+  const po = await json(ctx.post("/api/purchase-orders", { data: {
+    vendor_id: vid, order_date: today(), lines: [{ item_name: "Italian marble", quantity: 10, unit: "sqft", unit_price: 450 }] } }));
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/purchase-orders");
+  await page.getByTestId(`po-actions-${po.id}`).click({ timeout: 20000 });
+  await page.getByRole("menuitem", { name: "Mark as sent to vendor" }).click();
+  await expect(page.getByText(`${po.po_number} marked as sent`)).toBeVisible({ timeout: 20000 });
+  await expect(page.getByTestId(`po-row-${po.id}`)).toContainText(/sent/i);
+  await page.getByTestId(`po-actions-${po.id}`).click();
+  await page.getByRole("menuitem", { name: "Cancel PO" }).click();
+  await page.getByTestId("confirm-ok").click();
+  await expect(page.getByTestId(`po-row-${po.id}`)).toContainText(/cancel/i, { timeout: 20000 });
+  await expect(page.getByTestId("po-detail")).toHaveCount(0);
+  await ctx.dispose();
+});

@@ -199,6 +199,7 @@ test("vendor commission: planned posts nothing, partial receipt posts once to ba
 
   const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
   await page.goto(`/vendors/${vid}`);
+  await page.getByTestId("vendor-group-money").click();
   await page.getByTestId("vendor-tab-commissions").click();
   await expect(page.getByTestId("commission-status").first()).toHaveText(/partially received/i);
   await ctx.dispose();

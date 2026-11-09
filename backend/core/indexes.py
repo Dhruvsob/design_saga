@@ -158,6 +158,9 @@ _INDEXES = [
     ("site_visits",        [("org_id", 1), ("employee_id", 1), ("status", 1)], {}),
     ("site_visits",        [("open_key", 1)],
                             {"name": "site_visit_open_unique", "unique": True, "sparse": True}),
+    # Drawing register: one row per drawing number per project
+    ("drawings",           [("org_id", 1), ("project_id", 1), ("number", 1)],
+                            {"name": "drawing_number_unique", "unique": True}),
 ]
 
 

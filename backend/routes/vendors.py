@@ -1476,7 +1476,7 @@ async def vendor_performance(vendor_id: str, request: Request,
 def _validate_commission_receipt_account(payment_method: str, account: dict) -> None:
     """Keep the displayed receipt method and the debited cash/bank ledger aligned."""
     from core.finance import validate_method_account
-    validate_method_account(payment_method, account, label="commission receipts")
+    validate_method_account(payment_method, account, label="vendor incentive receipts")
 
 def _bill_purchase_base(bill: dict) -> float:
     """The number commission percentages apply to — subtotal (pre-tax, pre-TDS)."""
@@ -1546,9 +1546,9 @@ async def _reverse_commission_je(commission_row: dict) -> Optional[str]:
                 income_acc = {"id": l["account_id"], "name": l["account_name"],
                               "type": l["account_type"]}
     if not income_acc:
-        label = (commission_row.get("commission_config_snapshot") or {}).get("income_label") \
-                or "Vendor Commission Income"
-        acc = await sdb.accounts.find_one({"name": label}, {"_id": 0})
+        label = (commission_row.get("commission_config_snapshot") or {}).get("income_label")
+        from routes.accounting import vendor_incentive_account
+        acc = await vendor_incentive_account(label)   # tolerant of the account being renamed
         if acc:
             income_acc = {"id": acc["id"], "name": acc["name"], "type": acc["type"]}
     if not bank_acc:
@@ -1676,7 +1676,7 @@ async def _compute_commission_for_bill(bill_id: str) -> Optional[dict]:
             "percentage": cfg.get("percentage"),
             "fixed_amount": cfg.get("fixed_amount"),
             "slabs": cfg.get("slabs"),
-            "income_label": cfg.get("income_label") or "Vendor Commission Income",
+            "income_label": cfg.get("income_label") or "Vendor Incentive Income",
         },
         "amount": amount,
         "earned_amount": amount,
@@ -1831,7 +1831,7 @@ async def update_vendor_commercial(vendor_id: str, payload: CommissionConfig, re
     _require(user, "finance.update")
     if payload.type not in COMMISSION_TYPES:
         raise HTTPException(status_code=400,
-                            detail=f"commission type must be one of {COMMISSION_TYPES}")
+                            detail=f"Incentive type must be one of {COMMISSION_TYPES}")
     cfg = payload.model_dump()
     res = await sdb.vendors_acc.update_one(
         {"id": vendor_id},

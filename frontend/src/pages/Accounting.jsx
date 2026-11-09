@@ -979,6 +979,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
   const [startReminder, reminderModal] = useReminderFlow();
   const [filter, setFilter] = useState("active");
   const [category, setCategory] = useState("all");
+  const [age, setAge] = useState(null);       // receivable aging bucket filter
   const [query, setQuery] = useState("");
   const [collecting, setCollecting] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1117,8 +1118,22 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
     return row.bucket === id && row.status !== "received";
   };
   const isHistory = filter === "history";
+  // Receivable aging: how long money has been overdue (India business date).
+  const todayIso = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+  const ageOf = (row) => {
+    if (!row.due_date) return "none";
+    const days = Math.round((Date.parse(todayIso) - Date.parse(row.due_date)) / 86400e3);
+    return days <= 0 ? "current" : days <= 30 ? "d30" : days <= 60 ? "d60" : days <= 90 ? "d90" : "d90p";
+  };
+  const AGES = [["current", "Not yet due"], ["d30", "1–30 days late"], ["d60", "31–60"], ["d90", "61–90"], ["d90p", "Over 90"], ["none", "No due date"]];
+  const open = (data.rows || []).filter((row) => row.status !== "received" && row.outstanding > 0 && inCategory(row));
+  const aging = AGES.map(([id, label]) => {
+    const inBucket = open.filter((row) => ageOf(row) === id);
+    return { id, label, count: inBucket.length, amount: inBucket.reduce((sum, row) => sum + Number(row.outstanding || 0), 0) };
+  });
   const rows = (data.rows || []).filter((row) => {
     if (!matchesFilter(row, filter) || !inCategory(row)) return false;
+    if (age && !isHistory && ageOf(row) !== age) return false;
     if (!term) return true;
     return `${row.project_name || ""} ${row.client_name || ""} ${row.vendor_name || ""} ${row.name || ""} ${row.reference || ""} ${row.source_type || ""}`
       .toLowerCase().includes(term);
@@ -1146,7 +1161,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <div className="overline">MONEY IN / COLLECTIONS DUE</div>
-          <div className="text-xs text-[var(--ink-2)] mt-1">Invoices, project milestones, vendor commissions and other receivables · as of {formatDate(data.as_of)}</div>
+          <div className="text-xs text-[var(--ink-2)] mt-1">Invoices, project milestones, vendor incentives and other receivables · as of {formatDate(data.as_of)}</div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <input className="input-flat min-w-[260px]" value={query}
@@ -1208,6 +1223,25 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
         <KPI label="Due today / upcoming" value={CURRENCY((data.totals?.due_today || 0) + (data.totals?.upcoming || 0))} Icon={ArrowDown} tint="#7A4E1A" />
         <KPI label="Received" value={CURRENCY(data.totals?.received)} Icon={ChartLine} tint="#1D633E" />
       </div>
+
+      {open.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 border border-[var(--line)] divide-x divide-y lg:divide-y-0 divide-[var(--line-soft)]"
+             role="group" aria-label="Money due by age" data-testid="collections-aging">
+          {aging.map((b) => (
+            <button key={b.id} type="button" disabled={!b.count} aria-pressed={age === b.id}
+              onClick={() => { setAge(age === b.id ? null : b.id); if (isHistory) setFilter("active"); }}
+              className={`text-left px-3 py-2 transition ${age === b.id ? "bg-[var(--ink)] text-white" : "bg-white hover:bg-[var(--hover)]"} disabled:opacity-50 disabled:cursor-default`}
+              data-testid={`aging-${b.id}`}>
+              <div className={`text-[10px] uppercase tracking-wider ${age === b.id ? "text-white/70" : ["d60", "d90", "d90p"].includes(b.id) && b.count ? "text-[var(--danger)]" : "text-[var(--ink-3)]"}`}>{b.label}</div>
+              <div className="font-semibold tabular-nums text-sm">{CURRENCY(b.amount)}</div>
+              <div className={`text-[10px] ${age === b.id ? "text-white/70" : "text-[var(--ink-3)]"}`}>{b.count} {b.count === 1 ? "item" : "items"}</div>
+            </button>
+          ))}
+        </div>
+      )}
+      {age && !isHistory && (
+        <div className="text-xs text-[var(--ink-2)] -mt-2">Showing {AGES.find(([id]) => id === age)?.[1].toLowerCase()} only · <button type="button" className="underline" onClick={() => setAge(null)}>show all</button></div>
+      )}
 
       <div className="flex flex-col gap-2">
         <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Collection status" data-testid="collections-filters">

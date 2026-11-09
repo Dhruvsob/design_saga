@@ -8,6 +8,7 @@ import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import ProjectPhases from "../components/ProjectPhases";
 import ProjectSiteVisits from "../components/SiteVisits";
+import ProjectDrawings from "../components/ProjectDrawings";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
@@ -19,7 +20,7 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
-const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Site visits", "Invoices", "Activity"];
+const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Invoices", "Activity"];
 const inr = (n) => formatINR(n);
 
 export default function ProjectDetail() {
@@ -227,6 +228,7 @@ export default function ProjectDetail() {
     if ((t === "Milestones" || t === "Invoices") && !canSeeFinancials) return false;
     if (t === "Vendors" && !canSeeProcurement && !canSeeVendorCosts) return false;
     if (t === "Site visits" && !(hasPerm("attendance.read") || hasPerm("attendance.create"))) return false;
+    if (t === "Drawings" && !hasPerm("files.read")) return false;
     return true;
   });
 
@@ -560,6 +562,7 @@ export default function ProjectDetail() {
         </div>
       )}
 
+      {tab === "Drawings" && <ProjectDrawings projectId={id} projectName={p.name} files={p.files || []} onFilesChanged={load} />}
       {tab === "Site visits" && <ProjectSiteVisits projectId={id} projectName={p.name} />}
 
       {tab === "Invoices" && canSeeFinancials && (
