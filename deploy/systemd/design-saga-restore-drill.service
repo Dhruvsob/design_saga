@@ -1,0 +1,16 @@
+[Unit]
+Description=Verify the latest Design Saga backup with an isolated restore
+Requires=docker.service
+After=docker.service design-saga-backup.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/design-saga-git/deploy/restore-latest.sh
+TimeoutStartSec=30min
+UMask=0077
+Nice=15
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/design-saga-git /opt/design-saga-backups

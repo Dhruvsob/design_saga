@@ -6,14 +6,21 @@ umask 077
 repo_root=${DESIGN_SAGA_ROOT:-/opt/design-saga-git}
 backup_root=${DESIGN_SAGA_BACKUP_ROOT:-/opt/design-saga-backups}
 retention_days=${DESIGN_SAGA_BACKUP_RETENTION_DAYS:-7}
+keep_latest=${DESIGN_SAGA_BACKUP_KEEP_LATEST:-12}
 file_root="$repo_root/data/files"
 
-case "$retention_days" in
-  ''|*[!0-9]*) echo "Retention must be a non-negative integer" >&2; exit 2 ;;
+for setting in "$retention_days" "$keep_latest"; do
+  case "$setting" in
+    ''|*[!0-9]*) echo "Retention settings must be non-negative integers" >&2; exit 2 ;;
+  esac
+done
+case "$keep_latest" in
+  0) echo "DESIGN_SAGA_BACKUP_KEEP_LATEST must be at least 1" >&2; exit 2 ;;
 esac
 
 mkdir -p "$backup_root"
 chmod 700 "$backup_root"
+backup_root=$(cd "$backup_root" && pwd -P)
 
 exec 9>"$backup_root/.backup.lock"
 if ! flock -n 9; then
@@ -94,5 +101,33 @@ find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
     find "$old" -type f -delete
     find "$old" -depth -type d -empty -delete
   done
+
+# A deployment creates a safety backup as well as the daily timer. During an
+# active repair period that can produce dozens of snapshots in one day and
+# exhaust the VPS even though age-based retention is working. Keep the newest
+# N backups plus one representative backup for every retained UTC day.
+keep_file=$(mktemp "$backup_root/.retention.XXXXXX")
+trap 'rm -f "$keep_file"' EXIT INT TERM
+find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+  -name '20??????T??????Z' -printf '%f\n' | sort -r | \
+  awk -v latest="$keep_latest" '
+    NR <= latest { keep[$0] = 1 }
+    {
+      day = substr($0, 1, 8)
+      if (!(day in daily)) { daily[day] = 1; keep[$0] = 1 }
+    }
+    END { for (name in keep) print name }
+  ' > "$keep_file"
+
+find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+  -name '20??????T??????Z' -printf '%f\n' | while IFS= read -r name; do
+    grep -Fxq "$name" "$keep_file" && continue
+    old="$backup_root/$name"
+    [ "$(dirname "$old")" = "$backup_root" ] || exit 1
+    find "$old" -type f -delete
+    find "$old" -depth -type d -empty -delete
+  done
+rm -f "$keep_file"
+trap - EXIT INT TERM
 
 echo "Design Saga backup completed: $destination"

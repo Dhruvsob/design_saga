@@ -1,0 +1,10 @@
+[Unit]
+Description=Run a weekly isolated Design Saga restore drill
+
+[Timer]
+OnCalendar=Sun *-*-* 03:35:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
