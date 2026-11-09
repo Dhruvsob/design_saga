@@ -259,9 +259,7 @@ def generate_reminder_pdf(reminder: dict, org: dict) -> bytes:
     top = pdf.get_y()
     to_lines = [reminder.get("party_name") or "—"] + [x for x in (
         reminder.get("party_address"), reminder.get("party_phone")) if x]
-    proj_lines = [reminder.get("project_name") or "—"]
-    if reminder.get("title"):
-        proj_lines.append(reminder["title"])
+    proj_lines = [x for x in (reminder.get("project_name"), reminder.get("title")) if x] or ["Payment due"]
     bottom = top
     for x, label, lines in ((LEFT, "TO", to_lines), (110, "FOR", proj_lines)):
         pdf.set_xy(x, top)

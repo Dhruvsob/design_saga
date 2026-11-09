@@ -464,7 +464,7 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     period = f"{_dmy(from_date) if from_date else 'Inception'} to {_dmy(to_date or business_today().isoformat())}"
     pdf = BrandedPDF(Brand(org), "Vendor Incentive Statement", vendor.get("name") or "")
     pdf.add_page()
-    draw_letterhead(pdf, "Vendor Incentive Statement", [
+    draw_letterhead(pdf, "Incentive Statement", [
         ("Period", period if len(period) <= 24 else _dmy(to_date or business_today().isoformat())),
         ("Generated", _dmy(business_today().isoformat())),
     ])
@@ -476,7 +476,7 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
     pdf.set_text_color(*GREY)
     for value in (vendor.get("company"),
                   f"GSTIN: {vendor['gstin']}" if vendor.get("gstin") else None,
-                  vendor.get("email"), vendor.get("phone"), f"Period: {period}"):
+                  vendor.get("email"), vendor.get("phone")):
         if value:
             pdf.cell(0, 4.6, safe_text(value), ln=1)
     pdf.ln(3)
@@ -497,8 +497,8 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
         pdf.cell(card_w - 8, 6.5, _money(value), 0, 0)
     pdf.set_y(y + 19)
 
-    cols = [("Bill date", 22), ("Bill #", 26), ("Base", 27), ("Earned", 26),
-            ("Received", 26), ("Status", 28), ("Reference", 25)]
+    cols = [("Date", 22), ("From", 30), ("Bill value", 25), ("Incentive", 25),
+            ("Received", 25), ("Status", 28), ("Reference", 25)]
 
     def table_header():
         pdf.set_fill_color(*pdf.brand.primary)
@@ -517,8 +517,10 @@ async def vendor_commission_statement_pdf(vendor_id: str, request: Request,
         pdf.set_text_color(*INK)
         pdf.set_font("Helvetica", "", 8)
         fill = i % 2 == 1
-        values = [_dmy(r.get("bill_date")), r.get("bill_number") or "-",
-                  _money(r.get("purchase_amount") or 0), _money(r.get("amount") or 0),
+        on_bill = bool(r.get("bill_number") or r.get("bill_id"))
+        values = [_dmy(r.get("bill_date") or r.get("due_date") or r.get("created_at")),
+                  (f"Bill {r.get('bill_number')}" if r.get("bill_number") else "Bill") if on_bill else "Direct incentive",
+                  _money(r.get("purchase_amount") or 0) if on_bill else "-", _money(r.get("amount") or 0),
                   _money(r.get("received_amount") or 0),
                   status_label.get(r.get("status") or "", (r.get("status") or "").title()),
                   (r.get("reference") or "")[:16]]

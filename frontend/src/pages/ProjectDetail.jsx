@@ -22,6 +22,15 @@ import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
 const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Activity"];
+// One project workspace, grouped the way a studio works on a job.
+export const PROJECT_TAB_GROUPS = [
+  { id: "overview", label: "Overview", tabs: ["Overview", "Activity"] },
+  { id: "work", label: "Work", tabs: ["Phases", "Tasks"] },
+  { id: "design", label: "Design", tabs: ["Drawings", "Files"] },
+  { id: "site", label: "Site", tabs: ["Site visits", "Snags"] },
+  { id: "commercial", label: "Commercial", tabs: ["Milestones", "Invoices", "Vendors"] },
+];
+const SUBTAB_LABEL = { Milestones: "Fee milestones", Vendors: "Vendors & purchases", Activity: "Activity log" };
 const inr = (n) => formatINR(n);
 
 export default function ProjectDetail() {
@@ -34,7 +43,7 @@ export default function ProjectDetail() {
   const TYPES = values("project_type", ["Residential", "Commercial"]);
 
   const [p, setP] = useState(null);
-  const [tab, setTab] = useState("Overview");
+  const [tab, setTab] = useState(() => (TABS.includes(searchParams.get("tab")) ? searchParams.get("tab") : "Overview"));
   const [loading, setLoading] = useState(true);
   const [fileForm, setFileForm] = useState({ name: "", url: "", stage: "", client_visible: false, file: null });
   const [showFileForm, setShowFileForm] = useState(false);
@@ -215,6 +224,10 @@ export default function ProjectDetail() {
 
   const currentIdx = STAGES.indexOf(p.stage || STAGES[0]);
   const fin = p.financials || {};
+  // `money` keeps value, billing and cash received apart and counts receipts made
+  // through Collections Due; the older `financials` block only sees invoice payments.
+  const money = p.money || {};
+  const stillToReceive = money.still_to_receive ?? Math.max(0, Number(money.invoiced || 0) - Number(money.received || 0));
   // Backend decides financial visibility (finance.read / invoices.read / Admin).
   // Fall back to client perms if the flag is absent.
   const canSeeFinancials = (p.can_view_financials !== undefined)
@@ -233,6 +246,13 @@ export default function ProjectDetail() {
     if (t === "Drawings" && !hasPerm("files.read")) return false;
     return true;
   });
+  const tabGroups = PROJECT_TAB_GROUPS
+    .map((g) => ({ ...g, tabs: g.tabs.filter((t) => visibleTabs.includes(t)) }))
+    .filter((g) => g.tabs.length);
+  const activeGroup = tabGroups.find((g) => g.tabs.includes(tab)) || tabGroups[0];
+  const COUNTS = { Tasks: (p.tasks || []).length, Milestones: (p.milestones || []).length, Invoices: (p.invoices || []).length,
+    Files: (p.files || []).length, Vendors: (p.purchase_orders || []).length + (p.vendor_bills || []).length };
+  const groupCount = (g) => g.tabs.reduce((n, t) => n + (COUNTS[t] || 0), 0);
 
   return (
     <div className="space-y-8" data-testid="project-detail">
@@ -262,20 +282,20 @@ export default function ProjectDetail() {
               <button onClick={openEdit} className="btn-ghost" data-testid="project-edit-btn">
                 <PencilSimple size={14} /> Edit
               </button>
-              <button onClick={toggleArchive} className="btn-ghost" data-testid="project-archive-btn">
-                {p.archived ? <><ArrowCounterClockwise size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
-              </button>
             </>
           )}
           {hasPerm("projects.update") && p.share_token && (
-            <>
-              <button onClick={copyShare} className="btn-ghost" data-testid="share-portal-btn">
-                <Copy size={14} /> Client portal link
-              </button>
-              <button onClick={rotateShare} className="btn-ghost" title="Invalidate the old client portal link">
-                <ArrowsClockwise size={14} /> Reset portal link
-              </button>
-            </>
+            <button onClick={copyShare} className="btn-ghost" data-testid="share-portal-btn">
+              <Copy size={14} /> Client portal link
+            </button>
+          )}
+          {hasPerm("projects.update") && (
+            <RowActions label={p.name} testid="project-more-actions" actions={[
+              { label: p.archived ? "Restore project" : "Archive project", icon: p.archived ? ArrowCounterClockwise : Archive,
+                onSelect: toggleArchive, testid: "project-archive-btn" },
+              { label: "Reset client portal link", icon: ArrowsClockwise, hidden: !p.share_token, divider: true,
+                onSelect: rotateShare },
+            ]} />
           )}
         </div>
       </div>
@@ -306,18 +326,34 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-[var(--line)] overflow-x-auto">
-        {visibleTabs.map((t) => (
+      {/* Tabs: five groups; the active group's sections underneath */}
+      <div className="border-b border-[var(--line)]">
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Project sections">
+          {tabGroups.map((g) => (
+            <button key={g.id} type="button" role="tab" aria-selected={activeGroup?.id === g.id}
+              onClick={() => { if (!g.tabs.includes(tab)) setTab(g.tabs[0]); }}
+              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition whitespace-nowrap ${
+                activeGroup?.id === g.id ? "border-[var(--accent)] text-[var(--accent-strong)]" : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
+              }`}
+              data-testid={`tab-group-${g.id}`}>
+              {g.label}
+              {groupCount(g) > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{groupCount(g)}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 -mt-4" role="tablist" aria-label={`${activeGroup?.label || ""} sections`}>
+        {(activeGroup?.tabs || []).map((t) => (
           <button
             key={t}
+            type="button" role="tab" aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition whitespace-nowrap ${
-              tab === t ? "border-[var(--accent)] text-[var(--accent-strong)]" : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
+            className={`px-3 py-1.5 text-xs border rounded-full transition whitespace-nowrap ${
+              tab === t ? "bg-[var(--ink)] text-white border-[var(--ink)]" : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--accent-strong)]"
             }`}
             data-testid={`tab-${t}`}
           >
-            {t}
+            {SUBTAB_LABEL[t] || t}
             {t === "Tasks" && (p.tasks || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{p.tasks.length}</span>}
             {t === "Milestones" && (p.milestones || []).length > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{p.milestones.length}</span>}
             {t === "Vendors" && ((p.purchase_orders || []).length + (p.vendor_bills || []).length) > 0 && <span className="ml-1.5 font-mono text-[10px] text-[var(--ink-3)]">{(p.purchase_orders || []).length + (p.vendor_bills || []).length}</span>}
@@ -335,10 +371,10 @@ export default function ProjectDetail() {
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[var(--line)]" data-testid="project-financials">
-              <MiniStat label="Budget" value={inr(fin.budget)} />
-              <MiniStat label="Invoiced" value={inr(fin.invoiced)} />
-              <MiniStat label="Collected" value={inr(fin.collected)} accent="#1D633E" />
-              <MiniStat label="Outstanding" value={inr(fin.outstanding)} accent={fin.outstanding > 0 ? "#B22B22" : undefined} />
+              <MiniStat label="Project value" value={inr(money.project_value ?? fin.budget)} />
+              <MiniStat label="Invoiced" value={inr(money.invoiced ?? fin.invoiced)} />
+              <MiniStat label="Received" value={inr(money.received ?? fin.collected)} accent="#1D633E" />
+              <MiniStat label="Still to receive" value={inr(stillToReceive)} accent={stillToReceive > 0 ? "#B22B22" : undefined} />
               {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (

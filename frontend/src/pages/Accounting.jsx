@@ -257,21 +257,20 @@ export default function Accounting() {
             ))}
           </select>
         </div>
-        <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-6 gap-x-3 gap-y-4">
+        <div className="hidden sm:flex flex-wrap items-center gap-x-5 gap-y-2">
           {TAB_GROUPS.map((g) => (
-            <div key={g.id} role="group" aria-labelledby={`acc-group-${g.id}`} data-testid={`acc-group-${g.id}`}>
-              <div id={`acc-group-${g.id}`} className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-3)] mb-1.5 px-1">{g.label}</div>
-              <div className="flex flex-col gap-1">
-                {TABS.filter((t) => t.group === g.id).map(({ id, label, Icon }) => (
-                  <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
-                    aria-current={tab === id ? "page" : undefined}
-                    className={`min-h-10 px-2.5 py-1.5 text-left text-xs flex items-center gap-2 rounded-md border transition ${tab === id
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[#5B4E3A] font-semibold"
-                      : "border-transparent text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"}`}>
-                    <Icon size={15} className="shrink-0" /> <span>{label}</span>
-                  </button>
-                ))}
-              </div>
+            <div key={g.id} role="group" aria-labelledby={`acc-group-${g.id}`} data-testid={`acc-group-${g.id}`}
+              className="inline-flex flex-wrap items-center gap-1">
+              <span id={`acc-group-${g.id}`} className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-3)] mr-1">{g.label}</span>
+              {TABS.filter((t) => t.group === g.id).map(({ id, label, Icon }) => (
+                <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
+                  aria-current={tab === id ? "page" : undefined}
+                  className={`h-8 px-2.5 text-xs inline-flex items-center gap-1.5 rounded-full border transition ${tab === id
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[#5B4E3A] font-semibold"
+                    : "border-transparent text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"}`}>
+                  <Icon size={13} className="shrink-0" /> <span>{label}</span>
+                </button>
+              ))}
             </div>
           ))}
         </div>
@@ -1171,13 +1170,13 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
     <div className="space-y-4" data-testid="collections-due-tab">
       <MoneyInTabs />
       {reminderModal}
-      <div className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
+      <div className="flex items-center justify-between gap-3 flex-wrap lg:flex-nowrap">
+        <div className="min-w-0">
           <div className="overline">MONEY IN / COLLECTIONS DUE</div>
           <div className="text-xs text-[var(--ink-2)] mt-1">Invoices, project milestones, vendor incentives and other receivables · as of {formatDate(data.as_of)}</div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <input className="input-flat min-w-[260px]" value={query}
+        <div className="flex gap-2 w-full lg:w-auto">
+          <input className="input-flat flex-1 lg:w-[300px]" value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search person, project, invoice or reference"
             data-testid="collections-search" />

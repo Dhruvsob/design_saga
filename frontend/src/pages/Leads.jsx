@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -240,29 +240,35 @@ export default function Leads() {
                       <div className="font-semibold text-sm leading-snug">{l.name}</div>
                       <DotsSixVertical size={14} className="text-[var(--line-strong)] mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <div className="text-xs text-[var(--ink-2)] mt-1 flex items-center gap-1.5">
+                    <div className="text-xs text-[var(--ink-2)] mt-1 flex flex-wrap items-center gap-x-1.5">
                       <span>{l.project_type}</span>
-                      <span className="w-0.5 h-0.5 bg-[var(--ink-3)] rounded-full" />
-                      <span>{l.location || "—"}</span>
+                      {l.location && <><span aria-hidden="true">·</span><span>{l.location}</span></>}
+                      {l.source && <><span aria-hidden="true">·</span><span className="text-[var(--ink-3)]">{statusLabel(l.source)}</span></>}
                     </div>
-                    <div className="font-mono text-sm mt-2 tabular-nums font-semibold">₹{(l.budget || 0).toLocaleString("en-IN")}</div>
-                    <button
-                      onClick={() => startEdit(l)}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs border border-[var(--line)] hover:border-[var(--ink)] hover:bg-[var(--surface-2)] py-1.5 transition text-[var(--ink-2)] hover:text-[var(--ink)]"
-                      title="View & add notes"
-                      data-testid={`lead-notes-btn-${l.id}`}
-                    >
-                      <NotePencil size={13} />
-                      Notes
-                      {(l.notes_log && l.notes_log.filter((n) => !n.deleted).length > 0) && (
-                        <span className="font-mono text-[10px] bg-[var(--ink)] text-white px-1.5 py-0.5 leading-none">
-                          {l.notes_log.filter((n) => !n.deleted).length}
-                        </span>
-                      )}
-                    </button>
-                    <div className="flex items-center flex-wrap gap-x-2 gap-y-2 mt-3 pt-3 border-t border-[var(--line-soft)]">
-                      <span className="overline text-[10px] truncate min-w-0 flex-1">{statusLabel(l.source)}</span>
-                      <div className="flex items-center gap-2 shrink-0">
+                    {Number(l.budget) > 0
+                      ? <div className="font-mono text-sm mt-2 tabular-nums font-semibold">₹{Number(l.budget).toLocaleString("en-IN")}</div>
+                      : <div className="text-[11px] mt-2 text-[var(--ink-3)]">Budget not set</div>}
+                    <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[var(--line-soft)]">
+                      <button
+                        onClick={() => startEdit(l)}
+                        className="inline-flex items-center gap-1 text-xs text-[var(--ink-2)] hover:text-[var(--ink)]"
+                        title="View & add notes"
+                        data-testid={`lead-notes-btn-${l.id}`}
+                      >
+                        <NotePencil size={13} /> Notes
+                        {(l.notes_log && l.notes_log.filter((n) => !n.deleted).length > 0) && (
+                          <span className="font-mono text-[10px] bg-[var(--hover)] text-[var(--ink)] rounded-full px-1.5 leading-4">
+                            {l.notes_log.filter((n) => !n.deleted).length}
+                          </span>
+                        )}
+                      </button>
+                      <div className="flex items-center gap-2 shrink-0 ml-auto">
+                        {l.converted_project_id && (
+                          <Link to={`/projects/${l.converted_project_id}`} className="text-[var(--accent-strong)] hover:underline text-xs flex items-center gap-1 font-semibold"
+                             data-testid={`lead-project-${l.id}`}>
+                            Project <ArrowRight size={12} weight="bold" />
+                          </Link>
+                        )}
                         {canConvert && l.stage !== "Won" && l.stage !== "Lost" && (
                           <button onClick={() => convert(l.id)} className="text-[var(--accent-strong)] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
                             <ArrowRight size={12} weight="bold" /> Convert
@@ -289,9 +295,6 @@ export default function Leads() {
           );
         })}
       </div>
-      {canUpdate && <p className="text-xs text-[var(--ink-2)] font-mono tracking-wider flex items-center gap-2">
-        <DotsSixVertical size={12} /> DRAG CARDS BETWEEN COLUMNS TO UPDATE STAGES.
-      </p>}
 
       {/* Edit lead modal */}
       {editing && (

@@ -4,7 +4,7 @@ import { test, expect, request as pwRequest } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { api, json, uid, authFile, baseURL } from "./helpers.mjs";
+import { api, json, uid, authFile, baseURL, openProjectTab } from "./helpers.mjs";
 
 const SITE = { latitude: 23.0225, longitude: 72.5714, accuracy: 10 };
 const FAR = { latitude: 23.0725, longitude: 72.6414, accuracy: 10 };
@@ -55,7 +55,7 @@ test.describe("site visit as staff", () => {
   test("check in on site, add a photo and notes, finish, see it on the timeline", async ({ page }, testInfo) => {
     const { admin, employee, project } = await setUpProject();
     await page.goto(`/projects/${project.id}`);
-    await page.getByTestId("tab-Site visits").click();
+    await openProjectTab(page, "Site visits");
     await expect(page.getByTestId("site-visit-start")).toBeVisible();
     await page.getByTestId("site-visit-checkin").click();
 
@@ -121,7 +121,7 @@ test.describe("site visit as staff", () => {
     await anon.dispose();
 
     // Project timeline.
-    await page.getByTestId("tab-Activity").click();
+    await openProjectTab(page, "Activity");
     await expect(page.getByTestId("activity-timeline")).toContainText("checked in on site");
     await expect(page.getByTestId("activity-timeline")).toContainText("finished a site visit");
 
@@ -135,7 +135,7 @@ test.describe("site visit as staff", () => {
     const { admin, employee, project } = await setUpProject();
     await context.setGeolocation(FAR);
     await page.goto(`/projects/${project.id}`);
-    await page.getByTestId("tab-Site visits").click();
+    await openProjectTab(page, "Site visits");
     await page.getByTestId("site-visit-checkin").click();
     const blocked = page.getByTestId("site-visit-blocked");
     await expect(blocked).toBeVisible();
@@ -197,7 +197,7 @@ test.describe("live map as admin", () => {
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation(SITE);
     await page.goto(`/projects/${project.id}`);
-    await page.getByTestId("tab-Site visits").click();
+    await openProjectTab(page, "Site visits");
     await page.getByTestId("site-fence-set").click();
     await expect(page.getByTestId("site-fence-editor")).toBeVisible();
     await page.getByTestId("site-fence-radius").fill("120");

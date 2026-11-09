@@ -109,10 +109,9 @@ export default function Vendors() {
       </PageHero>
 
       {/* KPI STRIP */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Kpi label="Vendors" value={rows.length} testid="kpi-vendor-count" />
-        <Kpi label="Contractors" value={rows.filter((v) => v.agency_type === "contractor").length} />
-        <Kpi label="Suppliers" value={rows.filter((v) => v.agency_type === "supplier").length} />
+        <Kpi label="With bills to pay" value={rows.filter((v) => Number(v.outstanding || 0) > 0).length} />
         <Kpi label="Outstanding" value={INR(totalOutstanding)} accent testid="kpi-vendor-outstanding" />
       </div>
 

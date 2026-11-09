@@ -122,7 +122,7 @@ export default function Holidays() {
   return (
     <div className="space-y-6" data-testid="holidays-page">
       <PageHero title="Holidays" kicker="Company holidays, weekly offs and festival days. Applied automatically to attendance and payroll.">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="overline">YEAR</label>
           <input
             type="number" min="2000" max="2100" value={year} aria-label="Year"
@@ -130,9 +130,6 @@ export default function Holidays() {
             onChange={(e) => setYear(Number(e.target.value) || currentYear)}
             className="border border-[var(--line)] w-24 text-sm px-2 py-1"
           />
-          <button className="btn-ghost text-xs" onClick={load} data-testid="holiday-refresh">
-            <ArrowsClockwise size={14} /> Refresh
-          </button>
           {canCreate && (
             <button className="btn-ghost text-xs" onClick={addSaturdays} data-testid="holiday-saturdays">
               <Calendar size={14} /> Add Saturdays

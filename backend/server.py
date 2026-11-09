@@ -2473,8 +2473,9 @@ def generate_invoice_pdf(doc: dict, org: Optional[dict] = None) -> bytes:
         ("Date", _pdf_display_date(doc.get("issue_date") or doc.get("created_at"))),
         ("Valid until" if is_quote else "Due date",
          _pdf_display_date(doc.get("due_date")) if doc.get("due_date") else ""),
-        ("Status", status),
     ]
+    if doc.get("status") == "cancelled":
+        meta.append(("Status", status))     # only a cancelled document says so on paper
     draw_letterhead(pdf, title, meta)
 
     # ---- Bill To / Project ----
@@ -4060,12 +4061,12 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
     # Cover meta block
     pdf.set_text_color(*ink)
     pdf.set_font("Helvetica", "B", 9)
-    cover_rows = [
+    cover_rows = [(label, val) for label, val in (
         ("CLIENT", doc.get("client_name") or "—"),
-        ("LOCATION", doc.get("project_location") or "—"),
-        ("AREA", f"{doc.get('area_sqft', 0):g} sq.ft"),
+        ("LOCATION", doc.get("project_location")),
+        ("AREA", f"{float(doc.get('area_sqft') or 0):g} sq.ft" if float(doc.get("area_sqft") or 0) > 0 else None),
         ("PREPARED BY", org_name),
-    ]
+    ) if val]
     for label, val in cover_rows:
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_text_color(*grey)
@@ -4168,7 +4169,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
 
         def boq_header():
             pdf.set_font("Helvetica", "B", 8)
-            pdf.set_fill_color(0, 0, 0)
+            pdf.set_fill_color(*klein)
             pdf.set_text_color(255, 255, 255)
             if is_consult:
                 pdf.cell(95, 7, " Professional Service", 0, 0, "L", fill=True)
@@ -4228,7 +4229,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.cell(0, 9, _safe("Cost broken down by room."), ln=1)
         hr()
         pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(0, 0, 0)
+        pdf.set_fill_color(*klein)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(120, 7, "  Room", 0, 0, "L", fill=True)
         pdf.cell(60, 7, "Total", 0, 1, "R", fill=True)
@@ -4245,7 +4246,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.cell(0, 9, _safe("Brand-tier specifications."), ln=1)
         hr()
         pdf.set_font("Helvetica", "B", 8)
-        pdf.set_fill_color(0, 0, 0)
+        pdf.set_fill_color(*klein)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(45, 7, " Category", 0, 0, "L", fill=True)
         pdf.cell(45, 7, "Premium", 0, 0, "L", fill=True)
@@ -4295,7 +4296,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.cell(0, 9, _safe("Milestone-linked schedule."), ln=1)
         hr()
         pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(0, 0, 0)
+        pdf.set_fill_color(*klein)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(80, 7, "  Milestone", 0, 0, "L", fill=True)
         pdf.cell(25, 7, "%", 0, 0, "R", fill=True)
@@ -4306,7 +4307,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         for p in doc.get("payment_plan", []):
             pdf.cell(80, 6, _safe(f"  {p.get('label', '')}"), 0, 0)
             pdf.cell(25, 6, f"{p.get('percentage', 0):g}%", 0, 0, "R")
-            pdf.cell(35, 6, f"{p.get('amount', 0):,.0f}", 0, 0, "R")
+            pdf.cell(35, 6, _safe(_inr(p.get("amount")) if float(p.get("amount") or 0) else "-"), 0, 0, "R")
             pdf.cell(40, 6, _safe(f"{p.get('due_after_days', 0)}"), 0, 1, "R")
 
     # ============ TIMELINE ============
@@ -4316,7 +4317,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.cell(0, 9, _safe(f"Total: {doc.get('total_duration_weeks', 0)} weeks"), ln=1)
         hr()
         pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(0, 0, 0)
+        pdf.set_fill_color(*klein)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(100, 7, "  Phase", 0, 0, "L", fill=True)
         pdf.cell(40, 7, "Start (wk)", 0, 0, "R", fill=True)
@@ -4345,11 +4346,11 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
             pdf.ln(2)
 
     # ============ SIGNATURE ============
-    section_break(95)
+    section_break(125 if brand.has_bank else 80)
     header_section("10 / Acceptance & Signature")
     pdf.cell(0, 9, _safe("This quotation is binding once signed."), ln=1)
     hr()
-    pdf.ln(20)
+    pdf.ln(10)
     y = pdf.get_y()
     pdf.set_draw_color(*ink)
     pdf.line(20, y + 25, 95, y + 25)

@@ -35,13 +35,14 @@ export default function ProjectAttention({ p, visibleTabs, onOpen, canSeeFinanci
   const dueMilestones = milestones.filter((m) => m.due_date && m.due_date <= today
     && Number(m.amount || 0) - Number(m.paid_amount || 0) > 0.009);
   const dueAmount = dueMilestones.reduce((s, m) => s + Number(m.amount || 0) - Number(m.paid_amount || 0), 0);
-  const outstanding = Number(p.financials?.outstanding || 0);
+  const money = p.money || {};
+  const outstanding = Number(money.still_to_receive ?? Math.max(0, Number(money.invoiced || 0) - Number(money.received || 0)));
 
   const items = [
     overdue > 0 && { tab: "Tasks", text: `${overdue} task${overdue > 1 ? "s are" : " is"} past due`, action: "Review tasks" },
     canSeeFinancials && dueMilestones.length > 0 && { tab: "Milestones",
       text: `${formatINR(dueAmount)} due from ${dueMilestones.length} milestone${dueMilestones.length > 1 ? "s" : ""}`, action: "Collect" },
-    canSeeFinancials && outstanding > 0 && { tab: "Invoices", text: `${formatINR(outstanding)} invoiced but not yet received`, action: "View invoices" },
+    canSeeFinancials && outstanding > 0 && dueMilestones.length === 0 && { tab: "Milestones", text: `${formatINR(outstanding)} still to receive on this project`, action: "View fee milestones" },
     !p.project_manager && { tab: null, text: "No project manager assigned", action: null },
     p.has_phase_plan === false && { tab: "Phases", text: "No phase plan yet", action: "Plan phases" },
   ].filter(Boolean).filter((i) => !i.tab || visibleTabs.includes(i.tab));

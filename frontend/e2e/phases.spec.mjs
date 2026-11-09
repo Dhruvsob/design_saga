@@ -1,7 +1,7 @@
 // Project phase templates (PRJ-01): apply, track, fee milestones, access.
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { api, json, uid, authFile } from "./helpers.mjs";
+import { api, json, uid, authFile, openProjectTab } from "./helpers.mjs";
 
 test.use({ storageState: authFile("admin") });
 
@@ -18,7 +18,7 @@ test("apply consultancy phases with fee milestones, then track progress", async 
   } }));
 
   await page.goto(`/projects/${project.id}`);
-  await page.getByTestId("tab-Phases").click();
+  await openProjectTab(page, "Phases");
   await expect(page.getByTestId("phase-setup")).toBeVisible();
   await page.getByTestId("template-consultancy").click();
   await page.getByTestId("phase-milestones").check();

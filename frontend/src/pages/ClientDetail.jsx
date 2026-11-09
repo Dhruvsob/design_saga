@@ -101,10 +101,19 @@ export default function ClientDetail() {
             CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{c.name}</h1>
-          <div className="mt-2 text-sm text-[var(--ink-2)] space-x-3">
+          <div className="mt-2 text-sm text-[var(--ink-2)] flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="client-contact">
             {c.company && <span>{c.company}</span>}
-            {c.email && <span className="font-mono text-xs">{c.email}</span>}
-            {c.phone && <span className="font-mono text-xs">{c.phone}</span>}
+            {c.phone && <a href={`tel:${c.phone}`} className="hover:text-[var(--accent-strong)]">{c.phone}</a>}
+            {c.phone && String(c.phone).replace(/\D/g, "").length >= 10 && (
+              <a href={`https://wa.me/${String(c.phone).replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}`} target="_blank" rel="noreferrer"
+                 className="text-xs text-[var(--accent-strong)] hover:underline">WhatsApp</a>
+            )}
+            {c.email && <a href={`mailto:${c.email}`} className="hover:text-[var(--accent-strong)]">{c.email}</a>}
+            {!c.phone && !c.email && hasPerm("clients.update") && (
+              <button type="button" onClick={openEdit} className="text-xs text-[var(--ink-3)] hover:text-[var(--accent-strong)] underline-offset-2 hover:underline">
+                Add phone or email
+              </button>
+            )}
           </div>
           {c.address && <div className="mt-1 text-sm text-[var(--ink-2)]">{c.address}</div>}
           {c.notes && <p className="mt-2 text-sm text-[var(--ink-2)] max-w-2xl border-l-2 border-[var(--line)] pl-3">{c.notes}</p>}

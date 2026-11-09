@@ -1,6 +1,6 @@
 // Site snags: raise with a photo -> mark fixed with a photo -> verify & close; reopen needs a reason.
 import { test, expect } from "@playwright/test";
-import { api, json, uid, authFile, baseURL } from "./helpers.mjs";
+import { api, json, uid, authFile, baseURL, openProjectTab } from "./helpers.mjs";
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;
@@ -16,7 +16,7 @@ test("snag: raised with photo, fixed with photo, verified and closed; staff cann
   const project = await json(ctx.post("/api/projects", { data: { name: `Site ${uid()}`, client_id: client.id, engagement_type: "consultancy" } }));
   const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
   await page.goto(`/projects/${project.id}`);
-  await page.getByTestId("tab-Snags").click({ timeout: 20000 });
+  await openProjectTab(page, "Snags", { timeout: 20000 });
   await page.getByTestId("snag-add").click();
   await page.getByTestId("snag-title").fill("Cracked tile at entrance");
   await page.getByTestId("snag-photo").setInputFiles({ name: "crack.jpg", mimeType: "image/jpeg", buffer: JPG });

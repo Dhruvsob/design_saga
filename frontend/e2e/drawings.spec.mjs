@@ -1,6 +1,6 @@
 // Drawing register on the project page: add, issue rev A with a PDF, ask for changes, issue rev B, approve.
 import { test, expect } from "@playwright/test";
-import { api, json, uid, authFile, baseURL } from "./helpers.mjs";
+import { api, json, uid, authFile, baseURL, openProjectTab } from "./helpers.mjs";
 
 test.beforeEach(async ({ browserName }, testInfo) => {
   void browserName;
@@ -15,7 +15,7 @@ test("drawing register: revisions A then B, supersession, approval, staff cannot
   const project = await json(ctx.post("/api/projects", { data: { name: `Bungalow ${uid()}`, client_id: client.id, engagement_type: "consultancy" } }));
   const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
   await page.goto(`/projects/${project.id}`);
-  await page.getByTestId("tab-Drawings").click({ timeout: 20000 });
+  await openProjectTab(page, "Drawings", { timeout: 20000 });
   await page.getByTestId("drawing-add").click();
   await page.getByTestId("form-field-number").fill("a-101");
   await page.getByTestId("form-field-title").fill("Ground floor plan");
