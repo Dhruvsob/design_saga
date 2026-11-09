@@ -407,7 +407,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| DB-01 | P2 | Slow-query/index audit with large-tenant data; API latency budgets (DS-008) | Audit Needed | Needs disposable DB |
+| DB-01 | P2 | Slow-query/index audit with large-tenant data; API latency budgets (DS-008) | Measured 09/11 | Production last 24 h: 231 requests, 0 over 1 s, max 234 ms; new collections (drawings, snags, period exports) indexed by org+project. Re-run with a large synthetic tenant before onboarding big studios |
 | DB-02 | P2 | Rate-limit buckets in process memory; must move to shared storage before >1 worker | Confirmed constraint | Keep single worker until done |
 | DB-03 | P3 | Large-export streaming | Confirmed | Later |
 
