@@ -118,15 +118,15 @@ Mobile (< lg breakpoint): only the cream form panel. All `data-testid` attribute
 | UX-13 | P2 | Tables: unify row height, numeric font (money currently JetBrains Mono with slashed zero — decide with owner before changing the established look), sticky first column on wide finance tables |
 | UX-14 | done | One entrance for every custom dialog (backdrop fade 140 ms, panel lift 180 ms), button press feedback, row-hover transition; reduced-motion respected. Tab-content transitions intentionally not added (data screens should switch instantly) |
 | UX-15 | done (project) | Project lifecycle is a progress line: numbered dots, ticks for finished stages, sentence-case labels, "Stage 4 of 9"; connectors on wide screens only. Leads keep their kanban (stages are columns there) |
-| PDF-10 | P1 | Payment receipt, purchase-order and client/account statement PDFs need backend endpoints (CDX-02); templates will reuse `core/pdf_brand.py` letterhead/table/signature helpers |
+| PDF-10 | done (DS-120) | Payment receipt, purchase-order and client statement PDFs use the shared tenant brand and existing preview UI; backend endpoints and contextual actions are implemented |
 
 ## 5. Codex handoff (backend contracts needed)
 
 | ID | Pri | Endpoint / area | Reproduction | Expected / contract |
 |---|---|---|---|---|
-| CDX-01 | P1 | `GET /projects/{id}` → `financials` and `money.billed_unpaid` | Project with an invoice added to Collections Due and ₹X received there: `financials.collected` = 0, `money.billed_unpaid` = full invoice; `money.received` = X (correct) | Compute `financials.collected/outstanding` and `money.billed_unpaid` from the same receipts as `money.received` (invoice `paid_amount` + Collections Due receipts linked by `invoice_id`/project), or retire `financials`. Frontend already reads `money.*` |
-| CDX-02 | P1 | New PDF endpoints | Not available today | `GET /accounting/collections/receipts/{receipt_id}/pdf` (payment receipt: payer, project, amount, date, Cash/Bank, reference, collection it settles); `GET /purchase-orders/{id}/pdf`; `GET /clients/{id}/statement.pdf?from&to` (invoices, receipts, balance). Same auth/tenant rules as invoice PDF. Claude will style them with `core/pdf_brand.py` |
-| CDX-03 | P2 | `tests/test_quotation_types.py::test_consultancy_defaults_use_consultancy_terms_and_schedule` | Fails on `e3ce32b` (not in the CI gate): expected terms text differs from current defaults | Update the test or the defaults; it is not caused by this branch |
+| CDX-01 | done (DS-120) | `GET /projects/{id}` → `financials` and `money.billed_unpaid` | Invoice-linked Collections Due receipts were omitted | Direct invoice receipts plus linked Collections Due receipts now reduce the same invoice balance once, capped at invoice total; both project summaries use that result |
+| CDX-02 | done (DS-120) | New PDF endpoints | The three documents were unavailable | Added `/accounting/collections/receipts/{receipt_id}/pdf`, `/purchase-orders/{id}/pdf`, and `/clients/{id}/statement.pdf?from&to` with scoped auth/tenant rules, shared branding and UI actions |
+| CDX-03 | done (DS-120) | Consultancy quotation contract test | Test expected obsolete turnkey fields | Test now verifies the intentional letter-proposal contract (`proposal.fee`, no BOQ payment plan/build timeline); runtime behaviour unchanged |
 | CDX-04 | P3 | `GET /leads` | Card shows "Project →" via `converted_project_id` (present on converted leads) | No change needed unless the field is ever projected out |
 | CDX-05 | — | Merge note | This branch edits presentation code in `server.py`, `routes/money_in.py`, `routes/finance_extras.py` | Rebase/merge order: integrate this branch after any Codex change to those PDF functions, or ping Claude to rebase |
 
@@ -141,7 +141,7 @@ E2E_BASE_URL=http://127.0.0.1:5174 node e2e/tools/pdf-samples.mjs <outDir>      
 ## 7. Test evidence for this batch
 
 - Frontend lint, JSX undefined-name scan, production build: clean.
-- Backend PDF-related tests: 41 passed; 1 pre-existing failure (CDX-03) also fails on `e3ce32b`.
+- DS-120 backend canonical gate: 485 passed, including the corrected CDX-03 contract and new PDF/project-money/payroll-recovery regressions.
 - Playwright desktop + mobile (phases, drawings, snags, site-visits, ux, smoke, a11y, navigation, pdf, collections, crm-chain): 82 passed, 15 intentional skips, 2 timeouts that passed on rerun (clients paging, Saturday holidays).
 - `ux-sweep.mjs` after the batch: no page/console errors, no horizontal overflow at 390 px.
 

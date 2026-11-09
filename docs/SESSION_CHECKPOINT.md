@@ -1,48 +1,52 @@
 # Session Checkpoint
 
 Read this first, then `DESIGN-SAGA-REPAIR-TRACKER.md` → "Canonical Open Backlog".
-Last updated: 06/11/2026 16:30 IST.
+Last updated: 09/11/2026 23:05 IST.
 
 ## Where things stand
 
-- Branch `codex/repair-release`; see `git log -5 --oneline` for the exact head.
-- Production runtime is `7edf02e` (deployed 06/11/2026 10:43 UTC, backup
-  `/opt/design-saga-backups/20261106T104203Z`). Head `6dc7382` (employee
-  advances + unsaved warnings, DS-091) is pushed, tested and its verified bundle
-  is at `/root/ds-6dc7382.bundle` on the VPS; deploy is waiting for the owner's
-  explicit approval.
-- Deploy recipe: `git bundle create x.bundle <prod-head>..codex/repair-release`,
-  `scp` to `root@srv2020574.hstgr.cloud` (IPv6), verify sha256 both ends, then on
-  the VPS in a transient unit: `git fetch /root/x.bundle codex/repair-release:refs/remotes/origin/codex/repair-release && git merge --ff-only origin/codex/repair-release`
-  (post-merge hook: backup -> rebuild -> health check -> auto rollback).
-- Completed this session: DS-085 phases, DS-086 logo + upload normalisation,
-  DS-087 consultancy proposal + quotation modes + flowing turnkey PDF, DS-088
-  collections active/history, DS-089 leave privacy, DS-090 salary working +
-  styled confirms, DS-091 employee advances + unsaved warnings.
-- Gates: backend mandatory list 366 passed; Playwright full run passed (35) plus
-  targeted runs of proposal/ux/forms/money/pdf/navigation after later changes;
-  ESLint 0 warnings; Vite build pass. OneDrive placeholder note (DS-083) still applies.
-- Logo: production tenant DESIGN SAGA (`org_759bcccd654c`) still has the 6250px
-  JPG with grid. Owner to re-upload `Design Saga - logo (final, transparent).png`
-  via Company Settings (direct DB write is blocked by the safety classifier).
+- Branch `codex/backend-completion`; implementation commit `c544d9e` follows the
+  deployed integration `143c995`. The next commit updates this checkpoint/tracker.
+- Production runtime/source is `143c995fb90bcc003d83510c3f7627148b709fee`.
+  The pre-deploy backup for that release is `/opt/design-saga-backups/20261109T165423Z`.
+  Caddy's protected checksum remains
+  `e3fc3c8c96d3c84e37af6f0c5e8483481813960d477d64bf43558aa135acaedd`.
+- DS-120 completes the three Claude backend handoffs: project invoice-linked
+  collections now reconcile, branded payment-receipt/PO/client-statement PDFs
+  and contextual UI actions are present, and the stale consultancy test matches
+  the intentional letter-proposal contract. It also adds interrupted payroll
+  reversal recovery coverage.
+- Gates: canonical backend list **485 passed**; frontend ESLint and JSX checks,
+  5 logic tests and Vite production build passed; diff and tracked/history
+  secret scans passed. No new dependency or migration.
+- Read-only production investigation found two Demo-only historical states:
+  `pr_2ccbff137a52` was journal-reversed before its run status update completed;
+  settlement `vcpay_45ca202c39a1` says bank transfer while journal
+  `je_0bf99e7789dd` explicitly uses Cash. Repair only after the DS-120 backup,
+  through the idempotent payroll workflow and one exact audited metadata update.
 
 ## Next executable tasks (in order)
 
-1. Deploy `6dc7382` once approved; verify live (advances panel, payroll recovery).
-2. Attendance policy: effective-dated versions, late tiers with preview (mandate 09, T07).
-3. Tenant-editable phase templates; link phase progress to lifecycle stage.
-4. A11Y-01 remainder: modal focus traps, tablet visual QA, screen-reader pass.
-5. Edit/Delete matrix re-audit across modules (mandate 13) and vendor/project
-   commission views (mandate 12).
+1. Commit the DS-120 tracker update; push/fast-forward the repair release.
+2. Fresh full backup, then rebuild/recreate only backend and web; preserve Caddy,
+   FerretDB/PostgreSQL and Tanvika.
+3. Apply the two exact Demo repairs with audit evidence; rerun integrity until all
+   report sections are zero. Do not touch the real Design Saga tenant data.
+4. Live-check auth guards, all three new PDF routes, project money, logs, Caddy
+   checksum and `gamaa.tech` health.
+5. Continue only genuinely open backlog rows; do not repeat deployed work.
 
 ## Waiting on the owner
 
-- SEC-02: should default Employee/Designer roles keep `clients.read`/`leads.read`?
-- ACC-02: CGST/SGST vs IGST split and paisa vs whole-rupee GST rounding.
-- SEC-01: rotate exposed Atlas password / viewer token at the provider.
-- OPS-01: SSH to 187.52.124.46:22 times out from this workstation (443 is open);
-  check Hostinger firewall / UFW / fail2ban.
-- OPS-02/03: off-server backup destination and external alert destination.
+- SEC-01: rotate/revoke the exposed historical Atlas password and viewer token
+  at their providers; code cannot rotate external credentials.
+- SEC-02/06: decide whether Employee/Designer defaults retain tenant-wide
+  client/lead visibility.
+- ACC-02/05/06: accountant/product decisions for GST split, TDS/credit notes,
+  Tally/email/payment-link scope and retention.
+- OPS-02/03: choose the encrypted off-server backup destination and external
+  alert target. The host cannot invent provider credentials or recipients.
+- Coordinate the pending kernel reboot because the VPS also hosts Tanvika.
 
 ## Resume the local QA stack (Windows, Git Bash)
 

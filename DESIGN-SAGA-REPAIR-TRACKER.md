@@ -4,14 +4,23 @@ Last updated: 2026-11-09 (Asia/Kolkata)
 
 ## Current Checkpoint
 
-- Local checkout: `claude/ux-product-refinement`; integrated base `b2d6a99` (Codex `397c530` + Claude `d16579b`); DS-119 UX changes ready for push and deploy.
-- Production checkout: `/opt/design-saga-git`; runtime/source commit `e3a855aba0ff48545c839da24d95ab584e8850e4` is deployed on `srv2020574.hstgr.cloud`.
+- Local checkout: `codex/backend-completion`; DS-120 implementation commit `c544d9e` is based on the deployed Claude/Codex integration `143c995`.
+- Production checkout: `/opt/design-saga-git`; runtime/source commit `143c995fb90bcc003d83510c3f7627148b709fee` is deployed on `srv2020574.hstgr.cloud` pending the guarded DS-120 release.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - SSH key access works. Caddy, web, backend, FerretDB and PostgreSQL are running; PostgreSQL, FerretDB, backend and web report healthy. Public `/` and `/api/` return 200; unauthenticated auth, site-visit, attendance-project, payroll-run and receivables routes return 401.
 - Verified backups were created immediately before and during deployment at `/opt/design-saga-backups/20261108T082420Z` and `/opt/design-saga-backups/20261108T082550Z`. The scheduled backup and monitor timers are active; the latest monitor result is successful.
 - Deployment used a SHA-256-verified Git bundle and the guarded updater. It fast-forwarded `c2f09bd` to `e3a855a`, rebuilt/recreated only backend and web, preserved the VPS-only Caddy files byte-for-byte, and produced no observed post-deploy backend 5xx/traceback signature.
 - Host log retention is now verified: journald is capped at 1 GB / 7 days; new Docker containers inherit 10 MB x 3-file rotation; an exact-path logrotate rule covers the three older containers without restarting them. Existing PostgreSQL/FerretDB logs were compressed from about 1.5 GB to 115 MB archived, disk use fell from 73% to 70%, and every container stayed healthy.
-- Current action: deploy DS-119 UX batch to gamaa.in; then continue with tenant management work.
+- Current action: document and deploy DS-120, repair the two exact `sample(Demo)` historical inconsistencies through audited application-safe paths, rerun production integrity, and live-check the three new PDF actions.
+
+### DS-120: Accounting consistency, finance documents and interrupted-reversal recovery (09/11)
+
+- **CDX-01 — one project collection figure**: project `money.billed_unpaid` and legacy `financials.collected/outstanding` now include receipts recorded against invoice-linked Collections Due rows. Direct invoice receipts and linked collections are combined once and capped at the invoice total; a historical paid invoice without `paid_amount` is treated as fully paid. Tenant and financial-read guards are unchanged.
+- **CDX-02 — three missing branded documents**: added tenant-branded payment receipt, purchase-order and client-statement PDFs. The routes reuse the existing scoped database, permissions, organisation branding, safe filenames and PDF preview component. Received Payments, Purchase Orders and Client Detail now expose the actions in their existing menus/header instead of adding duplicate modules.
+- **CDX-03 — consultancy contract test corrected**: the stale test now reflects the live letter-proposal model (`proposal.fee`); it no longer expects turnkey BOQ payment-plan/timeline fields on a consultancy proposal. Production behaviour was not changed.
+- **Historical QA root cause covered**: a regression test proves that when a payroll journal was already reversed but the payroll-run update was interrupted, retrying completes the run cancellation without posting a second reversal. Read-only production investigation isolated that exact state to one Demo payroll row; it is not present in the real Design Saga tenant.
+- **Demo payment metadata**: one Demo vendor settlement says bank transfer while its balanced journal explicitly uses Cash. Current validators already prevent recurrence. The safe historical repair is metadata-only (`payment_method=cash`) with an audit row; the journal amount/account must not be reposted or changed.
+- **Verified before deployment**: canonical backend gate **485 passed**; focused PDF/accounting/payroll tests passed; frontend ESLint, JSX undefined-name check, 5 logic tests and production build passed; `git diff --check` and tracked/Git-history secret scan passed. No dependency was added.
 
 ### DS-119: UX integration — enhanced tactile, login redesign, e2e harness root-cause fix (09/11)
 
@@ -369,7 +378,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | ACC-01 | P1 | `compute_invoice_totals` (`server.py`) rounds each line but sums unrounded amounts, adds tax to the unrounded subtotal, and uses binary-float `round()` (₹2.675 → ₹2.67): printed lines can fail to foot to subtotal/total | Deployed (DS-073; `e3a855a`) | Decimal ROUND_HALF_UP per line; subtotal = Σ rounded lines; total = subtotal + tax; only affects new/edited drafts |
 | ACC-02 | P1 | GST is one tax amount; no CGST/SGST vs IGST split, place of supply, tenant GSTIN/state (BR-016) | Decision Needed | Needs tenant state + client state fields and accountant sign-off on rounding |
 | ACC-03 | P1 | Run DS-072 `/api/accounting/integrity/source-links` on production and reconcile record by record | Live Verified 08/11 (`org_default` and `org_759bcccd654c`, all five checks zero) | Report only; no automatic repair |
-| ACC-09 | P1 | Historical payroll/vendor-payment rows booked to Cash with a non-cash method (DS-076 root cause) are not yet listed for correction | Live Verified 08/11 (zero mismatches in both Design Saga org records) | Add a method/account mismatch section to the DS-072 read-only report; correct record by record via reversal |
+| ACC-09 | P1 | Historical payroll/vendor-payment rows booked to Cash with a non-cash method (DS-076 root cause) are not yet listed for correction | Real Design Saga tenant clean; one Demo-only settlement metadata mismatch isolated 09/11, repair pending DS-120 deployment | Keep its balanced Cash journal; change the exact settlement metadata to Cash with an audit row, then rerun integrity |
 | ACC-04 | P1 | Decimal/minor-unit policy across PO, bill, commission, payroll, loans (floats with `round(x, 2)` throughout) | Deployed (DS-082; `e3a855a`) | Shared money helper adopted module by module after ACC-01 proves the pattern |
 | ACC-05 | P2 | TDS, commission tax treatment, credit notes (period close done in DS-111) | Decision Needed | Accountant policy first |
 | ACC-10 | P2 | Purge/archival of exported years: only after owner/CA retention decision, verified off-server backup (OPS-02) and restore drill | Decision Needed | Keep closed years read-only in place; no deletion of posted books |
@@ -380,7 +389,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| HR-01 | P1 | Live validation of payroll Cash/Bank posting, reversal/repost and monthly paid-leave/LOP | Deployed; live read-only journal/link/method integrity clean; authenticated mutation journey still pending | Covered by local tests; verify after deploy |
+| HR-01 | P1 | Live validation of payroll Cash/Bank posting, reversal/repost and monthly paid-leave/LOP | Current prevention deployed; one Demo-only interrupted status update isolated and covered by DS-120 regression, production repair pending | Retry the idempotent reversal workflow after backup; it must reuse the existing reversal and update the run once |
 | HR-02 | P2 | Statutory payroll (PF/ESI/PT/TDS), payslip delivery, bank files | Decision Needed | Scope decision |
 | HR-03 | P2 | Leave carry-forward/encashment rules | Decision Needed | Policy |
 
@@ -389,14 +398,14 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
 | PRJ-01 | P2 | Generic stages; no configurable architecture phase templates with fee/dates/deliverables | Deployed (DS-085; `e3a855a`) | Smallest slice: per-tenant phase template applied at project creation, editable |
-| PRJ-02 | P2 | Site diary / issue / snag with photo evidence and closure is missing (supervisors use tasks) | Tested (DS-116) | Snag list with issue/fix photos and verified closure; site diary covered by site visits (DS-110) |
+| PRJ-02 | P2 | Site diary / issue / snag with photo evidence and closure is missing (supervisors use tasks) | Deployed in current `143c995` (DS-116) | Snag list with issue/fix photos and verified closure; site diary covered by site visits (DS-110) |
 | PRJ-03 | P3 | Timesheets, capacity planning, planned-vs-actual hours | Confirmed gap | Later; depends on PRJ-01 |
 
 ### 5. CRM, clients, quotations, invoices and collections
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| CRM-01 | P2 | Lead → quotation → project chain not verified end to end on current code | Tested (DS-115) | Duplicate-project defect fixed; E2E added |
+| CRM-01 | P2 | Lead → quotation → project chain not verified end to end on current code | Deployed in current `143c995` (DS-115) | Duplicate-project defect fixed; E2E added |
 | CRM-02 | P3 | Duplicate lead merge, source attribution | Confirmed gap | Later |
 
 ### 6. Vendors, procurement, bills, payments and commissions
@@ -404,13 +413,13 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
 | VEN-01 | P1 | Live 3-way-match correction and vendor/project/report reconciliation | Deployed; live read-only source/journal integrity clean; authenticated mutation journey still pending | Verify after deploy |
-| VEN-02 | P3 | Bill creation discoverability from vendor and PO context (BR-027) | Confirmed UX | IA batch follow-up |
+| VEN-02 | P3 | Bill creation discoverability from vendor and PO context (BR-027) | Deployed in current `143c995` (DS-118) | Record vendor bill from received/partial PO row or detail panel |
 
 ### 7. Files, drawings, revisions, RFIs, submittals and approvals
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| DOC-01 | P2 | No drawing register (number, revision, issue purpose, supersession, transmittal) | Tested (DS-114) | Register + revisions + approvals + Excel; transmittal PDF still open |
+| DOC-01 | P2 | No drawing register (number, revision, issue purpose, supersession, transmittal) | Deployed in current `143c995` (DS-114) | Register + revisions + approvals + Excel; transmittal PDF remains a separate P3 enhancement |
 | DOC-02 | P3 | RFIs/submittals, client selections, change orders | Confirmed gap | Validate demand first |
 
 ### 8. Frontend information architecture and UI/UX
@@ -422,7 +431,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | UX-03 | P2 | Mobile drawer has no close button (only backdrop tap); `X` icon imported but unused | Deployed (DS-074; `e3a855a`) | Accessible close button |
 | UX-04 | P2 | Large flat dropdowns for project/client/vendor/employee/account (BR-029) | Deployed (DS-081; `e3a855a`) | Searchable combobox for high-volume selectors |
 | UX-05 | P2 | Form safety: double-submit, unsaved-change warning, field-level server errors (risk register "Audit") | Deployed (DS-084; `e3a855a`); unsaved-change and field-level errors remain a P3 follow-up | Shared form hooks, module by module |
-| UX-06 | P3 | Role-specific home (principal, PM, supervisor, accountant, HR, employee) | Confirmed gap | After IA batch |
+| UX-06 | P3 | Role-specific home (principal, PM, supervisor, accountant, HR, employee) | Deployed in current `143c995` (DS-118) | Permission-aware My day, sales/team and finance widgets |
 
 ### 9. Accessibility, responsive behaviour and browsers
 
@@ -442,7 +451,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 
 | ID | Sev | Item | Status | Solution |
 |---|---|---|---|---|
-| OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Runtime deployed at `6ec8745` on 09/11 via verified bundle; backend/web healthy and protected Caddy files preserved | Continue guarded bundle releases while provider outbound IPv4 remains unreliable |
+| OPS-01 | P0 | Deploy accumulated branch (`3b15e23` → current) | Runtime deployed at `143c995` on 09/11 via verified bundle; DS-120 is locally tested and next | Continue guarded bundle releases; back up first and preserve protected Caddy files |
 | OPS-02 | P1 | Encrypted off-server backup replication + alerting | Externally Blocked (destination/credentials) | Owner chooses provider |
 | OPS-03 | P1 | External alert delivery (uptime/5xx/TLS/disk/backup) | Externally Blocked | Owner chooses webhook/email target |
 | OPS-04 | P2 | Container image scanning, immutable release tags, CI approval gate | Deployed and live-verified at `6ec8745` | Pinned Trivy HIGH/CRITICAL gate, fresh `--pull` builds and revision-labelled immutable release tags |
