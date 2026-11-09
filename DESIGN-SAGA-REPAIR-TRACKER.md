@@ -325,7 +325,7 @@ Method: route-by-route read of the money screens (Accounting, Collections Due, R
 | SEC-02 | P1 | Default `Employee` and `Designer` roles hold `clients.read` + `leads.read` (`core/rbac.py`), so every employee sees all client contacts and the full sales pipeline | Decision Needed | Owner decides default visibility; if restricted, change defaults with a migration note for tenants that customised roles |
 | SEC-03 | P2 | `_ScopedColl.__getattr__` passes unwrapped methods (`estimated_document_count`, `bulk_write`, `watch`, ...) straight to the raw collection; no current caller, but a future one would read/write across tenants | Deployed (DS-073; `e3a855a`) | Fail closed for tenant-unsafe passthroughs; regression test |
 | SEC-04 | P2 | Admin sidebar entries gate on `role === "Admin"` instead of permission, so a tenant owner on a custom full-access role loses Company/Audit links while backend allows them | Deployed (DS-074; `e3a855a`) | Gate on permission + platform flag only |
-| SEC-05 | P2 | Secret inventory document (owner/purpose/rotation/revocation, never values) | Confirmed | Add `docs/runbooks/secret-inventory.md` |
+| SEC-05 | P2 | Secret inventory document (owner/purpose/rotation/revocation, never values) | Done (09/11) | `docs/runbooks/secret-inventory.md`; SEC-01 rotation row still pending owner |
 | SEC-06 | P2 | Object-level assignment visibility for invoices/quotations/clients is tenant-wide by permission design; needs explicit product rule per role | Decision Needed | Tie to SEC-02 decision |
 | SEC-07 | P3 | Server-side malware scanning and orphan-object reconciliation for uploads | Confirmed (defense-in-depth) | ClamAV sidecar or documented acceptance |
 
