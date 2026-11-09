@@ -113,6 +113,9 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
 
 function AppRouter() {
   const location = useLocation();
+  useEffect(() => {
+    if (!location.hash) window.scrollTo({ top: 0, behavior: "instant" });
+  }, [location.pathname]);
   if (location.hash?.includes("session_id=")) {
     return <AuthCallback />;
   }

@@ -42,7 +42,7 @@ export default function ActivityTimeline({ entityType, entityId }) {
   }, [entityType, entityId]);
 
   return (
-    <div className="border border-[var(--line)]" data-testid="activity-timeline">
+    <div className="border border-[var(--line)] rounded-lg overflow-hidden" data-testid="activity-timeline">
       <div className="p-4 border-b border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
         <ClockCounterClockwise size={14} />
         <span className="overline">ACTIVITY</span>

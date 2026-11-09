@@ -351,7 +351,7 @@ export default function Leads() {
 
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1" data-testid="lead-notes-list">
                 {notes.length === 0 && (
-                  <div className="text-xs text-[var(--ink-3)] py-3 text-center border border-dashed border-[var(--line)]">
+                  <div className="text-xs text-[var(--ink-3)] py-3 text-center border border-dashed border-[var(--line)] rounded-md">
                     No notes yet — every note you add is timestamped and kept in history.
                   </div>
                 )}

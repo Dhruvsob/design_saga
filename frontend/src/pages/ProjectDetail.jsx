@@ -734,5 +734,5 @@ function Row({ k, v }) {
 }
 
 function Empty({ text }) {
-  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] p-6 text-center">{text}</p>;
+  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] rounded-md p-6 text-center">{text}</p>;
 }

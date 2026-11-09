@@ -107,7 +107,7 @@ export default function MasterDataManager() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" data-testid="master-data-manager">
       {/* kind list */}
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-lg overflow-hidden">
         <div className="overline p-3 border-b border-[var(--line)] bg-[var(--surface-2)]">CONFIGURATION KINDS</div>
         {Object.entries(kinds).map(([k, label]) => (
           <button key={k} onClick={() => { setSelected(k); setEditingId(null); }}
@@ -125,17 +125,17 @@ export default function MasterDataManager() {
       {/* items */}
       <div className="lg:col-span-3 space-y-4">
         {err && (
-          <div className="border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)] flex items-center gap-2">
+          <div className="border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)] flex items-center gap-2 rounded-md">
             <Warning size={13} /> {err}
           </div>
         )}
         {notice && (
-          <div className="border border-[var(--success)] bg-[var(--success-soft)] px-3 py-2 text-sm text-[var(--success)] flex items-center gap-2">
+          <div className="border border-[var(--success)] bg-[var(--success-soft)] px-3 py-2 text-sm text-[var(--success)] flex items-center gap-2 rounded-md">
             <Check size={13} /> {notice}
           </div>
         )}
         {isSystem && (
-          <div className="border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--ink-2)]">
+          <div className="border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--ink-2)] rounded-md">
             System pipeline — order defines the workflow. Values can be renamed, reordered and deactivated but not deleted.
           </div>
         )}
@@ -148,7 +148,7 @@ export default function MasterDataManager() {
           </button>
         </form>
 
-        <div className="border border-[var(--line)]">
+        <div className="border border-[var(--line)] rounded-lg overflow-hidden">
           <table className="w-full">
             <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr className="text-left">
