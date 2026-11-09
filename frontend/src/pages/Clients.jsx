@@ -105,7 +105,7 @@ export default function Clients() {
           <button
             onClick={() => { setShowForm(!showForm); setEditing(null); setForm(EMPTY); }}
             className="btn-primary" data-testid="new-client-btn">
-            <Plus size={14} /> {showForm ? "Cancel" : "New client"}
+            {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New client"}</>}
           </button>
         )}
       </PageHero>

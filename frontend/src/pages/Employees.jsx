@@ -4,7 +4,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { dateForInput, formatDate, statusLabel } from "../lib/format";
-import { Plus, ArrowRight, MagnifyingGlass, UserMinus } from "@phosphor-icons/react";
+import { Plus, ArrowRight, MagnifyingGlass, UserMinus, X } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
@@ -102,7 +102,7 @@ export default function Employees() {
       >
         {canCreate && (
           <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-employee-btn">
-            <Plus size={14} /> {showForm ? "Cancel" : "New employee"}
+            {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New employee"}</>}
           </button>
         )}
       </PageHero>

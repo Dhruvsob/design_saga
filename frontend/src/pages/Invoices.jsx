@@ -296,7 +296,7 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
       <PageHero title={docType === "quotation" ? "Quotations" : "Invoices"} count={loaded ? rows.length : undefined}
         kicker={docType === "quotation" ? undefined : "Invoices are documents for your client; the status is just for you. To follow up on money, use ⋮ › Add to Collections Due — reminders and payments live there."}>
         {canCreate && <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(initialForm(docType)); }} className="btn-primary" data-testid={`new-${docType}-btn`}>
-          <Plus size={14} /> {showForm ? "Cancel" : `New ${docType}`}
+          {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {`New ${docType}`}</>}
         </button>}
       </PageHero>
       {docType === "invoice" && <MoneyInTabs />}

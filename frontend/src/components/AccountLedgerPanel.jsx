@@ -191,7 +191,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
               <button onClick={() => setShowAdd((s) => !s)}
                 className={`btn-primary text-xs ${account.type === "income" ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`}
                 data-testid="ledger-quickadd-btn">
-                <Plus size={13} /> {showAdd ? "Cancel" : `Record ${account.type}`}
+                {showAdd ? <><X size={13} /> Cancel</> : <><Plus size={13} /> {`Record ${account.type}`}</>}
               </button>
             )}
           </div>

@@ -117,7 +117,7 @@ export default function RBACAdmin() {
           <Sliders size={14} /> Dropdown lists (Master Data)
         </Link>
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary" data-testid="create-user-btn">
-          <UserPlus size={14} /> {showCreate ? "Cancel" : "Create user"}
+          {showCreate ? "Cancel" : <><UserPlus size={14} /> Create user</>}
         </button>
       </PageHero>
 

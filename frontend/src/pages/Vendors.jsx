@@ -103,7 +103,7 @@ export default function Vendors() {
             className="btn-primary"
             data-testid="new-vendor-btn"
           >
-            <Plus size={14} /> {showForm ? "Cancel" : "New vendor"}
+            {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New vendor"}</>}
           </button>
         )}
       </PageHero>

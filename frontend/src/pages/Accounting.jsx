@@ -1183,7 +1183,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
           <button type="button" className="btn-primary" onClick={() => {
             setShowPlan(!showPlan); setEditingRow(null); setPlan(emptyPlan);
           }}>
-            <Plus size={13} /> {showPlan ? "Cancel" : "Add expected collection"}
+            {showPlan ? <><X size={13} /> Cancel</> : <><Plus size={13} /> {"Add expected collection"}</>}
           </button>
         </div>
       </div>
@@ -1417,7 +1417,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
       <div className="flex justify-end">
         <button onClick={() => setShowForm(showForm && showForm.kind === kind ? false : { kind })}
           className={`btn-primary ${kind === "income" ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`} data-testid={`${kind}-new-btn`}>
-          <Plus size={14} /> {showForm && showForm.kind === kind ? "Cancel" : `New ${kind}`}
+          {showForm && showForm.kind === kind ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {`New ${kind}`}</>}
         </button>
       </div>
 
@@ -1688,7 +1688,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
           setForm({ name: "", type: "expense", code: "", is_bank: false, opening_balance: "" });
           setShowForm(!showForm);
         }} className="btn-primary" data-testid="new-account-btn">
-          <Plus size={14} /> {showForm ? "Cancel" : "New account"}
+          {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New account"}</>}
         </button>
       </div>
       {showForm && (

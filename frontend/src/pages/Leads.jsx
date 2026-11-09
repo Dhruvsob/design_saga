@@ -184,7 +184,7 @@ export default function Leads() {
         count={leads.length}
       >
         {canCreate && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-lead-btn">
-          <Plus size={14} /> {showForm ? "Cancel" : "New lead"}
+          {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New lead"}</>}
         </button>}
       </PageHero>
 

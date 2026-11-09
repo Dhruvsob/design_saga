@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { statusLabel } from "../lib/format";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Trash, X } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
@@ -44,6 +44,7 @@ export default function QuotationsAdv() {
   const [form, setForm] = useState({ type: "", project_title: "", client_id: "", project_id: "", project_location: "", area_sqft: "" });
   const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const load = async () => {
     const [r, c, p, t] = await Promise.all([
@@ -56,6 +57,16 @@ export default function QuotationsAdv() {
     setLoaded(true);
     setClients(c.data);
     setProjects(p.data);
+    // Opened from a client or project ("New quotation"): start the form filled in.
+    const wantClient = searchParams.get("client");
+    const wantProject = searchParams.get("project");
+    if ((wantClient || wantProject) && hasPerm("quotations.create")) {
+      const proj = (p.data || []).find((x) => x.id === wantProject);
+      const cli = (c.data || []).find((x) => x.id === (wantClient || proj?.client_id));
+      setForm((f) => ({ ...f, client_id: cli?.id || "", client_name: cli?.name, project_id: proj?.id || "",
+        project_title: f.project_title || proj?.name || "" }));
+      setShowForm(true);
+    }
     const allowed = (t.data.allowed_types || ["turnkey", "consultancy"]).filter((x) => NEW_TYPE_LABELS[x]);
     setAllowedTypes(allowed);
     if (allowed.length === 1) setForm((f) => ({ ...f, type: allowed[0] }));
@@ -91,7 +102,7 @@ export default function QuotationsAdv() {
         kicker="Design proposals and turnkey quotations, with versions, approval and a branded PDF.">
         <div className="flex items-center gap-3">
           {hasPerm("quotations.create") && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-quotation-btn">
-            <Plus size={14} /> {showForm ? "Cancel" : "New quotation"}
+            {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New quotation</>}
           </button>}
         </div>
       </PageHero>
@@ -182,7 +193,7 @@ export default function QuotationsAdv() {
             {loaded && rows.length === 0 && (
               <EmptyRow cols={8} icon={FilePdf} title="No quotations yet"
                 hint="Create a design proposal or a turnkey BOQ quotation and download it as a branded PDF."
-                actionLabel={hasPerm("quotations.create") ? "New quotation" : undefined}
+                actionLabel={hasPerm("quotations.create") && !showForm ? "New quotation" : undefined}
                 onAction={() => { setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
             )}
           </tbody>

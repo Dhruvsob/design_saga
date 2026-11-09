@@ -15,7 +15,7 @@ import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
-  X, Warning, Trash, UsersThree, CaretRight,
+  X, Warning, Trash, UsersThree, CaretRight, Check,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
@@ -293,6 +293,8 @@ export default function ProjectDetail() {
             <RowActions label={p.name} testid="project-more-actions" actions={[
               { label: p.archived ? "Restore project" : "Archive project", icon: p.archived ? ArrowCounterClockwise : Archive,
                 onSelect: toggleArchive, testid: "project-archive-btn" },
+              { label: "New quotation for this project", icon: Plus, hidden: !hasPerm("quotations.create"),
+                onSelect: () => navigate(`/quotations?project=${p.id}`) },
               { label: "Reset client portal link", icon: ArrowsClockwise, hidden: !p.share_token, divider: true,
                 onSelect: rotateShare },
             ]} />
@@ -300,30 +302,35 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* Stage tracker */}
-      <div className="border border-[var(--line)] p-6 bg-white" data-testid="stage-tracker">
-        <div className="overline mb-4">LIFECYCLE STAGE</div>
-        <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-1">
+      {/* Stage tracker: one progress line; click a stage to move the project */}
+      <div className="border border-[var(--line)] bg-white px-5 py-4" data-testid="stage-tracker">
+        <div className="flex items-center justify-between mb-3">
+          <div className="overline">LIFECYCLE</div>
+          <div className="text-xs text-[var(--ink-2)]">Stage {currentIdx + 1} of {STAGES.length} · <span className="font-semibold text-[var(--ink)]">{STAGES[currentIdx] || p.stage}</span></div>
+        </div>
+        <ol className="flex flex-wrap lg:flex-nowrap items-start gap-y-3" aria-label="Project stages">
           {STAGES.map((s, i) => {
             const done = i < currentIdx;
             const current = i === currentIdx;
             return (
-              <button
-                key={s}
-                onClick={() => setStage(s)}
-                className={`p-2 text-[10px] font-mono uppercase tracking-wider border text-left transition ${
-                  current ? "bg-[var(--accent)] text-white border-[var(--accent)]"
-                  : done ? "bg-[var(--ink)] text-white border-[var(--ink)]"
-                  : "bg-white text-[var(--ink-2)] border-[var(--line)] hover:border-[var(--ink)]"
-                }`}
-                data-testid={`stage-${s}`}
-              >
-                <div className="opacity-60">STEP {i + 1}</div>
-                <div className="font-semibold">{s}</div>
-              </button>
+              <li key={s} className="flex-1 min-w-[96px] relative">
+                {i > 0 && <span aria-hidden="true" className={`hidden lg:block absolute top-[11px] right-1/2 w-full h-[2px] ${i <= currentIdx ? "bg-[var(--accent)]" : "bg-[var(--line)]"}`} />}
+                <button type="button" onClick={() => setStage(s)} data-testid={`stage-${s}`}
+                  aria-current={current ? "step" : undefined}
+                  title={current ? "Current stage" : `Move project to ${s}`}
+                  className="relative z-[1] w-full flex flex-col items-center gap-1.5 group">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold border transition ${
+                    current ? "bg-[var(--accent-strong)] border-[var(--accent-strong)] text-white ring-4 ring-[var(--accent-ring)]"
+                    : done ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+                    : "bg-white border-[var(--line-strong)] text-[var(--ink-3)] group-hover:border-[var(--accent-strong)]"}`}>
+                    {done ? <Check size={11} weight="bold" /> : i + 1}
+                  </span>
+                  <span className={`text-[11px] leading-tight text-center px-1 ${current ? "font-semibold text-[var(--ink)]" : done ? "text-[var(--ink-2)]" : "text-[var(--ink-3)] group-hover:text-[var(--ink)]"}`}>{s}</span>
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ol>
       </div>
 
       {/* Tabs: five groups; the active group's sections underneath */}
@@ -461,7 +468,7 @@ export default function ProjectDetail() {
           {hasPerm("finance.read") && (
             <div className="flex justify-end">
               <button onClick={() => setShowMsForm(!showMsForm)} className="btn-primary" data-testid="add-milestone-btn">
-                <Plus size={14} /> {showMsForm ? "Cancel" : "Add milestone"}
+                {showMsForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"Add milestone"}</>}
               </button>
             </div>
           )}

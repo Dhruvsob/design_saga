@@ -237,7 +237,7 @@ export default function TasksBoard() {
           <DownloadSimple size={14} /> Export CSV
         </button>
         {canCreateTask && <button onClick={() => setShowForm((s) => !s)} className="btn-primary" data-testid="new-task-btn">
-          <Plus size={14} /> {showForm ? "Cancel" : "New task"}
+          {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New task"}</>}
         </button>}
       </PageHero>
 

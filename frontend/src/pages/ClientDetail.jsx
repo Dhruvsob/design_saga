@@ -7,7 +7,7 @@ import CommentsPanel from "../components/CommentsPanel";
 import ActivityTimeline from "../components/ActivityTimeline";
 import { formatDate, formatINR, statusLabel } from "../lib/format";
 import {
-  ArrowLeft, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X, Warning,
+  ArrowLeft, PencilSimple, Archive, ArrowCounterClockwise, CaretRight, X, Warning, Plus,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 
@@ -118,7 +118,12 @@ export default function ClientDetail() {
           {c.address && <div className="mt-1 text-sm text-[var(--ink-2)]">{c.address}</div>}
           {c.notes && <p className="mt-2 text-sm text-[var(--ink-2)] max-w-2xl border-l-2 border-[var(--line)] pl-3">{c.notes}</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {hasPerm("quotations.create") && !c.archived && (
+            <button onClick={() => navigate(`/quotations?client=${c.id}`)} className="btn-primary" data-testid="client-new-quotation">
+              <Plus size={14} /> New quotation
+            </button>
+          )}
           {hasPerm("clients.update") && (
             <>
               <button onClick={openEdit} className="btn-ghost" data-testid="client-edit-btn">

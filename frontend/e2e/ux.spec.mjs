@@ -366,3 +366,21 @@ test("My day lists my own overdue task first; staff dashboard has no sales or te
   await expect(staff.getByTestId("add-lead-btn")).toHaveCount(0);
   await ctx.dispose();
 });
+
+test("New quotation from a client opens the form with that client chosen; project lifecycle moves by clicking a stage", async ({ page }) => {
+  const { api: mkApi, json: j, uid: u } = await import("./helpers.mjs");
+  const ctx = await mkApi("admin");
+  const client = await j(ctx.post("/api/clients", { data: { name: `Quote ${u()}`, phone: "9825022222" } }));
+  const project = await j(ctx.post("/api/projects", { data: { name: `Stage ${u()}`, client_id: client.id, engagement_type: "consultancy" } }));
+  await ctx.dispose();
+  await page.goto(`/clients/${client.id}`);
+  await expect(page.getByTestId("client-contact")).toContainText("WhatsApp", { timeout: 20000 });
+  await page.getByTestId("client-new-quotation").click();
+  await expect.poll(() => page.url()).toContain(`/quotations?client=${client.id}`);
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await expect(page.locator("main")).toContainText(client.name);
+  await page.goto(`/projects/${project.id}`);
+  await page.getByTestId("stage-Concept").click();
+  await expect(page.getByTestId("stage-tracker")).toContainText("Stage 2 of", { timeout: 20000 });
+  await expect(page.getByTestId("stage-Concept")).toHaveAttribute("aria-current", "step");
+});

@@ -47,21 +47,43 @@ brand tokens unchanged (`src/index.css`: #8B7F6A, #76705E, #F5F4F0, #FAF9F6, #8B
 | PDF-02 | Turnkey/consultancy quotation PDF | Black table headers (off-brand), payment-plan amounts as bare "0", "LOCATION -", "AREA 0 sq.ft", signature forced onto an almost empty extra page | Brand-colour headers; amounts as Rs. with Indian grouping or "-"; empty cover rows hidden; signature follows terms when it fits |
 | PDF-03 | Payment reminder PDF | "FOR -" when no project | Shows the collection title instead |
 | UX-12 | Vendors | "Contractors / Suppliers" cards were almost always 0 | "With bills to pay" count; three cards |
+| UX-16 | All forms | 13 "open form" buttons showed a **+** next to "Cancel" | Cancel shows ✕; the + only on the create action |
+| UX-17 | Whole app | Owner shared five reference boards (soft/tactile "neo" UI kits) and asked for that detailing in our brown/cream tone across the ERP | **Soft tactile detailing**, CSS only, brand colours unchanged (see §3a) |
 | PDF-04 | Vendor incentive statement PDF | Two-line title, period printed twice, direct incentives as "-, -, Rs. 0.00" | "Incentive statement"; period once; Date / From ("Direct incentive" or "Bill …") / Bill value columns |
 
 PDF changes are presentation-only (labels, colours, layout); no amount, query or calculation changed.
 They touch shared backend files — `server.py` (invoice + quotation PDF builders), `routes/money_in.py` (`generate_reminder_pdf`), `routes/finance_extras.py` (statement) — please merge with care (CDX-05).
+
+### 3a. Soft tactile detailing (UX-17, owner reference boards 09/11/2026)
+
+Taken from the references: layered soft shadows instead of hard borders, a light top edge on raised surfaces, sunken inputs that glow on focus, buttons that lift on hover and press in, rounded floating menus/dialogs/toasts, a quiet background wash, and soft table-row states.
+Not taken: the sage/copper palettes, neumorphic low-contrast text, and heavy embossing that hurts legibility on dense finance tables.
+
+All of it lives in the `SOFT TACTILE DETAILING` block at the end of `src/index.css` (no component changed):
+
+| Token / rule | Use |
+|---|---|
+| `--elev-1/2/3` | Warm shadows (rgba of the brand brown), resting / hover / floating |
+| `--edge-light` | 1 px inner highlight on raised surfaces |
+| `--sunken`, `--glow` | Inputs: pressed-in at rest, soft taupe ring on focus |
+| background | Two faint radial washes over `--app` (#FAF9F6), fixed |
+| `.card-flat`, table frames | Rounded, `--elev-1` + edge light |
+| `.btn-primary` | #827B68 → #76705E gradient, lifts on hover, presses in on click |
+| `.btn-ghost`, chips, pill tabs | Soft depth; selected rows get the accent tint and an inset bar |
+| menus, dialogs, toasts | `--elev-3`, 14–16 px radius, dialog backdrop blur 3 px |
+
+Brand tokens are unchanged. `prefers-reduced-motion` turns off the hover lift.
 
 ## 4. Open frontend work (next batches, in order)
 
 | ID | Pri | Item |
 |---|---|---|
 | UX-10 | — | Decided: keep the Money In strip inside Accounting › Collections Due. Collections Due lives in Accounting and the strip is the only path between the four Money In screens, so it is a cross-link, not a duplicate engine |
-| UX-11 | P1 | Quotation builder: client picker + "New quotation for this client" from Client page (`/quotations?client=`) |
+| UX-11 | done | "New quotation" on the Client page and in the Project ⋮ menu; `/quotations?client=` / `?project=` open the form pre-filled |
 | UX-12 | done | Vendors summary: Contractors/Suppliers cards (usually 0) replaced by "With bills to pay"; three cards. "Incentive pending" needs a list field (future CDX) |
-| UX-13 | P2 | Tables: unify row height, numeric font, sticky first column on wide finance tables; drawer pattern for record details |
-| UX-14 | P2 | Motion: consistent 150–200 ms ease on drawers/menus/tab change (respect reduced-motion, already global) |
-| UX-15 | P2 | Lead stage stepper and project lifecycle stepper share one component; mono uppercase labels → sentence case |
+| UX-13 | P2 | Tables: unify row height, numeric font (money currently JetBrains Mono with slashed zero — decide with owner before changing the established look), sticky first column on wide finance tables |
+| UX-14 | done | One entrance for every custom dialog (backdrop fade 140 ms, panel lift 180 ms), button press feedback, row-hover transition; reduced-motion respected. Tab-content transitions intentionally not added (data screens should switch instantly) |
+| UX-15 | done (project) | Project lifecycle is a progress line: numbered dots, ticks for finished stages, sentence-case labels, "Stage 4 of 9"; connectors on wide screens only. Leads keep their kanban (stages are columns there) |
 | PDF-10 | P1 | Payment receipt, purchase-order and client/account statement PDFs need backend endpoints (CDX-02); templates will reuse `core/pdf_brand.py` letterhead/table/signature helpers |
 
 ## 5. Codex handoff (backend contracts needed)
@@ -88,3 +110,7 @@ E2E_BASE_URL=http://127.0.0.1:5174 node e2e/tools/pdf-samples.mjs <outDir>      
 - Backend PDF-related tests: 41 passed; 1 pre-existing failure (CDX-03) also fails on `e3ce32b`.
 - Playwright desktop + mobile (phases, drawings, snags, site-visits, ux, smoke, a11y, navigation, pdf, collections, crm-chain): 82 passed, 15 intentional skips, 2 timeouts that passed on rerun (clients paging, Saturday holidays).
 - `ux-sweep.mjs` after the batch: no page/console errors, no horizontal overflow at 390 px.
+
+Batch 2 (UX-11, UX-14, UX-15, UX-16, UX-17):
+- Lint, JSX scan, frontend logic tests, production build: clean.
+- Playwright desktop + mobile (ux, smoke, a11y, navigation, forms, phases, proposal, crm-chain, drawings, snags, money, procurement-chain, pdf, collections): 92 passed, 23 intentional skips. 2 failures were environmental: the 5-minute idle PIN lock appeared mid-run (the failure screenshot is the lock screen) and the known Saturday-holidays mongod stall. Both, plus the 5 serial tests that did not run after the first one, passed on a rerun on their own (17/17 desktop ux, 1/1 mobile Saturdays).

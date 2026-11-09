@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
-import { Plus, ArrowRight, CaretRight, MagnifyingGlass, SquaresFour, ListBullets, PushPin, PencilSimple, Archive } from "@phosphor-icons/react";
+import { Plus, ArrowRight, CaretRight, MagnifyingGlass, SquaresFour, ListBullets, PushPin, PencilSimple, Archive, X } from "@phosphor-icons/react";
 import RowActions from "../components/RowActions";
 import { confirmAction } from "../lib/confirm";
 import { toast } from "sonner";
@@ -134,7 +134,7 @@ export default function Projects() {
         count={projects.length}
       >
         {canCreate && <button onClick={() => setShowForm(!showForm)} className="btn-primary" data-testid="new-project-btn">
-          <Plus size={14} /> {showForm ? "Cancel" : "New project"}
+          {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New project"}</>}
         </button>}
       </PageHero>
 

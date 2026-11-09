@@ -11,8 +11,7 @@ import {
   IdentificationCard, CurrencyInr, Plus, Trash, FileText, Gauge, Receipt,
   PaperPlaneTilt, ShieldCheck, Notepad, Certificate, Wrench,
   Handshake, Percent, TrendUp, DownloadSimple, PencilSimple, ArrowCounterClockwise,
-  Archive,
-} from "@phosphor-icons/react";
+  Archive, X } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
@@ -600,7 +599,7 @@ function Bills({ v, accounts, purchaseOrders, initialPoId, canBill, canEdit, can
       {canBill && (
         <div>
           <button onClick={() => setOpen(!open)} className="btn-primary" data-testid="new-bill-btn">
-            <Plus size={14} /> {open ? "Cancel" : "Record bill"}
+            {open ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"Record bill"}</>}
           </button>
         </div>
       )}
@@ -787,7 +786,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
       {canBill && (
         <div>
           <button onClick={() => setOpen(!open)} className="btn-primary" data-testid="new-payment-btn">
-            <Plus size={14} /> {open ? "Cancel" : "Record payment"}
+            {open ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"Record payment"}</>}
           </button>
           {!canBill && (
             <span className="text-xs text-[var(--ink-3)] ml-2">Only finance roles can record payments.</span>
@@ -1275,7 +1274,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
       {canReceive && (
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setOpen(!open)} className="btn-primary" data-testid="receive-cm-btn">
-            <Plus size={14} /> {open ? "Cancel" : "Record vendor incentive received"}
+            {open ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"Record vendor incentive received"}</>}
           </button>
           <button onClick={downloadStatementPdf} className="btn-ghost" data-testid="cm-statement-pdf-btn">
             <DownloadSimple size={13} /> Statement PDF

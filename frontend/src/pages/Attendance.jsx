@@ -611,7 +611,7 @@ export default function Attendance() {
               <Clock size={14} /> {showCorrForm ? "Cancel" : "Request correction"}
             </button>
             <button onClick={() => { setShowLeaveForm(!showLeaveForm); setShowCorrForm(false); }} className="btn-primary" data-testid="new-leave-btn">
-              <Plus size={14} /> {showLeaveForm ? "Cancel" : "Apply leave"}
+              {showLeaveForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"Apply leave"}</>}
             </button>
           </div>
           {showLeaveForm && (
