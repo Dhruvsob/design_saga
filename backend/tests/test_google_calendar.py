@@ -168,6 +168,15 @@ def test_calendar_sync_excludes_inactive_and_unapproved_users():
     }
 
 
+def test_default_org_calendar_sync_includes_legacy_unstamped_users():
+    query = gc._active_user_filter("org_default", "legacy_user")
+    assert query["$and"][1]["user_id"] == "legacy_user"
+    scope = query["$and"][0]["$or"]
+    assert {"org_id": "org_default"} in scope
+    assert {"org_id": {"$exists": False}} in scope
+    assert {"org_id": None} in scope
+
+
 def test_assignee_copy_does_not_send_duplicate_google_invites(monkeypatch):
     attendee_lookup = AsyncMock(return_value=["person@example.com"])
     monkeypatch.setattr(gc, "_attendee_emails", attendee_lookup)

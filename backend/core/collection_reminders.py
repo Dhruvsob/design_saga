@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 from core.db import db
 from core.helpers import iso_now, new_id, next_sequence
 from core.scoped_db import current_org_id, sdb
+from core.tenancy import scoped_org_query
 
 REPEAT_CHOICES = ("none", "daily", "weekly")
 MAX_REPEATS = 12
@@ -97,8 +98,10 @@ async def _finance_owner_user_ids(org_id: str) -> list[str]:
     """
     ids = []
     async for u in db.users.find(
-            {"org_id": org_id, "role": {"$in": ["Admin", "Director"]},
-             "is_active": {"$ne": False}}, {"_id": 0, "user_id": 1}):
+            scoped_org_query(org_id, {
+                "role": {"$in": ["Admin", "Director"]},
+                "is_active": {"$ne": False},
+            }), {"_id": 0, "user_id": 1}):
         ids.append(u["user_id"])
     return ids
 

@@ -6,6 +6,7 @@ common filters.
 """
 from .db import db
 from .helpers import iso_now, now_utc
+from .tenancy import scoped_org_query
 
 # (collection, index_keys, opts)
 _INDEXES = [
@@ -227,8 +228,10 @@ async def _migrate_collection_calendar_privacy():
         if org_id not in owner_cache:
             owner_cache[org_id] = [
                 row["user_id"] async for row in db.users.find(
-                    {"org_id": org_id, "role": {"$in": ["Admin", "Director"]},
-                     "is_active": {"$ne": False}},
+                    scoped_org_query(org_id, {
+                        "role": {"$in": ["Admin", "Director"]},
+                        "is_active": {"$ne": False},
+                    }),
                     {"_id": 0, "user_id": 1},
                 )
             ]
