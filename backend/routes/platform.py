@@ -313,6 +313,33 @@ async def set_org_subscription(org_id: str, payload: OrgSubscriptionIn, request:
     return {"org_id": org_id, "subscription": sub, "state": subscription_state(fresh)}
 
 
+# ------------------------------------------------------------------
+# MODULE TOGGLES
+# ------------------------------------------------------------------
+class OrgModulesIn(BaseModel):
+    modules: dict  # e.g. {"accounting": False, "crm": True}
+
+
+@router.patch("/orgs/{org_id}/modules")
+async def set_org_modules(org_id: str, payload: OrgModulesIn, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    """Platform owner toggles individual ERP modules on/off for a tenant."""
+    sa = await require_super_admin(request, session_token, authorization)
+    org = await get_org(org_id)
+    if not org:
+        raise HTTPException(404, "Organisation not found")
+    current_modules = (org.get("features") or {}).get("modules") or {}
+    new_modules = {**current_modules, **{k: bool(v) for k, v in payload.modules.items()}}
+    await db.organizations.update_one(
+        {"org_id": org_id},
+        {"$set": {"features.modules": new_modules, "updated_at": iso_now()}}
+    )
+    await audit(sa, "org.modules_update", target=org_id, target_type="org",
+                meta={"changes": {k: v for k, v in payload.modules.items()}})
+    return {"ok": True, "modules": new_modules}
+
+
 @router.delete("/orgs/{org_id}")
 async def delete_org(org_id: str, request: Request,
                      purge: bool = False,
