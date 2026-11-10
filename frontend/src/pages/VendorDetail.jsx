@@ -530,7 +530,7 @@ function Ledger({ data }) {
         <Kpi label="Total paid" value={INR(data.total_paid)} />
         <Kpi label="Closing balance" value={INR(data.outstanding)} accent={data.outstanding > 0} />
       </div>
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -705,7 +705,7 @@ function Bills({ v, accounts, purchaseOrders, initialPoId, canBill, canEdit, can
         </form>
       )}
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -878,7 +878,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
         </form>
       )}
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -1364,7 +1364,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
         </form>
       )}
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -1404,7 +1404,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
       </div>
 
       {(ledger.receipts || []).length > 0 && (
-        <div className="border border-[var(--line)]" data-testid="commission-receipts">
+        <div className="border border-[var(--line)] rounded-md overflow-hidden" data-testid="commission-receipts">
           <div className="overline px-3 pt-3">RECEIPT HISTORY</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="text-[10px] font-mono uppercase text-[var(--ink-3)]">

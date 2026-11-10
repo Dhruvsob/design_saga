@@ -567,7 +567,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       <div className="overline mb-2">LINE ITEMS</div>
-      <div className="border border-[var(--line)] mb-6 overflow-x-auto">
+      <div className="border border-[var(--line)] mb-6 overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr className="text-left">
             <Th>Category</Th><Th>Description</Th><Th>Amount</Th><Th>Receipt</Th>
@@ -596,7 +596,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
           <div className="overline mb-2">APPROVAL TRAIL</div>
           <div className="space-y-2">
             {exp.approval_trail.map((t, i) => (
-              <div key={i} className="border border-[var(--line)] p-2 text-xs">
+              <div key={i} className="border border-[var(--line)] p-2 text-xs rounded-md">
                 <div className="font-mono">{(t.at || "").slice(0,16)} · {t.actor_name || t.actor} ({t.actor_role || "system"})</div>
                 <div><b>{t.decision}</b> {t.comment && `— ${t.comment}`}</div>
               </div>

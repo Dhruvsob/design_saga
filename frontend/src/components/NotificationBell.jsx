@@ -161,7 +161,7 @@ export default function NotificationBell() {
       {open && (
         <div
           data-testid="notif-panel"
-          className="absolute right-0 mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[520px] bg-white border border-[var(--line)] shadow-xl z-50 flex flex-col"
+          className="absolute right-0 mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[520px] bg-white border border-[var(--line)] shadow-xl z-50 flex flex-col rounded-lg overflow-hidden"
         >
           {/* header */}
           <div className="p-4 border-b border-[var(--line)] flex items-center justify-between">

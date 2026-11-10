@@ -641,7 +641,7 @@ export default function Attendance() {
               <button className="btn-primary md:col-span-4" data-testid="corr-submit"><PaperPlaneRight size={14} /> Submit correction</button>
             </form>
           )}
-          <div className="border border-[var(--line)] overflow-x-auto">
+          <div className="border border-[var(--line)] overflow-x-auto rounded-md">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                 <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
@@ -705,7 +705,7 @@ export default function Attendance() {
           {monthlyView === "grid" ? (
             <MonthlyGrid monthly={monthly} ym={ym} />
           ) : (
-            <div className="border border-[var(--line)] overflow-x-auto table-scroll">
+            <div className="border border-[var(--line)] overflow-x-auto table-scroll rounded-md">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                   <tr>
@@ -790,7 +790,7 @@ function MonthlyGrid({ monthly, ym }) {
           </span>
         ))}
       </div>
-      <div className="border border-[var(--line)] overflow-x-auto table-scroll" data-testid="monthly-grid">
+      <div className="border border-[var(--line)] overflow-x-auto table-scroll rounded-md" data-testid="monthly-grid">
         <table className="text-xs border-collapse">
           <thead>
             <tr className="bg-[var(--surface-2)]">
@@ -1362,7 +1362,7 @@ function EmployeeSetupCard() {
                   data-testid={`weekly-off-${d.v}`}>{d.l}</button>
               ))}
               <button type="button" onClick={() => setCfg({ ...cfg, weekly_offs: null })}
-                className="px-3 py-1.5 text-xs font-mono border border-[var(--line)] text-[var(--ink-3)]">
+                className="px-3 py-1.5 text-xs font-mono border border-[var(--line)] text-[var(--ink-3)] rounded-md">
                 Use policy
               </button>
             </div>

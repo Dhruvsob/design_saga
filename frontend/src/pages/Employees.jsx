@@ -159,7 +159,7 @@ export default function Employees() {
           {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-14 w-full" />)}
         </div>
       ) : (
-        <div className="border border-[var(--line)]">
+        <div className="border border-[var(--line)] rounded-md overflow-hidden">
           <div className="overflow-x-auto"><table className="w-full">
             <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr className="text-left">

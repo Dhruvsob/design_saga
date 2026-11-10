@@ -152,7 +152,7 @@ export default function Clients() {
         </label>
       </div>
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">

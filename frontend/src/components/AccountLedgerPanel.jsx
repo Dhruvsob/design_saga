@@ -197,7 +197,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
           </div>
 
           {showAdd && canQuickAdd && (
-            <div className="p-3 bg-[var(--surface-2)] border border-[var(--line)]" data-testid="ledger-quickadd-form">
+            <div className="p-3 bg-[var(--surface-2)] border border-[var(--line)] rounded-md" data-testid="ledger-quickadd-form">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                 <input type="number" min="0" step="0.01" placeholder="Amount" className="input-flat" value={addForm.amount}
                   onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })} data-testid="ledger-add-amount" />
