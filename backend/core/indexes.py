@@ -98,8 +98,8 @@ _INDEXES = [
     ("ai_messages",        [("org_id", 1), ("user_id", 1), ("session_id", 1)], {}),
     ("google_calendar_connections", [("org_id", 1), ("user_id", 1)],
                             {"name": "google_calendar_org_user_unique", "unique": True}),
-    ("google_calendar_connections", [("org_id", 1), ("connected_email", 1)],
-                            {"name": "google_calendar_org_email_unique", "unique": True,
+    ("google_calendar_connections", [("connected_email", 1)],
+                            {"name": "google_calendar_email_unique", "unique": True,
                              "sparse": True}),
     ("google_oauth_states", [("state_hash", 1)],
                             {"name": "google_oauth_state_unique", "unique": True}),
@@ -198,6 +198,8 @@ async def _migrate_google_calendar_ownership():
     info = await connections.index_information()
     if "google_calendar_org_unique" in info:
         await connections.drop_index("google_calendar_org_unique")
+    if "google_calendar_org_email_unique" in info:
+        await connections.drop_index("google_calendar_org_email_unique")
     # Legacy rows had no owner and cannot be processed safely. A personal sync
     # recreates them for the owning user without touching ERP or Google data.
     await db.google_calendar_sync_queue.delete_many({"user_id": {"$exists": False}})

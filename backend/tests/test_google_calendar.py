@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 import httpx
 
@@ -21,6 +22,40 @@ def test_token_encryption_requires_real_secret(monkeypatch):
     monkeypatch.setenv("GOOGLE_CALENDAR_ENCRYPTION_KEY", "short")
     with pytest.raises(gc.GoogleCalendarError):
         gc.encrypt_token("refresh-secret")
+
+
+def test_google_email_cannot_be_reused_by_another_erp_identity(monkeypatch):
+    connections = SimpleNamespace(
+        find_one=AsyncMock(return_value={"org_id": "org_b", "user_id": "user_b"}),
+        update_one=AsyncMock(),
+    )
+    monkeypatch.setattr(gc, "db", SimpleNamespace(google_calendar_connections=connections))
+
+    with pytest.raises(gc.GoogleCalendarError, match="Each employee must connect their own"):
+        asyncio.run(gc.save_connection(
+            "org_a", "user_a",
+            {"refresh_token": "refresh", "access_token": "access", "expires_in": 3600},
+            "shared@example.com",
+        ))
+
+    connections.update_one.assert_not_awaited()
+
+
+def test_same_erp_identity_can_reconnect_its_google_account(monkeypatch):
+    connections = SimpleNamespace(
+        find_one=AsyncMock(return_value={"org_id": "org_a", "user_id": "user_a"}),
+        update_one=AsyncMock(),
+    )
+    monkeypatch.setattr(gc, "db", SimpleNamespace(google_calendar_connections=connections))
+    monkeypatch.setattr(gc, "encrypt_token", lambda value: f"encrypted:{value}")
+
+    asyncio.run(gc.save_connection(
+        "org_a", "user_a",
+        {"refresh_token": "refresh", "access_token": "access", "expires_in": 3600},
+        "person@example.com",
+    ))
+
+    connections.update_one.assert_awaited_once()
 
 
 def test_sync_error_summary_never_persists_provider_url_or_token():

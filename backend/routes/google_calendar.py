@@ -14,6 +14,7 @@ from core.deps import require_user
 from core.google_calendar import (
     connection_for, enqueue_user_sources, exchange_code,
     google_email, is_configured, new_oauth_state, oauth_url, process_sync_queue,
+    GOOGLE_ACCOUNT_IN_USE_MESSAGE, GoogleCalendarError,
     RECONNECT_REQUIRED_MESSAGE, save_connection, state_hash,
 )
 from core.helpers import iso_now, now_utc
@@ -115,6 +116,10 @@ async def google_calendar_callback(code: Optional[str] = None, state: Optional[s
             target_type="google_calendar", meta={"email": email},
         )
         return RedirectResponse(_frontend_url(google="connected"), status_code=303)
+    except GoogleCalendarError as exc:
+        log.warning("Google Calendar OAuth callback failed: %s", type(exc).__name__)
+        outcome = "account_in_use" if str(exc) == GOOGLE_ACCOUNT_IN_USE_MESSAGE else "error"
+        return RedirectResponse(_frontend_url(google=outcome), status_code=303)
     except Exception as exc:  # noqa: BLE001 - OAuth errors return a safe UI status
         log.warning("Google Calendar OAuth callback failed: %s", type(exc).__name__)
         return RedirectResponse(_frontend_url(google="error"), status_code=303)

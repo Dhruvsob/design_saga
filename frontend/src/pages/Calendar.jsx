@@ -114,6 +114,7 @@ export default function CalendarPage() {
     if (!outcome) return;
     if (outcome === "connected") toast.success("Google Calendar connected");
     else if (outcome === "access_denied") toast.error("Google blocked access — your email may not be added as a test user in Google Cloud Console. Ask your admin to publish the OAuth app or add your email as a test user.");
+    else if (outcome === "account_in_use") toast.error("That Google account belongs to another ERP user. Each employee must connect their own Google account.");
     else if (outcome === "redirect_uri_mismatch") toast.error("OAuth redirect URI mismatch — the callback URL registered in Google Cloud Console does not match the server. Contact your admin.");
     else if (outcome === "invalid_state") toast.error("Google connection expired. Please try again.");
     else toast.error("Google Calendar could not be connected. Please try again.");
@@ -249,7 +250,7 @@ export default function CalendarPage() {
                   ? `${google.email || "Connected"}${google.pending ? ` · ${google.pending} pending` : ""}`
                   : googleNeedsReconnect
                     ? `${google.email || "Your Google account"} must be reconnected. Your ERP data is safe; sync is paused.`
-                    : google.configured ? "Connect your own Google Calendar. Only your shared or assigned items sync." : "OAuth setup is required on the server"}
+                    : google.configured ? "Personal connection: use your own Google account. Only your own, assigned, or explicitly shared items sync." : "OAuth setup is required on the server"}
               </div>
               {google.last_error && <div className="text-xs text-[var(--danger)]">{google.last_error}</div>}
             </div>
@@ -716,7 +717,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
                   })}
                 </div>
                 {f.employee_ids.length > 0 && (
-                  <div className="text-[10px] text-[var(--ink-2)] mt-1">{f.employee_ids.length} employee(s) tagged — they'll be notified.</div>
+                  <div className="text-[10px] text-[var(--ink-2)] mt-1">{f.employee_ids.length} employee(s) tagged — only they are notified and each receives it in their own connected Google Calendar.</div>
                 )}
               </div>
             )}

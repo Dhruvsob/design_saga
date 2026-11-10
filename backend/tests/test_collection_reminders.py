@@ -46,7 +46,12 @@ def test_reminder_is_reflected_everywhere_and_closed_on_receipt(monkeypatch):
         monkeypatch.setattr(scoped_db_module, "db", db)
         monkeypatch.setattr(notifications_module, "db", db)
         monkeypatch.setattr(cr, "db", db)
-        await db.users.insert_one({"user_id": f"u_{org}", "org_id": org, "role": "Admin", "name": "Owner"})
+        await db.users.insert_many([
+            {"user_id": f"u_{org}", "org_id": org, "role": "Admin", "name": "Owner"},
+            {"user_id": f"director_{org}", "org_id": org, "role": "Director", "name": "Director"},
+            {"user_id": f"accountant_{org}", "org_id": org, "role": "Accountant", "name": "Accountant"},
+            {"user_id": f"employee_{org}", "org_id": org, "role": "Employee", "name": "Employee"},
+        ])
         set_scope_from_user({"org_id": org, "role": "Admin", "user_id": f"u_{org}"})
         try:
             await sdb.collection_receivables.insert_one({
@@ -57,7 +62,9 @@ def test_reminder_is_reflected_everywhere_and_closed_on_receipt(monkeypatch):
             assert out["active"] and out["alerts_added"] == 2
             ev = await sdb.calendar_events.find_one({"id": out["event_id"]})
             assert ev["date"] == "2026-11-20" and ev["start_time"] == "09:30" and ev["alert_minutes"] == [0, 1440]
-            assert ev["visibility"] == "private" and f"u_{org}" in ev["attendee_ids"]
+            assert ev["visibility"] == "private"
+            assert set(ev["attendee_ids"]) == {f"u_{org}", f"director_{org}"}
+            assert ev["created_by"] == "system:collections"
             assert "25,000" in ev["title"]
             doc = await sdb.payment_reminders.find_one({"source_id": "recv_x", "auto": True})
             assert doc["number"].startswith("PR-") and doc["amount_due"] == 25000

@@ -88,10 +88,16 @@ def event_id(org_id: str, source_type: str, source_id: str) -> str:
     return f"evt_col_{digest}"
 
 
-async def _finance_user_ids(org_id: str) -> list[str]:
+async def _finance_owner_user_ids(org_id: str) -> list[str]:
+    """Owners receive sensitive collection reminders in personal calendars.
+
+    Accountants keep their normal ERP finance permissions and notifications,
+    but an owner's receivables must not silently appear in an accountant or
+    employee's personal Google Calendar.
+    """
     ids = []
     async for u in db.users.find(
-            {"org_id": org_id, "role": {"$in": ["Admin", "Director", "Accountant"]},
+            {"org_id": org_id, "role": {"$in": ["Admin", "Director"]},
              "is_active": {"$ne": False}}, {"_id": 0, "user_id": 1}):
         ids.append(u["user_id"])
     return ids
@@ -179,6 +185,7 @@ async def _upsert_event(org_id: str, source_type: str, row: dict, occ: list, par
         row.get("notes"),
         "Record the payment in Design Saga > Accounting > Collections Due when it arrives.",
     ]))
+    owner_ids = await _finance_owner_user_ids(org_id)
     doc = {
         "id": eid, "org_id": org_id, "title": _title(source_type, party, outstanding(row)),
         "kind": "reminder", "date": main[:10], "start_time": main[11:16], "end_time": None,
@@ -186,16 +193,19 @@ async def _upsert_event(org_id: str, source_type: str, row: dict, occ: list, par
         # ERP sound comes from the timed alerts; this stays None so the event's
         # own same-day check doesn't play it twice.
         "reminder_minutes": None, "alert_minutes": alert_minutes, "recurrence": recurrence,
-        "visibility": "private", "attendee_ids": await _finance_user_ids(org_id), "employee_ids": [],
+        "visibility": "private", "attendee_ids": owner_ids, "employee_ids": [],
         "source_type": source_type, "source_id": row["id"], "collection_reminder": True,
+        # A finance user may create the receivable, but this generated calendar
+        # copy belongs only to tenant owners.  Using a system creator prevents
+        # an Accountant creator from gaining Google visibility via ownership.
+        "created_by": "system:collections", "created_by_name": "Collections Due",
         "updated_at": iso_now(),
     }
     existing = await sdb.calendar_events.find_one({"id": eid}, {"_id": 0, "id": 1})
     if existing:
         await sdb.calendar_events.update_one({"id": eid}, {"$set": doc})
     else:
-        doc.update({"created_at": iso_now(), "created_by": user_id or row.get("created_by"),
-                    "created_by_name": "Collections Due"})
+        doc["created_at"] = iso_now()
         await sdb.calendar_events.insert_one(dict(doc))
     return eid
 

@@ -13,6 +13,7 @@ from urllib.parse import quote, urlencode
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from email_validator import EmailNotValidError, validate_email
+from pymongo.errors import DuplicateKeyError
 
 from .db import db
 from .access_control import unique_legacy_assignee_user_id
@@ -35,6 +36,10 @@ class GoogleCalendarError(RuntimeError):
 
 RECONNECT_REQUIRED_MESSAGE = (
     "Google authorization expired. Reconnect Google Calendar to resume sync."
+)
+GOOGLE_ACCOUNT_IN_USE_MESSAGE = (
+    "This Google account is already connected to another ERP user. "
+    "Each employee must connect their own Google account."
 )
 
 
@@ -150,32 +155,38 @@ async def google_email(access_token: str) -> str:
 
 async def save_connection(org_id: str, user_id: str, token: dict, email: str) -> None:
     existing = await db.google_calendar_connections.find_one(
-        {"org_id": org_id, "connected_email": email, "user_id": {"$ne": user_id}},
-        {"_id": 0, "user_id": 1},
+        {"connected_email": email},
+        {"_id": 0, "org_id": 1, "user_id": 1},
     )
-    if existing:
-        raise GoogleCalendarError(
-            "This Google account is already connected to another ERP user in this organisation")
+    if existing and (
+            existing.get("org_id") != org_id or existing.get("user_id") != user_id):
+        raise GoogleCalendarError(GOOGLE_ACCOUNT_IN_USE_MESSAGE)
     now = now_utc()
     expires_at = now + timedelta(seconds=max(60, int(token.get("expires_in") or 3600) - 60))
-    await db.google_calendar_connections.update_one(
-        {"org_id": org_id, "user_id": user_id},
-        {"$set": {
-            "org_id": org_id,
-            "user_id": user_id,
-            "connected_by": user_id,
-            "connected_email": email,
-            "calendar_id": "primary",
-            "connection_id": secrets.token_hex(12),
-            "refresh_token_enc": encrypt_token(token["refresh_token"]),
-            "access_token_enc": encrypt_token(token["access_token"]),
-            "access_token_expires_at": expires_at,
-            "status": "connected",
-            "last_error": None,
-            "updated_at": iso_now(),
-        }, "$setOnInsert": {"created_at": iso_now()}},
-        upsert=True,
-    )
+    try:
+        await db.google_calendar_connections.update_one(
+            {"org_id": org_id, "user_id": user_id},
+            {"$set": {
+                "org_id": org_id,
+                "user_id": user_id,
+                "connected_by": user_id,
+                "connected_email": email,
+                "calendar_id": "primary",
+                "connection_id": secrets.token_hex(12),
+                "refresh_token_enc": encrypt_token(token["refresh_token"]),
+                "access_token_enc": encrypt_token(token["access_token"]),
+                "access_token_expires_at": expires_at,
+                "status": "connected",
+                "last_error": None,
+                "updated_at": iso_now(),
+            }, "$setOnInsert": {"created_at": iso_now()}},
+            upsert=True,
+        )
+    except DuplicateKeyError as exc:
+        # The global unique index closes the race between the read above and
+        # this upsert, so one Google calendar can never receive two ERP users'
+        # private records (including users in different tenants).
+        raise GoogleCalendarError(GOOGLE_ACCOUNT_IN_USE_MESSAGE) from exc
 
 
 async def connection_for(org_id: str, user_id: str) -> dict | None:
