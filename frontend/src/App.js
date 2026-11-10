@@ -9,39 +9,42 @@ import Layout from "./components/Layout";
 import { MandatoryPinSetupOverlay, PinLockOverlay } from "./components/AppPinLock";
 import { ConfirmHost } from "./lib/confirm";
 
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Leads = lazy(() => import("./pages/Leads"));
-const Projects = lazy(() => import("./pages/Projects"));
-const ProjectDetail = lazy(() => import("./pages/ProjectDetail"));
-const Tasks = lazy(() => import("./pages/TasksBoard"));
-const TaskDetail = lazy(() => import("./pages/TaskDetail"));
-const Attendance = lazy(() => import("./pages/Attendance"));
-const Holidays = lazy(() => import("./pages/Holidays"));
-const LiveMap = lazy(() => import("./pages/LiveMap"));
-const Payroll = lazy(() => import("./pages/Payroll"));
-const Accounting = lazy(() => import("./pages/Accounting"));
-const Clients = lazy(() => import("./pages/Clients"));
-const ClientDetail = lazy(() => import("./pages/ClientDetail"));
-const Invoices = lazy(() => import("./pages/Invoices"));
-const PaymentReminders = lazy(() => import("./pages/PaymentReminders"));
-const ReceivedPayments = lazy(() => import("./pages/ReceivedPayments"));
-const QuotationsAdv = lazy(() => import("./pages/QuotationsAdv"));
-const QuotationBuilder = lazy(() => import("./pages/QuotationBuilder"));
-const RBACAdmin = lazy(() => import("./pages/RBACAdmin"));
-const Employees = lazy(() => import("./pages/Employees"));
-const EmployeeDetail = lazy(() => import("./pages/EmployeeDetail"));
-const Vendors = lazy(() => import("./pages/Vendors"));
-const VendorDetail = lazy(() => import("./pages/VendorDetail"));
-const ClientPortal = lazy(() => import("./pages/ClientPortal"));
-const Loans = lazy(() => import("./pages/Loans"));
-const PurchaseOrders = lazy(() => import("./pages/PurchaseOrders"));
-const Expenses = lazy(() => import("./pages/Expenses"));
-const SuperAdminPanel = lazy(() => import("./pages/SuperAdminPanel"));
-const CalendarPage = lazy(() => import("./pages/Calendar"));
-const CompanySettings = lazy(() => import("./pages/CompanySettings"));
-const AuditLog = lazy(() => import("./pages/AuditLog"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const LandingPage = lazy(() => import("./pages/LandingPage"));
+// lazy() plus .preload(), so a page's code can download while the PIN screen is up.
+const lazyPage = (factory) => Object.assign(lazy(factory), { preload: factory });
+
+const Dashboard = lazyPage(() => import("./pages/Dashboard"));
+const Leads = lazyPage(() => import("./pages/Leads"));
+const Projects = lazyPage(() => import("./pages/Projects"));
+const ProjectDetail = lazyPage(() => import("./pages/ProjectDetail"));
+const Tasks = lazyPage(() => import("./pages/TasksBoard"));
+const TaskDetail = lazyPage(() => import("./pages/TaskDetail"));
+const Attendance = lazyPage(() => import("./pages/Attendance"));
+const Holidays = lazyPage(() => import("./pages/Holidays"));
+const LiveMap = lazyPage(() => import("./pages/LiveMap"));
+const Payroll = lazyPage(() => import("./pages/Payroll"));
+const Accounting = lazyPage(() => import("./pages/Accounting"));
+const Clients = lazyPage(() => import("./pages/Clients"));
+const ClientDetail = lazyPage(() => import("./pages/ClientDetail"));
+const Invoices = lazyPage(() => import("./pages/Invoices"));
+const PaymentReminders = lazyPage(() => import("./pages/PaymentReminders"));
+const ReceivedPayments = lazyPage(() => import("./pages/ReceivedPayments"));
+const QuotationsAdv = lazyPage(() => import("./pages/QuotationsAdv"));
+const QuotationBuilder = lazyPage(() => import("./pages/QuotationBuilder"));
+const RBACAdmin = lazyPage(() => import("./pages/RBACAdmin"));
+const Employees = lazyPage(() => import("./pages/Employees"));
+const EmployeeDetail = lazyPage(() => import("./pages/EmployeeDetail"));
+const Vendors = lazyPage(() => import("./pages/Vendors"));
+const VendorDetail = lazyPage(() => import("./pages/VendorDetail"));
+const ClientPortal = lazyPage(() => import("./pages/ClientPortal"));
+const Loans = lazyPage(() => import("./pages/Loans"));
+const PurchaseOrders = lazyPage(() => import("./pages/PurchaseOrders"));
+const Expenses = lazyPage(() => import("./pages/Expenses"));
+const SuperAdminPanel = lazyPage(() => import("./pages/SuperAdminPanel"));
+const CalendarPage = lazyPage(() => import("./pages/Calendar"));
+const CompanySettings = lazyPage(() => import("./pages/CompanySettings"));
+const AuditLog = lazyPage(() => import("./pages/AuditLog"));
+const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"));
+const LandingPage = lazyPage(() => import("./pages/LandingPage"));
 
 const PageFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center overline">LOADING...</div>
@@ -53,6 +56,11 @@ function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
+  const lockedOut = Boolean(pinLocked || user?.app_pin_setup_required);
+  const page = children?.type;
+  useEffect(() => {
+    if (lockedOut) page?.preload?.();
+  }, [lockedOut, page]);
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (!user) return null;
   // Suspended workspace: show a clear message before the user is confused.

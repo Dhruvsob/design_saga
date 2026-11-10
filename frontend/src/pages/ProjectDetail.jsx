@@ -12,6 +12,7 @@ import ProjectDrawings from "../components/ProjectDrawings";
 import ProjectSnags from "../components/ProjectSnags";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
+import { feeCalc } from "../lib/fees";
 import { safeFileUrl } from "../lib/url";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
@@ -163,21 +164,6 @@ export default function ProjectDetail() {
       setSearchParams({}, { replace: true });
     }
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const feeCalc = (f) => {
-    const fst = f.fee_structure_type;
-    if (fst === "lump_sum") return f.fee_lump_sum_amount ? Number(f.fee_lump_sum_amount) : null;
-    if (fst === "percentage_consultancy") {
-      const v = Number(f.fee_project_value || 0), pct = Number(f.fee_percentage || 0);
-      return v && pct ? Math.round(v * pct / 100) : null;
-    }
-    if (fst === "turnkey") return f.fee_contract_value ? Number(f.fee_contract_value) : null;
-    if (fst === "per_sqft") {
-      const area = Number(f.site_area_sqft || 0), rate = Number(f.fee_rate_per_sqft || 0);
-      return area && rate ? area * rate : null;
-    }
-    return null;
-  };
 
   const saveEdit = async (e) => {
     e.preventDefault(); setErr("");

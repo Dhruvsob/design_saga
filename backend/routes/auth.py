@@ -27,6 +27,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
+import asyncio
 import bcrypt
 import hashlib
 import uuid
@@ -276,7 +277,9 @@ async def _verify_app_pin(user: dict, pin: str) -> dict:
     if locked_until and locked_until > now_utc():
         seconds = max(1, int((locked_until - now_utc()).total_seconds()))
         raise HTTPException(status_code=429, detail=f"Too many incorrect PIN attempts. Try again in {seconds} seconds")
-    if verify_password(str(pin or ""), doc.get("pin_hash") or ""):
+    # bcrypt is CPU-bound (~0.3-1 s); on the event loop it would stall every
+    # other request of the single worker while one person unlocks.
+    if await asyncio.to_thread(verify_password, str(pin or ""), doc.get("pin_hash") or ""):
         await db.user_app_locks.update_one(
             {"user_id": user["user_id"]},
             {"$set": {"failed_attempts": 0, "last_unlocked_at": now_utc()},
@@ -365,7 +368,7 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
     # one whose password actually matches.
     candidates = await db.users.find(_identifier_query(ident), {"_id": 0}).to_list(50)
 
-    matches = _password_matches(candidates, payload.password)
+    matches = await asyncio.to_thread(_password_matches, candidates, payload.password)
     if len(matches) > 1:
         await _register_failed_attempt(ident, ip_hash)
         await audit(None, "auth.login_ambiguous", target_type="auth",
@@ -454,6 +457,7 @@ async def setup_app_pin(payload: AppPinSetupIn, request: Request,
                 detail="For security, sign out and sign in again before setting your App PIN",
             )
 
+    pin_hash = await asyncio.to_thread(hash_password, pin)
     now = now_utc()
     await db.user_app_locks.update_one(
         {"user_id": user["user_id"]},
@@ -461,7 +465,7 @@ async def setup_app_pin(payload: AppPinSetupIn, request: Request,
             "user_id": user["user_id"],
             "org_id": user.get("org_id"),
             "enabled": True,
-            "pin_hash": hash_password(pin),
+            "pin_hash": pin_hash,
             "failed_attempts": 0,
             "updated_at": now,
             "updated_by": user["user_id"],

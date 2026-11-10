@@ -117,6 +117,10 @@ async def monthly_summary(emp: dict, year: int, month: int,
     raw_allowance = policy.get("monthly_paid_leave_allowance")
     paid_leave_allowance = 1 if raw_allowance in (None, "") else max(0, int(raw_allowance))
     today = now_ist().date()
+    # Auto-paid-leave applies only inside the employment window: proration
+    # absences before joining / after exit must never consume the free day.
+    join_iso = str(emp.get("joining_date") or "")[:10]
+    exit_iso = str(emp.get("exit_date") or emp.get("terminated_at") or "")[:10]
 
     for dnum in range(1, days_in_month + 1):
         cur = _date(year, month, dnum)
@@ -150,7 +154,8 @@ async def monthly_summary(emp: dict, year: int, month: int,
                 status = "paid_leave"
         elif rec is not None and rstatus == "absent":
             # Auto-convert the first eligible absence to free paid leave.
-            if paid_leave_used < paid_leave_allowance:
+            in_service = (not join_iso or iso_d >= join_iso) and (not exit_iso or iso_d <= exit_iso)
+            if in_service and paid_leave_used < paid_leave_allowance:
                 status = "paid_leave"
                 auto_pl = True
                 paid_leave_used += 1
@@ -160,8 +165,11 @@ async def monthly_summary(emp: dict, year: int, month: int,
             status = "upcoming"
         else:
             # Past day with no attendance record — employee did not check in.
-            # Apply the same auto-paid-leave rule for unexpected/emergency absence.
-            if paid_leave_used < paid_leave_allowance:
+            # Auto-convert for unexpected/emergency absence, but only once the
+            # day is over (`cur < today`): today must not consume the free day
+            # before the employee has had the chance to check in.
+            in_service = (not join_iso or iso_d >= join_iso) and (not exit_iso or iso_d <= exit_iso)
+            if in_service and cur < today and paid_leave_used < paid_leave_allowance:
                 status = "paid_leave"
                 auto_pl = True
                 paid_leave_used += 1
@@ -334,6 +342,7 @@ async def payroll_preview(year: int, month: int, policy: dict) -> dict:
             "present": summ["present"], "late": summ["late"],
             "late_rejected": summ["late_rejected"], "half_day": summ["half_day"],
             "absent": summ["absent"], "paid_leave": summ["paid_leave"],
+            "auto_paid_leave": summ["auto_paid_leave"],
             "unpaid_leave": summ["unpaid_leave"], "week_off": summ["week_off"],
             "holidays": summ["holidays"], "site_visit": summ["site_visit"],
             "lop_days": s["lop_days"], "lop_deduction": s["lop_deduction"],

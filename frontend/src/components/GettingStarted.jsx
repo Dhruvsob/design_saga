@@ -4,12 +4,6 @@ import { CheckCircle, Circle, X } from "@phosphor-icons/react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
-const listLength = (result) => {
-  if (result.status !== "fulfilled") return null;
-  const data = result.value?.data;
-  return Array.isArray(data) ? data.length : Array.isArray(data?.items) ? data.items.length : null;
-};
-
 /**
  * Admin-only setup checklist for a new firm (PROD-01). Each step is derived
  * from real data, links to the screen that completes it and ticks itself off.
@@ -22,19 +16,15 @@ export default function GettingStarted() {
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(storageKey) === "1"; } catch { return false; }
   });
-  const [counts, setCounts] = useState(null);
+  // { employees, clients, projects, vendors }: true/false, or null when that module is off.
+  const [status, setStatus] = useState(null);
 
   useEffect(() => {
     if (!isAdmin || dismissed) return;
     let alive = true;
-    Promise.allSettled([
-      api.get("/employees"), api.get("/clients"), api.get("/projects"), api.get("/vendors"),
-    ]).then(([employees, clients, projects, vendors]) => {
-      if (alive) {
-        setCounts({ employees: listLength(employees), clients: listLength(clients),
-                    projects: listLength(projects), vendors: listLength(vendors) });
-      }
-    });
+    api.get("/dashboard/setup-status")
+      .then(({ data }) => { if (alive) setStatus(data); })
+      .catch(() => {});
     return () => { alive = false; };
   }, [isAdmin, dismissed]);
 
@@ -42,7 +32,6 @@ export default function GettingStarted() {
     const org = currentOrg || {};
     const address = org.address || {};
     const bank = org.bank_details || {};
-    const has = (n) => (n === null || n === undefined ? null : n > 0);
     return [
       { key: "logo", label: "Upload your company logo", hint: "Shown on every invoice, quotation and payslip",
         done: Boolean(org.branding?.logo_url), to: "/settings/company" },
@@ -51,17 +40,17 @@ export default function GettingStarted() {
       { key: "bank", label: "Add bank details for payments", hint: "Clients see these on invoices",
         done: Boolean(bank.account || bank.upi), to: "/settings/company" },
       { key: "employee", label: "Add your first employee", hint: "Needed for attendance, tasks and payroll",
-        done: has(counts?.employees), to: "/employees" },
+        done: status?.employees, to: "/employees" },
       { key: "client", label: "Add your first client", hint: "Then quote, invoice and track collections",
-        done: has(counts?.clients), to: "/clients" },
+        done: status?.clients, to: "/clients" },
       { key: "project", label: "Create your first project", hint: "Tasks, files, site work and finances live here",
-        done: has(counts?.projects), to: "/projects" },
+        done: status?.projects, to: "/projects" },
       { key: "vendor", label: "Add a vendor or contractor", hint: "For purchase orders, bills and vendor incentives",
-        done: has(counts?.vendors), to: "/vendors" },
-    ];
-  }, [currentOrg, counts]);
+        done: status?.vendors, to: "/vendors" },
+    ].filter((step) => step.done !== null);   // module switched off for this workspace
+  }, [currentOrg, status]);
 
-  if (!isAdmin || dismissed || !counts) return null;
+  if (!isAdmin || dismissed || !status) return null;
   const doneCount = steps.filter((s) => s.done).length;
   if (doneCount === steps.length) return null;
 

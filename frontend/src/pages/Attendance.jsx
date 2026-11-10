@@ -539,10 +539,20 @@ export default function Attendance() {
               </div>
               {summary && (
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                  {Object.entries(summary.counts).map(([k, v]) => (
+                  {(mySalary?.summary ? [
+                    ["present", (mySalary.summary.present || 0) + (mySalary.summary.site_visit || 0)],
+                    ["late", mySalary.summary.late || 0],
+                    ["half_day", mySalary.summary.half_day || 0],
+                    ["paid_leave", mySalary.summary.paid_leave || 0],
+                    ["unpaid_leave", mySalary.summary.unpaid_leave || 0],
+                    ["absent", mySalary.summary.absent || 0],
+                  ] : Object.entries(summary.counts)).map(([k, v]) => (
                     <div key={k} className="border border-[var(--line)] rounded-lg p-3" data-testid={`count-${k}`}>
-                      <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: STATUS_COLORS[k] }}>{k}</div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: STATUS_COLORS[k] }}>{k.replace(/_/g, " ")}</div>
                       <div className="font-display font-bold text-2xl">{v}</div>
+                      {k === "paid_leave" && Number(mySalary?.summary?.auto_paid_leave) > 0 && (
+                        <div className="text-[9px]" style={{ color: "#1a7f5a" }}>incl. {mySalary.summary.auto_paid_leave} auto</div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -354,6 +354,14 @@ class ProjectIn(BaseModel):
     description: Optional[str] = None
     project_manager_id: Optional[str] = None           # employee id (project team lead)
     team_ids: Optional[List[str]] = None               # employee ids on the project team
+    site_address: Optional[str] = None
+    site_area_sqft: Optional[float] = Field(default=None, ge=0)
+    fee_structure_type: Optional[str] = None      # lump_sum | percentage_consultancy | turnkey | per_sqft
+    fee_lump_sum_amount: Optional[float] = Field(default=None, ge=0)
+    fee_project_value: Optional[float] = Field(default=None, ge=0)   # for percentage_consultancy
+    fee_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    fee_contract_value: Optional[float] = Field(default=None, ge=0)  # for turnkey
+    fee_rate_per_sqft: Optional[float] = Field(default=None, ge=0)   # for per_sqft
 
 
 class ProjectStageUpdate(BaseModel):
@@ -361,6 +369,14 @@ class ProjectStageUpdate(BaseModel):
 
 
 FEE_STRUCTURE_TYPES = ("lump_sum", "percentage_consultancy", "turnkey", "per_sqft")
+# Inputs that belong to each fee type; the others are cleared when the type changes.
+FEE_SUBFIELDS = {
+    "lump_sum": {"fee_lump_sum_amount"},
+    "percentage_consultancy": {"fee_project_value", "fee_percentage"},
+    "turnkey": {"fee_contract_value"},
+    "per_sqft": {"fee_rate_per_sqft"},
+}
+ALL_FEE_SUBFIELDS = frozenset().union(*FEE_SUBFIELDS.values())
 
 
 class ProjectUpdate(FiniteModel):
@@ -897,52 +913,82 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
                             and has_permission(user, "employees.read"))
     project_scope, task_scope = await _dashboard_scope_queries(user)
 
-    active_projects = await sdb.projects.count_documents(merge_query(
-        {"stage": {"$nin": ["Handover"]}, "archived": {"$ne": True}}, project_scope))
-    total_projects = await sdb.projects.count_documents(merge_query(
-        {"archived": {"$ne": True}}, project_scope))
-
-    # Revenue: sum from ACCOUNTING journal entries (income line credits) — single source
-    # of truth. Falls back to zero if no journal exists yet. This matches the P&L report.
-    revenue = None
-    if can_view_revenue:
-        revenue = 0.0
-        async for je in sdb.journal_entries.find({}, {"_id": 0, "lines": 1}):
-            for l in je.get("lines", []):
-                if l.get("account_type") == "income":
-                    revenue += float(l.get("credit", 0)) - float(l.get("debit", 0))
-        revenue = round(revenue, 2)
-
-    # Collection due: the same figure Collections Due shows (BR-010).
-    collection_due = None
-    unplanned = None
-    if can_view_collections:
-        from routes.accounting import collections_summary
-        summary = await collections_summary()
-        collection_due = summary["outstanding"]
-        unplanned = summary["unplanned_invoices"]
-
-    # Overdue tasks
     from core.helpers import business_today
     today = business_today().isoformat()
-    overdue_tasks = await sdb.tasks.count_documents(merge_query({
-        "status": {"$ne": "done"},
-        "due_date": {"$lt": today, "$ne": None}
-    }, task_scope))
 
-    # Pipeline funnel
-    pipeline = []
-    if can_view_leads:
-        for stage in PIPELINE_STAGES:
-            count = await sdb.leads.count_documents({"stage": stage})
-            pipeline.append({"stage": stage, "count": count})
+    async def _none():
+        return None
 
-    # Lead sources
-    sources = {}
-    if can_view_leads:
-        async for lead in sdb.leads.find({}, {"_id": 0, "source": 1}):
+    async def _revenue():
+        # Revenue: sum from ACCOUNTING journal entries (income line credits) — single
+        # source of truth; matches the P&L report. Summed in the database so the
+        # whole journal is not shipped to Python on every dashboard load.
+        rows = await sdb.journal_entries.aggregate([
+            {"$match": {"lines.account_type": "income"}},
+            {"$unwind": "$lines"},
+            {"$match": {"lines.account_type": "income"}},
+            {"$group": {"_id": None,
+                        "debit": {"$sum": "$lines.debit"},
+                        "credit": {"$sum": "$lines.credit"}}},
+        ]).to_list(1)
+        totals = rows[0] if rows else {}
+        return round(float(totals.get("credit") or 0) - float(totals.get("debit") or 0), 2)
+
+    async def _collections():
+        # Collection due: the same figure Collections Due shows (BR-010).
+        from routes.accounting import collections_summary
+        return await collections_summary()
+
+    async def _lead_stats():
+        # One pass for the funnel and the sources (was a query per stage + a scan).
+        stage_counts: dict = {}
+        sources: dict = {}
+        async for lead in sdb.leads.find({}, {"_id": 0, "stage": 1, "source": 1}):
+            stage = lead.get("stage")
+            stage_counts[stage] = stage_counts.get(stage, 0) + 1
             s = lead.get("source", "Other")
             sources[s] = sources.get(s, 0) + 1
+        return stage_counts, sources
+
+    async def _utilization():
+        # Team utilization — real signal: weighted open tasks (urgent=3, high=2, medium=1,
+        # low=1) per active employee. A workload index the studio owner can eyeball.
+        weight = {"urgent": 3, "critical": 3, "high": 2, "medium": 1, "low": 1}
+        load = {}
+        async for t in sdb.tasks.find(
+                merge_query({"status": {"$ne": "done"}}, task_scope),
+                {"_id": 0, "assignee_name": 1, "priority": 1}):
+            n = t.get("assignee_name") or "Unassigned"
+            load[n] = load.get(n, 0) + weight.get((t.get("priority") or "medium").lower(), 1)
+        return load
+
+    # Independent reads run concurrently: the slowest one sets the wait, not the sum.
+    (active_projects, total_projects, revenue, summary, overdue_tasks,
+     lead_stats, util) = await asyncio.gather(
+        sdb.projects.count_documents(merge_query(
+            {"stage": {"$nin": ["Handover"]}, "archived": {"$ne": True}}, project_scope)),
+        sdb.projects.count_documents(merge_query(
+            {"archived": {"$ne": True}}, project_scope)),
+        _revenue() if can_view_revenue else _none(),
+        _collections() if can_view_collections else _none(),
+        sdb.tasks.count_documents(merge_query({
+            "status": {"$ne": "done"},
+            "due_date": {"$lt": today, "$ne": None}
+        }, task_scope)),
+        _lead_stats() if can_view_leads else _none(),
+        _utilization() if can_view_utilization else _none(),
+    )
+
+    collection_due = summary["outstanding"] if summary else None
+    unplanned = summary["unplanned_invoices"] if summary else None
+
+    # Pipeline funnel + lead sources
+    pipeline = []
+    sources = {}
+    if lead_stats:
+        stage_counts, sources = lead_stats
+        pipeline = [{"stage": stage, "count": stage_counts.get(stage, 0)}
+                    for stage in PIPELINE_STAGES]
     source_list = [{"source": k, "count": v} for k, v in sources.items()]
 
     # Alerts
@@ -960,16 +1006,7 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
             f"{'is' if unplanned['count'] == 1 else 'are'} not in Collections Due yet"),
             "link": "/invoices"})
 
-    # Team utilization — real signal: weighted open tasks (urgent=3, high=2, medium=1, low=1)
-    # per active employee. Not a percentage — a workload index the studio owner can eyeball.
-    weight = {"urgent": 3, "critical": 3, "high": 2, "medium": 1, "low": 1}
-    util = {}
-    if can_view_utilization:
-        async for t in sdb.tasks.find(
-                merge_query({"status": {"$ne": "done"}}, task_scope),
-                {"_id": 0, "assignee_name": 1, "priority": 1}):
-            n = t.get("assignee_name") or "Unassigned"
-            util[n] = util.get(n, 0) + weight.get((t.get("priority") or "medium").lower(), 1)
+    util = util or {}
     utilization = sorted(
         [{"name": k, "load": v} for k, v in util.items()],
         key=lambda x: -x["load"],
@@ -996,6 +1033,34 @@ async def dashboard_stats(request: Request, session_token: Optional[str] = Cooki
         "alerts": alerts,
         "utilization": utilization,
     }
+
+
+@api.get("/dashboard/setup-status")
+async def dashboard_setup_status(request: Request, session_token: Optional[str] = Cookie(default=None),
+                                 authorization: Optional[str] = Header(default=None)):
+    """Admin setup checklist: does the studio have its first employee, client,
+    project and vendor? Four existence checks instead of downloading every list.
+    A step whose module is switched off for the workspace is null."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(status_code=403, detail="Missing permission: *.*")
+    from core.tenancy import get_org, user_org_id
+    org = await get_org(user_org_id(user))
+    modules = ((org or {}).get("features") or {}).get("modules") or {}
+
+    async def _exists(module, collection, query):
+        if modules.get(module) is False:
+            return None
+        return bool(await collection.find_one(query, {"_id": 1}))
+
+    project_scope = await project_visibility_query(user)
+    employees, clients, projects, vendors = await asyncio.gather(
+        _exists("employees", sdb.employees, {}),
+        _exists("clients", sdb.clients, {"archived": {"$ne": True}}),
+        _exists("projects", sdb.projects, merge_query({"archived": {"$ne": True}}, project_scope)),
+        _exists("vendors", sdb.vendors_acc, {"active": {"$ne": False}}),
+    )
+    return {"employees": employees, "clients": clients, "projects": projects, "vendors": vendors}
 
 
 # ============================================================
@@ -1493,6 +1558,13 @@ async def create_project(payload: ProjectIn, request: Request,
                 detail="Project engagement_type is required (consultancy | turnkey) for hybrid workspaces.",
             )
         doc["engagement_type"] = et
+    if doc.get("fee_structure_type") and doc["fee_structure_type"] not in FEE_STRUCTURE_TYPES:
+        raise HTTPException(status_code=400,
+                            detail=f"fee_structure_type must be one of: {', '.join(FEE_STRUCTURE_TYPES)}")
+    # Keep only the inputs of the chosen fee type (a switched form may carry stale ones).
+    _keep = FEE_SUBFIELDS.get(doc.get("fee_structure_type") or "", set())
+    for _f in ALL_FEE_SUBFIELDS - _keep:
+        doc[_f] = None
     doc["id"] = new_id("prj_")
     doc["share_token"] = new_share_token()
     doc["created_at"] = iso(now_utc())
@@ -1777,6 +1849,20 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
         if not c:
             raise HTTPException(status_code=404, detail="Client not found")
         upd["client_name"] = c.get("name")
+    # The fee structure updates as a group: switching the type clears the other
+    # types' inputs, and an empty type ("") clears the whole structure.
+    # Preserve fields already marked for clearing by validation above.
+    fst = upd.get("fee_structure_type")
+    if fst is not None:
+        for f in ALL_FEE_SUBFIELDS - FEE_SUBFIELDS.get(fst, set()):
+            upd.pop(f, None)
+            unset[f] = ""
+        if fst == "":
+            upd.pop("fee_structure_type", None)
+            unset["fee_structure_type"] = ""
+    # Never set and unset the same MongoDB field.
+    for field in unset:
+        upd.pop(field, None)
     upd["updated_at"] = iso(now_utc())
     update_doc = {"$set": upd}
     if unset:
