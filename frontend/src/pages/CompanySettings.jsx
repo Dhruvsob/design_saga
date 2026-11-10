@@ -279,7 +279,7 @@ export default function CompanySettings() {
                 {branding.logo_url && !logoBroken ? (
                   <img src={branding.logo_url} alt="" onError={() => setLogoBroken(true)} className="h-10 w-auto max-w-[64px] object-contain" />
                 ) : (
-                  <div className="w-9 h-9 flex items-center justify-center text-white font-display font-bold text-sm"
+                  <div className="w-9 h-9 flex items-center justify-center text-white font-display font-bold text-sm rounded-full"
                        style={{ backgroundColor: pdfColour }}>
                     {(org.name || "DS").slice(0, 2).toUpperCase()}
                   </div>

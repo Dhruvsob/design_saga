@@ -241,7 +241,7 @@ export default function NotificationBell() {
                 }`}
               >
                 <div className="flex items-start gap-2">
-                  <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 mt-0.5 ${KIND_COLOR[n.kind] || KIND_COLOR.info}`}>
+                  <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 mt-0.5 rounded ${KIND_COLOR[n.kind] || KIND_COLOR.info}`}>
                     {n.kind.replace(/_/g, " ")}
                   </span>
                   <div className="flex-1 min-w-0">

@@ -267,11 +267,11 @@ export default function ProjectDetail() {
               <Link to={`/clients/${p.client_id}`} className="hover:text-[var(--accent-strong)] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
             ) : (p.client_name || "—")}
             {p.engagement_type && (
-              <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
+              <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
                 p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[#5F5A4B]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
               }`}>{p.engagement_type}</span>
             )}
-            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
+            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{p.name}</h1>
           {p.description && <p className="mt-2 text-[var(--ink-2)] max-w-2xl">{p.description}</p>}
@@ -454,7 +454,7 @@ export default function ProjectDetail() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
+                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
                 <span className={`status-chip chip-${t.priority}`}>{statusLabel(t.priority)}</span>
                 <CaretRight size={12} className="text-[var(--ink-3)]" />
               </div>

@@ -174,9 +174,9 @@ export default function RBACAdmin() {
                   <Td>
                     <div className="flex items-center gap-3">
                       {u.picture ? (
-                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
+                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)] rounded-full" />
                       ) : (
-                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
+                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs rounded-full">
                           {(u.name || "?").slice(0, 1).toUpperCase()}
                         </div>
                       )}
@@ -434,9 +434,9 @@ function PendingRow({ u, roles, onDecide, savingId }) {
       <Td>
         <div className="flex items-center gap-3">
           {u.picture ? (
-            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
+            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)] rounded-full" />
           ) : (
-            <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
+            <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs rounded-full">
               {(u.name || "?").slice(0, 1).toUpperCase()}
             </div>
           )}

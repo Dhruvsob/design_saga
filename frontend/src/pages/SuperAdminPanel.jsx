@@ -252,9 +252,9 @@ export default function SuperAdminPanel() {
                 <Td>
                   <div className="flex items-center gap-3">
                     {o.branding?.logo_url ? (
-                      <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[var(--line)] bg-white" />
+                      <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[var(--line)] bg-white rounded-full" />
                     ) : (
-                      <div className="w-8 h-8 flex items-center justify-center text-white font-display font-bold text-xs"
+                      <div className="w-8 h-8 flex items-center justify-center text-white font-display font-bold text-xs rounded-full"
                            style={{ backgroundColor: (!o.branding?.primary_color || o.branding.primary_color.toUpperCase() === "#002FA7") ? "#76705E" : o.branding.primary_color }}>
                         {(o.name || "?").slice(0, 2).toUpperCase()}
                       </div>
