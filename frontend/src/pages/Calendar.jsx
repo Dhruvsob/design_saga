@@ -113,7 +113,10 @@ export default function CalendarPage() {
     const outcome = new URLSearchParams(window.location.search).get("google");
     if (!outcome) return;
     if (outcome === "connected") toast.success("Google Calendar connected");
-    else toast.error(outcome === "invalid_state" ? "Google connection expired. Please try again." : "Google Calendar could not be connected");
+    else if (outcome === "access_denied") toast.error("Google blocked access — your email may not be added as a test user in Google Cloud Console. Ask your admin to publish the OAuth app or add your email as a test user.");
+    else if (outcome === "redirect_uri_mismatch") toast.error("OAuth redirect URI mismatch — the callback URL registered in Google Cloud Console does not match the server. Contact your admin.");
+    else if (outcome === "invalid_state") toast.error("Google connection expired. Please try again.");
+    else toast.error("Google Calendar could not be connected. Please try again.");
     window.history.replaceState({}, "", window.location.pathname);
     loadGoogle();
   }, [loadGoogle]);

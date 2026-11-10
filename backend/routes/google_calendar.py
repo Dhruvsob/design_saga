@@ -82,7 +82,12 @@ async def connect_google_calendar(request: Request,
 @router.get("/calendar/google/callback")
 async def google_calendar_callback(code: Optional[str] = None, state: Optional[str] = None,
                                    error: Optional[str] = None):
-    if error or not code or not state:
+    if error:
+        # Pass the Google-supplied error code so the frontend can show specific guidance.
+        # access_denied = app in testing mode, user not added as test user.
+        safe_error = error if error in ("access_denied", "invalid_client", "redirect_uri_mismatch") else "error"
+        return RedirectResponse(_frontend_url(google=safe_error), status_code=303)
+    if not code or not state:
         return RedirectResponse(_frontend_url(google="error"), status_code=303)
     oauth_state = await db.google_oauth_states.find_one_and_delete({
         "state_hash": state_hash(state),
