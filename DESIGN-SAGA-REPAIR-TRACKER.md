@@ -1,17 +1,24 @@
 # Design Saga Repair Tracker
 
-Last updated: 2026-11-09 (Asia/Kolkata)
+Last updated: 2026-11-10 (Asia/Kolkata)
 
 ## Current Checkpoint
 
-- Local checkout: `codex/backend-completion`; DS-120 implementation commit `c544d9e` and release checkpoint `648b01a` are published to `origin/codex/repair-release`.
-- Production checkout: `/opt/design-saga-git`; runtime/source commit `648b01aac33d23279dc6447e8ee673d63b3dd7b2` is live on `srv2020574.hstgr.cloud`.
+- Local checkout: `codex/integrate-latest-20261110`; release `a588b05` is published to `origin/codex/repair-release` and preserves the previously live VPS-only integration history.
+- Production checkout: `/opt/design-saga-git`; source commit `a588b0504a4931d95e951b0eccb6641b3bf99148` is live on `srv2020574.hstgr.cloud`. The backend image is `a588b05`; the web image is the full application release `8647b84` because the final follow-up changed backend status text only.
 - Production working tree: protected external changes in `deploy/Caddyfile` plus `deploy/Caddyfile.pre-tanvika-20261003T154040Z`. Do not overwrite, reset, or include these changes in Design Saga deployments.
 - SSH key access works. Caddy, web, backend, FerretDB and PostgreSQL are running; PostgreSQL, FerretDB, backend and web report healthy. Public `/` and `/api/` return 200; unauthenticated auth, site-visit, attendance-project, payroll-run and receivables routes return 401.
-- Verified backups were created immediately before and during deployment at `/opt/design-saga-backups/20261108T082420Z` and `/opt/design-saga-backups/20261108T082550Z`. The scheduled backup and monitor timers are active; the latest monitor result is successful.
-- Deployment used a SHA-256-verified Git bundle and the guarded updater. It fast-forwarded `c2f09bd` to `e3a855a`, rebuilt/recreated only backend and web, preserved the VPS-only Caddy files byte-for-byte, and produced no observed post-deploy backend 5xx/traceback signature.
+- Verified release backups were created at `/opt/design-saga-backups/20261110T080458Z`, `20261110T080516Z`, `20261110T081208Z`, and `20261110T081236Z`. The scheduled backup and monitor timers remain active.
+- Deployment fast-forwarded the exact GitHub release through the guarded updater, rebuilt/recreated backend and web for `8647b84`, then backend only for `a588b05`. PostgreSQL, FerretDB, Caddy and Tanvika were not rebuilt or restarted; both protected Caddy hashes are unchanged and no post-deploy 5xx/traceback signature was observed.
 - Host log retention is now verified: journald is capped at 1 GB / 7 days; new Docker containers inherit 10 MB x 3-file rotation; an exact-path logrotate rule covers the three older containers without restarting them. Existing PostgreSQL/FerretDB logs were compressed from about 1.5 GB to 115 MB archived, disk use fell from 73% to 70%, and every container stayed healthy.
-- Current action: no unblocked P0/P1 engineering defect remains in the canonical backlog. Await the listed owner/accountant/provider decisions; continue P2/P3 product enhancements only after scope is chosen.
+- Current action: the existing personal Google connection is correctly marked `reconnect_required`; the user must click **Reconnect Google** and complete Google consent. Move the Google OAuth consent app out of Testing when ready so refresh grants do not keep expiring after the testing-window limit. No credential bypass or shared tenant calendar was introduced.
+
+### DS-121: Latest attendance, Calendar, project and UX release (10/11)
+
+- Merged the complete `claude/ux-product-refinement` line with the repaired release and the already-live VPS integration history; no live commit was overwritten. The release includes the two-level PC-friendly Accounting navigation, UI refinement passes, public GAMAA landing page, subscription/module gating, project fee structures, and the automatic monthly paid-leave/LOP attendance policy.
+- Google Calendar remains personal per ERP user (`org_id + user_id` ownership); another employee cannot see or reuse that connection. Expired/revoked Google grants now persist `reconnect_required`, return an actionable 409 on sync, and show **Reconnect Google** instead of a stale generic worker error. The currently stored connection is expired and requires user consent before sync can resume.
+- Added validated/rate-limited public contact requests, platform-only review, strict boolean module toggles, safer project-fee clearing/validation, and login redirection for protected routes. No dependency or database migration was added.
+- Verification: canonical backend gate **492 passed**; frontend lint, undefined-JSX check, logic tests and production build passed; production-only Bandit scan and tracked/history secret scan passed. The focused rendered UX suite passed **17/17**, including Calendar, geofence, Collections Due, Daybook, row actions and project lifecycle. Live source/image revisions, health checks, security headers, unauthenticated route guards, protected hashes, Tanvika availability and recent error logs were all verified after deployment.
 
 ### DS-120: Accounting consistency, finance documents and interrupted-reversal recovery (09/11)
 
