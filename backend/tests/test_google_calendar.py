@@ -7,6 +7,7 @@ import pytest
 from core import google_calendar as gc
 from core import access_control
 from routes.calendar import _validate_event_timing
+from routes.google_calendar import _status_error
 
 
 def test_token_encryption_round_trip(monkeypatch):
@@ -48,6 +49,17 @@ def test_other_google_failure_stays_generic():
     assert reconnect is False
     assert message == "GoogleCalendarError"
     assert "secret" not in message
+
+
+def test_status_normalizes_old_reconnect_error_for_existing_connections():
+    assert _status_error({
+        "status": "reconnect_required",
+        "last_error": "GoogleCalendarError",
+    }) == gc.RECONNECT_REQUIRED_MESSAGE
+    assert _status_error({
+        "status": "connected",
+        "last_error": "HTTPStatusError (HTTP 503)",
+    }) == "HTTPStatusError (HTTP 503)"
 
 
 def test_google_event_id_is_stable_and_google_safe():

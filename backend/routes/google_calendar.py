@@ -37,6 +37,13 @@ def _require_calendar_user(user: dict) -> str:
     return user_org_id(user)
 
 
+def _status_error(connection: dict | None) -> str | None:
+    """Do not leak a stale generic worker error after a refresh grant expires."""
+    if connection and connection.get("status") == "reconnect_required":
+        return RECONNECT_REQUIRED_MESSAGE
+    return (connection or {}).get("last_error")
+
+
 @router.get("/calendar/google/status")
 async def google_calendar_status(request: Request,
                                  session_token: Optional[str] = Cookie(default=None),
@@ -52,7 +59,7 @@ async def google_calendar_status(request: Request,
         "status": (connection or {}).get("status", "disconnected"),
         "email": (connection or {}).get("connected_email"),
         "last_sync_at": (connection or {}).get("last_sync_at"),
-        "last_error": (connection or {}).get("last_error"),
+        "last_error": _status_error(connection),
         "pending": pending,
         "can_manage": bool(has_permission(user, "calendar.read")),
         "personal": True,
