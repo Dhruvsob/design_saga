@@ -5,6 +5,7 @@ to make range queries fast. Additional compound indexes cover the most
 common filters.
 """
 from .db import db
+from .helpers import iso_now, now_utc
 
 # (collection, index_keys, opts)
 _INDEXES = [
@@ -170,6 +171,7 @@ _INDEXES = [
 
 async def ensure_indexes():
     await _migrate_google_calendar_ownership()
+    await _migrate_collection_calendar_privacy()
     for coll, keys, opts in _INDEXES:
         try:
             if opts.get("unique"):
@@ -203,6 +205,80 @@ async def _migrate_google_calendar_ownership():
     # Legacy rows had no owner and cannot be processed safely. A personal sync
     # recreates them for the owning user without touching ERP or Google data.
     await db.google_calendar_sync_queue.delete_many({"user_id": {"$exists": False}})
+
+
+async def _migrate_collection_calendar_privacy():
+    """Remove legacy finance-recipient leakage from generated reminders.
+
+    Older collection reminders included Accountants and used the finance user's
+    identity as creator.  That made the private event eligible for the creator's
+    personal Google sync.  Reconcile only rows that still carry that legacy
+    shape, and queue remote deletion/upsert without calling Google at startup.
+    """
+    owner_cache: dict[str, list[str]] = {}
+    async for event in db.calendar_events.find(
+        {"collection_reminder": True},
+        {"_id": 1, "id": 1, "org_id": 1, "attendee_ids": 1,
+         "employee_ids": 1, "created_by": 1, "created_by_name": 1},
+    ):
+        org_id, source_id = event.get("org_id"), event.get("id")
+        if not org_id or not source_id:
+            continue
+        if org_id not in owner_cache:
+            owner_cache[org_id] = [
+                row["user_id"] async for row in db.users.find(
+                    {"org_id": org_id, "role": {"$in": ["Admin", "Director"]},
+                     "is_active": {"$ne": False}},
+                    {"_id": 0, "user_id": 1},
+                )
+            ]
+        owner_ids = owner_cache[org_id]
+        already_private = (
+            set(event.get("attendee_ids") or []) == set(owner_ids)
+            and not (event.get("employee_ids") or [])
+            and event.get("created_by") == "system:collections"
+            and event.get("created_by_name") == "Collections Due"
+        )
+        if already_private:
+            continue
+        await db.calendar_events.update_one(
+            {"_id": event["_id"]},
+            {"$set": {
+                "visibility": "private",
+                "attendee_ids": owner_ids,
+                "employee_ids": [],
+                "created_by": "system:collections",
+                "created_by_name": "Collections Due",
+                "updated_at": iso_now(),
+            }},
+        )
+        async for connection in db.google_calendar_connections.find(
+            {"org_id": org_id, "status": "connected"},
+            {"_id": 0, "user_id": 1},
+        ):
+            user_id = connection.get("user_id")
+            if not user_id:
+                continue
+            operation = "upsert"
+            if user_id not in owner_ids:
+                mapping = await db.google_calendar_synced_events.find_one({
+                    "org_id": org_id, "user_id": user_id,
+                    "source_type": "calendar_event", "source_id": source_id,
+                }, {"_id": 1})
+                if not mapping:
+                    continue
+                operation = "delete"
+            sync_key = f"{org_id}:{user_id}:calendar_event:{source_id}"
+            await db.google_calendar_sync_queue.update_one(
+                {"sync_key": sync_key},
+                {"$set": {
+                    "sync_key": sync_key, "org_id": org_id, "user_id": user_id,
+                    "source_type": "calendar_event", "source_id": source_id,
+                    "operation": operation, "status": "pending", "attempts": 0,
+                    "next_attempt_at": now_utc(), "updated_at": iso_now(),
+                }, "$setOnInsert": {"created_at": iso_now()}},
+                upsert=True,
+            )
 
 
 async def _remove_nonunique_equivalent(coll_name, keys):

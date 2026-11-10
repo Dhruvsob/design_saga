@@ -22,6 +22,7 @@ def test_occurrences_advance_main_and_repeats():
 
 def test_reminder_is_reflected_everywhere_and_closed_on_receipt(monkeypatch):
     import core.db as db_module
+    import core.indexes as indexes_module
     import core.notifications as notifications_module
     import core.scoped_db as scoped_db_module
     from core.scoped_db import set_scope_from_user, clear_scope, sdb
@@ -45,6 +46,7 @@ def test_reminder_is_reflected_everywhere_and_closed_on_receipt(monkeypatch):
         monkeypatch.setattr(db_module, "db", db)
         monkeypatch.setattr(scoped_db_module, "db", db)
         monkeypatch.setattr(notifications_module, "db", db)
+        monkeypatch.setattr(indexes_module, "db", db)
         monkeypatch.setattr(cr, "db", db)
         await db.users.insert_many([
             {"user_id": f"u_{org}", "org_id": org, "role": "Admin", "name": "Owner"},
@@ -66,6 +68,17 @@ def test_reminder_is_reflected_everywhere_and_closed_on_receipt(monkeypatch):
             assert set(ev["attendee_ids"]) == {f"u_{org}", f"director_{org}"}
             assert ev["created_by"] == "system:collections"
             assert "25,000" in ev["title"]
+            # Startup migration also repairs reminders created by older builds,
+            # so an Accountant creator cannot retain personal Google access.
+            await sdb.calendar_events.update_one({"id": out["event_id"]}, {"$set": {
+                "attendee_ids": [f"accountant_{org}"],
+                "created_by": f"accountant_{org}",
+                "created_by_name": "Accountant",
+            }})
+            await indexes_module._migrate_collection_calendar_privacy()
+            ev = await sdb.calendar_events.find_one({"id": out["event_id"]})
+            assert set(ev["attendee_ids"]) == {f"u_{org}", f"director_{org}"}
+            assert ev["created_by"] == "system:collections"
             doc = await sdb.payment_reminders.find_one({"source_id": "recv_x", "auto": True})
             assert doc["number"].startswith("PR-") and doc["amount_due"] == 25000
             # refresh again: nothing duplicated
