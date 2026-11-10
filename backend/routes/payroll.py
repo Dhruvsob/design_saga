@@ -708,6 +708,9 @@ def _generate_salary_slip_pdf(emp: dict, run: dict, org: dict,
         pdf.set_text_color(90, 90, 90)
         note = (f"Paid days {_count(attendance['paid_days'])} · loss of pay "
                 f"{_count(attendance.get('lop_days', 0))} day(s)")
+        auto_pl = int(attendance.get("auto_paid_leave") or 0)
+        if auto_pl:
+            note += f" · {auto_pl} absence(s) auto-counted as paid leave"
         if attendance.get("as_of_today"):
             note = ("Attendance as recorded today; salary was calculated on the attendance at payment. " + note)
         pdf.multi_cell(0, 4.5, _safe(note), 0, "R")
@@ -839,6 +842,7 @@ def _slip_attendance(summary: dict, breakdown: dict) -> dict:
         "present": float(s.get("present") or 0) + float(s.get("late") or 0) + float(s.get("site_visit") or 0),
         "offs": float(s.get("week_off") or 0) + float(s.get("holidays") or 0),
         "paid_leave": s.get("paid_leave") or 0,
+        "auto_paid_leave": s.get("auto_paid_leave") or 0,
         "unpaid_leave": s.get("unpaid_leave") or 0,
         "absent": s.get("absent") or 0,
         "half_day": s.get("half_day") or 0,
@@ -970,7 +974,14 @@ def _generate_attendance_payslip_pdf(s: dict, org: dict) -> bytes:
     pdf.set_font("Helvetica", "", 9)
     for v in vals:
         pdf.cell(w, 7, str(v), 1, 0, "C")
-    pdf.ln(10)
+    pdf.ln()
+    auto_pl = int(summ.get("auto_paid_leave") or 0)
+    if auto_pl:
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(26, 127, 90)
+        pdf.cell(0, 5, f"  * Paid leave includes {auto_pl} day(s) auto-counted from unexpected absence", 0, 1, "L")
+        pdf.set_text_color(0, 0, 0)
+    pdf.ln(6)
 
     # Earnings / Deductions
     pdf.set_fill_color(*primary)

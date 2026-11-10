@@ -834,7 +834,7 @@ function Versions({ q }) {
 /* ========= Preview ========= */
 function Preview({ qid }) {
   return (
-    <div className="border border-[var(--line)]" style={{ height: "85vh" }} data-testid="tab-preview">
+    <div className="border border-[var(--line)] rounded-lg overflow-hidden" style={{ height: "85vh" }} data-testid="tab-preview">
       <PdfFrame path={`/quotations-adv/${qid}/pdf`} title="Quotation preview" />
     </div>
   );

@@ -145,6 +145,12 @@ export default function ProjectDetail() {
       budget: p.budget ?? "", description: p.description || "",
       start_date: p.start_date || "", end_date: p.end_date || "",
       site_address: p.site_address || "", site_area_sqft: p.site_area_sqft || "",
+      fee_structure_type: p.fee_structure_type || "",
+      fee_lump_sum_amount: p.fee_lump_sum_amount ?? "",
+      fee_project_value: p.fee_project_value ?? "",
+      fee_percentage: p.fee_percentage ?? "",
+      fee_contract_value: p.fee_contract_value ?? "",
+      fee_rate_per_sqft: p.fee_rate_per_sqft ?? "",
     });
     setErr("");
     setEditOpen(true);
@@ -158,14 +164,36 @@ export default function ProjectDetail() {
     }
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const feeCalc = (f) => {
+    const fst = f.fee_structure_type;
+    if (fst === "lump_sum") return f.fee_lump_sum_amount ? Number(f.fee_lump_sum_amount) : null;
+    if (fst === "percentage_consultancy") {
+      const v = Number(f.fee_project_value || 0), pct = Number(f.fee_percentage || 0);
+      return v && pct ? Math.round(v * pct / 100) : null;
+    }
+    if (fst === "turnkey") return f.fee_contract_value ? Number(f.fee_contract_value) : null;
+    if (fst === "per_sqft") {
+      const area = Number(f.site_area_sqft || 0), rate = Number(f.fee_rate_per_sqft || 0);
+      return area && rate ? area * rate : null;
+    }
+    return null;
+  };
+
   const saveEdit = async (e) => {
     e.preventDefault(); setErr("");
+    const payload = {
+      ...form,
+      budget: Number(form.budget || 0),
+      site_area_sqft: form.site_area_sqft ? Number(form.site_area_sqft) : undefined,
+      fee_structure_type: form.fee_structure_type || undefined,
+      fee_lump_sum_amount: form.fee_lump_sum_amount !== "" ? Number(form.fee_lump_sum_amount) : undefined,
+      fee_project_value: form.fee_project_value !== "" ? Number(form.fee_project_value) : undefined,
+      fee_percentage: form.fee_percentage !== "" ? Number(form.fee_percentage) : undefined,
+      fee_contract_value: form.fee_contract_value !== "" ? Number(form.fee_contract_value) : undefined,
+      fee_rate_per_sqft: form.fee_rate_per_sqft !== "" ? Number(form.fee_rate_per_sqft) : undefined,
+    };
     try {
-      await api.patch(`/projects/${id}`, {
-        ...form,
-        budget: Number(form.budget || 0),
-        site_area_sqft: form.site_area_sqft ? Number(form.site_area_sqft) : undefined,
-      });
+      await api.patch(`/projects/${id}`, payload);
       setEditOpen(false);
       load();
     } catch (ex) {
@@ -267,11 +295,11 @@ export default function ProjectDetail() {
               <Link to={`/clients/${p.client_id}`} className="hover:text-[var(--accent-strong)] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
             ) : (p.client_name || "—")}
             {p.engagement_type && (
-              <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
+              <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
                 p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[#5F5A4B]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
               }`}>{p.engagement_type}</span>
             )}
-            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
+            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{p.name}</h1>
           {p.description && <p className="mt-2 text-[var(--ink-2)] max-w-2xl">{p.description}</p>}
@@ -454,7 +482,7 @@ export default function ProjectDetail() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
+                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
                 <span className={`status-chip chip-${t.priority}`}>{statusLabel(t.priority)}</span>
                 <CaretRight size={12} className="text-[var(--ink-3)]" />
               </div>
@@ -660,6 +688,53 @@ export default function ProjectDetail() {
             </div>
             <input className="input-flat w-full" placeholder="Site address" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
             <input className="input-flat w-full" type="number" min="0" placeholder="Enter site area (sq ft)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} />
+
+            {/* Fee structure */}
+            <div className="border-t border-[var(--line-soft)] pt-3 space-y-2">
+              <div className="overline text-[10px]">FEE STRUCTURE</div>
+              <select aria-label="Fee structure type" className="input-flat w-full"
+                value={form.fee_structure_type}
+                onChange={(e) => setForm({ ...form, fee_structure_type: e.target.value })}>
+                <option value="">— Select fee type —</option>
+                <option value="lump_sum">Lump Sum (fixed fee)</option>
+                <option value="percentage_consultancy">Consultancy % (% of project value)</option>
+                <option value="turnkey">Turnkey (materials + execution)</option>
+                <option value="per_sqft">Per Sq Ft (rate × area)</option>
+              </select>
+              {form.fee_structure_type === "lump_sum" && (
+                <input className="input-flat w-full" type="number" min="0" placeholder="Fixed fee amount (₹)"
+                  value={form.fee_lump_sum_amount}
+                  onChange={(e) => setForm({ ...form, fee_lump_sum_amount: e.target.value })} />
+              )}
+              {form.fee_structure_type === "percentage_consultancy" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="input-flat" type="number" min="0" placeholder="Total project value (₹)"
+                    value={form.fee_project_value}
+                    onChange={(e) => setForm({ ...form, fee_project_value: e.target.value })} />
+                  <input className="input-flat" type="number" min="0" max="100" step="0.01" placeholder="Fee % (e.g. 8.5)"
+                    value={form.fee_percentage}
+                    onChange={(e) => setForm({ ...form, fee_percentage: e.target.value })} />
+                </div>
+              )}
+              {form.fee_structure_type === "turnkey" && (
+                <input className="input-flat w-full" type="number" min="0" placeholder="Turnkey contract value (₹)"
+                  value={form.fee_contract_value}
+                  onChange={(e) => setForm({ ...form, fee_contract_value: e.target.value })} />
+              )}
+              {form.fee_structure_type === "per_sqft" && (
+                <input className="input-flat w-full" type="number" min="0" placeholder="Rate per sq ft (₹/sq ft)"
+                  value={form.fee_rate_per_sqft}
+                  onChange={(e) => setForm({ ...form, fee_rate_per_sqft: e.target.value })} />
+              )}
+              {feeCalc(form) !== null && (
+                <div className="text-xs text-[var(--ink-2)] font-mono bg-[var(--surface-2)] px-3 py-1.5 rounded">
+                  Calculated fee: <span className="text-[var(--ink)] font-semibold">{inr(feeCalc(form))}</span>
+                  {form.fee_structure_type === "per_sqft" && form.site_area_sqft && ` (${Number(form.site_area_sqft).toLocaleString()} sq ft × ₹${Number(form.fee_rate_per_sqft).toLocaleString()}/sq ft)`}
+                  {form.fee_structure_type === "percentage_consultancy" && form.fee_percentage && ` (${form.fee_percentage}% of ${inr(Number(form.fee_project_value))})`}
+                </div>
+              )}
+            </div>
+
             <textarea className="input-flat w-full" rows="2" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
             <button className="btn-primary w-full" data-testid="edit-project-save">Save changes</button>

@@ -152,7 +152,7 @@ export default function Clients() {
         </label>
       </div>
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
@@ -169,7 +169,7 @@ export default function Clients() {
                 <Td className="font-semibold">
                   <span className="inline-flex items-center gap-2">
                     {c.name}
-                    {c.archived && <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">Archived</span>}
+                    {c.archived && <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-3)]">Archived</span>}
                     <CaretRight size={10} className="text-[var(--ink-3)]" />
                   </span>
                 </Td>

@@ -530,7 +530,7 @@ function Ledger({ data }) {
         <Kpi label="Total paid" value={INR(data.total_paid)} />
         <Kpi label="Closing balance" value={INR(data.outstanding)} accent={data.outstanding > 0} />
       </div>
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -547,7 +547,7 @@ function Ledger({ data }) {
               <tr key={i} className="border-b border-[var(--line-soft)]" data-testid={`ledger-row-${i}`}>
                 <Td className="font-mono text-xs">{formatDate(e.date)}</Td>
                 <Td>
-                  <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 ${
+                  <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded ${
                     e.type === "bill" ? "bg-[var(--danger-soft)] text-[var(--danger)]" : "bg-[var(--success-soft)] text-[var(--success)]"
                   }`}>{e.type}</span>
                 </Td>
@@ -705,7 +705,7 @@ function Bills({ v, accounts, purchaseOrders, initialPoId, canBill, canEdit, can
         </form>
       )}
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -878,7 +878,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
         </form>
       )}
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -1364,7 +1364,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
         </form>
       )}
 
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)] text-left">
             <tr>
@@ -1385,7 +1385,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
                 <Td><div className="font-mono text-xs">{r.bill_number || r.reference || "Expected vendor incentive"}</div><div className="text-[10px] text-[var(--ink-3)]">{r.project_name || (r.project_id ? "Linked project" : "No project")}</div></Td>
                 <Td className="text-right font-mono">{INR_D(r.purchase_amount)}</Td>
                 <Td>
-                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--line-soft)]">
+                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--line-soft)]">
                     {r.origin === "manual_expected" ? r.recognition : r.commission_type}
                   </span>
                 </Td>
@@ -1404,7 +1404,7 @@ function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit,
       </div>
 
       {(ledger.receipts || []).length > 0 && (
-        <div className="border border-[var(--line)]" data-testid="commission-receipts">
+        <div className="border border-[var(--line)] rounded-md overflow-hidden" data-testid="commission-receipts">
           <div className="overline px-3 pt-3">RECEIPT HISTORY</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="text-[10px] font-mono uppercase text-[var(--ink-3)]">

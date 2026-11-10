@@ -340,7 +340,7 @@ function LoanDetailModal({ loanId, accounts, canEdit, canDelete, canTransact, on
 
       {/* Schedule */}
       <div className="overline mb-2">AMORTIZATION SCHEDULE</div>
-      <div className="max-h-[420px] overflow-y-auto border border-[var(--line)]">
+      <div className="max-h-[420px] overflow-y-auto border border-[var(--line)] rounded-md">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] sticky top-0 border-b border-[var(--line)]">
             <tr className="text-left">

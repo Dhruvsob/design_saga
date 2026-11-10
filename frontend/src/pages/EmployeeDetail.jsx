@@ -555,8 +555,8 @@ export default function EmployeeDetail() {
                 <input type="number" min={0} max={100} className="input-flat" placeholder="Enter score (0-100)" value={perf.current_kpi_score ?? ""} onChange={(e) => patch(() => ({ current_kpi_score: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
             )}
-            <div className="mt-3 h-2 bg-[var(--line-soft)] relative">
-              <div className="h-2 bg-[var(--accent)]" style={{ width: `${Math.min(100, Math.max(0, perf.current_kpi_score || 0))}%` }} />
+            <div className="mt-3 h-2 bg-[var(--line-soft)] relative rounded-full overflow-hidden">
+              <div className="h-2 bg-[var(--accent)] rounded-full" style={{ width: `${Math.min(100, Math.max(0, perf.current_kpi_score || 0))}%` }} />
             </div>
           </Card>
 

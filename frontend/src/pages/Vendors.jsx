@@ -217,7 +217,7 @@ export default function Vendors() {
       )}
 
       {/* LIST */}
-      <div className="border border-[var(--line)]">
+      <div className="border border-[var(--line)] rounded-md overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-left">
@@ -314,7 +314,7 @@ function TypePill({ type }) {
     other: "bg-[var(--line-soft)] text-[var(--ink)]",
   };
   return (
-    <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 ${map[type] || map.vendor}`}>
+    <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded ${map[type] || map.vendor}`}>
       {AGENCY_LABELS[type] || type || "vendor"}
     </span>
   );

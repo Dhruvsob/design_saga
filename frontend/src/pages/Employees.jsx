@@ -159,7 +159,7 @@ export default function Employees() {
           {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-14 w-full" />)}
         </div>
       ) : (
-        <div className="border border-[var(--line)]">
+        <div className="border border-[var(--line)] rounded-md overflow-hidden">
           <div className="overflow-x-auto"><table className="w-full">
             <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr className="text-left">
@@ -184,9 +184,9 @@ export default function Employees() {
                   <Td>
                     <div className="flex items-center gap-3">
                       {r.photo ? (
-                        <img src={r.photo} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
+                        <img src={r.photo} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)] rounded-full" />
                       ) : (
-                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
+                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs rounded-full">
                           {(r.first_name || "?").slice(0, 1).toUpperCase()}
                         </div>
                       )}

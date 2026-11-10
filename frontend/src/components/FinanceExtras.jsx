@@ -108,7 +108,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
         />
       )}
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
@@ -441,7 +441,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
         </button>
 
         {showLog && (
-          <div className="mt-3 border border-[var(--line)] overflow-x-auto">
+          <div className="mt-3 border border-[var(--line)] overflow-x-auto rounded-md">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                 <tr>
@@ -489,7 +489,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
         )}
       </div>
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>

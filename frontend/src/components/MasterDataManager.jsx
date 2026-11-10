@@ -178,7 +178,7 @@ export default function MasterDataManager() {
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 ${
+                    <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
                       item.is_active ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--hover)] text-[var(--ink-3)]"
                     }`}>{item.is_active ? "Active" : "Inactive"}</span>
                   </td>

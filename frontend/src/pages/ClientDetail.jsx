@@ -100,7 +100,7 @@ export default function ClientDetail() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <div className="overline mb-2">
-            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
+            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{c.name}</h1>
           <div className="mt-2 text-sm text-[var(--ink-2)] flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="client-contact">

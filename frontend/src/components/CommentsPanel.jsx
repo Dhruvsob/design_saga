@@ -66,7 +66,7 @@ export default function CommentsPanel({ entityType, entityId }) {
         {comments.map((c) => (
           <div key={c.id} className="p-4 group" data-testid={`comment-${c.id}`}>
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-[10px]">
+              <div className="w-6 h-6 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-[10px] rounded-full">
                 {(c.author_name || "?").slice(0, 1).toUpperCase()}
               </div>
               <span className="text-sm font-semibold">{c.author_name}</span>

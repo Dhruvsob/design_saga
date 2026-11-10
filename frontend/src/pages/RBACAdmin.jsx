@@ -174,9 +174,9 @@ export default function RBACAdmin() {
                   <Td>
                     <div className="flex items-center gap-3">
                       {u.picture ? (
-                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
+                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)] rounded-full" />
                       ) : (
-                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
+                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs rounded-full">
                           {(u.name || "?").slice(0, 1).toUpperCase()}
                         </div>
                       )}
@@ -373,7 +373,7 @@ function RolePermissionEditor({ role, catalog, onSaved }) {
 
   return (
     <div className="space-y-3" data-testid={`perm-editor-${role.name}`}>
-      <div className="overflow-x-auto border border-[var(--line)]">
+      <div className="overflow-x-auto border border-[var(--line)] rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
@@ -434,9 +434,9 @@ function PendingRow({ u, roles, onDecide, savingId }) {
       <Td>
         <div className="flex items-center gap-3">
           {u.picture ? (
-            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
+            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)] rounded-full" />
           ) : (
-            <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
+            <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs rounded-full">
               {(u.name || "?").slice(0, 1).toUpperCase()}
             </div>
           )}

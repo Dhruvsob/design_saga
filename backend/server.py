@@ -360,6 +360,9 @@ class ProjectStageUpdate(BaseModel):
     stage: str
 
 
+FEE_STRUCTURE_TYPES = ("lump_sum", "percentage_consultancy", "turnkey", "per_sqft")
+
+
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     client_id: Optional[str] = None
@@ -373,6 +376,12 @@ class ProjectUpdate(BaseModel):
     team_ids: Optional[List[str]] = None
     site_address: Optional[str] = None
     site_area_sqft: Optional[float] = None
+    fee_structure_type: Optional[str] = None      # lump_sum | percentage_consultancy | turnkey | per_sqft
+    fee_lump_sum_amount: Optional[float] = Field(default=None, ge=0)
+    fee_project_value: Optional[float] = Field(default=None, ge=0)   # for percentage_consultancy
+    fee_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    fee_contract_value: Optional[float] = Field(default=None, ge=0)  # for turnkey
+    fee_rate_per_sqft: Optional[float] = Field(default=None, ge=0)   # for per_sqft
 
 
 class VendorContact(BaseModel):
@@ -1731,6 +1740,8 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
         raise HTTPException(status_code=400, detail="Nothing to update")
     if upd.get("engagement_type") and upd["engagement_type"] not in ("consultancy", "turnkey"):
         raise HTTPException(status_code=400, detail="engagement_type must be consultancy | turnkey")
+    if upd.get("fee_structure_type") and upd["fee_structure_type"] not in FEE_STRUCTURE_TYPES:
+        raise HTTPException(status_code=400, detail=f"fee_structure_type must be one of: {', '.join(FEE_STRUCTURE_TYPES)}")
     if upd.get("client_id"):
         c = await sdb.clients.find_one({"id": upd["client_id"]}, {"_id": 0})
         if not c:

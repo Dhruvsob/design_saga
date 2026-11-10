@@ -106,7 +106,7 @@ async def monthly_summary(emp: dict, year: int, month: int,
     summary = {k: 0 for k in [
         "present", "late", "late_pending", "late_rejected", "half_day", "absent",
         "paid_leave", "unpaid_leave", "week_off", "holidays", "site_visit",
-        "working_days", "total_working_minutes",
+        "auto_paid_leave", "working_days", "total_working_minutes",
     ]}
     daily = []
     payable = 0.0
@@ -128,6 +128,9 @@ async def monthly_summary(emp: dict, year: int, month: int,
         worked = rec is not None and rstatus in WORKED_STATUSES
 
         # Precedence: worked > holiday > weekly-off > leave > absent > upcoming
+        # Rule: first absence each month is auto-converted to free paid leave when
+        # the monthly allowance has not yet been consumed by an approved leave.
+        auto_pl = False   # True when this absent day is auto-converted to paid leave
         if worked:
             status = rstatus
         elif is_holiday:
@@ -146,11 +149,24 @@ async def monthly_summary(emp: dict, year: int, month: int,
                 # ordinary monthly casual/sick/earned-leave allowance.
                 status = "paid_leave"
         elif rec is not None and rstatus == "absent":
-            status = "absent"
+            # Auto-convert the first eligible absence to free paid leave.
+            if paid_leave_used < paid_leave_allowance:
+                status = "paid_leave"
+                auto_pl = True
+                paid_leave_used += 1
+            else:
+                status = "absent"
         elif cur > today:
             status = "upcoming"
         else:
-            status = "absent"
+            # Past day with no attendance record — employee did not check in.
+            # Apply the same auto-paid-leave rule for unexpected/emergency absence.
+            if paid_leave_used < paid_leave_allowance:
+                status = "paid_leave"
+                auto_pl = True
+                paid_leave_used += 1
+            else:
+                status = "absent"
 
         wm = int((rec or {}).get("working_minutes")
                  or round(float((rec or {}).get("worked_hours") or 0) * 60))
@@ -181,6 +197,8 @@ async def monthly_summary(emp: dict, year: int, month: int,
             payable += 0.5
             lop += 0.5
         elif status == "paid_leave":
+            if auto_pl:
+                summary["auto_paid_leave"] += 1
             summary["paid_leave"] += 1
             payable += 1
         elif status == "unpaid_leave":
@@ -214,6 +232,7 @@ async def monthly_summary(emp: dict, year: int, month: int,
             "check_out": _hhmm_ist(co),
             "working_minutes": wm,
             "status": status,
+            "auto_paid_leave": auto_pl,
             "late_minutes": (rec or {}).get("late_minutes") or 0,
             "late_reason": (rec or {}).get("late_reason"),
             "late_category": (rec or {}).get("late_category"),

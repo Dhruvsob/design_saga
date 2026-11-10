@@ -41,19 +41,41 @@ const CalendarPage = lazy(() => import("./pages/Calendar"));
 const CompanySettings = lazy(() => import("./pages/CompanySettings"));
 const AuditLog = lazy(() => import("./pages/AuditLog"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 
 const PageFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center overline">LOADING...</div>
 );
 
 function ProtectedShell({ children, requirePerm, requireSuperAdmin }) {
-  const { user, loading, pinLocked, hasPerm, isPending, isRejected, isSuperAdmin, logout } = useAuth();
+  const { user, loading, pinLocked, hasPerm, isPending, isRejected, isSuperAdmin, logout, isSuspended } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
     if (!loading && !user) navigate("/", { replace: true });
   }, [user, loading, navigate]);
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (!user) return null;
+  // Suspended workspace: show a clear message before the user is confused.
+  if (isSuspended) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white px-6">
+        <div className="max-w-lg text-center" data-testid="suspended-workspace-screen">
+          <div className="overline mb-4 text-[var(--warning)]">WORKSPACE SUSPENDED</div>
+          <h1 className="font-display font-bold tracking-tighter text-5xl mb-4">Access paused.</h1>
+          <p className="text-[var(--ink-2)] mb-6">
+            Your workspace has been suspended by the platform administrator. This usually happens when a subscription payment is overdue. Please contact support to restore access.
+          </p>
+          <div className="text-xs font-mono uppercase tracking-wider text-[var(--ink-3)] mb-6">
+            Signed in as <span className="text-[var(--ink)]">{user.email}</span>
+          </div>
+          <button onClick={logout} className="btn-primary" data-testid="suspended-signout-btn">
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Pending / rejected: block ERP access entirely.
   if (isPending || isRejected) {
     return (
@@ -122,6 +144,7 @@ function AppRouter() {
   return (
     <Suspense fallback={<PageFallback />}><Routes>
       <Route path="/" element={<PublicRoot />} />
+      <Route path="/login" element={<LoginRoute />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/portal/:token" element={<ClientPortal />} />
       <Route path="/dashboard" element={<ProtectedShell><Dashboard /></ProtectedShell>} />
@@ -164,6 +187,15 @@ function PublicRoot() {
   const { user, loading, isPending, isRejected, isSuperAdmin } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   // Pending/rejected users land in ProtectedShell to see the notice consistently.
+  if (user && (isPending || isRejected)) return <Navigate to="/dashboard" replace />;
+  if (user && isSuperAdmin && !user.org_id) return <Navigate to="/super-admin" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
+}
+
+function LoginRoute() {
+  const { user, loading, isPending, isRejected, isSuperAdmin } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (user && (isPending || isRejected)) return <Navigate to="/dashboard" replace />;
   if (user && isSuperAdmin && !user.org_id) return <Navigate to="/super-admin" replace />;
   if (user) return <Navigate to="/dashboard" replace />;

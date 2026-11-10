@@ -864,7 +864,7 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       </div>
 
       {cf.activities && (
-        <div className="border border-[var(--line)] bg-white overflow-x-auto">
+        <div className="border border-[var(--line)] bg-white overflow-x-auto rounded-md">
           <table className="w-full min-w-[680px] text-sm">
             <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr><th className="p-3 text-left overline">ACTIVITY</th><th className="p-3 text-left overline">DETAIL</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">NET</th></tr>
@@ -891,7 +891,7 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       )}
 
       {Array.isArray(cf.cash_accounts) && cf.cash_accounts.length > 0 && (
-        <div className="border border-[var(--line)] bg-white overflow-x-auto">
+        <div className="border border-[var(--line)] bg-white overflow-x-auto rounded-md">
           <div className="p-3 border-b border-[var(--line)] overline">CASH & BANK RECONCILIATION</div>
           <table className="w-full min-w-[620px] text-sm">
             <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr><th className="p-3 text-left overline">ACCOUNT</th><th className="p-3 text-right overline">OPENING</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">CLOSING</th></tr></thead>
@@ -1278,7 +1278,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
       </div>
 
       {open.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 border border-[var(--line)] divide-x divide-y lg:divide-y-0 divide-[var(--line-soft)]"
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 border border-[var(--line)] divide-x divide-y lg:divide-y-0 divide-[var(--line-soft)] rounded-md overflow-hidden"
              role="group" aria-label="Money due by age" data-testid="collections-aging">
           {aging.map((b) => (
             <button key={b.id} type="button" disabled={!b.count} aria-pressed={age === b.id}
@@ -1320,7 +1320,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
         </div>
       </div>
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase text-[var(--ink-2)]">
             <tr>
@@ -1545,7 +1545,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
         </form>
       )}
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Narration</th><th className="p-2 text-left">Account</th><th className="p-2 text-left">Reference</th><th className="p-2 text-right">Amount</th></tr>
@@ -1960,7 +1960,7 @@ function CombinedLedger({ clients, vendors, projects, accounts, fy, fromDate, to
             <KPI label="Net" value={CURRENCY(data.totals.net)} Icon={ChartLine} tint="#0A0A0A" />
           </div>
           {data.by_vendor.length > 0 && (
-            <div className="border border-[var(--line)] overflow-x-auto">
+            <div className="border border-[var(--line)] overflow-x-auto rounded-md">
               <table className="w-full text-sm" data-testid="combined-by-vendor">
                 <thead className="bg-[var(--surface-2)]"><tr className="overline text-left">
                   <th className="p-2">By vendor</th>{accountCols.map((c) => <th key={c} className="p-2 text-right">{c}</th>)}<th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th>
@@ -1976,16 +1976,16 @@ function CombinedLedger({ clients, vendors, projects, accounts, fy, fromDate, to
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-[var(--line)]"><table className="w-full text-sm" data-testid="combined-by-project">
+            <div className="border border-[var(--line)] rounded-md overflow-hidden"><table className="w-full text-sm" data-testid="combined-by-project">
               <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">By project</th><th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th></tr></thead>
               <tbody>{data.by_project.map((x) => <tr key={x.project_id || "none"} className="border-t border-[var(--line-soft)]"><td className="p-2">{x.project_name}</td><td className="p-2 text-right tabular-nums">{CURRENCY(x.income)}</td><td className="p-2 text-right tabular-nums">{x.expense ? CURRENCY(x.expense) : "—"}</td></tr>)}</tbody>
             </table></div>
-            <div className="border border-[var(--line)]"><table className="w-full text-sm" data-testid="combined-by-account">
+            <div className="border border-[var(--line)] rounded-md overflow-hidden"><table className="w-full text-sm" data-testid="combined-by-account">
               <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">By account</th><th className="p-2 text-right">Amount</th></tr></thead>
               <tbody>{data.by_account.map((x) => <tr key={x.account_id} className="border-t border-[var(--line-soft)]"><td className="p-2">{x.account_name}<span className="text-[10px] text-[var(--ink-3)] ml-1">{x.type}</span></td><td className="p-2 text-right tabular-nums">{CURRENCY(x.amount)}</td></tr>)}</tbody>
             </table></div>
           </div>
-          <div className="border border-[var(--line)] overflow-x-auto"><table className="w-full text-sm min-w-[720px]">
+          <div className="border border-[var(--line)] overflow-x-auto rounded-md"><table className="w-full text-sm min-w-[720px]">
             <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">Date</th><th className="p-2">Entry</th><th className="p-2">Project</th><th className="p-2">Vendor / client</th><th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th></tr></thead>
             <tbody>{data.entries.map((e) => (
               <tr key={e.id} className="border-t border-[var(--line-soft)]">
