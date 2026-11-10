@@ -51,7 +51,7 @@ export default function CommentsPanel({ entityType, entityId }) {
   };
 
   return (
-    <div className="border border-[var(--line)]" data-testid="comments-panel">
+    <div className="border border-[var(--line)] rounded-lg overflow-hidden" data-testid="comments-panel">
       <div className="p-4 border-b border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
         <ChatCircleText size={14} />
         <span className="overline">NOTES &amp; COMMENTS</span>

@@ -64,7 +64,7 @@ export default function MyDay() {
         <div className="space-y-3">
           {a && (
             <button type="button" onClick={() => navigate("/attendance")} data-testid="my-day-attendance"
-              className="w-full text-left border border-[var(--line)] p-3 hover:border-[var(--accent-strong)] transition">
+              className="w-full text-left border border-[var(--line)] rounded-md p-3 hover:border-[var(--accent-strong)] transition">
               <div className="flex items-center gap-2 text-xs text-[var(--ink-2)]"><Clock size={14} /> Attendance today</div>
               <div className="mt-1 text-sm font-semibold">
                 {a.checked_out ? "Checked out" : a.checked_in ? `Checked in at ${time(a.check_in)}` : "Not checked in yet"}
@@ -73,7 +73,7 @@ export default function MyDay() {
             </button>
           )}
           {l && (
-            <div className="border border-[var(--line)] p-3" data-testid="my-day-leave">
+            <div className="border border-[var(--line)] rounded-md p-3" data-testid="my-day-leave">
               <div className="flex items-center gap-2 text-xs text-[var(--ink-2)]"><CalendarCheck size={14} /> Leave this month</div>
               <div className="mt-1 text-sm font-semibold">
                 {l.free_left > 0 ? "Your free leave is still available" : `${l.used_this_month} day${l.used_this_month === 1 ? "" : "s"} taken`}

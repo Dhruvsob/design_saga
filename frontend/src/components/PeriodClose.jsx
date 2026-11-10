@@ -111,7 +111,7 @@ export default function PeriodClose({ fyChoices = [], currentFy, isAdmin }) {
 
   return (
     <div className="space-y-5" data-testid="period-close">
-      <div className="flex flex-wrap items-center gap-3 border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3" data-testid="period-lock-status">
+      <div className="flex flex-wrap items-center gap-3 border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 rounded-md" data-testid="period-lock-status">
         {lock ? <LockSimple size={20} className="text-[var(--accent-strong)]" /> : <LockSimpleOpen size={20} className="text-[var(--ink-3)]" />}
         <div className="flex-1 min-w-[220px]">
           <div className="font-semibold">{lock ? `Books closed up to ${formatDate(lock)}` : "No period is closed yet"}</div>
@@ -135,7 +135,7 @@ export default function PeriodClose({ fyChoices = [], currentFy, isAdmin }) {
       </div>
 
       <ol className="space-y-4">
-        <li className="border border-[var(--line)] p-4">
+        <li className="border border-[var(--line)] rounded-md p-4">
           <div className="flex flex-wrap items-center gap-3">
             <span className="overline">1 · Check</span>
             <span className="text-sm text-[var(--ink-2)] flex-1">Entries balance, every entry has its source record, Cash/Bank matches the payment method.</span>
@@ -163,7 +163,7 @@ export default function PeriodClose({ fyChoices = [], currentFy, isAdmin }) {
           )}
         </li>
 
-        <li className="border border-[var(--line)] p-4">
+        <li className="border border-[var(--line)] rounded-md p-4">
           <div className="flex flex-wrap items-center gap-3">
             <span className="overline">2 · Export</span>
             <span className="text-sm text-[var(--ink-2)] flex-1">One Excel file: Daybook, journal lines, trial balance, P&amp;L, chart of accounts, invoices, receipts, collections, vendor bills and payments, payroll, expenses, attachments and audit log, with a checksum manifest. Exporting never deletes anything.</span>
@@ -174,7 +174,7 @@ export default function PeriodClose({ fyChoices = [], currentFy, isAdmin }) {
           {exported && <div className="mt-2 text-[11px] text-[var(--ink-3)] break-all" data-testid="period-export-done">Downloaded · SHA-256 {exported.sha256}</div>}
         </li>
 
-        <li className="border border-[var(--line)] p-4">
+        <li className="border border-[var(--line)] rounded-md p-4">
           <div className="flex flex-wrap items-center gap-3">
             <span className="overline">3 · Close</span>
             <span className="text-sm text-[var(--ink-2)] flex-1">
@@ -201,7 +201,7 @@ export default function PeriodClose({ fyChoices = [], currentFy, isAdmin }) {
       </ol>
 
       {status?.history?.length > 0 && (
-        <div className="border border-[var(--line)] overflow-x-auto">
+        <div className="border border-[var(--line)] overflow-x-auto rounded-md">
           <table className="w-full text-sm min-w-[620px]" data-testid="period-history">
             <thead className="bg-[var(--surface-2)]"><tr className="overline text-left">
               <th className="p-2">When</th><th className="p-2">Action</th><th className="p-2">Closed up to</th><th className="p-2">By</th><th className="p-2">Reason / export</th>

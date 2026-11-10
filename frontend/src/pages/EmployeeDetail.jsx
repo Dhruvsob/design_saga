@@ -952,7 +952,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : history.length === 0 ? (
-        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)]" data-testid="salary-history-empty">
+        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)] rounded-md" data-testid="salary-history-empty">
           No revisions recorded yet. Record an increment to start a history — past payslips remain unchanged.
         </div>
       ) : (
@@ -1039,7 +1039,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : shown.length === 0 ? (
-        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)]" data-testid="payment-history-empty">
+        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)] rounded-md" data-testid="payment-history-empty">
           No salary payments recorded yet.
         </div>
       ) : (

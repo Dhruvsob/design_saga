@@ -81,7 +81,7 @@ export default function ProjectSnags({ projectId, employees = [] }) {
       <div className="space-y-2">
         {data === null && <div className="overline">LOADING…</div>}
         {data && rows.length === 0 && (
-          <div className="border border-dashed border-[var(--line)] p-8 text-center text-sm text-[var(--ink-3)]">
+          <div className="border border-dashed border-[var(--line)] rounded-md p-8 text-center text-sm text-[var(--ink-3)]">
             {filter === "active" ? "No open snags. Raise one from site with a photo; the assignee fixes it with a photo; a manager verifies and closes it." : "Nothing in this view."}
           </div>
         )}
@@ -91,7 +91,7 @@ export default function ProjectSnags({ projectId, employees = [] }) {
           const late = s.due_date && s.status === "open" && s.due_date < new Date().toISOString().slice(0, 10);
           const canFix = s.status === "open" && (data.can_manage || mine.has(s.assignee_user_id));
           return (
-            <div key={s.id} className="border border-[var(--line)] p-3 flex gap-3 items-start" data-testid={`snag-${s.number}`}>
+            <div key={s.id} className="border border-[var(--line)] rounded-md p-3 flex gap-3 items-start" data-testid={`snag-${s.number}`}>
               <button type="button" className="shrink-0 w-16 h-16 bg-[var(--surface-2)] overflow-hidden" onClick={() => setViewing(s)} aria-label={`Open ${s.number}`}>
                 {first ? <AuthImage src={`/snags/${s.id}/photos/${first.id}`} alt="" className="w-16 h-16 object-cover" />
                   : <Camera size={20} className="m-auto text-[var(--ink-3)]" />}

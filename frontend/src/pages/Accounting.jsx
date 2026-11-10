@@ -18,6 +18,7 @@ import {
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
   Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
   HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle, Trash,
+  CaretDown,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
@@ -103,6 +104,7 @@ export default function Accounting() {
   const [showForm, setShowForm] = useState(false);
   const [showWithdrawal, setShowWithdrawal] = useState(false);
   const [showTransfers, setShowTransfers] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [meta, setMeta] = useState(null);
   const [ledgerAccount, setLedgerAccount] = useState(null);
   // Financial period: fy label OR explicit from/to date range
@@ -209,14 +211,30 @@ export default function Accounting() {
           className="btn-primary bg-[var(--danger)]" data-testid="quick-expense-btn">
           <ArrowUp size={14} /> Record expense
         </button>
-        <button onClick={() => setShowWithdrawal(true)}
-          className="btn-ghost" data-testid="owner-withdrawal-btn">
-          <HandCoins size={14} /> Owner withdrawal
-        </button>
-        <button onClick={() => setShowTransfers(true)}
-          className="btn-ghost" data-testid="capital-transfers-btn">
-          <ArrowsLeftRight size={14} /> Capital &amp; transfers
-        </button>
+        <div className="relative">
+          <button onClick={() => setShowMore((m) => !m)}
+            className="btn-ghost" data-testid="more-actions-btn">
+            More <CaretDown size={12} className={`transition-transform duration-150 ${showMore ? "rotate-180" : ""}`} />
+          </button>
+          {showMore && (
+            <>
+              <button className="fixed inset-0 z-20 cursor-default" aria-hidden tabIndex={-1} onClick={() => setShowMore(false)} />
+              <div className="absolute right-0 top-full mt-1.5 z-30 bg-white border border-[var(--line)] rounded-lg shadow-lg py-1 min-w-[200px]"
+                role="menu">
+              <button onClick={() => { setShowWithdrawal(true); setShowMore(false); }}
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--surface-2)] transition"
+                data-testid="owner-withdrawal-btn" role="menuitem">
+                <HandCoins size={14} className="text-[var(--ink-2)]" /> Owner withdrawal
+              </button>
+              <button onClick={() => { setShowTransfers(true); setShowMore(false); }}
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--surface-2)] transition"
+                data-testid="capital-transfers-btn" role="menuitem">
+                <ArrowsLeftRight size={14} className="text-[var(--ink-2)]" /> Capital &amp; transfers
+              </button>
+              </div>
+            </>
+          )}
+        </div>
       </PageHero>
 
       {showWithdrawal && (
@@ -240,41 +258,64 @@ export default function Accounting() {
         />
       )}
 
-      <nav className="border border-[var(--line)] bg-white p-3 md:p-4" aria-label="Accounting sections" data-testid="accounting-tabs">
-        <div className="flex items-center justify-between gap-3 mb-3 sm:hidden">
-          <div className="overline">SECTION</div>
-          <select
-            value={tab}
-            onChange={(event) => setTab(event.target.value)}
-            className="input-flat min-w-[180px]"
-            aria-label="Accounting section"
-            data-testid="accounting-section-select"
-          >
-            {TAB_GROUPS.map((g) => (
-              <optgroup key={g.id} label={g.label}>
-                {TABS.filter((t) => t.group === g.id).map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        <div className="hidden sm:flex flex-wrap items-center gap-x-5 gap-y-2">
-          {TAB_GROUPS.map((g) => (
-            <div key={g.id} role="group" aria-labelledby={`acc-group-${g.id}`} data-testid={`acc-group-${g.id}`}
-              className="inline-flex flex-wrap items-center gap-1">
-              <span id={`acc-group-${g.id}`} className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-3)] mr-1">{g.label}</span>
-              {TABS.filter((t) => t.group === g.id).map(({ id, label, Icon }) => (
-                <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
-                  aria-current={tab === id ? "page" : undefined}
-                  className={`h-8 px-2.5 text-xs inline-flex items-center gap-1.5 rounded-full border transition ${tab === id
-                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[#5B4E3A] font-semibold"
-                    : "border-transparent text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"}`}>
-                  <Icon size={13} className="shrink-0" /> <span>{label}</span>
-                </button>
-              ))}
+      {/* Two-level accounting navigation */}
+      {(() => {
+        const activeGroup = TABS.find((t) => t.id === tab)?.group ?? "overview";
+        return (
+          <nav className="border border-[var(--line)] rounded-lg bg-white overflow-hidden" aria-label="Accounting sections" data-testid="accounting-tabs">
+            {/* Mobile: single select with optgroups */}
+            <div className="sm:hidden px-3 py-2.5 flex items-center gap-3">
+              <span className="overline shrink-0">SECTION</span>
+              <select value={tab} onChange={(e) => setTab(e.target.value)}
+                className="input-flat flex-1 min-w-0" aria-label="Accounting section"
+                data-testid="accounting-section-select">
+                {TAB_GROUPS.map((g) => (
+                  <optgroup key={g.id} label={g.label}>
+                    {TABS.filter((t) => t.group === g.id).map(({ id, label }) => (
+                      <option key={id} value={id}>{label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
-          ))}
-        </div>
-      </nav>
+            {/* Desktop: two-level tabs */}
+            <div className="hidden sm:block">
+              {/* Level 1 — main categories */}
+              <div className="flex border-b border-[var(--line)] px-2">
+                {TAB_GROUPS.map((g) => {
+                  const active = activeGroup === g.id;
+                  return (
+                    <button key={g.id} data-testid={`acc-group-${g.id}`}
+                      onClick={() => { const first = TABS.find((t) => t.group === g.id); if (first) setTab(first.id); }}
+                      aria-current={active ? "true" : undefined}
+                      className={`h-10 px-4 text-sm font-semibold border-b-2 -mb-px transition shrink-0 ${
+                        active
+                          ? "border-[var(--accent)] text-[var(--accent-strong)]"
+                          : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
+                      }`}>
+                      {g.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Level 2 — contextual sub-tabs */}
+              <div className="flex items-center gap-0.5 px-3 py-2">
+                {TABS.filter((t) => t.group === activeGroup).map(({ id, label, Icon }) => (
+                  <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
+                    aria-current={tab === id ? "page" : undefined}
+                    className={`h-8 px-3 text-xs inline-flex items-center gap-1.5 rounded-md transition ${
+                      tab === id
+                        ? "bg-[var(--accent-soft)] text-[var(--accent-strong)] font-semibold"
+                        : "text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                    }`}>
+                    <Icon size={13} className="shrink-0" /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </nav>
+        );
+      })()}
 
       {/* Shared financial period selector. "All time" is sent explicitly. */}
       {["income", "expense", "reports", "balance", "cashflow", "ledgers", "validation"].includes(tab) && (
@@ -283,7 +324,7 @@ export default function Accounting() {
           <select aria-label="Fy"
             value={fy}
             onChange={(e) => { setFy(e.target.value); setFromDate(""); setToDate(""); }}
-            className="border border-[var(--line)] px-2 py-1 text-xs bg-white"
+            className="border border-[var(--line)] rounded-md px-2 py-1 text-xs bg-white"
             data-testid="fy-select"
           >
             <option value="all">— All time —</option>
@@ -295,14 +336,14 @@ export default function Accounting() {
           <input
             type="date" value={fromDate}
             onChange={(e) => { setFromDate(e.target.value); setFy(""); }}
-            className="border border-[var(--line)] px-2 py-1 text-xs"
+            className="border border-[var(--line)] rounded-md px-2 py-1 text-xs"
             data-testid="from-date"
           />
           <span className="text-[var(--ink-3)]">→</span>
           <input
             type="date" value={toDate}
             onChange={(e) => { setToDate(e.target.value); setFy(""); }}
-            className="border border-[var(--line)] px-2 py-1 text-xs"
+            className="border border-[var(--line)] rounded-md px-2 py-1 text-xs"
             data-testid="to-date"
           />
           {(fromDate || toDate || fy) && (
@@ -1909,7 +1950,7 @@ function CombinedLedger({ clients, vendors, projects, accounts, fy, fromDate, to
           options={accounts.filter((a) => ["income", "expense"].includes(a.type) && a.active !== false).map((a) => ({ id: a.id, label: a.name }))} />
       </div>
       <p className="text-[11px] text-[var(--ink-3)]">Pick any mix: a project plus several vendors shows what each vendor brought in on that project. Choices of the same kind are added together; different kinds narrow the result.</p>
-      {!any && <div className="text-sm text-[var(--ink-3)] py-6 text-center border border-dashed border-[var(--line)]">Choose at least one project, vendor, client or account.</div>}
+      {!any && <div className="text-sm text-[var(--ink-3)] py-6 text-center border border-dashed border-[var(--line)] rounded-md">Choose at least one project, vendor, client or account.</div>}
       {loading && <div className="overline">LOADING…</div>}
       {data && !loading && (
         <>
@@ -2017,7 +2058,7 @@ function LedgersView({ clients, vendors, employees, projects, accounts = [], fy,
         {entityType !== "combined" && <select aria-label="Entity id"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
-          className="border border-[var(--line)] px-3 py-1.5 text-sm bg-white min-w-[280px]"
+          className="border border-[var(--line)] rounded-md px-3 py-1.5 text-sm bg-white min-w-[280px]"
           data-testid="ledger-entity-select"
         >
           <option value="">Select {ENTITY_TYPES.find((e) => e.id === entityType)?.label}…</option>

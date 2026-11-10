@@ -410,7 +410,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
             { k: "reconciled", label: "Reconciled", tint: "#1D633E" },
             { k: "ignored", label: "Ignored", tint: "#5C5C5C" },
           ].map((s) => (
-            <div key={s.k} className="border border-[var(--line)] p-2 text-center">
+            <div key={s.k} className="border border-[var(--line)] rounded-sm p-2 text-center">
               <div className="overline">{s.label}</div>
               <div className="font-mono font-bold text-lg" style={{ color: s.tint }}>{counts[s.k] || 0}</div>
             </div>

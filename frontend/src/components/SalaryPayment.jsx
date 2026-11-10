@@ -261,7 +261,7 @@ export function PaySalaryBlock({
 
 function StatBox({ label, value, tint = "#0A0A0A", big }) {
   return (
-    <div className="border border-[var(--line)] p-3">
+    <div className="border border-[var(--line)] rounded-md p-3">
       <div className="overline">{label}</div>
       <div className={`font-mono font-bold ${big ? "text-2xl" : "text-lg"}`} style={{ color: tint }}>{value}</div>
     </div>
