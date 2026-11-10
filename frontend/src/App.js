@@ -41,6 +41,7 @@ const CalendarPage = lazy(() => import("./pages/Calendar"));
 const CompanySettings = lazy(() => import("./pages/CompanySettings"));
 const AuditLog = lazy(() => import("./pages/AuditLog"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 
 const PageFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center overline">LOADING...</div>
@@ -143,6 +144,7 @@ function AppRouter() {
   return (
     <Suspense fallback={<PageFallback />}><Routes>
       <Route path="/" element={<PublicRoot />} />
+      <Route path="/login" element={<LoginRoute />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/portal/:token" element={<ClientPortal />} />
       <Route path="/dashboard" element={<ProtectedShell><Dashboard /></ProtectedShell>} />
@@ -185,6 +187,15 @@ function PublicRoot() {
   const { user, loading, isPending, isRejected, isSuperAdmin } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   // Pending/rejected users land in ProtectedShell to see the notice consistently.
+  if (user && (isPending || isRejected)) return <Navigate to="/dashboard" replace />;
+  if (user && isSuperAdmin && !user.org_id) return <Navigate to="/super-admin" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
+}
+
+function LoginRoute() {
+  const { user, loading, isPending, isRejected, isSuperAdmin } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center overline">LOADING…</div>;
   if (user && (isPending || isRejected)) return <Navigate to="/dashboard" replace />;
   if (user && isSuperAdmin && !user.org_id) return <Navigate to="/super-admin" replace />;
   if (user) return <Navigate to="/dashboard" replace />;
