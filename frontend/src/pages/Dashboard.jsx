@@ -39,8 +39,6 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, []);
 
-  if (loading) return <DashboardSkeleton />;
-
   const kpis = stats?.kpis || {};
   const pipeline = stats?.pipeline || [];
   const alerts = stats?.alerts || [];
@@ -86,10 +84,12 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Mounted right away so their requests run alongside the stats call. */}
       <GettingStarted />
 
       <MyDay />
 
+      {loading ? <DashboardSkeleton /> : <>
       {/* ============== KPI ROW ============== */}
       <div className="fade-up">
         <div className={`grid grid-cols-1 md:grid-cols-2 ${kpiGrid} border-t border-l border-[var(--line)] kpi-grid`}>
@@ -275,6 +275,7 @@ export default function Dashboard() {
           )}
         </div>}
       </div>}
+      </>}
 
     </div>
   );
@@ -339,11 +340,6 @@ function Kpi({ label, value, sub: rawSub, Icon, accent, trend, sparkData, testid
 function DashboardSkeleton() {
   return (
     <div className="space-y-10" data-testid="dashboard-loading">
-      <div className="space-y-3">
-        <div className="skeleton h-3 w-40"></div>
-        <div className="skeleton h-16 w-72"></div>
-        <div className="skeleton h-4 w-96"></div>
-      </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-px bg-[var(--line)]">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="bg-white p-6 space-y-3">
