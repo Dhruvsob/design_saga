@@ -267,6 +267,7 @@ export default function Payroll() {
                     <td className="px-3 py-3 text-center tabular text-xs">
                       {r.payable_days == null ? "—" : r.payable_days}
                       {Number(r.lop_days) > 0 && <div className="text-[10px] text-[var(--danger)]">{r.lop_days} loss of pay</div>}
+                      {Number(r.auto_paid_leave) > 0 && <div className="text-[10px]" style={{ color: "#1a7f5a" }}>{r.auto_paid_leave} auto paid leave</div>}
                     </td>
                     <td className={`px-3 py-3 text-right tabular text-xs ${deduction > 0 ? "text-[var(--danger)]" : "text-[var(--ink-3)]"}`}>
                       {r.deduction == null ? "—" : deduction > 0 ? `−${inr(deduction)}` : "—"}

@@ -354,6 +354,14 @@ class ProjectIn(BaseModel):
     description: Optional[str] = None
     project_manager_id: Optional[str] = None           # employee id (project team lead)
     team_ids: Optional[List[str]] = None               # employee ids on the project team
+    site_address: Optional[str] = None
+    site_area_sqft: Optional[float] = Field(default=None, ge=0)
+    fee_structure_type: Optional[str] = None      # lump_sum | percentage_consultancy | turnkey | per_sqft
+    fee_lump_sum_amount: Optional[float] = Field(default=None, ge=0)
+    fee_project_value: Optional[float] = Field(default=None, ge=0)   # for percentage_consultancy
+    fee_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    fee_contract_value: Optional[float] = Field(default=None, ge=0)  # for turnkey
+    fee_rate_per_sqft: Optional[float] = Field(default=None, ge=0)   # for per_sqft
 
 
 class ProjectStageUpdate(BaseModel):
@@ -361,6 +369,14 @@ class ProjectStageUpdate(BaseModel):
 
 
 FEE_STRUCTURE_TYPES = ("lump_sum", "percentage_consultancy", "turnkey", "per_sqft")
+# Inputs that belong to each fee type; the others are cleared when the type changes.
+FEE_SUBFIELDS = {
+    "lump_sum": {"fee_lump_sum_amount"},
+    "percentage_consultancy": {"fee_project_value", "fee_percentage"},
+    "turnkey": {"fee_contract_value"},
+    "per_sqft": {"fee_rate_per_sqft"},
+}
+ALL_FEE_SUBFIELDS = frozenset().union(*FEE_SUBFIELDS.values())
 
 
 class ProjectUpdate(BaseModel):
@@ -375,7 +391,7 @@ class ProjectUpdate(BaseModel):
     project_manager_id: Optional[str] = None
     team_ids: Optional[List[str]] = None
     site_address: Optional[str] = None
-    site_area_sqft: Optional[float] = None
+    site_area_sqft: Optional[float] = Field(default=None, ge=0)
     fee_structure_type: Optional[str] = None      # lump_sum | percentage_consultancy | turnkey | per_sqft
     fee_lump_sum_amount: Optional[float] = Field(default=None, ge=0)
     fee_project_value: Optional[float] = Field(default=None, ge=0)   # for percentage_consultancy
@@ -1491,6 +1507,13 @@ async def create_project(payload: ProjectIn, request: Request,
                 detail="Project engagement_type is required (consultancy | turnkey) for hybrid workspaces.",
             )
         doc["engagement_type"] = et
+    if doc.get("fee_structure_type") and doc["fee_structure_type"] not in FEE_STRUCTURE_TYPES:
+        raise HTTPException(status_code=400,
+                            detail=f"fee_structure_type must be one of: {', '.join(FEE_STRUCTURE_TYPES)}")
+    # Keep only the inputs of the chosen fee type (a switched form may carry stale ones).
+    _keep = FEE_SUBFIELDS.get(doc.get("fee_structure_type") or "", set())
+    for _f in ALL_FEE_SUBFIELDS - _keep:
+        doc[_f] = None
     doc["id"] = new_id("prj_")
     doc["share_token"] = new_share_token()
     doc["created_at"] = iso(now_utc())
@@ -1721,8 +1744,22 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
         if not c:
             raise HTTPException(status_code=404, detail="Client not found")
         upd["client_name"] = c.get("name")
+    # The fee structure updates as a group: switching the type clears the other
+    # types' inputs, and an empty type ("") clears the whole structure.
+    unset = {}
+    fst = upd.get("fee_structure_type")
+    if fst is not None:
+        for f in ALL_FEE_SUBFIELDS - FEE_SUBFIELDS.get(fst, set()):
+            upd.pop(f, None)
+            unset[f] = ""
+        if fst == "":
+            upd.pop("fee_structure_type", None)
+            unset["fee_structure_type"] = ""
     upd["updated_at"] = iso(now_utc())
-    res = await sdb.projects.update_one({"id": project_id}, {"$set": upd})
+    ops = {"$set": upd}
+    if unset:
+        ops["$unset"] = unset
+    res = await sdb.projects.update_one({"id": project_id}, ops)
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
     if "budget" in upd:

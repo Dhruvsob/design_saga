@@ -1,34 +1,12 @@
 import { CaretRight, CheckCircle, WarningCircle } from "@phosphor-icons/react";
 import { dateForInput, formatDate, formatINR } from "../lib/format";
+import { projectFeeDisplay } from "../lib/fees";
 
 /**
  * Project overview without repetition: the tab bar is the navigation, the
  * lifecycle bar shows the stage and the Team card shows people, so this only
  * adds (1) the few facts shown nowhere else and (2) what needs attention now.
  */
-const FEE_LABELS = {
-  lump_sum: "Lump Sum",
-  percentage_consultancy: "Consultancy %",
-  turnkey: "Turnkey",
-  per_sqft: "Per Sq Ft",
-};
-
-function projectFeeDisplay(p) {
-  const fst = p.fee_structure_type;
-  if (!fst) return null;
-  const label = FEE_LABELS[fst] || fst;
-  if (fst === "lump_sum" && p.fee_lump_sum_amount) return `${label} · ${formatINR(p.fee_lump_sum_amount)}`;
-  if (fst === "percentage_consultancy" && p.fee_percentage) {
-    const calc = p.fee_project_value ? formatINR(p.fee_project_value * p.fee_percentage / 100) : null;
-    return `${label} · ${p.fee_percentage}%${calc ? ` = ${calc}` : ""}`;
-  }
-  if (fst === "turnkey" && p.fee_contract_value) return `${label} · ${formatINR(p.fee_contract_value)}`;
-  if (fst === "per_sqft" && p.fee_rate_per_sqft) {
-    const calc = p.site_area_sqft ? formatINR(p.site_area_sqft * p.fee_rate_per_sqft) : null;
-    return `${label} · ₹${p.fee_rate_per_sqft}/sq ft${calc ? ` = ${calc}` : ""}`;
-  }
-  return label;
-}
 
 export function ProjectFacts({ p }) {
   const feeDisplay = projectFeeDisplay(p);

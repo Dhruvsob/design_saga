@@ -293,6 +293,7 @@ function SalaryWorking({ b }) {
             Paid days this month: <strong className="text-[var(--ink)]">{b.payable_days}</strong>
             {Number(b.lop_days) > 0 && <> · loss-of-pay days: <strong className="text-[var(--danger)]">{b.lop_days}</strong></>}.
             {Number(b.monthly_paid_leave_allowance) > 0 && <> {b.paid_leave_allowance_used || 0} of {b.monthly_paid_leave_allowance} paid leave(s) used.</>}
+            {Number(sum.auto_paid_leave) > 0 && <> <span style={{ color: "#1a7f5a" }}>{sum.auto_paid_leave} absence{Number(sum.auto_paid_leave) > 1 ? "s" : ""} auto-counted as the free monthly paid leave (no deduction).</span></>}
           </p>
         )}
         {counts.length > 0 && (

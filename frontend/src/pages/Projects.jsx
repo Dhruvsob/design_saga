@@ -9,6 +9,7 @@ import { confirmAction } from "../lib/confirm";
 import { toast } from "sonner";
 import PageHero from "../components/PageHero";
 import { formatINR, empName } from "../lib/format";
+import { feeCalc, projectFeeDisplay, FEE_LABELS } from "../lib/fees";
 import SearchSelect from "../components/SearchSelect";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
@@ -29,11 +30,15 @@ export default function Projects() {
   const [clients, setClients] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
+  const EMPTY_FORM = {
     name: "", client_id: "", project_type: "Residential",
     engagement_type: defaultEng, budget: "", stage: "Requirement", description: "",
     project_manager_id: "", team_ids: [],
-  });
+    site_address: "", site_area_sqft: "",
+    fee_structure_type: "", fee_lump_sum_amount: "", fee_project_value: "",
+    fee_percentage: "", fee_contract_value: "", fee_rate_per_sqft: "",
+  };
+  const [form, setForm] = useState(EMPTY_FORM);
   const [err, setErr] = useState("");
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -82,11 +87,17 @@ export default function Projects() {
         budget: form.budget === "" ? 0 : Number(form.budget),
         project_manager_id: form.project_manager_id || undefined,
         team_ids: form.team_ids,
+        site_address: form.site_address || undefined,
+        site_area_sqft: form.site_area_sqft !== "" ? Number(form.site_area_sqft) : undefined,
+        fee_structure_type: form.fee_structure_type || undefined,
+        fee_lump_sum_amount: form.fee_lump_sum_amount !== "" ? Number(form.fee_lump_sum_amount) : undefined,
+        fee_project_value: form.fee_project_value !== "" ? Number(form.fee_project_value) : undefined,
+        fee_percentage: form.fee_percentage !== "" ? Number(form.fee_percentage) : undefined,
+        fee_contract_value: form.fee_contract_value !== "" ? Number(form.fee_contract_value) : undefined,
+        fee_rate_per_sqft: form.fee_rate_per_sqft !== "" ? Number(form.fee_rate_per_sqft) : undefined,
       });
       setShowForm(false);
-      setForm({ name: "", client_id: "", project_type: "Residential",
-                engagement_type: defaultEng, budget: "", stage: "Requirement", description: "",
-                project_manager_id: "", team_ids: [] });
+      setForm(EMPTY_FORM);
       load();
     } catch (ex) {
       const d = ex?.response?.data?.detail;
@@ -172,6 +183,57 @@ export default function Projects() {
           )}
           <input className="input-flat" type="number" min="0" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="project-budget" />
           <input className="input-flat" placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <input className="input-flat" placeholder="Site address (optional)" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
+          <input className="input-flat" type="number" min="0" placeholder="Site area (sq ft, optional)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} data-testid="project-site-area" />
+
+          {/* Fee structure — how this project's fee is charged */}
+          <div className="md:col-span-2 border-t border-[var(--line-soft)] pt-3 space-y-2">
+            <div className="overline text-[10px]">FEE STRUCTURE (OPTIONAL)</div>
+            <select aria-label="Fee structure type" className="input-flat w-full"
+              value={form.fee_structure_type}
+              onChange={(e) => setForm({ ...form, fee_structure_type: e.target.value })}
+              data-testid="project-fee-type">
+              <option value="">— Select fee type —</option>
+              <option value="lump_sum">Lump Sum (fixed fee)</option>
+              <option value="percentage_consultancy">Consultancy % (% of project value)</option>
+              <option value="turnkey">Turnkey (materials + execution)</option>
+              <option value="per_sqft">Per Sq Ft (rate × area)</option>
+            </select>
+            {form.fee_structure_type === "lump_sum" && (
+              <input className="input-flat w-full" type="number" min="0" placeholder="Fixed fee amount (₹)"
+                value={form.fee_lump_sum_amount}
+                onChange={(e) => setForm({ ...form, fee_lump_sum_amount: e.target.value })} />
+            )}
+            {form.fee_structure_type === "percentage_consultancy" && (
+              <div className="grid grid-cols-2 gap-2">
+                <input className="input-flat" type="number" min="0" placeholder="Total project value (₹)"
+                  value={form.fee_project_value}
+                  onChange={(e) => setForm({ ...form, fee_project_value: e.target.value })} />
+                <input className="input-flat" type="number" min="0" max="100" step="0.1" placeholder="Fee %"
+                  value={form.fee_percentage}
+                  onChange={(e) => setForm({ ...form, fee_percentage: e.target.value })} />
+              </div>
+            )}
+            {form.fee_structure_type === "turnkey" && (
+              <input className="input-flat w-full" type="number" min="0" placeholder="Turnkey contract value (₹)"
+                value={form.fee_contract_value}
+                onChange={(e) => setForm({ ...form, fee_contract_value: e.target.value })} />
+            )}
+            {form.fee_structure_type === "per_sqft" && (
+              <input className="input-flat w-full" type="number" min="0" placeholder="Rate per sq ft (₹/sq ft)"
+                value={form.fee_rate_per_sqft}
+                onChange={(e) => setForm({ ...form, fee_rate_per_sqft: e.target.value })} />
+            )}
+            {feeCalc(form) !== null && (
+              <div className="text-xs text-[var(--ink-2)] font-mono bg-[var(--surface-2)] px-3 py-1.5 rounded">
+                Calculated fee: <span className="text-[var(--ink)] font-semibold">{formatINR(feeCalc(form))}</span>
+                {form.fee_structure_type === "per_sqft" && !form.site_area_sqft && " — enter the site area above"}
+              </div>
+            )}
+            {form.fee_structure_type === "per_sqft" && !form.site_area_sqft && form.fee_rate_per_sqft && (
+              <div className="text-xs text-[var(--warning)]">Enter the site area above to calculate the fee.</div>
+            )}
+          </div>
 
           {/* Project Team — controls who can see this project's tasks */}
           <div className="md:col-span-2 border-t border-[var(--line-soft)] pt-3">
@@ -265,7 +327,10 @@ export default function Projects() {
                   <td className="p-3"><div className="font-semibold">{p.name}</div><div className="text-xs text-[var(--ink-3)]">{p.project_type}{p.engagement_type ? ` · ${p.engagement_type}` : ""}</div></td>
                   <td className="p-3">{p.client_name || "—"}</td>
                   <td className="p-3"><span className="status-chip chip-medium">{p.stage || "Requirement"}</span></td>
-                  <td className="p-3 text-right font-mono">{formatINR(p.budget)}</td>
+                  <td className="p-3 text-right font-mono">
+                    {feeCalc(p) ? formatINR(feeCalc(p)) : formatINR(p.budget)}
+                    {projectFeeDisplay(p) && <div className="text-[10px] text-[var(--ink-3)] font-sans">{projectFeeDisplay(p)}</div>}
+                  </td>
                   <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>{menuFor(p)}</td>
                 </tr>
               ))}
@@ -316,7 +381,12 @@ export default function Projects() {
               </div>
 
               <div className="mt-5 flex items-center justify-between">
-                <div className="font-mono text-sm font-semibold tabular-nums">{Number(p.budget) > 0 ? formatINR(p.budget) : <span className="font-sans font-normal text-xs text-[var(--ink-3)]">Fee not set</span>}</div>
+                <div className="font-mono text-sm font-semibold tabular-nums">
+                  {feeCalc(p) ? (
+                    <>{formatINR(feeCalc(p))} <span className="font-sans font-normal text-[10px] text-[var(--ink-3)]">{FEE_LABELS[p.fee_structure_type]}</span></>
+                  ) : Number(p.budget) > 0 ? formatINR(p.budget)
+                    : <span className="font-sans font-normal text-xs text-[var(--ink-3)]">Fee not set</span>}
+                </div>
                 <div className="overline flex items-center gap-1 group-hover:text-[var(--accent-strong)] transition-colors">
                   OPEN <CaretRight size={10} weight="bold" className="transition-transform group-hover:translate-x-0.5" />
                 </div>

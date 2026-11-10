@@ -971,7 +971,8 @@ async def monthly_sheet(request: Request, year: Optional[int] = Query(None, ge=2
              "shift_start": 1, "shift_end": 1, "grace_minutes": 1,
              "weekly_offs": 1, "full_day_min_minutes": 1,
              "payroll_basis_days": 1, "monthly_salary": 1, "salary": 1,
-             "employment_status": 1, "terminated_at": 1, "exit_date": 1}).to_list(None)
+             "employment_status": 1, "terminated_at": 1, "exit_date": 1,
+             "joining_date": 1}).to_list(None)
     policy = await _get_attendance_policy()
     holiday_dates = await engine.get_holiday_dates(y)
     rows = []
