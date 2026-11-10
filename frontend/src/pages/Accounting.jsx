@@ -18,6 +18,7 @@ import {
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
   Scales, Waves, DownloadSimple, Notebook, CaretRight, Repeat, Star,
   HandCoins, ArrowsLeftRight, PencilSimple, Archive, ArrowCounterClockwise, WarningCircle, Trash,
+  CaretDown,
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
@@ -103,6 +104,7 @@ export default function Accounting() {
   const [showForm, setShowForm] = useState(false);
   const [showWithdrawal, setShowWithdrawal] = useState(false);
   const [showTransfers, setShowTransfers] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [meta, setMeta] = useState(null);
   const [ledgerAccount, setLedgerAccount] = useState(null);
   // Financial period: fy label OR explicit from/to date range
@@ -209,14 +211,30 @@ export default function Accounting() {
           className="btn-primary bg-[var(--danger)]" data-testid="quick-expense-btn">
           <ArrowUp size={14} /> Record expense
         </button>
-        <button onClick={() => setShowWithdrawal(true)}
-          className="btn-ghost" data-testid="owner-withdrawal-btn">
-          <HandCoins size={14} /> Owner withdrawal
-        </button>
-        <button onClick={() => setShowTransfers(true)}
-          className="btn-ghost" data-testid="capital-transfers-btn">
-          <ArrowsLeftRight size={14} /> Capital &amp; transfers
-        </button>
+        <div className="relative">
+          <button onClick={() => setShowMore((m) => !m)}
+            className="btn-ghost" data-testid="more-actions-btn">
+            More <CaretDown size={12} className={`transition-transform duration-150 ${showMore ? "rotate-180" : ""}`} />
+          </button>
+          {showMore && (
+            <>
+              <button className="fixed inset-0 z-20 cursor-default" aria-hidden tabIndex={-1} onClick={() => setShowMore(false)} />
+              <div className="absolute right-0 top-full mt-1.5 z-30 bg-white border border-[var(--line)] rounded-lg shadow-lg py-1 min-w-[200px]"
+                role="menu">
+              <button onClick={() => { setShowWithdrawal(true); setShowMore(false); }}
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--surface-2)] transition"
+                data-testid="owner-withdrawal-btn" role="menuitem">
+                <HandCoins size={14} className="text-[var(--ink-2)]" /> Owner withdrawal
+              </button>
+              <button onClick={() => { setShowTransfers(true); setShowMore(false); }}
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--surface-2)] transition"
+                data-testid="capital-transfers-btn" role="menuitem">
+                <ArrowsLeftRight size={14} className="text-[var(--ink-2)]" /> Capital &amp; transfers
+              </button>
+              </div>
+            </>
+          )}
+        </div>
       </PageHero>
 
       {showWithdrawal && (
@@ -240,41 +258,64 @@ export default function Accounting() {
         />
       )}
 
-      <nav className="border border-[var(--line)] bg-white p-3 md:p-4" aria-label="Accounting sections" data-testid="accounting-tabs">
-        <div className="flex items-center justify-between gap-3 mb-3 sm:hidden">
-          <div className="overline">SECTION</div>
-          <select
-            value={tab}
-            onChange={(event) => setTab(event.target.value)}
-            className="input-flat min-w-[180px]"
-            aria-label="Accounting section"
-            data-testid="accounting-section-select"
-          >
-            {TAB_GROUPS.map((g) => (
-              <optgroup key={g.id} label={g.label}>
-                {TABS.filter((t) => t.group === g.id).map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        <div className="hidden sm:flex flex-wrap items-center gap-x-5 gap-y-2">
-          {TAB_GROUPS.map((g) => (
-            <div key={g.id} role="group" aria-labelledby={`acc-group-${g.id}`} data-testid={`acc-group-${g.id}`}
-              className="inline-flex flex-wrap items-center gap-1">
-              <span id={`acc-group-${g.id}`} className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-3)] mr-1">{g.label}</span>
-              {TABS.filter((t) => t.group === g.id).map(({ id, label, Icon }) => (
-                <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
-                  aria-current={tab === id ? "page" : undefined}
-                  className={`h-8 px-2.5 text-xs inline-flex items-center gap-1.5 rounded-full border transition ${tab === id
-                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[#5B4E3A] font-semibold"
-                    : "border-transparent text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"}`}>
-                  <Icon size={13} className="shrink-0" /> <span>{label}</span>
-                </button>
-              ))}
+      {/* Two-level accounting navigation */}
+      {(() => {
+        const activeGroup = TABS.find((t) => t.id === tab)?.group ?? "overview";
+        return (
+          <nav className="border border-[var(--line)] rounded-lg bg-white overflow-hidden" aria-label="Accounting sections" data-testid="accounting-tabs">
+            {/* Mobile: single select with optgroups */}
+            <div className="sm:hidden px-3 py-2.5 flex items-center gap-3">
+              <span className="overline shrink-0">SECTION</span>
+              <select value={tab} onChange={(e) => setTab(e.target.value)}
+                className="input-flat flex-1 min-w-0" aria-label="Accounting section"
+                data-testid="accounting-section-select">
+                {TAB_GROUPS.map((g) => (
+                  <optgroup key={g.id} label={g.label}>
+                    {TABS.filter((t) => t.group === g.id).map(({ id, label }) => (
+                      <option key={id} value={id}>{label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
-          ))}
-        </div>
-      </nav>
+            {/* Desktop: two-level tabs */}
+            <div className="hidden sm:block">
+              {/* Level 1 — main categories */}
+              <div className="flex border-b border-[var(--line)] px-2">
+                {TAB_GROUPS.map((g) => {
+                  const active = activeGroup === g.id;
+                  return (
+                    <button key={g.id} data-testid={`acc-group-${g.id}`}
+                      onClick={() => { const first = TABS.find((t) => t.group === g.id); if (first) setTab(first.id); }}
+                      aria-current={active ? "true" : undefined}
+                      className={`h-10 px-4 text-sm font-semibold border-b-2 -mb-px transition shrink-0 ${
+                        active
+                          ? "border-[var(--accent)] text-[var(--accent-strong)]"
+                          : "border-transparent text-[var(--ink-2)] hover:text-[var(--ink)]"
+                      }`}>
+                      {g.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Level 2 — contextual sub-tabs */}
+              <div className="flex items-center gap-0.5 px-3 py-2">
+                {TABS.filter((t) => t.group === activeGroup).map(({ id, label, Icon }) => (
+                  <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
+                    aria-current={tab === id ? "page" : undefined}
+                    className={`h-8 px-3 text-xs inline-flex items-center gap-1.5 rounded-md transition ${
+                      tab === id
+                        ? "bg-[var(--accent-soft)] text-[var(--accent-strong)] font-semibold"
+                        : "text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                    }`}>
+                    <Icon size={13} className="shrink-0" /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </nav>
+        );
+      })()}
 
       {/* Shared financial period selector. "All time" is sent explicitly. */}
       {["income", "expense", "reports", "balance", "cashflow", "ledgers", "validation"].includes(tab) && (
@@ -283,7 +324,7 @@ export default function Accounting() {
           <select aria-label="Fy"
             value={fy}
             onChange={(e) => { setFy(e.target.value); setFromDate(""); setToDate(""); }}
-            className="border border-[var(--line)] px-2 py-1 text-xs bg-white"
+            className="border border-[var(--line)] rounded-md px-2 py-1 text-xs bg-white"
             data-testid="fy-select"
           >
             <option value="all">— All time —</option>
@@ -295,14 +336,14 @@ export default function Accounting() {
           <input
             type="date" value={fromDate}
             onChange={(e) => { setFromDate(e.target.value); setFy(""); }}
-            className="border border-[var(--line)] px-2 py-1 text-xs"
+            className="border border-[var(--line)] rounded-md px-2 py-1 text-xs"
             data-testid="from-date"
           />
           <span className="text-[var(--ink-3)]">→</span>
           <input
             type="date" value={toDate}
             onChange={(e) => { setToDate(e.target.value); setFy(""); }}
-            className="border border-[var(--line)] px-2 py-1 text-xs"
+            className="border border-[var(--line)] rounded-md px-2 py-1 text-xs"
             data-testid="to-date"
           />
           {(fromDate || toDate || fy) && (
@@ -823,7 +864,7 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       </div>
 
       {cf.activities && (
-        <div className="border border-[var(--line)] bg-white overflow-x-auto">
+        <div className="border border-[var(--line)] bg-white overflow-x-auto rounded-md">
           <table className="w-full min-w-[680px] text-sm">
             <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
               <tr><th className="p-3 text-left overline">ACTIVITY</th><th className="p-3 text-left overline">DETAIL</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">NET</th></tr>
@@ -850,7 +891,7 @@ function CashFlowView({ cf, onDownload, periodQs }) {
       )}
 
       {Array.isArray(cf.cash_accounts) && cf.cash_accounts.length > 0 && (
-        <div className="border border-[var(--line)] bg-white overflow-x-auto">
+        <div className="border border-[var(--line)] bg-white overflow-x-auto rounded-md">
           <div className="p-3 border-b border-[var(--line)] overline">CASH & BANK RECONCILIATION</div>
           <table className="w-full min-w-[620px] text-sm">
             <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr><th className="p-3 text-left overline">ACCOUNT</th><th className="p-3 text-right overline">OPENING</th><th className="p-3 text-right overline">INFLOW</th><th className="p-3 text-right overline">OUTFLOW</th><th className="p-3 text-right overline">CLOSING</th></tr></thead>
@@ -909,7 +950,7 @@ function Dashboard({ d, onRefresh, onOpenCollections }) {
         <div className="card-flat">
           <div className="overline mb-3">DUE TO COLLECT · next 30 days</div>
           {d.kpis?.unplanned_invoices?.count > 0 && (
-            <a href="/invoices" className="block mb-3 text-xs border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 hover:border-[var(--accent-strong)]" data-testid="unplanned-invoices">
+            <a href="/invoices" className="block mb-3 text-xs border border-[var(--line)] rounded-md bg-[var(--surface-2)] px-3 py-2 hover:border-[var(--accent-strong)]" data-testid="unplanned-invoices">
               {d.kpis.unplanned_invoices.count} sent invoice{d.kpis.unplanned_invoices.count === 1 ? "" : "s"} ({CURRENCY(d.kpis.unplanned_invoices.amount)}) not yet in Collections Due. Open Invoices › ⋮ › Add to Collections Due.
             </a>
           )}
@@ -1237,7 +1278,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
       </div>
 
       {open.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 border border-[var(--line)] divide-x divide-y lg:divide-y-0 divide-[var(--line-soft)]"
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 border border-[var(--line)] divide-x divide-y lg:divide-y-0 divide-[var(--line-soft)] rounded-md overflow-hidden"
              role="group" aria-label="Money due by age" data-testid="collections-aging">
           {aging.map((b) => (
             <button key={b.id} type="button" disabled={!b.count} aria-pressed={age === b.id}
@@ -1279,7 +1320,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
         </div>
       </div>
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase text-[var(--ink-2)]">
             <tr>
@@ -1357,7 +1398,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 
       {collecting && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <form onSubmit={saveReceipt} className="bg-white border border-[var(--line)] w-full max-w-lg p-5 space-y-4">
+          <form onSubmit={saveReceipt} className="bg-white border border-[var(--line)] rounded-xl w-full max-w-lg p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="overline">RECORD COLLECTION RECEIPT</div>
@@ -1504,7 +1545,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
         </form>
       )}
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Narration</th><th className="p-2 text-left">Account</th><th className="p-2 text-left">Reference</th><th className="p-2 text-right">Amount</th></tr>
@@ -1909,7 +1950,7 @@ function CombinedLedger({ clients, vendors, projects, accounts, fy, fromDate, to
           options={accounts.filter((a) => ["income", "expense"].includes(a.type) && a.active !== false).map((a) => ({ id: a.id, label: a.name }))} />
       </div>
       <p className="text-[11px] text-[var(--ink-3)]">Pick any mix: a project plus several vendors shows what each vendor brought in on that project. Choices of the same kind are added together; different kinds narrow the result.</p>
-      {!any && <div className="text-sm text-[var(--ink-3)] py-6 text-center border border-dashed border-[var(--line)]">Choose at least one project, vendor, client or account.</div>}
+      {!any && <div className="text-sm text-[var(--ink-3)] py-6 text-center border border-dashed border-[var(--line)] rounded-md">Choose at least one project, vendor, client or account.</div>}
       {loading && <div className="overline">LOADING…</div>}
       {data && !loading && (
         <>
@@ -1919,7 +1960,7 @@ function CombinedLedger({ clients, vendors, projects, accounts, fy, fromDate, to
             <KPI label="Net" value={CURRENCY(data.totals.net)} Icon={ChartLine} tint="#0A0A0A" />
           </div>
           {data.by_vendor.length > 0 && (
-            <div className="border border-[var(--line)] overflow-x-auto">
+            <div className="border border-[var(--line)] overflow-x-auto rounded-md">
               <table className="w-full text-sm" data-testid="combined-by-vendor">
                 <thead className="bg-[var(--surface-2)]"><tr className="overline text-left">
                   <th className="p-2">By vendor</th>{accountCols.map((c) => <th key={c} className="p-2 text-right">{c}</th>)}<th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th>
@@ -1935,16 +1976,16 @@ function CombinedLedger({ clients, vendors, projects, accounts, fy, fromDate, to
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-[var(--line)]"><table className="w-full text-sm" data-testid="combined-by-project">
+            <div className="border border-[var(--line)] rounded-md overflow-hidden"><table className="w-full text-sm" data-testid="combined-by-project">
               <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">By project</th><th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th></tr></thead>
               <tbody>{data.by_project.map((x) => <tr key={x.project_id || "none"} className="border-t border-[var(--line-soft)]"><td className="p-2">{x.project_name}</td><td className="p-2 text-right tabular-nums">{CURRENCY(x.income)}</td><td className="p-2 text-right tabular-nums">{x.expense ? CURRENCY(x.expense) : "—"}</td></tr>)}</tbody>
             </table></div>
-            <div className="border border-[var(--line)]"><table className="w-full text-sm" data-testid="combined-by-account">
+            <div className="border border-[var(--line)] rounded-md overflow-hidden"><table className="w-full text-sm" data-testid="combined-by-account">
               <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">By account</th><th className="p-2 text-right">Amount</th></tr></thead>
               <tbody>{data.by_account.map((x) => <tr key={x.account_id} className="border-t border-[var(--line-soft)]"><td className="p-2">{x.account_name}<span className="text-[10px] text-[var(--ink-3)] ml-1">{x.type}</span></td><td className="p-2 text-right tabular-nums">{CURRENCY(x.amount)}</td></tr>)}</tbody>
             </table></div>
           </div>
-          <div className="border border-[var(--line)] overflow-x-auto"><table className="w-full text-sm min-w-[720px]">
+          <div className="border border-[var(--line)] overflow-x-auto rounded-md"><table className="w-full text-sm min-w-[720px]">
             <thead className="bg-[var(--surface-2)]"><tr className="overline text-left"><th className="p-2">Date</th><th className="p-2">Entry</th><th className="p-2">Project</th><th className="p-2">Vendor / client</th><th className="p-2 text-right">Income</th><th className="p-2 text-right">Expense</th></tr></thead>
             <tbody>{data.entries.map((e) => (
               <tr key={e.id} className="border-t border-[var(--line-soft)]">
@@ -2017,7 +2058,7 @@ function LedgersView({ clients, vendors, employees, projects, accounts = [], fy,
         {entityType !== "combined" && <select aria-label="Entity id"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
-          className="border border-[var(--line)] px-3 py-1.5 text-sm bg-white min-w-[280px]"
+          className="border border-[var(--line)] rounded-md px-3 py-1.5 text-sm bg-white min-w-[280px]"
           data-testid="ledger-entity-select"
         >
           <option value="">Select {ENTITY_TYPES.find((e) => e.id === entityType)?.label}…</option>

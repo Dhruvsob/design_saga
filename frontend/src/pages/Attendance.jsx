@@ -16,7 +16,7 @@ import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
   present: "#1D633E", late: "#7A4E1A", absent: "#B22B22", half_day: "#B87500",
-  leave: "#2B5299", paid_leave: "#2B5299", unpaid_leave: "#B22B22",
+  leave: "#2B5299", paid_leave: "#2B5299", auto_paid_leave: "#1a7f5a", unpaid_leave: "#B22B22",
   holiday: "#2B5299", week_off: "#5C5C5C", pending_approval: "#B87500",
   upcoming: "#C9C9C9", site_visit: "#0E7490",
 };
@@ -514,16 +514,20 @@ export default function Attendance() {
                   </div>
                 </div>
                 <div className="grid grid-cols-7 gap-1.5">
-                  {mySalary.daily.map((d) => (
+                  {mySalary.daily.map((d) => {
+                    const dSt = d.auto_paid_leave ? "auto_paid_leave" : d.status;
+                    const dLabel = d.auto_paid_leave ? "auto paid leave" : d.status;
+                    return (
                     <div key={d.date} className="border border-[var(--line-soft)] p-1.5 text-center"
-                      style={{ background: `${STATUS_COLORS[d.status] || "#EEE"}12` }}
-                      title={`${formatDate(d.date)} · ${d.status}${d.check_in ? ` · in ${d.check_in}` : ""}${d.check_out ? ` · out ${d.check_out}` : ""}`}>
+                      style={{ background: `${STATUS_COLORS[dSt] || "#EEE"}12` }}
+                      title={`${formatDate(d.date)} · ${dLabel}${d.check_in ? ` · in ${d.check_in}` : ""}${d.check_out ? ` · out ${d.check_out}` : ""}`}>
                       <div className="text-[10px] font-mono">{Number(d.date.slice(8, 10))}</div>
-                      <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[d.status] || "#6E6A63" }}>
-                        {d.status.replace(/_/g, " ")}
+                      <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[dSt] || "#6E6A63" }}>
+                        {dLabel.replace(/_/g, " ")}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -536,7 +540,7 @@ export default function Attendance() {
               {summary && (
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                   {Object.entries(summary.counts).map(([k, v]) => (
-                    <div key={k} className="border border-[var(--line)] p-3" data-testid={`count-${k}`}>
+                    <div key={k} className="border border-[var(--line)] rounded-lg p-3" data-testid={`count-${k}`}>
                       <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: STATUS_COLORS[k] }}>{k}</div>
                       <div className="font-display font-bold text-2xl">{v}</div>
                     </div>
@@ -641,7 +645,7 @@ export default function Attendance() {
               <button className="btn-primary md:col-span-4" data-testid="corr-submit"><PaperPlaneRight size={14} /> Submit correction</button>
             </form>
           )}
-          <div className="border border-[var(--line)] overflow-x-auto">
+          <div className="border border-[var(--line)] overflow-x-auto rounded-md">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                 <tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">From</th><th className="p-2 text-left">To</th><th className="p-2 text-left">Days</th><th className="p-2 text-left">Reason</th><th className="p-2 text-left">Status</th></tr>
@@ -687,7 +691,7 @@ export default function Attendance() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <MonthPicker ym={ym} setYm={setYm} />
             <div className="flex items-center gap-3">
-              <div className="flex items-center border border-[var(--line)]" data-testid="monthly-view-toggle">
+              <div className="flex items-center border border-[var(--line)] rounded-md overflow-hidden" data-testid="monthly-view-toggle">
                 {[["grid", "Day-by-day"], ["summary", "Summary"]].map(([v, l]) => (
                   <button key={v} onClick={() => setMonthlyView(v)}
                     className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${monthlyView === v ? "bg-[var(--ink)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
@@ -705,7 +709,7 @@ export default function Attendance() {
           {monthlyView === "grid" ? (
             <MonthlyGrid monthly={monthly} ym={ym} />
           ) : (
-            <div className="border border-[var(--line)] overflow-x-auto table-scroll">
+            <div className="border border-[var(--line)] overflow-x-auto table-scroll rounded-md">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                   <tr>
@@ -765,7 +769,7 @@ function SalRow({ k, v, sub, red }) {
 
 const STATUS_LETTER = {
   present: "P", late: "L", absent: "A", half_day: "½",
-  leave: "LV", paid_leave: "LV", unpaid_leave: "LV",
+  leave: "LV", paid_leave: "LV", auto_paid_leave: "AP", unpaid_leave: "UL",
   holiday: "H", week_off: "W", pending_approval: "?", site_visit: "SV",
 };
 
@@ -781,7 +785,7 @@ function MonthlyGrid({ monthly, ym }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono" data-testid="monthly-grid-legend">
-        {[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["half_day", "Half"], ["leave", "Leave"], ["holiday", "Holiday"], ["week_off", "Week-off"]].map(([k, l]) => (
+        {[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["half_day", "Half"], ["leave", "Leave"], ["auto_paid_leave", "Auto PL"], ["unpaid_leave", "Unpaid"], ["holiday", "Holiday"], ["week_off", "Week-off"]].map(([k, l]) => (
           <span key={k} className="flex items-center gap-1">
             <span className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold"
               style={{ background: STATUS_COLORS[k] + "22", color: STATUS_COLORS[k], border: `1px solid ${STATUS_COLORS[k]}` }}>
@@ -790,7 +794,7 @@ function MonthlyGrid({ monthly, ym }) {
           </span>
         ))}
       </div>
-      <div className="border border-[var(--line)] overflow-x-auto table-scroll" data-testid="monthly-grid">
+      <div className="border border-[var(--line)] overflow-x-auto table-scroll rounded-md" data-testid="monthly-grid">
         <table className="text-xs border-collapse">
           <thead>
             <tr className="bg-[var(--surface-2)]">
@@ -822,11 +826,12 @@ function MonthlyGrid({ monthly, ym }) {
                   {days.map((d) => {
                     const dateStr = `${ym.y}-${pad(ym.m)}-${pad(d)}`;
                     const rec = byDate[dateStr];
-                    const st = rec?.status;
+                    const st = rec?.auto_paid_leave ? "auto_paid_leave" : rec?.status;
                     const color = st ? STATUS_COLORS[st] : null;
                     const letter = st ? (STATUS_LETTER[st] || "•") : "·";
                     const lateM = rec?.late_minutes;
-                    const title = rec ? `${dateStr}: ${st}${lateM ? ` · ${lateM} min late` : ""}` : `${dateStr}: no record`;
+                    const displaySt = rec?.auto_paid_leave ? "auto paid leave" : st;
+                    const title = rec ? `${dateStr}: ${displaySt}${lateM ? ` · ${lateM} min late` : ""}` : `${dateStr}: no record`;
                     if (st === "upcoming" || (!rec && dateStr > todayKey)) return <td key={d} className="p-0.5" aria-label={`${dateStr}: upcoming`} />;
                     return (
                       <td key={d} className="p-0.5 text-center" title={title}>
@@ -1362,7 +1367,7 @@ function EmployeeSetupCard() {
                   data-testid={`weekly-off-${d.v}`}>{d.l}</button>
               ))}
               <button type="button" onClick={() => setCfg({ ...cfg, weekly_offs: null })}
-                className="px-3 py-1.5 text-xs font-mono border border-[var(--line)] text-[var(--ink-3)]">
+                className="px-3 py-1.5 text-xs font-mono border border-[var(--line)] text-[var(--ink-3)] rounded-md">
                 Use policy
               </button>
             </div>
@@ -1896,6 +1901,7 @@ function MyLeaveMonth({ summary, ym }) {
   const free = Number(summary?.monthly_paid_leave_allowance ?? 1);
   const used = Number(summary?.paid_leave_allowance_used || 0) + Number(summary?.excess_ordinary_leave_days || 0);
   const extra = Number(summary?.excess_ordinary_leave_days || 0);
+  const autoPL = Number(summary?.summary?.auto_paid_leave || 0);
   const perDay = Number(summary?.per_day_rate || 0);
   return (
     <div className="card-flat" data-testid="my-leave-balance">
@@ -1906,6 +1912,14 @@ function MyLeaveMonth({ summary, ym }) {
       <div className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
         <span>Leave taken</span><span className="font-semibold tabular-nums">{used}</span>
       </div>
+      {autoPL > 0 && (
+        <div className="flex items-center justify-between border-b border-[var(--line-soft)] py-2 text-sm">
+          <span className="text-[var(--ink-2)]">Auto-counted as paid leave</span>
+          <span className="font-semibold tabular-nums" style={{ color: "#1a7f5a" }}>
+            {autoPL} day{autoPL === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between py-2 text-sm">
         <span>Deducted from salary</span>
         <span className={`font-semibold tabular-nums ${extra > 0 ? "text-[var(--danger)]" : ""}`}>

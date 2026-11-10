@@ -33,6 +33,11 @@ class GoogleCalendarError(RuntimeError):
     pass
 
 
+RECONNECT_REQUIRED_MESSAGE = (
+    "Google authorization expired. Reconnect Google Calendar to resume sync."
+)
+
+
 def _safe_sync_error(exc: Exception) -> str:
     """Return operationally useful error metadata without persisting provider text.
 
@@ -44,6 +49,18 @@ def _safe_sync_error(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
         return f"{name} (HTTP {exc.response.status_code})"
     return name
+
+
+def _sync_failure(exc: Exception) -> tuple[str, bool]:
+    """Return a safe queue error and whether OAuth reconnection is required."""
+    reconnect_required = (
+        isinstance(exc, GoogleCalendarError)
+        and str(exc) == RECONNECT_REQUIRED_MESSAGE
+    )
+    return (
+        RECONNECT_REQUIRED_MESSAGE if reconnect_required else _safe_sync_error(exc),
+        reconnect_required,
+    )
 
 
 def is_configured() -> bool:
@@ -186,9 +203,13 @@ async def _access_token(connection: dict) -> str:
     if response.status_code != 200:
         await db.google_calendar_connections.update_one(
             {"org_id": connection["org_id"], "user_id": connection["user_id"]},
-            {"$set": {"status": "reconnect_required", "last_error": "Google authorization expired"}},
+            {"$set": {
+                "status": "reconnect_required",
+                "last_error": RECONNECT_REQUIRED_MESSAGE,
+                "updated_at": iso_now(),
+            }},
         )
-        raise GoogleCalendarError("Google Calendar must be reconnected")
+        raise GoogleCalendarError(RECONNECT_REQUIRED_MESSAGE)
     token = response.json()
     expires_at = now_utc() + timedelta(seconds=max(60, int(token.get("expires_in") or 3600) - 60))
     await db.google_calendar_connections.update_one(
@@ -588,7 +609,10 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
             result["synced"] += 1
         except Exception as exc:  # noqa: BLE001 - queue retains sanitized failure
             attempts = int(row.get("attempts") or 0) + 1
-            message = _safe_sync_error(exc)
+            # Preserve the actionable reconnect reason written by _access_token.
+            # A generic exception name made the UI look broken and hid the one
+            # recovery action the user actually needs to take.
+            message, reconnect_required = _sync_failure(exc)
             delay = min(3600, 30 * (2 ** min(attempts, 7)))
             await db.google_calendar_sync_queue.update_one(
                 {"sync_key": row["sync_key"]},
@@ -596,9 +620,12 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
                           "next_attempt_at": now_utc() + timedelta(seconds=delay),
                           "updated_at": iso_now()}},
             )
+            connection_update = {"last_error": message, "updated_at": iso_now()}
+            if reconnect_required:
+                connection_update["status"] = "reconnect_required"
             await db.google_calendar_connections.update_one(
                 {"org_id": row["org_id"], "user_id": user_id},
-                {"$set": {"last_error": message}})
+                {"$set": connection_update})
             result["failed"] += 1
             log.warning("Google Calendar sync failed for %s: %s", row["sync_key"], message)
     return result

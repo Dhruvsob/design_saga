@@ -20,6 +20,7 @@ export function AuthProvider({ children }) {
   const [currentOrg, setCurrentOrg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pinLocked, setPinLocked] = useState(false);
+  const [isSuspended, setIsSuspended] = useState(false);
 
   const broadcastPinState = useCallback((locked) => {
     try {
@@ -37,6 +38,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/org/current");
       setCurrentOrg(data);
+      setIsSuspended(false);
       // Apply CSS variables so any component can theme against org colors.
       if (data?.branding?.primary_color) {
         document.documentElement.style.setProperty(
@@ -48,7 +50,13 @@ export function AuthProvider({ children }) {
           "--org-accent", data.branding.accent_color
         );
       }
-    } catch {
+    } catch (err) {
+      const detail = (err?.response?.data?.detail || "").toLowerCase();
+      if (err?.response?.status === 403 && detail.includes("suspended")) {
+        setIsSuspended(true);
+      } else {
+        setIsSuspended(false);
+      }
       setCurrentOrg(null);
     }
   }, []);
@@ -174,6 +182,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setCurrentOrg(null);
     setPinLocked(false);
+    setIsSuspended(false);
     broadcastAuthState(false);
     window.location.href = "/";
   };
@@ -230,6 +239,7 @@ export function AuthProvider({ children }) {
         loginWithPassword, isPending, isRejected, isSuperAdmin,
         currentOrg, refreshOrg: fetchOrg,
         pinLocked, setupPin, unlockPin, lockNow,
+        isSuspended,
       }}
     >
       {children}

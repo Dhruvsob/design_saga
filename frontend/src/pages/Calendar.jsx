@@ -113,7 +113,10 @@ export default function CalendarPage() {
     const outcome = new URLSearchParams(window.location.search).get("google");
     if (!outcome) return;
     if (outcome === "connected") toast.success("Google Calendar connected");
-    else toast.error(outcome === "invalid_state" ? "Google connection expired. Please try again." : "Google Calendar could not be connected");
+    else if (outcome === "access_denied") toast.error("Google blocked access — your email may not be added as a test user in Google Cloud Console. Ask your admin to publish the OAuth app or add your email as a test user.");
+    else if (outcome === "redirect_uri_mismatch") toast.error("OAuth redirect URI mismatch — the callback URL registered in Google Cloud Console does not match the server. Contact your admin.");
+    else if (outcome === "invalid_state") toast.error("Google connection expired. Please try again.");
+    else toast.error("Google Calendar could not be connected. Please try again.");
     window.history.replaceState({}, "", window.location.pathname);
     loadGoogle();
   }, [loadGoogle]);
@@ -149,6 +152,7 @@ export default function CalendarPage() {
       toast.error(ex?.response?.data?.detail || "Could not disconnect Google Calendar");
     } finally { setGoogleBusy(false); }
   };
+  const googleNeedsReconnect = google?.status === "reconnect_required";
 
   const scoped = useMemo(() => items.filter((i) => {
     const sc = i.scope || (i.project_id ? "project" : "studio");
@@ -243,7 +247,9 @@ export default function CalendarPage() {
               <div className="truncate text-xs text-[var(--ink-2)]">
                 {google.connected
                   ? `${google.email || "Connected"}${google.pending ? ` · ${google.pending} pending` : ""}`
-                  : google.configured ? "Connect your own Google Calendar. Only your shared or assigned items sync." : "OAuth setup is required on the server"}
+                  : googleNeedsReconnect
+                    ? `${google.email || "Your Google account"} must be reconnected. Your ERP data is safe; sync is paused.`
+                    : google.configured ? "Connect your own Google Calendar. Only your shared or assigned items sync." : "OAuth setup is required on the server"}
               </div>
               {google.last_error && <div className="text-xs text-[var(--danger)]">{google.last_error}</div>}
             </div>
@@ -261,7 +267,8 @@ export default function CalendarPage() {
             ) : (
               <button type="button" className="btn-primary text-xs" onClick={connectGoogle}
                       disabled={googleBusy || !google.configured} data-testid="google-calendar-connect">
-                <GoogleLogo size={14} weight="bold" /> Connect Google
+                <GoogleLogo size={14} weight="bold" />
+                {googleNeedsReconnect ? "Reconnect Google" : "Connect Google"}
               </button>
             )}
           </div>
@@ -305,7 +312,7 @@ export default function CalendarPage() {
                   data-testid="cal-sound-toggle">
             {soundOn ? <SpeakerHigh size={16} /> : <SpeakerSlash size={16} className="text-[var(--ink-3)]" />}
           </button>
-          <div className="flex items-center gap-1 border border-[var(--line)]">
+          <div className="flex items-center gap-1 border border-[var(--line)] rounded-md overflow-hidden">
             {["month", "week", "agenda"].map((v) => (
               <button key={v} onClick={() => setView(v)}
                 className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider ${view === v ? "bg-[var(--ink)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
@@ -682,7 +689,7 @@ function EventModal({ mode, initial, me, onClose, onSaved }) {
 
         {/* Assignment / tagging */}
         {canAssign && (
-          <div className="border border-[var(--line)] p-3 space-y-3" data-testid="event-assign-section">
+          <div className="border border-[var(--line)] rounded-lg p-3 space-y-3" data-testid="event-assign-section">
             <div className="overline flex items-center gap-1.5"><Users size={12} /> Assign / tag</div>
 
             {opts.employees.length > 0 && (

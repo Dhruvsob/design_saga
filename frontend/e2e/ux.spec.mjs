@@ -14,10 +14,13 @@ test.beforeEach(async ({ browserName }, testInfo) => {
 
 async function openCollections(page) {
   const select = page.getByTestId("accounting-section-select");
-  await page.locator('[data-testid="accounting-section-select"]:visible, [data-testid="tab-receivables"]:visible')
+  await page.locator('[data-testid="accounting-section-select"]:visible, [data-testid="acc-group-in"]:visible')
     .first().waitFor();
   if (await select.isVisible()) await select.selectOption("receivables");
-  else await page.getByTestId("tab-receivables").click();
+  else {
+    await page.getByTestId("acc-group-in").click();
+    await page.getByTestId("tab-receivables").click();
+  }
 }
 
 test("a fully received collection leaves the active queue and shows in Received history", async ({ page }) => {
@@ -253,10 +256,12 @@ test("accounting sections are grouped by what you are doing", async ({ page }, t
   test.skip(testInfo.project.name !== "desktop", "grouped grid is the desktop layout; mobile uses the grouped select");
   await page.goto("/accounting");
   const groups = { overview: ["dashboard", "validation"], in: ["income", "receivables", "commissions"],
-    out: ["expense", "recurring"], books: ["daybook", "ledgers", "bank"], reports: ["reports", "balance", "cashflow"], setup: ["coa"] };
+    out: ["expense", "recurring"], books: ["daybook", "ledgers", "bank"], reports: ["reports", "balance", "cashflow"], setup: ["coa", "close"] };
   for (const [g, tabs] of Object.entries(groups)) {
-    for (const t of tabs) await expect(page.getByTestId(`acc-group-${g}`).getByTestId(`tab-${t}`)).toBeVisible();
+    await page.getByTestId(`acc-group-${g}`).click();
+    for (const t of tabs) await expect(page.getByTestId(`tab-${t}`)).toBeVisible();
   }
+  await page.getByTestId("acc-group-reports").click();
   await page.getByTestId("tab-balance").click();
   await expect(page.getByTestId("tab-balance")).toHaveAttribute("aria-current", "page");
 });
@@ -307,6 +312,7 @@ test("breadcrumbs link back to the list and the Daybook header stays pinned", as
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await page.goto("/accounting");
+  await page.getByTestId("acc-group-books").click();
   await page.getByTestId("tab-daybook").click();
   const th = page.getByTestId("daybook-scroll").locator("thead th").first();
   await expect(th).toBeVisible();

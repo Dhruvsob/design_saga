@@ -145,6 +145,12 @@ export default function ProjectDetail() {
       budget: p.budget ?? "", description: p.description || "",
       start_date: p.start_date || "", end_date: p.end_date || "",
       site_address: p.site_address || "", site_area_sqft: p.site_area_sqft || "",
+      fee_structure_type: p.fee_structure_type || "",
+      fee_lump_sum_amount: p.fee_lump_sum_amount ?? "",
+      fee_project_value: p.fee_project_value ?? "",
+      fee_percentage: p.fee_percentage ?? "",
+      fee_contract_value: p.fee_contract_value ?? "",
+      fee_rate_per_sqft: p.fee_rate_per_sqft ?? "",
     });
     setErr("");
     setEditOpen(true);
@@ -158,14 +164,36 @@ export default function ProjectDetail() {
     }
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const feeCalc = (f) => {
+    const fst = f.fee_structure_type;
+    if (fst === "lump_sum") return f.fee_lump_sum_amount ? Number(f.fee_lump_sum_amount) : null;
+    if (fst === "percentage_consultancy") {
+      const v = Number(f.fee_project_value || 0), pct = Number(f.fee_percentage || 0);
+      return v && pct ? Math.round(v * pct / 100) : null;
+    }
+    if (fst === "turnkey") return f.fee_contract_value ? Number(f.fee_contract_value) : null;
+    if (fst === "per_sqft") {
+      const area = Number(f.site_area_sqft || 0), rate = Number(f.fee_rate_per_sqft || 0);
+      return area && rate ? area * rate : null;
+    }
+    return null;
+  };
+
   const saveEdit = async (e) => {
     e.preventDefault(); setErr("");
+    const payload = {
+      ...form,
+      budget: Number(form.budget || 0),
+      site_area_sqft: form.site_area_sqft ? Number(form.site_area_sqft) : null,
+      fee_structure_type: form.fee_structure_type || null,
+      fee_lump_sum_amount: form.fee_lump_sum_amount !== "" ? Number(form.fee_lump_sum_amount) : null,
+      fee_project_value: form.fee_project_value !== "" ? Number(form.fee_project_value) : null,
+      fee_percentage: form.fee_percentage !== "" ? Number(form.fee_percentage) : null,
+      fee_contract_value: form.fee_contract_value !== "" ? Number(form.fee_contract_value) : null,
+      fee_rate_per_sqft: form.fee_rate_per_sqft !== "" ? Number(form.fee_rate_per_sqft) : null,
+    };
     try {
-      await api.patch(`/projects/${id}`, {
-        ...form,
-        budget: Number(form.budget || 0),
-        site_area_sqft: form.site_area_sqft ? Number(form.site_area_sqft) : undefined,
-      });
+      await api.patch(`/projects/${id}`, payload);
       setEditOpen(false);
       load();
     } catch (ex) {
@@ -267,11 +295,11 @@ export default function ProjectDetail() {
               <Link to={`/clients/${p.client_id}`} className="hover:text-[var(--accent-strong)] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
             ) : (p.client_name || "—")}
             {p.engagement_type && (
-              <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 ${
+              <span className={`ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
                 p.engagement_type === "consultancy" ? "bg-[var(--hover)] text-[#5F5A4B]" : "bg-[var(--warning-soft)] text-[var(--warning)]"
               }`}>{p.engagement_type}</span>
             )}
-            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
+            {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{p.name}</h1>
           {p.description && <p className="mt-2 text-[var(--ink-2)] max-w-2xl">{p.description}</p>}
@@ -303,7 +331,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Stage tracker: one progress line; click a stage to move the project */}
-      <div className="border border-[var(--line)] bg-white px-5 py-4" data-testid="stage-tracker">
+      <div className="border border-[var(--line)] rounded-xl bg-white px-5 py-4" data-testid="stage-tracker">
         <div className="flex items-center justify-between mb-3">
           <div className="overline">LIFECYCLE</div>
           <div className="text-xs text-[var(--ink-2)]">Stage {currentIdx + 1} of {STAGES.length} · <span className="font-semibold text-[var(--ink)]">{STAGES[currentIdx] || p.stage}</span></div>
@@ -377,7 +405,7 @@ export default function ProjectDetail() {
                             onOpen={(t) => setTab(t)} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border-t border-l border-[var(--line)]" data-testid="project-financials">
+            <div className="grid grid-cols-2 md:grid-cols-5 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-financials">
               <MiniStat label="Project value" value={inr(money.project_value ?? fin.budget)} />
               <MiniStat label="Invoiced" value={inr(money.invoiced ?? fin.invoiced)} />
               <MiniStat label="Received" value={inr(money.received ?? fin.collected)} accent="#1D633E" />
@@ -385,7 +413,7 @@ export default function ProjectDetail() {
               {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-t border-l border-[var(--line)]" data-testid="project-operational-stats">
+            <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-operational-stats">
               <MiniStat label="Tasks" value={`${(p.tasks || []).length}`} />
               <MiniStat label="Team" value={`${(p.team || []).length + (p.project_manager ? 1 : 0)}`} />
               <MiniStat label="Files" value={`${(p.files || []).length}`} />
@@ -395,7 +423,7 @@ export default function ProjectDetail() {
 
           <div className="grid grid-cols-1 gap-6">
             {/* team */}
-            <div className="border border-[var(--line)] p-5">
+            <div className="border border-[var(--line)] rounded-lg p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="overline"><UsersThree size={12} className="inline mr-1" /> TEAM</div>
                 {hasPerm("projects.update") && (
@@ -420,7 +448,7 @@ export default function ProjectDetail() {
                   <div className="flex flex-wrap gap-1.5">
                     {(p.team || []).map((m) => (
                       <Link key={m.id} to={`/employees/${m.id}`}
-                        className="text-xs border border-[var(--line)] px-2 py-1 hover:border-[var(--ink)] transition">
+                        className="text-xs border border-[var(--line)] px-2 py-1 rounded-md hover:border-[var(--ink)] transition">
                         {m.name} {m.designation && <span className="text-[var(--ink-3)]">· {m.designation}</span>}
                       </Link>
                     ))}
@@ -443,7 +471,7 @@ export default function ProjectDetail() {
           {(p.tasks || []).length === 0 && <Empty text="No tasks yet. Add them from the Tasks page." />}
           {(p.tasks || []).map((t) => (
             <button key={t.id} onClick={() => navigate(`/tasks/${t.id}`)}
-              className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition"
+              className="w-full text-left border border-[var(--line)] rounded-lg p-3 flex items-center justify-between hover:border-[var(--ink)] transition"
               data-testid={`project-task-${t.id}`}>
               <div>
                 <div className="font-semibold text-sm">{t.title}</div>
@@ -454,7 +482,7 @@ export default function ProjectDetail() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
+                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-2)]">{t.status_detail || t.status}</span>
                 <span className={`status-chip chip-${t.priority}`}>{statusLabel(t.priority)}</span>
                 <CaretRight size={12} className="text-[var(--ink-3)]" />
               </div>
@@ -506,7 +534,7 @@ export default function ProjectDetail() {
           )}
           {(p.milestones || []).length === 0 && <Empty text="No payment milestones yet." />}
           {(p.milestones || []).map((m) => (
-            <div key={m.id} className="border border-[var(--line)] p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
+            <div key={m.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
               <div>
                 <div className="font-semibold text-sm">{m.name}</div>
                 <div className="text-xs text-[var(--ink-2)]">Due {formatDate(m.due_date)}{m.percent ? ` · ${m.percent}% of project value` : ""}{Number(m.paid_amount || 0) > 0 && m.status !== "paid" ? ` · ${inr(m.paid_amount)} received` : ""}</div>
@@ -528,7 +556,7 @@ export default function ProjectDetail() {
             <div className="space-y-2">
               {(p.purchase_orders || []).map((po) => (
                 <button key={po.id} onClick={() => navigate("/purchase-orders")}
-                  className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
+                  className="w-full text-left border border-[var(--line)] rounded-lg p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div>
                     <div className="font-mono font-semibold text-sm">{po.po_number}</div>
                     <div className="text-xs text-[var(--ink-2)]">{po.vendor_name || "—"}</div>
@@ -547,7 +575,7 @@ export default function ProjectDetail() {
             <div className="space-y-2">
               {(p.vendor_bills || []).map((b) => (
                 <button key={b.id} onClick={() => b.vendor_id && navigate(`/vendors/${b.vendor_id}`)}
-                  className="w-full text-left border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
+                  className="w-full text-left border border-[var(--line)] rounded-lg p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div>
                     <div className="font-mono font-semibold text-sm">{b.bill_number || b.id}</div>
                     <div className="text-xs text-[var(--ink-2)]">{b.vendor_name || "—"} · {formatDate(b.bill_date)}</div>
@@ -585,7 +613,7 @@ export default function ProjectDetail() {
           )}
           {(p.files || []).length === 0 && <Empty text="No files yet." />}
           {(p.files || []).map((f) => (
-            <div key={f.id} className="border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition group">
+            <div key={f.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between hover:border-[var(--ink)] transition group">
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm">{f.name}</div>
                 <div className="text-xs text-[var(--ink-2)]">{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
@@ -615,7 +643,7 @@ export default function ProjectDetail() {
         <div className="space-y-2">
           {(p.invoices || []).length === 0 && <Empty text="No invoices yet." />}
           {(p.invoices || []).map((i) => (
-            <div key={i.id} className="border border-[var(--line)] p-3 flex items-center justify-between">
+            <div key={i.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
                 <div className="text-xs text-[var(--ink-2)]">{i.doc_type} · Due {formatDate(i.due_date)}</div>
@@ -660,6 +688,53 @@ export default function ProjectDetail() {
             </div>
             <input className="input-flat w-full" placeholder="Site address" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
             <input className="input-flat w-full" type="number" min="0" placeholder="Enter site area (sq ft)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} />
+
+            {/* Fee structure */}
+            <div className="border-t border-[var(--line-soft)] pt-3 space-y-2">
+              <div className="overline text-[10px]">FEE STRUCTURE</div>
+              <select aria-label="Fee structure type" className="input-flat w-full"
+                value={form.fee_structure_type}
+                onChange={(e) => setForm({ ...form, fee_structure_type: e.target.value })}>
+                <option value="">— Select fee type —</option>
+                <option value="lump_sum">Lump Sum (fixed fee)</option>
+                <option value="percentage_consultancy">Consultancy % (% of project value)</option>
+                <option value="turnkey">Turnkey (materials + execution)</option>
+                <option value="per_sqft">Per Sq Ft (rate × area)</option>
+              </select>
+              {form.fee_structure_type === "lump_sum" && (
+                <input className="input-flat w-full" type="number" min="0" placeholder="Fixed fee amount (₹)"
+                  value={form.fee_lump_sum_amount}
+                  onChange={(e) => setForm({ ...form, fee_lump_sum_amount: e.target.value })} />
+              )}
+              {form.fee_structure_type === "percentage_consultancy" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="input-flat" type="number" min="0" placeholder="Total project value (₹)"
+                    value={form.fee_project_value}
+                    onChange={(e) => setForm({ ...form, fee_project_value: e.target.value })} />
+                  <input className="input-flat" type="number" min="0" max="100" step="0.01" placeholder="Fee % (e.g. 8.5)"
+                    value={form.fee_percentage}
+                    onChange={(e) => setForm({ ...form, fee_percentage: e.target.value })} />
+                </div>
+              )}
+              {form.fee_structure_type === "turnkey" && (
+                <input className="input-flat w-full" type="number" min="0" placeholder="Turnkey contract value (₹)"
+                  value={form.fee_contract_value}
+                  onChange={(e) => setForm({ ...form, fee_contract_value: e.target.value })} />
+              )}
+              {form.fee_structure_type === "per_sqft" && (
+                <input className="input-flat w-full" type="number" min="0" placeholder="Rate per sq ft (₹/sq ft)"
+                  value={form.fee_rate_per_sqft}
+                  onChange={(e) => setForm({ ...form, fee_rate_per_sqft: e.target.value })} />
+              )}
+              {feeCalc(form) !== null && (
+                <div className="text-xs text-[var(--ink-2)] font-mono bg-[var(--surface-2)] px-3 py-1.5 rounded">
+                  Calculated fee: <span className="text-[var(--ink)] font-semibold">{inr(feeCalc(form))}</span>
+                  {form.fee_structure_type === "per_sqft" && form.site_area_sqft && ` (${Number(form.site_area_sqft).toLocaleString()} sq ft × ₹${Number(form.fee_rate_per_sqft).toLocaleString()}/sq ft)`}
+                  {form.fee_structure_type === "percentage_consultancy" && form.fee_percentage && ` (${form.fee_percentage}% of ${inr(Number(form.fee_project_value))})`}
+                </div>
+              )}
+            </div>
+
             <textarea className="input-flat w-full" rows="2" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 flex items-center gap-2"><Warning size={12} /> {err}</div>}
             <button className="btn-primary w-full" data-testid="edit-project-save">Save changes</button>
@@ -734,5 +809,5 @@ function Row({ k, v }) {
 }
 
 function Empty({ text }) {
-  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] p-6 text-center">{text}</p>;
+  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] rounded-md p-6 text-center">{text}</p>;
 }

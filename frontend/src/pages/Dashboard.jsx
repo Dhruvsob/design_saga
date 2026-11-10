@@ -200,7 +200,7 @@ export default function Dashboard() {
                   tabIndex={a.link ? 0 : undefined}
                   onClick={a.link ? () => navigate(a.link) : undefined}
                   onKeyDown={a.link ? (e) => { if (e.key === "Enter") navigate(a.link); } : undefined}
-                  className={`border-l-2 pl-3 py-2 hover:bg-[var(--surface-2)] transition ${a.link ? "cursor-pointer" : ""}`}
+                  className={`border-l-2 rounded-r-md pl-3 py-2 hover:bg-[var(--surface-2)] transition ${a.link ? "cursor-pointer" : ""}`}
                   style={{ borderColor: a.level === "high" ? "#B22B22" : "#8B7F6A" }}
                   data-testid={a.link ? "alert-link" : undefined}
                 >
@@ -230,7 +230,7 @@ export default function Dashboard() {
                   <div key={u.name} className="group">
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-[var(--ink)] text-white flex items-center justify-center text-[10px] font-display font-bold">
+                        <div className="w-6 h-6 bg-[var(--ink)] text-white flex items-center justify-center text-[10px] font-display font-bold rounded-full">
                           {u.name.slice(0, 1).toUpperCase()}
                         </div>
                         <span className="text-sm font-medium">{u.name}</span>
@@ -240,9 +240,9 @@ export default function Dashboard() {
                         <span className="text-[var(--ink-3)]"> tasks</span>
                       </span>
                     </div>
-                    <div className="h-2 bg-[var(--line-soft)] relative overflow-hidden">
+                    <div className="h-2 bg-[var(--line-soft)] relative overflow-hidden rounded-full">
                       <div
-                        className="h-2 bg-[var(--ink)] group-hover:bg-[var(--accent)] transition-colors"
+                        className="h-2 bg-[var(--ink)] group-hover:bg-[var(--accent)] transition-colors rounded-full"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -265,7 +265,7 @@ export default function Dashboard() {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {sources.map((s) => (
-                <div key={s.source} className="border border-[var(--line)] p-4 hover:border-[var(--ink)] hover:-translate-y-0.5 transition cursor-pointer">
+                <div key={s.source} className="border border-[var(--line)] rounded-lg p-4 hover:border-[var(--ink)] hover:-translate-y-0.5 transition cursor-pointer">
                   <div className="overline">{statusLabel(s.source)}</div>
                   <div className="font-display font-bold text-3xl tracking-tighter mt-1">{s.count}</div>
                   <div className="mt-2 h-0.5 bg-[var(--accent)]" style={{ width: `${Math.min(100, s.count * 25)}%` }} />

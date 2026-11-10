@@ -14,7 +14,7 @@ from core.deps import require_user
 from core.google_calendar import (
     connection_for, enqueue_user_sources, exchange_code,
     google_email, is_configured, new_oauth_state, oauth_url, process_sync_queue,
-    save_connection, state_hash,
+    RECONNECT_REQUIRED_MESSAGE, save_connection, state_hash,
 )
 from core.helpers import iso_now, now_utc
 from core.rbac import has_permission
@@ -82,7 +82,12 @@ async def connect_google_calendar(request: Request,
 @router.get("/calendar/google/callback")
 async def google_calendar_callback(code: Optional[str] = None, state: Optional[str] = None,
                                    error: Optional[str] = None):
-    if error or not code or not state:
+    if error:
+        # Pass the Google-supplied error code so the frontend can show specific guidance.
+        # access_denied = app in testing mode, user not added as test user.
+        safe_error = error if error in ("access_denied", "invalid_client", "redirect_uri_mismatch") else "error"
+        return RedirectResponse(_frontend_url(google=safe_error), status_code=303)
+    if not code or not state:
         return RedirectResponse(_frontend_url(google="error"), status_code=303)
     oauth_state = await db.google_oauth_states.find_one_and_delete({
         "state_hash": state_hash(state),
@@ -116,6 +121,8 @@ async def sync_google_calendar(request: Request,
     org_id = _require_calendar_user(user)
     connection = await connection_for(org_id, user["user_id"])
     if not connection or connection.get("status") != "connected":
+        if connection and connection.get("status") == "reconnect_required":
+            raise HTTPException(409, RECONNECT_REQUIRED_MESSAGE)
         raise HTTPException(409, "Connect Google Calendar first")
     queued = await enqueue_user_sources(org_id, user["user_id"])
     result = await process_sync_queue(200, org_id=org_id, user_id=user["user_id"])

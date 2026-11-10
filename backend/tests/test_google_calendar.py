@@ -35,6 +35,21 @@ def test_sync_error_summary_never_persists_provider_url_or_token():
     assert "oauth.example" not in summary
 
 
+def test_reconnect_failure_keeps_actionable_safe_message():
+    message, reconnect = gc._sync_failure(
+        gc.GoogleCalendarError(gc.RECONNECT_REQUIRED_MESSAGE))
+    assert reconnect is True
+    assert message == gc.RECONNECT_REQUIRED_MESSAGE
+    assert "token" not in message.lower()
+
+
+def test_other_google_failure_stays_generic():
+    message, reconnect = gc._sync_failure(gc.GoogleCalendarError("provider secret"))
+    assert reconnect is False
+    assert message == "GoogleCalendarError"
+    assert "secret" not in message
+
+
 def test_google_event_id_is_stable_and_google_safe():
     first = gc.google_event_id("org_a", "task", "tsk_123")
     assert first == gc.google_event_id("org_a", "task", "tsk_123")

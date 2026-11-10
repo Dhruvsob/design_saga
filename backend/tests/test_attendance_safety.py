@@ -99,6 +99,77 @@ def test_monthly_paid_leave_allowance_converts_only_excess_ordinary_leave_to_lop
     assert result["lop_deduction"] == 2000
 
 
+def test_first_absence_is_auto_paid_leave_but_second_is_lop(monkeypatch):
+    rows = [
+        {"employee_id": "emp_1", "date": "2026-11-02", "status": "absent"},
+        {"employee_id": "emp_1", "date": "2026-11-03", "status": "absent"},
+    ]
+
+    class Cursor:
+        def __aiter__(self):
+            async def values():
+                for row in rows:
+                    yield row
+            return values()
+
+    class AttendanceRows:
+        def find(self, *_args, **_kwargs):
+            return Cursor()
+
+    monkeypatch.setattr(attendance.engine, "sdb", SimpleNamespace(attendance=AttendanceRows()))
+    monkeypatch.setattr(
+        attendance.engine, "now_ist",
+        lambda: datetime(2026, 11, 3, tzinfo=timezone(timedelta(hours=5, minutes=30))),
+    )
+    result = asyncio.run(attendance.engine.monthly_summary(
+        {"id": "emp_1", "monthly_salary": 30000, "payroll_basis_days": 30,
+         "weekly_offs": [6]},
+        2026, 11,
+        {"weekly_off_days": [6], "full_day_min_hours": 8,
+         "monthly_paid_leave_allowance": 1},
+        holiday_dates=set(),
+    ))
+    first = next(row for row in result["daily"] if row["date"] == "2026-11-02")
+    second = next(row for row in result["daily"] if row["date"] == "2026-11-03")
+    assert first["status"] == "paid_leave" and first["auto_paid_leave"] is True
+    assert second["status"] == "absent" and second["auto_paid_leave"] is False
+    assert result["summary"]["auto_paid_leave"] == 1
+    assert result["lop_days"] == 1
+
+
+def test_approved_ordinary_leave_consumes_allowance_before_absence(monkeypatch):
+    rows = [
+        {"employee_id": "emp_1", "date": "2026-11-02", "status": "leave",
+         "leave_type": "casual"},
+        {"employee_id": "emp_1", "date": "2026-11-03", "status": "absent"},
+    ]
+
+    class Cursor:
+        def __aiter__(self):
+            async def values():
+                for row in rows:
+                    yield row
+            return values()
+
+    class AttendanceRows:
+        def find(self, *_args, **_kwargs):
+            return Cursor()
+
+    monkeypatch.setattr(attendance.engine, "sdb", SimpleNamespace(attendance=AttendanceRows()))
+    monkeypatch.setattr(
+        attendance.engine, "now_ist",
+        lambda: datetime(2026, 11, 3, tzinfo=timezone(timedelta(hours=5, minutes=30))),
+    )
+    result = asyncio.run(attendance.engine.monthly_summary(
+        {"id": "emp_1", "weekly_offs": [6]}, 2026, 11,
+        {"weekly_off_days": [6], "monthly_paid_leave_allowance": 1},
+        holiday_dates=set(),
+    ))
+    absence = next(row for row in result["daily"] if row["date"] == "2026-11-03")
+    assert absence["status"] == "absent"
+    assert result["summary"]["auto_paid_leave"] == 0
+
+
 def test_attendance_policy_defaults_to_one_monthly_paid_leave():
     policy = AttendancePolicyIn()
     assert policy.monthly_paid_leave_allowance == 1

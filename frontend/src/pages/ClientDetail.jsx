@@ -100,7 +100,7 @@ export default function ClientDetail() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <div className="overline mb-2">
-            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
+            CLIENT {c.client_type ? `· ${c.client_type}` : ""} {c.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{c.name}</h1>
           <div className="mt-2 text-sm text-[var(--ink-2)] flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="client-contact">
@@ -170,7 +170,7 @@ export default function ClientDetail() {
           {(c.projects || []).length === 0 && <Empty text="No projects for this client yet." />}
           {(c.projects || []).map((p) => (
             <button key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
-              className="w-full text-left border border-[var(--line)] p-4 hover:border-[var(--ink)] transition flex items-center justify-between"
+              className="w-full text-left border border-[var(--line)] rounded-lg p-4 hover:border-[var(--ink)] transition flex items-center justify-between"
               data-testid={`client-project-${p.id}`}>
               <div>
                 <div className="font-semibold">{p.name}</div>
@@ -189,7 +189,7 @@ export default function ClientDetail() {
         <div className="space-y-2">
           {(c.invoices || []).length === 0 && <Empty text="No invoices for this client yet." />}
           {(c.invoices || []).map((i) => (
-            <div key={i.id} className="border border-[var(--line)] p-4 flex items-center justify-between">
+            <div key={i.id} className="border border-[var(--line)] rounded-md p-4 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold text-sm">{i.number}</div>
                 <div className="text-xs text-[var(--ink-2)] mt-0.5">{i.doc_type} · {i.project_name || "—"} · Due {formatDate(i.due_date)}</div>
@@ -258,7 +258,7 @@ export default function ClientDetail() {
       {editOpen && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-6"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setEditOpen(false); }}>
-          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] w-full max-w-lg p-6 space-y-3" data-testid="client-edit-modal">
+          <form onSubmit={saveEdit} className="bg-white border border-[var(--ink)] rounded-xl w-full max-w-lg p-6 space-y-3" data-testid="client-edit-modal">
             <div className="flex items-center justify-between">
               <div className="overline">EDIT CLIENT</div>
               <button type="button" onClick={() => setEditOpen(false)} className="btn-ghost p-1"><X size={14} /></button>
@@ -297,5 +297,5 @@ function Stat({ label, value, accent }) {
 }
 
 function Empty({ text }) {
-  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] p-6 text-center">{text}</p>;
+  return <p className="text-[var(--ink-2)] text-sm border border-dashed border-[var(--line)] rounded-md p-6 text-center">{text}</p>;
 }

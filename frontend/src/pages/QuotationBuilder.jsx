@@ -163,7 +163,7 @@ export default function QuotationBuilder() {
       </Link>
 
       {/* Header */}
-      <div className="border border-[var(--line)] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
+      <div className="border border-[var(--line)] p-6 rounded-xl flex flex-wrap gap-6 items-start justify-between bg-white">
         <div className="flex-1 min-w-[280px]">
           <div className="overline mb-2 flex items-center gap-3">
             {q.number} · {TYPE_LABELS[q.type]} · {q.version_label}
@@ -518,7 +518,7 @@ function Rooms({ q }) {
             {rooms.map((r) => {
               const pct = total ? (r.total / total) * 100 : 0;
               return (
-                <div key={r.room} className="border border-[var(--line)] p-4">
+                <div key={r.room} className="border border-[var(--line)] rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-display font-semibold">{r.room}</div>
                     <div className="font-mono font-semibold">{fmt(r.total)} <span className="text-xs text-[var(--ink-2)] ml-2">({pct.toFixed(0)}%)</span></div>
@@ -774,7 +774,7 @@ function Terms({ q, update, tpl }) {
     } testid="tab-terms">
       <div className="space-y-4">
         {(q.terms || []).map((t, i) => (
-          <div key={i} className="border border-[var(--line)] p-4">
+          <div key={i} className="border border-[var(--line)] rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <input className="font-display font-bold text-lg bg-transparent outline-none border-b border-transparent focus:border-[var(--accent)]" value={t.section || ""} onChange={(e) => setRow(i, "section", e.target.value)} />
               <button onClick={() => removeRow(i)} className="text-[var(--danger)]"><Trash size={14} /></button>
@@ -792,7 +792,7 @@ function Versions({ q }) {
   return (
     <Card title="VERSION HISTORY" testid="tab-versions">
       <div className="overline mb-2">CURRENT</div>
-      <div className="border border-[var(--ink)] p-4 mb-6">
+      <div className="border border-[var(--ink)] rounded-lg p-4 mb-6">
         <div className="flex items-center justify-between">
           <div>
             <div className="font-display font-bold text-lg">{q.version_label}</div>
@@ -809,7 +809,7 @@ function Versions({ q }) {
           {[...(q.versions_log || [])].reverse().map((v, i) => {
             const diff = (q.cost?.grand_total || 0) - (v.grand_total || 0);
             return (
-              <div key={i} className="border border-[var(--line)] p-4">
+              <div key={i} className="border border-[var(--line)] rounded-lg p-4">
                 <div className="flex items-center justify-between mb-1">
                   <div className="font-display font-bold">{v.version_label}</div>
                   <div className="font-mono">{fmt(v.grand_total)}</div>
@@ -834,7 +834,7 @@ function Versions({ q }) {
 /* ========= Preview ========= */
 function Preview({ qid }) {
   return (
-    <div className="border border-[var(--line)]" style={{ height: "85vh" }} data-testid="tab-preview">
+    <div className="border border-[var(--line)] rounded-lg overflow-hidden" style={{ height: "85vh" }} data-testid="tab-preview">
       <PdfFrame path={`/quotations-adv/${qid}/pdf`} title="Quotation preview" />
     </div>
   );

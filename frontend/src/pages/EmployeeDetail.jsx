@@ -221,7 +221,7 @@ export default function EmployeeDetail() {
       </Link>
 
       {/* Header */}
-      <div className="border border-[var(--line)] p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
+      <div className="border border-[var(--line)] rounded-xl p-6 flex flex-wrap gap-6 items-start justify-between bg-white">
         <div className="flex items-start gap-5 flex-1 min-w-[280px]">
           {emp.photo ? (
             <img src={emp.photo} alt="" className="w-20 h-20 object-cover ring-1 ring-[var(--line)]" />
@@ -461,7 +461,7 @@ export default function EmployeeDetail() {
               <div className="font-display font-bold">Total deductions</div>
               <div className="font-mono font-bold">{fmt(s.total_deductions)}</div>
             </div>
-            <div className="mt-3 border border-[var(--ink)] p-4 bg-[var(--surface-2)]">
+            <div className="mt-3 border border-[var(--ink)] p-4 rounded-lg bg-[var(--surface-2)]">
               <div className="overline mb-1">NET / MONTH</div>
               <div className="font-display font-bold text-3xl tracking-tighter accent-blue">{fmt(s.net_monthly)}</div>
               <div className="text-xs text-[var(--ink-2)] mt-1">CTC · {fmt(s.ctc_annual)} / year</div>
@@ -511,7 +511,7 @@ export default function EmployeeDetail() {
               {(emp.documents || []).map((d) => {
                 const safeUrl = safeExternalUrl(d.url);
                 return (
-                <div key={d.id} className="border border-[var(--line)] p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
+                <div key={d.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between hover:border-[var(--ink)] transition">
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-sm">{d.label}</div>
                     <div className="text-xs text-[var(--ink-2)] font-mono truncate">{d.url}</div>
@@ -555,8 +555,8 @@ export default function EmployeeDetail() {
                 <input type="number" min={0} max={100} className="input-flat" placeholder="Enter score (0-100)" value={perf.current_kpi_score ?? ""} onChange={(e) => patch(() => ({ current_kpi_score: e.target.value === "" ? "" : Number(e.target.value) }))} />
               </Row>
             )}
-            <div className="mt-3 h-2 bg-[var(--line-soft)] relative">
-              <div className="h-2 bg-[var(--accent)]" style={{ width: `${Math.min(100, Math.max(0, perf.current_kpi_score || 0))}%` }} />
+            <div className="mt-3 h-2 bg-[var(--line-soft)] relative rounded-full overflow-hidden">
+              <div className="h-2 bg-[var(--accent)] rounded-full" style={{ width: `${Math.min(100, Math.max(0, perf.current_kpi_score || 0))}%` }} />
             </div>
           </Card>
 
@@ -893,7 +893,7 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       </div>
 
       {open && (
-        <div className="border border-[var(--ink)] p-4 mb-4 space-y-3" data-testid="salary-revision-form">
+        <div className="border border-[var(--ink)] p-4 mb-4 rounded-lg space-y-3" data-testid="salary-revision-form">
           {correctingId && <div className="text-xs border border-[var(--warning)] bg-[var(--warning-soft)] p-2">
             This correction preserves the original revision as superseded and creates a replacement.
           </div>}
@@ -952,13 +952,13 @@ function SalaryRevisionsBlock({ employeeId, currentSalary, canEdit }) {
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : history.length === 0 ? (
-        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)]" data-testid="salary-history-empty">
+        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)] rounded-md" data-testid="salary-history-empty">
           No revisions recorded yet. Record an increment to start a history — past payslips remain unchanged.
         </div>
       ) : (
         <div className="space-y-2" data-testid="salary-history-list">
           {history.map((h) => (
-            <div key={h.id} className={`flex items-center justify-between border border-[var(--line)] px-3 py-2 ${h.superseded_at ? "bg-[var(--hover)] opacity-70" : "bg-[var(--surface-2)]"}`} data-testid={`salary-history-${h.id}`}>
+            <div key={h.id} className={`flex items-center justify-between border border-[var(--line)] px-3 py-2 rounded-md ${h.superseded_at ? "bg-[var(--hover)] opacity-70" : "bg-[var(--surface-2)]"}`} data-testid={`salary-history-${h.id}`}>
               <div className="min-w-0">
                 <div className="text-sm font-semibold flex items-center gap-2">
                   <ClockCounterClockwise size={13} className="text-[var(--accent-strong)]" />
@@ -1039,7 +1039,7 @@ function PaymentHistoryBlock({ employeeId, canCorrect }) {
       {loading ? (
         <div className="skeleton h-16 w-full" />
       ) : shown.length === 0 ? (
-        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)]" data-testid="payment-history-empty">
+        <div className="text-xs text-[var(--ink-3)] py-4 text-center border border-dashed border-[var(--line)] rounded-md" data-testid="payment-history-empty">
           No salary payments recorded yet.
         </div>
       ) : (

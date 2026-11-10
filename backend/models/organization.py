@@ -22,6 +22,7 @@ CONSULTANCY_MODULES = {
     "crm": True, "clients": True, "projects": True, "quotations": True,
     "employees": True, "attendance": True, "payroll": True,
     "accounting": True, "vendor_commissions": True, "tasks": True,
+    "vendors": True,
     "documents": True, "reports": True, "loans": True, "expenses": True,
     "invoices": True,
     # Disabled for consultancy-only workspaces
@@ -34,6 +35,8 @@ TURNKEY_ONLY = {
     "material_tracking": True, "vendor_billing": True,
     "labour_billing": True, "site_material": True, "project_costing": True,
 }
+
+MODULE_KEYS = frozenset({*CONSULTANCY_MODULES, *TURNKEY_ONLY})
 
 
 def features_for_mode(mode: str) -> dict:

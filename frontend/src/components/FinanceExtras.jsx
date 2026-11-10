@@ -108,7 +108,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
         />
       )}
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
@@ -410,7 +410,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
             { k: "reconciled", label: "Reconciled", tint: "#1D633E" },
             { k: "ignored", label: "Ignored", tint: "#5C5C5C" },
           ].map((s) => (
-            <div key={s.k} className="border border-[var(--line)] p-2 text-center">
+            <div key={s.k} className="border border-[var(--line)] rounded-sm p-2 text-center">
               <div className="overline">{s.label}</div>
               <div className="font-mono font-bold text-lg" style={{ color: s.tint }}>{counts[s.k] || 0}</div>
             </div>
@@ -441,7 +441,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
         </button>
 
         {showLog && (
-          <div className="mt-3 border border-[var(--line)] overflow-x-auto">
+          <div className="mt-3 border border-[var(--line)] overflow-x-auto rounded-md">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
                 <tr>
@@ -489,7 +489,7 @@ export const BankReconciliation = ({ accounts = [] }) => {
         )}
       </div>
 
-      <div className="border border-[var(--line)] overflow-x-auto">
+      <div className="border border-[var(--line)] overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>

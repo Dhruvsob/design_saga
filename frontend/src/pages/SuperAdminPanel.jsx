@@ -8,6 +8,7 @@ import {
   Crown, Plus, Buildings, Users, Briefcase, CurrencyInr,
   Trash, ShieldCheck, PauseCircle, PlayCircle, Warning, Check,
   Sparkle, ArrowRight, Key, PencilSimpleLine, ChartLineUp, UserCirclePlus,
+  Faders,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 
@@ -27,6 +28,7 @@ export default function SuperAdminPanel() {
   const [orgs, setOrgs] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [pending, setPending] = useState([]);
+  const [contactRequests, setContactRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -35,6 +37,7 @@ export default function SuperAdminPanel() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [reassignUser, setReassignUser] = useState(null);
   const [healthOrg, setHealthOrg] = useState(null);
+  const [modulesOrg, setModulesOrg] = useState(null);
   const [isoResult, setIsoResult] = useState(null);
   const [isoBusy, setIsoBusy] = useState(false);
 
@@ -53,14 +56,16 @@ export default function SuperAdminPanel() {
   const load = async () => {
     setLoading(true);
     try {
-      const [o, a, p] = await Promise.all([
+      const [o, a, p, c] = await Promise.all([
         api.get("/platform/orgs"),
         api.get("/platform/analytics"),
         api.get("/platform/pending-signups").catch(() => ({ data: [] })),
+        api.get("/platform/contact-requests?limit=20").catch(() => ({ data: [] })),
       ]);
       setOrgs(o.data);
       setAnalytics(a.data);
       setPending(p.data);
+      setContactRequests(c.data);
       setErr("");
     } catch (e) {
       setErr(fmtErr(e?.response?.data?.detail, "Failed to load"));
@@ -187,6 +192,34 @@ export default function SuperAdminPanel() {
         </div>
       )}
 
+      {contactRequests.length > 0 && (
+        <div className="card-flat" data-testid="contact-requests-card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="overline">DEMO REQUESTS · {contactRequests.length}</div>
+            <span className="text-xs text-[var(--ink-3)]">Latest public enquiries</span>
+          </div>
+          <div className="divide-y divide-[var(--line-soft)]">
+            {contactRequests.map((request) => (
+              <div key={request.request_id} className="py-3 first:pt-0 last:pb-0 grid gap-1 md:grid-cols-[1fr_auto]">
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm truncate">{request.name} · {request.company}</div>
+                  <div className="text-xs text-[var(--ink-2)] break-words">
+                    {request.message || "Demo enquiry"}
+                  </div>
+                  <div className="text-[10px] font-mono uppercase text-[var(--ink-3)] mt-1">
+                    {request.type || "studio"} · {formatDate(request.created_at)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 md:justify-end">
+                  {request.phone && <span className="text-xs font-mono">{request.phone}</span>}
+                  <a className="btn-ghost text-xs" href={`mailto:${request.email}`}>Email</a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tenant isolation verification */}
       <div className="card-flat" data-testid="isolation-check-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -231,7 +264,7 @@ export default function SuperAdminPanel() {
           <div className="overline">WORKSPACES · {orgs.length}</div>
         </div>
         <div className="overflow-x-auto">
-        <div className="overflow-x-auto"><table className="w-full min-w-[900px]" data-testid="orgs-table">
+        <table className="w-full min-w-[900px]" data-testid="orgs-table">
           <thead className="bg-[var(--surface-2)] border-y border-[var(--line)]">
             <tr className="text-left">
               <Th>Workspace</Th>
@@ -252,9 +285,9 @@ export default function SuperAdminPanel() {
                 <Td>
                   <div className="flex items-center gap-3">
                     {o.branding?.logo_url ? (
-                      <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[var(--line)] bg-white" />
+                      <img src={o.branding.logo_url} alt="" className="w-8 h-8 object-contain ring-1 ring-[var(--line)] bg-white rounded-full" />
                     ) : (
-                      <div className="w-8 h-8 flex items-center justify-center text-white font-display font-bold text-xs"
+                      <div className="w-8 h-8 flex items-center justify-center text-white font-display font-bold text-xs rounded-full"
                            style={{ backgroundColor: (!o.branding?.primary_color || o.branding.primary_color.toUpperCase() === "#002FA7") ? "#76705E" : o.branding.primary_color }}>
                         {(o.name || "?").slice(0, 2).toUpperCase()}
                       </div>
@@ -306,6 +339,9 @@ export default function SuperAdminPanel() {
                     <button title="Health & limits" onClick={() => setHealthOrg(o)} className="btn-ghost text-xs" data-testid={`health-org-${o.org_id}`}>
                       <ChartLineUp size={12} />
                     </button>
+                    <button title="Module access" onClick={() => setModulesOrg(o)} className="btn-ghost text-xs" data-testid={`modules-${o.org_id}`}>
+                      <Faders size={12} />
+                    </button>
                     <button title="Edit" onClick={() => setEditOrg(o)} className="btn-ghost text-xs" data-testid={`edit-org-${o.org_id}`}>
                       <PencilSimpleLine size={12} />
                     </button>
@@ -340,7 +376,7 @@ export default function SuperAdminPanel() {
               </td></tr>
             )}
           </tbody>
-        </table></div>
+        </table>
         </div>
       </div>
 
@@ -350,6 +386,7 @@ export default function SuperAdminPanel() {
       {confirmDelete && <ConfirmDeleteModal org={confirmDelete} onClose={() => setConfirmDelete(null)} onConfirm={deleteOrg} />}
       {reassignUser && <ReassignModal user={reassignUser} orgs={orgs} onClose={() => setReassignUser(null)} onDone={() => { setReassignUser(null); load(); }} />}
       {healthOrg && <OrgHealthModal org={healthOrg} onClose={() => setHealthOrg(null)} onSaved={() => { load(); }} />}
+      {modulesOrg && <ModulesModal org={modulesOrg} onClose={() => setModulesOrg(null)} onSaved={() => { setModulesOrg(null); load(); }} />}
     </div>
   );
 }
@@ -592,6 +629,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
                 <option value="monthly">Monthly</option>
                 <option value="quarterly">Quarterly</option>
                 <option value="yearly">Yearly</option>
+                <option value="lifetime">Lifetime</option>
               </select>
             </label>
             <label className="block">
@@ -773,7 +811,7 @@ function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-           className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-4xl" : "max-w-2xl"}`}>
+           className={`bg-white p-6 w-full border border-[var(--line)] rounded-xl max-h-[92vh] overflow-y-auto ${wide ? "max-w-4xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>
             {eyebrow && <div className="overline mb-1">{eyebrow}</div>}
@@ -789,6 +827,105 @@ function Modal({ children, onClose, title, eyebrow, wide }) {
 
 const Th = ({ children, className = "" }) => <th className={`px-4 py-3 overline ${className}`}>{children}</th>;
 const Td = ({ children, className = "" }) => <td className={`px-4 py-3 text-sm align-middle ${className}`}>{children}</td>;
+
+/* ------- Module access modal ------- */
+const ALL_MODULES = [
+  { key: "crm",               label: "CRM / Leads" },
+  { key: "clients",           label: "Clients" },
+  { key: "projects",          label: "Projects" },
+  { key: "quotations",        label: "Quotations" },
+  { key: "tasks",             label: "Tasks" },
+  { key: "employees",         label: "Employees & HR" },
+  { key: "attendance",        label: "Attendance" },
+  { key: "payroll",           label: "Payroll" },
+  { key: "accounting",        label: "Accounting" },
+  { key: "invoices",          label: "Invoices" },
+  { key: "expenses",          label: "Expenses" },
+  { key: "loans",             label: "Loans" },
+  { key: "vendors",           label: "Vendors & Bills" },
+  { key: "vendor_commissions",label: "Vendor Commissions" },
+  { key: "documents",         label: "Documents" },
+  { key: "reports",           label: "Reports" },
+  { key: "purchase_orders",   label: "Purchase Orders" },
+  { key: "inventory",         label: "Inventory" },
+  { key: "material_tracking", label: "Material Tracking" },
+  { key: "vendor_billing",    label: "Vendor Billing" },
+  { key: "labour_billing",    label: "Labour Billing" },
+  { key: "site_material",     label: "Site Material" },
+  { key: "project_costing",   label: "Project Costing" },
+];
+
+function ModulesModal({ org, onClose, onSaved }) {
+  const initModules = org.features?.modules || {};
+  const [mods, setMods] = useState(() => {
+    const m = {};
+    ALL_MODULES.forEach(({ key }) => { m[key] = initModules[key] !== false; });
+    return m;
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const toggle = (key) => setMods((s) => ({ ...s, [key]: !s[key] }));
+
+  const save = async () => {
+    setBusy(true); setErr("");
+    try {
+      await api.patch(`/platform/orgs/${org.org_id}/modules`, { modules: mods });
+      toast.success("Module access updated");
+      onSaved?.();
+    } catch (e) {
+      setErr(fmtErr(e?.response?.data?.detail, "Could not save modules"));
+    } finally { setBusy(false); }
+  };
+
+  const enabledCount = Object.values(mods).filter(Boolean).length;
+
+  return (
+    <Modal onClose={onClose} title={org.name} eyebrow="MODULE ACCESS" wide>
+      <p className="text-sm text-[var(--ink-2)] mb-4">
+        Toggle which ERP modules this workspace can access. Disabled modules are hidden from their navigation menu immediately and their API endpoints return 403.
+      </p>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs text-[var(--ink-3)]">{enabledCount} of {ALL_MODULES.length} modules enabled</span>
+        <button type="button" onClick={() => setMods(Object.fromEntries(ALL_MODULES.map(m => [m.key, true])))}
+                className="btn-ghost text-xs">Enable all</button>
+        <button type="button" onClick={() => setMods(Object.fromEntries(ALL_MODULES.map(m => [m.key, false])))}
+                className="btn-ghost text-xs">Disable all</button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2" data-testid={`modules-grid-${org.org_id}`}>
+        {ALL_MODULES.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => toggle(key)}
+            className={`flex items-center justify-between p-3 border text-left transition rounded-md ${
+              mods[key]
+                ? "border-[var(--accent)] bg-[var(--hover)]"
+                : "border-[var(--line)] bg-[var(--surface-2)] opacity-70"
+            }`}
+            data-testid={`module-toggle-${key}`}
+          >
+            <span className="text-sm font-medium">{label}</span>
+            <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
+              mods[key]
+                ? "bg-[var(--success-soft)] text-[var(--success)]"
+                : "bg-[var(--danger-soft)] text-[var(--danger)]"
+            }`}>
+              {mods[key] ? "ON" : "OFF"}
+            </span>
+          </button>
+        ))}
+      </div>
+      {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2 mt-3 rounded-md">{err}</div>}
+      <div className="flex gap-2 justify-end mt-4">
+        <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+        <button disabled={busy} onClick={save} className="btn-primary" data-testid="save-modules-btn">
+          {busy ? "Saving…" : <><Faders size={12} /> Save modules</>}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 function OrgHealthModal({ org, onClose, onSaved }) {
   const [health, setHealth] = useState(null);
@@ -855,11 +992,11 @@ function OrgHealthModal({ org, onClose, onSaved }) {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <div className="border border-[var(--line)] p-3">
+              <div className="border border-[var(--line)] rounded-md p-3">
                 <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">USERS</div>
                 <div className="font-mono text-lg">{health.usage.users.used}<span className="text-xs text-[var(--ink-3)]"> / {health.usage.users.limit ?? "∞"}</span></div>
               </div>
-              <div className="border border-[var(--line)] p-3">
+              <div className="border border-[var(--line)] rounded-md p-3">
                 <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">PROJECTS</div>
                 <div className="font-mono text-lg">{health.usage.projects.used}<span className="text-xs text-[var(--ink-3)]"> / {health.usage.projects.limit ?? "∞"}</span></div>
               </div>

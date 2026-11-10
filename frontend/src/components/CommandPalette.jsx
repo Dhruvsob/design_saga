@@ -120,7 +120,7 @@ export default function CommandPalette({ open, setOpen }) {
             className="flex-1 outline-none text-sm placeholder-[var(--ink-3)] bg-transparent"
             data-testid="command-palette-input"
           />
-          <kbd className="px-1.5 py-0.5 bg-[var(--surface-2)] border border-[var(--line)] font-mono text-[10px] text-[var(--ink-2)]">ESC</kbd>
+          <kbd className="px-1.5 py-0.5 bg-[var(--surface-2)] border border-[var(--line)] font-mono text-[10px] text-[var(--ink-2)] rounded">ESC</kbd>
         </div>
 
         {/* results */}

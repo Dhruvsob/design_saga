@@ -11,7 +11,7 @@ All endpoints gated by `require_super_admin`.
 """
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool, field_validator
 import uuid
 import re
 
@@ -26,7 +26,8 @@ from core.tenancy import (
 from core.rbac import normalize_role, expand_permissions
 from core.audit import audit
 from models.organization import (
-    OrgCreateIn, OrgUpdateIn, OrgStatusIn, DEFAULT_FEATURES, features_for_mode,
+    MODULE_KEYS, OrgCreateIn, OrgUpdateIn, OrgStatusIn, DEFAULT_FEATURES,
+    features_for_mode,
 )
 from models.user import RegisterIn, ResetPasswordIn
 import bcrypt
@@ -311,6 +312,57 @@ async def set_org_subscription(org_id: str, payload: OrgSubscriptionIn, request:
                 meta={"status": payload.status, "trial_ends_on": sub["trial_ends_on"]})
     fresh = await get_org(org_id)
     return {"org_id": org_id, "subscription": sub, "state": subscription_state(fresh)}
+
+
+# ------------------------------------------------------------------
+# MODULE TOGGLES
+# ------------------------------------------------------------------
+class OrgModulesIn(BaseModel):
+    modules: dict[str, StrictBool]  # e.g. {"accounting": False, "crm": True}
+
+    @field_validator("modules")
+    @classmethod
+    def known_modules_only(cls, value: dict[str, bool]) -> dict[str, bool]:
+        unknown = sorted(set(value) - MODULE_KEYS)
+        if unknown:
+            raise ValueError(f"Unknown module key(s): {', '.join(unknown)}")
+        return value
+
+
+@router.patch("/orgs/{org_id}/modules")
+async def set_org_modules(org_id: str, payload: OrgModulesIn, request: Request,
+                          session_token: Optional[str] = Cookie(default=None),
+                          authorization: Optional[str] = Header(default=None)):
+    """Platform owner toggles individual ERP modules on/off for a tenant."""
+    sa = await require_super_admin(request, session_token, authorization)
+    org = await get_org(org_id)
+    if not org:
+        raise HTTPException(404, "Organisation not found")
+    current_modules = (org.get("features") or {}).get("modules") or {}
+    new_modules = {**current_modules, **payload.modules}
+    await db.organizations.update_one(
+        {"org_id": org_id},
+        {"$set": {"features.modules": new_modules, "updated_at": iso_now()}}
+    )
+    await audit(sa, "org.modules_update", target=org_id, target_type="org",
+                meta={"changes": {k: v for k, v in payload.modules.items()}})
+    return {"ok": True, "modules": new_modules}
+
+
+@router.get("/contact-requests")
+async def list_contact_requests(request: Request, limit: int = 50,
+                                status: Optional[str] = None,
+                                session_token: Optional[str] = Cookie(default=None),
+                                authorization: Optional[str] = Header(default=None)):
+    """Recent public demo requests, visible only to the platform owner."""
+    await require_super_admin(request, session_token, authorization)
+    if status not in (None, "new", "contacted", "closed"):
+        raise HTTPException(400, "Invalid contact request status")
+    query = {"status": status} if status else {}
+    safe_limit = min(max(int(limit or 50), 1), 200)
+    return await db.contact_requests.find(
+        query, {"_id": 0, "website": 0},
+    ).sort("created_at", -1).limit(safe_limit).to_list(safe_limit)
 
 
 @router.delete("/orgs/{org_id}")

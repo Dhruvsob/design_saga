@@ -15,13 +15,16 @@ from models.accounting import ExpenseIn
 from models.expense import ExpenseLineIn
 from models.task import Attachment, TaskIn
 from models.vendor import VendorDocumentIn
+from routes.contact import ContactRequestIn, submit_contact
+import routes.contact as contact_module
 from routes.organization import _pack_org, _sanitize_branding_update
+from routes.platform import OrgModulesIn
 import routes.organization as organization_module
 import server as server_module
 from services.storage import LOGO_PATH_RE
 from server import (
-    DocumentIn, _ai_user_message, _cors_origins, _public_file_projection,
-    new_share_token,
+    DocumentIn, ProjectUpdate, _ai_user_message, _cors_origins,
+    _public_file_projection, new_share_token,
 )
 
 
@@ -62,6 +65,47 @@ def test_all_attachment_models_use_the_shared_url_policy():
             date="2026-10-13", amount=1, expense_account_id="expense",
             paid_from_account_id="bank", bill_url="data:text/html,bad",
         )
+
+
+def test_project_fee_update_rejects_unknown_or_non_finite_values():
+    with pytest.raises(ValidationError):
+        ProjectUpdate(fee_structure_type="unknown")
+    with pytest.raises(ValidationError):
+        ProjectUpdate(fee_lump_sum_amount=float("nan"))
+    with pytest.raises(ValidationError):
+        ProjectUpdate(site_area_sqft=-1)
+
+
+def test_module_toggle_payload_requires_known_real_booleans():
+    assert OrgModulesIn(modules={"accounting": False}).modules == {"accounting": False}
+    with pytest.raises(ValidationError):
+        OrgModulesIn(modules={"accounting": "false"})
+    with pytest.raises(ValidationError):
+        OrgModulesIn(modules={"made_up_module": True})
+
+
+def test_public_contact_request_is_validated_and_stored_without_honeypot(monkeypatch):
+    stored = []
+
+    class ContactRequests:
+        async def insert_one(self, document):
+            stored.append(document)
+
+    monkeypatch.setattr(
+        contact_module, "db", SimpleNamespace(contact_requests=ContactRequests()))
+    payload = ContactRequestIn(
+        name="  Aditi Shah  ", company=" Studio One ",
+        email="ADITI@EXAMPLE.COM", message="Hello\x00 world",
+    )
+    assert asyncio.run(submit_contact(payload)) == {"ok": True}
+    assert stored[0]["name"] == "Aditi Shah"
+    assert stored[0]["email"] == "aditi@example.com"
+    assert stored[0]["message"] == "Hello world"
+    assert stored[0]["status"] == "new"
+    assert "website" not in stored[0]
+
+    with pytest.raises(ValidationError):
+        ContactRequestIn(name="A", company="Studio", email="not-an-email")
 
 
 def test_branding_update_cannot_replace_object_logo_with_inline_data():
@@ -228,6 +272,7 @@ def test_every_api_route_has_authentication_or_reviewed_public_delegation():
         "create_session", "logout", "portal_view", "portal_message", "root",
         "login_password", "google_calendar_callback", "download_logo",
         "public_branding", "account_ledger_csv", "commissions_report_csv",
+        "submit_contact",
     }
     auth_calls = {"require_user", "require_super_admin", "get_current_user", "require_platform_owner"}
     backend = Path(__file__).resolve().parents[1]
@@ -269,6 +314,8 @@ def test_every_mutating_route_has_permission_or_ownership_guard():
         "disable_app_pin", "change_password",
         # Upserts only the caller's own {user_id, org_id} preference row.
         "update_notification_preferences",
+        # Public landing-page intake is validated, honeypotted and rate-limited.
+        "submit_contact",
     }
     guard = re.compile(
         r"^(enforce_permission|enforce_any_permission|has_permission|"

@@ -174,9 +174,9 @@ export default function RBACAdmin() {
                   <Td>
                     <div className="flex items-center gap-3">
                       {u.picture ? (
-                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
+                        <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)] rounded-full" />
                       ) : (
-                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
+                        <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs rounded-full">
                           {(u.name || "?").slice(0, 1).toUpperCase()}
                         </div>
                       )}
@@ -373,7 +373,7 @@ function RolePermissionEditor({ role, catalog, onSaved }) {
 
   return (
     <div className="space-y-3" data-testid={`perm-editor-${role.name}`}>
-      <div className="overflow-x-auto border border-[var(--line)]">
+      <div className="overflow-x-auto border border-[var(--line)] rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
             <tr>
@@ -434,9 +434,9 @@ function PendingRow({ u, roles, onDecide, savingId }) {
       <Td>
         <div className="flex items-center gap-3">
           {u.picture ? (
-            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)]" />
+            <img src={u.picture} alt="" className="w-8 h-8 object-cover ring-1 ring-[var(--line)] rounded-full" />
           ) : (
-            <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs">
+            <div className="w-8 h-8 bg-[var(--ink)] text-white flex items-center justify-center font-display font-bold text-xs rounded-full">
               {(u.name || "?").slice(0, 1).toUpperCase()}
             </div>
           )}
@@ -545,7 +545,7 @@ function ResetPasswordModal({ userId, user, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="bg-white p-6 max-w-md w-full border border-[var(--line)] space-y-3" data-testid="reset-pwd-modal">
+        className="bg-white p-6 max-w-md w-full border border-[var(--line)] rounded-xl space-y-3" data-testid="reset-pwd-modal">
         <div className="overline">RESET PASSWORD</div>
         <div className="font-display font-bold tracking-tight text-2xl">{user?.name || "User"}</div>
         <div className="text-xs text-[var(--ink-2)]">{user?.email} · {user?.employee_id}</div>

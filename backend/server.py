@@ -360,7 +360,10 @@ class ProjectStageUpdate(BaseModel):
     stage: str
 
 
-class ProjectUpdate(BaseModel):
+FEE_STRUCTURE_TYPES = ("lump_sum", "percentage_consultancy", "turnkey", "per_sqft")
+
+
+class ProjectUpdate(FiniteModel):
     name: Optional[str] = None
     client_id: Optional[str] = None
     project_type: Optional[str] = None
@@ -372,7 +375,15 @@ class ProjectUpdate(BaseModel):
     project_manager_id: Optional[str] = None
     team_ids: Optional[List[str]] = None
     site_address: Optional[str] = None
-    site_area_sqft: Optional[float] = None
+    site_area_sqft: Optional[float] = Field(default=None, ge=0)
+    fee_structure_type: Optional[Literal[
+        "lump_sum", "percentage_consultancy", "turnkey", "per_sqft",
+    ]] = None
+    fee_lump_sum_amount: Optional[float] = Field(default=None, ge=0)
+    fee_project_value: Optional[float] = Field(default=None, ge=0)   # for percentage_consultancy
+    fee_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    fee_contract_value: Optional[float] = Field(default=None, ge=0)  # for turnkey
+    fee_rate_per_sqft: Optional[float] = Field(default=None, ge=0)   # for per_sqft
 
 
 class VendorContact(BaseModel):
@@ -1725,19 +1736,52 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "projects.update"):
         raise HTTPException(status_code=403, detail="Missing permission: projects.update")
-    await get_visible_project(user, project_id, "projects.update")
-    upd = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if not upd:
+    project = await get_visible_project(user, project_id, "projects.update")
+    submitted = payload.model_dump(exclude_unset=True)
+    clearable = {
+        "site_area_sqft", "fee_structure_type", "fee_lump_sum_amount",
+        "fee_project_value", "fee_percentage", "fee_contract_value",
+        "fee_rate_per_sqft",
+    }
+    upd = {k: v for k, v in submitted.items() if v is not None}
+    unset = {k: "" for k, v in submitted.items() if v is None and k in clearable}
+    if not upd and not unset:
         raise HTTPException(status_code=400, detail="Nothing to update")
     if upd.get("engagement_type") and upd["engagement_type"] not in ("consultancy", "turnkey"):
         raise HTTPException(status_code=400, detail="engagement_type must be consultancy | turnkey")
+    fee_fields = {
+        "lump_sum": ("fee_lump_sum_amount",),
+        "percentage_consultancy": ("fee_project_value", "fee_percentage"),
+        "turnkey": ("fee_contract_value",),
+        "per_sqft": ("site_area_sqft", "fee_rate_per_sqft"),
+    }
+    if "fee_structure_type" in submitted:
+        fee_type = submitted["fee_structure_type"]
+        all_fee_values = {
+            "fee_lump_sum_amount", "fee_project_value", "fee_percentage",
+            "fee_contract_value", "fee_rate_per_sqft",
+        }
+        if fee_type is None:
+            unset.update({field: "" for field in all_fee_values})
+        else:
+            required = fee_fields[fee_type]
+            missing = [field for field in required if float(
+                submitted.get(field, project.get(field)) or 0) <= 0]
+            if missing:
+                labels = ", ".join(field.replace("fee_", "").replace("_", " ") for field in missing)
+                raise HTTPException(400, f"Complete the selected fee structure: {labels}")
+            for field in all_fee_values - set(required):
+                unset[field] = ""
     if upd.get("client_id"):
         c = await sdb.clients.find_one({"id": upd["client_id"]}, {"_id": 0})
         if not c:
             raise HTTPException(status_code=404, detail="Client not found")
         upd["client_name"] = c.get("name")
     upd["updated_at"] = iso(now_utc())
-    res = await sdb.projects.update_one({"id": project_id}, {"$set": upd})
+    update_doc = {"$set": upd}
+    if unset:
+        update_doc["$unset"] = unset
+    res = await sdb.projects.update_one({"id": project_id}, update_doc)
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
     if "budget" in upd:
@@ -5557,6 +5601,7 @@ from routes.calendar import router as calendar_router  # noqa: E402
 from routes.google_calendar import router as google_calendar_router  # noqa: E402
 from routes.finance_extras import router as finance_extras_router  # noqa: E402
 from routes.money_in import router as money_in_router  # noqa: E402
+from routes.contact import router as contact_router  # noqa: E402
 api.include_router(tasks_router)
 api.include_router(phases_router)
 api.include_router(attendance_router)
@@ -5581,6 +5626,7 @@ api.include_router(calendar_router)
 api.include_router(google_calendar_router)
 api.include_router(finance_extras_router)
 api.include_router(money_in_router)
+api.include_router(contact_router)
 from routes.site_visits import router as site_visits_router  # noqa: E402
 api.include_router(site_visits_router)
 from routes.period_close import router as period_close_router  # noqa: E402

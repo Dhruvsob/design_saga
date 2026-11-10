@@ -138,10 +138,10 @@ export default function ClientPortal() {
               </div>
             );
             return fileUrl ? (
-              <a key={f.id} href={fileUrl} target="_blank" rel="noreferrer" className="block border border-[var(--line)] p-4 hover:border-[var(--ink)] transition">
+              <a key={f.id} href={fileUrl} target="_blank" rel="noreferrer" className="block border border-[var(--line)] rounded-lg p-4 hover:border-[var(--ink)] transition">
                 {body}
               </a>
-            ) : <div key={f.id} className="block border border-[var(--line)] p-4">{body}</div>;
+            ) : <div key={f.id} className="block border border-[var(--line)] rounded-lg p-4">{body}</div>;
           })}
         </div>
       </section>
@@ -152,7 +152,7 @@ export default function ClientPortal() {
         <div className="space-y-2">
           {invoices.length === 0 && <p className="text-[var(--ink-2)] text-sm">No invoices yet.</p>}
           {invoices.map((i) => (
-            <div key={i.id} className="border border-[var(--line)] p-4 flex items-center justify-between">
+            <div key={i.id} className="border border-[var(--line)] rounded-md p-4 flex items-center justify-between">
               <div>
                 <div className="font-mono font-semibold">{i.number}</div>
                 <div className="text-xs text-[var(--ink-2)]">{i.doc_type} · Due {formatDate(i.due_date)}</div>

@@ -475,7 +475,7 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
       )}
       {paying && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <form onSubmit={recordPayment} className="bg-white border border-[var(--line)] w-full max-w-xl p-5 space-y-4">
+          <form onSubmit={recordPayment} className="bg-white border border-[var(--line)] rounded-xl w-full max-w-xl p-5 space-y-4">
             <div className="flex items-start justify-between gap-3"><div><div className="overline">RECORD PAYMENT</div><h2 className="font-display font-bold text-2xl">{paying.number}</h2><div className="text-xs text-[var(--ink-2)]">Outstanding ₹{roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0))).toLocaleString("en-IN")}</div></div><button type="button" className="btn-ghost" onClick={() => setPaying(null)}><X size={16}/></button></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs">Amount<input required min="0.01" max={roundPaise(Math.max(0, Number(paying.total || 0) - Number(paying.paid_amount || 0)))} step="0.01" type="number" className="input-flat mt-1 w-full" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label>

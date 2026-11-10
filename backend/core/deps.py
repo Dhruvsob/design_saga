@@ -136,6 +136,58 @@ async def ensure_user_access(user: dict) -> None:
                                 detail="Your organisation is suspended. Contact support.")
 
 
+_MODULE_PATH_MAP = [
+    ("/api/accounts",          "accounting"),
+    ("/api/journal-entries",   "accounting"),
+    ("/api/accounting",        "accounting"),
+    ("/api/period-close",      "accounting"),
+    ("/api/bank-statement",    "accounting"),
+    ("/api/invoices",          "invoices"),
+    ("/api/expenses",          "expenses"),
+    ("/api/loans",             "loans"),
+    ("/api/employees",         "employees"),
+    ("/api/attendance",        "attendance"),
+    ("/api/payroll",           "payroll"),
+    ("/api/clients",           "clients"),
+    ("/api/leads",             "crm"),
+    ("/api/vendors",           "vendors"),
+    ("/api/quotations-adv",    "quotations"),
+    ("/api/tasks",             "tasks"),
+    ("/api/purchase-orders",   "purchase_orders"),
+    ("/api/projects",          "projects"),
+    ("/api/documents",         "documents"),
+]
+
+
+async def enforce_module_access(request: Request, user: dict) -> None:
+    """Block access to API paths whose ERP module is disabled for this tenant."""
+    from .tenancy import is_super_admin
+    if is_super_admin(user):
+        return
+    org_id = user.get("org_id")
+    if not org_id:
+        return
+    path = request.url.path
+    module = None
+    for prefix, mod in _MODULE_PATH_MAP:
+        if path.startswith(prefix):
+            module = mod
+            break
+    if not module:
+        return
+    org = await db.organizations.find_one(
+        {"org_id": org_id}, {"_id": 0, "features": 1}
+    )
+    if not org:
+        return
+    modules = (org.get("features") or {}).get("modules") or {}
+    if modules.get(module) is False:
+        raise HTTPException(
+            status_code=403,
+            detail=f"The {module.replace('_', ' ')} module is not enabled for your workspace."
+        )
+
+
 async def require_user(
     request: Request,
     session_token: Optional[str] = Cookie(default=None),
@@ -150,6 +202,8 @@ async def require_user(
     # Expired subscription: viewing stays available, changes are refused.
     from .subscription import enforce_writable
     await enforce_writable(request, user)
+    # Module-level gating: disabled modules return 403.
+    await enforce_module_access(request, user)
     # Tenant scope re-affirmed (get_current_user already set it)
     set_scope_from_user(user)
     return user

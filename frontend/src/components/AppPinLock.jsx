@@ -30,7 +30,7 @@ export function MandatoryPinSetupOverlay() {
 
   return (
     <div className="fixed inset-0 z-[1001] bg-[var(--surface-2)] flex items-center justify-center p-5" data-testid="app-pin-setup-required">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[var(--line)] shadow-xl p-7">
+      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[var(--line)] shadow-xl p-7 rounded-xl">
         <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[var(--ink)] text-white">
           <ShieldCheck size={23} weight="fill" />
         </div>
@@ -103,7 +103,7 @@ export function PinLockOverlay() {
 
   return (
     <div className="fixed inset-0 z-[1000] bg-[var(--surface-2)] flex items-center justify-center p-5" data-testid="app-pin-lock">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[var(--line)] shadow-xl p-7">
+      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[var(--line)] shadow-xl p-7 rounded-xl">
         <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center bg-[var(--ink)] text-white">
           <LockKey size={23} weight="fill" />
         </div>
@@ -127,15 +127,15 @@ export function PinLockOverlay() {
         <div className="grid grid-cols-3 gap-2 mt-4" aria-label="PIN keypad">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
             <button key={digit} type="button" onClick={() => addDigit(String(digit))}
-              className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] font-mono font-semibold">
+              className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] font-mono font-semibold rounded-md">
               {digit}
             </button>
           ))}
           <span />
           <button type="button" onClick={() => addDigit("0")}
-            className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] font-mono font-semibold">0</button>
+            className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] font-mono font-semibold rounded-md">0</button>
           <button type="button" onClick={() => setPin((current) => current.slice(0, -1))}
-            className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] flex items-center justify-center"
+            className="h-11 border border-[var(--line)] bg-white hover:bg-[var(--surface-2)] flex items-center justify-center rounded-md"
             aria-label="Delete last digit"><Backspace size={18} /></button>
         </div>
         {error && <div className="text-xs text-[var(--danger)] text-center mt-3" role="alert">{error}</div>}
@@ -177,7 +177,7 @@ export function PinSecurityDialog({ onClose }) {
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
-      <div className="relative w-full max-w-md bg-white border border-[var(--line)] shadow-2xl p-6" onClick={(event) => event.stopPropagation()} data-testid="pin-security-dialog">
+      <div className="relative w-full max-w-md bg-white border border-[var(--line)] shadow-2xl p-6 rounded-xl" onClick={(event) => event.stopPropagation()} data-testid="pin-security-dialog">
         <div className="flex items-start justify-between gap-3 mb-5">
           <div>
             <div className="overline text-[var(--accent-strong)]">PERSONAL SECURITY</div>

@@ -567,7 +567,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       <div className="overline mb-2">LINE ITEMS</div>
-      <div className="border border-[var(--line)] mb-6 overflow-x-auto">
+      <div className="border border-[var(--line)] mb-6 overflow-x-auto rounded-md">
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]"><tr className="text-left">
             <Th>Category</Th><Th>Description</Th><Th>Amount</Th><Th>Receipt</Th>
@@ -596,7 +596,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
           <div className="overline mb-2">APPROVAL TRAIL</div>
           <div className="space-y-2">
             {exp.approval_trail.map((t, i) => (
-              <div key={i} className="border border-[var(--line)] p-2 text-xs">
+              <div key={i} className="border border-[var(--line)] p-2 text-xs rounded-md">
                 <div className="font-mono">{(t.at || "").slice(0,16)} · {t.actor_name || t.actor} ({t.actor_role || "system"})</div>
                 <div><b>{t.decision}</b> {t.comment && `— ${t.comment}`}</div>
               </div>
@@ -606,7 +606,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       {canDecide && (
-        <div className="border border-[var(--line)] p-3 mb-4 bg-[var(--surface-2)]">
+        <div className="border border-[var(--line)] rounded-lg p-3 mb-4 bg-[var(--surface-2)]">
           <div className="overline mb-2">MY DECISION</div>
           <textarea className="input-flat w-full h-16 mb-2" placeholder="Optional comment" value={comment} onChange={(e) => setComment(e.target.value)} data-testid="dec-comment" />
           <div className="flex gap-2">
@@ -617,7 +617,7 @@ function ExpenseDetail({ expId, accounts, isAdmin, isFinance, canCreate, canMana
       )}
 
       {canReimburse && (
-        <div className="border border-[var(--line)] p-3 bg-[var(--hover)]">
+        <div className="border border-[var(--line)] rounded-lg p-3 bg-[var(--hover)]">
           <div className="overline mb-2">REIMBURSE</div>
           <div className="flex flex-wrap gap-2 items-center">
             <select aria-label="Pay from" className="input-flat" value={payFrom} onChange={(e) => setPayFrom(e.target.value)} data-testid="pay-from">
@@ -643,7 +643,7 @@ function F({ label, children }) { return <label className="block"><div className
 function Modal({ children, onClose, title, eyebrow, wide }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[var(--line)] max-h-[92vh] overflow-y-auto ${wide ? "max-w-5xl" : "max-w-2xl"}`}>
+      <div onClick={(e) => e.stopPropagation()} className={`bg-white p-6 w-full border border-[var(--line)] rounded-xl max-h-[92vh] overflow-y-auto ${wide ? "max-w-5xl" : "max-w-2xl"}`}>
         <div className="flex items-start justify-between mb-4">
           <div>{eyebrow && <div className="overline mb-1">{eyebrow}</div>}<div className="font-display font-bold tracking-tighter text-3xl">{title}</div></div>
           <button onClick={onClose} className="btn-ghost"><X size={13}/></button>

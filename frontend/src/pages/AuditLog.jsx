@@ -98,7 +98,7 @@ export default function AuditLog() {
           placeholder="Search action, actor or record" data-testid="audit-search" />
       </div>
 
-      <div className="border border-[var(--line)] bg-white overflow-x-auto">
+      <div className="border border-[var(--line)] bg-white overflow-x-auto rounded-md">
         <table className="w-full min-w-[780px] text-left">
           <thead className="bg-[var(--surface-2)] border-b border-[var(--line)]">
             <tr className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-2)]">
