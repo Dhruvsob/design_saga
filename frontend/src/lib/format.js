@@ -161,7 +161,7 @@ const STATUS_WORDS = {
   pending_l2: "Awaiting finance", receipt_required: "Receipt needed", pending_approval: "Awaiting approval",
   in_progress: "In progress", on_hold: "On hold", bank_transfer: "Bank transfer", walk_in: "Walk-in",
   site_visit: "Site visit", week_off: "Week off", half_day: "Half day", paid_leave: "Paid leave",
-  unpaid_leave: "Unpaid leave", comp_off: "Comp off", ProjectManager: "Project Manager",
+  auto_paid_leave: "Auto paid leave", unpaid_leave: "Unpaid leave", comp_off: "Comp off", ProjectManager: "Project Manager",
   SuperAdmin: "Super Admin", full_time: "Full time", part_time: "Part time",
 };
 export function statusLabel(code) {

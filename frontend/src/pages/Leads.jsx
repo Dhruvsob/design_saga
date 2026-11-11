@@ -71,10 +71,15 @@ export default function Leads() {
   };
 
   const drop = async (stage) => {
-    if (!dragId) return;
-    await api.patch(`/leads/${dragId}/stage`, { stage });
+    const id = dragId;
     setDragId(null);
     setDragOver(null);
+    if (!id || leads.find((l) => l.id === id)?.stage === stage) return;
+    try {
+      await api.patch(`/leads/${id}/stage`, { stage });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not move the lead");
+    }
     load();
   };
 
@@ -168,12 +173,18 @@ export default function Leads() {
   };
 
   const convert = async (id) => {
-    const { data } = await api.post(`/leads/${id}/convert`);
-    toast.success("Lead converted — client & project created", {
-      action: { label: "Open project", onClick: () => navigate(`/projects/${data.project_id}`) },
-    });
+    try {
+      const { data } = await api.post(`/leads/${id}/convert`);
+      toast.success("Lead converted — client & project created", {
+        action: { label: "Open project", onClick: () => navigate(`/projects/${data.project_id}`) },
+      });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not convert the lead");
+    }
     load();
   };
+  // A converted lead links to its project; converting it again is refused.
+  const convertible = (l) => canConvert && !l.converted_project_id && l.stage !== "Won" && l.stage !== "Lost";
 
   return (
     <div className="space-y-8" data-testid="crm-page">
@@ -233,7 +244,8 @@ export default function Leads() {
                     key={l.id}
                     draggable={canUpdate}
                     onDragStart={() => setDragId(l.id)}
-                    className="border border-[var(--line)] p-3 rounded-lg bg-white hover:border-[var(--ink)] hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition-all group"
+                    onDragEnd={() => { setDragId(null); setDragOver(null); }}
+                    className={`border border-[var(--line)] p-3 rounded-lg bg-white hover:border-[var(--ink)] hover:-translate-y-0.5 transition-all group ${canUpdate ? "cursor-grab active:cursor-grabbing select-none" : ""}`}
                     data-testid={`lead-${l.id}`}
                   >
                     <div className="flex items-start justify-between mb-1">
@@ -269,7 +281,7 @@ export default function Leads() {
                             Project <ArrowRight size={12} weight="bold" />
                           </Link>
                         )}
-                        {canConvert && l.stage !== "Won" && l.stage !== "Lost" && (
+                        {convertible(l) && (
                           <button onClick={() => convert(l.id)} className="text-[var(--accent-strong)] hover:underline text-xs flex items-center gap-1 font-semibold shrink-0" title="Convert to project">
                             <ArrowRight size={12} weight="bold" /> Convert
                           </button>
@@ -277,7 +289,7 @@ export default function Leads() {
                         <RowActions label={l.name || "lead"} testid={`lead-actions-${l.id}`} actions={[
                           { label: canUpdate ? "Edit" : "View details", icon: canUpdate ? PencilSimple : Eye, onSelect: () => startEdit(l), testid: `lead-edit-${l.id}` },
                           { label: "Convert to project", icon: ArrowRight, onSelect: () => convert(l.id),
-                            hidden: !(canConvert && l.stage !== "Won" && l.stage !== "Lost") },
+                            hidden: !convertible(l) },
                           { divider: true },
                           { label: "Delete", icon: Trash, danger: true, onSelect: () => del(l.id), hidden: !canDelete, testid: `lead-delete-${l.id}` },
                         ]} />

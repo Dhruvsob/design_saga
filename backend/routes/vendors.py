@@ -359,15 +359,19 @@ async def list_vendors(
         rows = [r for r in rows if r["id"] in involved]
 
     # Outstanding balances are accounting data, not general vendor-directory data.
-    if _can_read_vendor_financials(user):
+    # One query for every listed vendor (a query per vendor was hundreds of
+    # sequential round trips for a real vendor directory).
+    if _can_read_vendor_financials(user) and rows:
+        outstanding_by_vendor: dict = {}
+        async for b in sdb.vendor_bills.find(
+            {"vendor_id": {"$in": [v["id"] for v in rows]},
+             "status": {"$in": ["received", "partially_paid", "overdue"]}},
+            {"_id": 0, "vendor_id": 1, "outstanding": 1, "total": 1, "paid_amount": 1},
+        ):
+            outstanding_by_vendor[b["vendor_id"]] = outstanding_by_vendor.get(b["vendor_id"], 0.0) + float(
+                b.get("outstanding") or (b.get("total", 0) - b.get("paid_amount", 0)))
         for v in rows:
-            outstanding = 0.0
-            async for b in sdb.vendor_bills.find(
-                {"vendor_id": v["id"], "status": {"$in": ["received", "partially_paid", "overdue"]}},
-                {"_id": 0, "outstanding": 1, "total": 1, "paid_amount": 1},
-            ):
-                outstanding += float(b.get("outstanding") or (b.get("total", 0) - b.get("paid_amount", 0)))
-            v["outstanding"] = round(outstanding, 2)
+            v["outstanding"] = round(outstanding_by_vendor.get(v["id"], 0.0), 2)
     return [_vendor_for_user(v, user) for v in rows]
 
 
