@@ -10,6 +10,7 @@ import ProjectPhases from "../components/ProjectPhases";
 import ProjectSiteVisits from "../components/SiteVisits";
 import ProjectDrawings from "../components/ProjectDrawings";
 import ProjectSnags from "../components/ProjectSnags";
+import ProjectTime from "../components/ProjectTime";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
 import { feeCalc } from "../lib/fees";
@@ -22,11 +23,11 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
-const TABS = ["Overview", "Phases", "Tasks", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Activity"];
+const TABS = ["Overview", "Phases", "Tasks", "Time", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Activity"];
 // One project workspace, grouped the way a studio works on a job.
 export const PROJECT_TAB_GROUPS = [
   { id: "overview", label: "Overview", tabs: ["Overview", "Activity"] },
-  { id: "work", label: "Work", tabs: ["Phases", "Tasks"] },
+  { id: "work", label: "Work", tabs: ["Phases", "Tasks", "Time"] },
   { id: "design", label: "Design", tabs: ["Drawings", "Files"] },
   { id: "site", label: "Site", tabs: ["Site visits", "Snags"] },
   { id: "commercial", label: "Commercial", tabs: ["Milestones", "Invoices", "Vendors"] },
@@ -451,6 +452,8 @@ export default function ProjectDetail() {
         <ProjectPhases projectId={id} project={p} canEdit={hasPerm("projects.update")}
           canSeeFinancials={canSeeFinancials} onChanged={load} />
       )}
+
+      {tab === "Time" && <ProjectTime projectId={id} canSeeFinancials={hasPerm("finance.read")} />}
 
       {tab === "Tasks" && (
         <div className="space-y-2">

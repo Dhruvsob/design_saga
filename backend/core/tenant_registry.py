@@ -9,7 +9,7 @@ TENANT_COLLECTIONS = (
     # People and access
     "users", "user_app_locks", "user_invites", "role_permissions", "user_favorite_accounts",
     "ai_usage",
-    "employees", "employee_advances",
+    "employees", "employee_advances", "time_entries",
     "attendance", "attendance_corrections", "attendance_policies", "office_locations",
     "leave_applications", "leave_rules", "leaves", "holidays", "payroll_runs",
     # Sales and projects

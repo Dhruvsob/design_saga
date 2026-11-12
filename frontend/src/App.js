@@ -45,6 +45,7 @@ const CompanySettings = lazyPage(() => import("./pages/CompanySettings"));
 const AuditLog = lazyPage(() => import("./pages/AuditLog"));
 const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"));
 const LandingPage = lazyPage(() => import("./pages/LandingPage"));
+const Timesheets = lazyPage(() => import("./pages/Timesheets"));
 const AcceptInvite = lazyPage(() => import("./pages/AcceptInvite"));
 
 const PageFallback = () => (
@@ -164,6 +165,7 @@ function AppRouter() {
       <Route path="/tasks" element={<ProtectedShell requirePerm="tasks.read"><Tasks /></ProtectedShell>} />
       <Route path="/tasks/:id" element={<ProtectedShell requirePerm="tasks.read"><TaskDetail /></ProtectedShell>} />
       <Route path="/calendar" element={<ProtectedShell requirePerm="calendar.read"><CalendarPage /></ProtectedShell>} />
+      <Route path="/timesheets" element={<ProtectedShell requirePerm="projects.read"><Timesheets /></ProtectedShell>} />
       <Route path="/clients" element={<ProtectedShell requirePerm="clients.read"><Clients /></ProtectedShell>} />
       <Route path="/clients/:id" element={<ProtectedShell requirePerm="clients.read"><ClientDetail /></ProtectedShell>} />
       <Route path="/invoices" element={<ProtectedShell requirePerm="invoices.read"><Invoices docType="invoice" /></ProtectedShell>} />
