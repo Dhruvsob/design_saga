@@ -4,7 +4,7 @@ Super Admin owns the whole SaaS deployment. They can:
 - Create / list / update / suspend / delete organisations (tenants)
 - Create the first Company Admin for a new organisation
 - Reset a Company Admin password
-- View platform-wide analytics (orgs, users, revenue rollup)
+- View platform-wide operational and subscription metadata
 - Impersonate an organisation for troubleshooting
 
 All endpoints gated by `require_super_admin`.
@@ -14,6 +14,7 @@ from typing import Optional, List
 from pydantic import BaseModel, StrictBool, field_validator
 import uuid
 import re
+from datetime import timedelta
 
 from core.pdf_brand import BRAND_ACCENT, BRAND_PRIMARY
 from core.limits import MAX_LIST_ROWS
@@ -78,6 +79,39 @@ async def _unique_slug(base: str) -> str:
 
 def _sanitize_org(o: dict) -> dict:
     return {k: v for k, v in (o or {}).items() if k != "_id"}
+
+
+def _platform_commercial_summary(orgs: list[dict], today=None) -> dict:
+    """Summarise platform-owned subscription metadata only.
+
+    Customer journals are tenant business data and must never be treated as
+    GAMAA platform revenue. Until a platform billing ledger exists, this
+    summary intentionally reports counts and renewal dates rather than money.
+    """
+    today = today or business_today()
+    today_key = today.isoformat()
+    horizon_key = (today + timedelta(days=30)).isoformat()
+    plans = {"starter": 0, "pro": 0, "enterprise": 0, "other": 0}
+    due_30_days = 0
+    overdue = 0
+
+    for org in orgs:
+        plan = str(org.get("plan") or "starter").lower()
+        plans[plan if plan in plans else "other"] += 1
+        if org.get("is_active") is False or org.get("is_suspended") is True:
+            continue
+        renewal = str((org.get("billing") or {}).get("renewal_date") or "")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", renewal):
+            continue
+        if renewal < today_key:
+            overdue += 1
+        elif renewal <= horizon_key:
+            due_30_days += 1
+
+    return {
+        "plans": plans,
+        "renewals": {"due_30_days": due_30_days, "overdue": overdue},
+    }
 
 
 def _current_session_filter(session_token: Optional[str], authorization: Optional[str]) -> dict:
@@ -551,6 +585,9 @@ async def platform_analytics(request: Request,
                              session_token: Optional[str] = Cookie(default=None),
                              authorization: Optional[str] = Header(default=None)):
     await require_super_admin(request, session_token, authorization)
+    org_rows = await db.organizations.find(
+        {}, {"_id": 0, "plan": 1, "billing": 1, "is_active": 1, "is_suspended": 1},
+    ).to_list(MAX_LIST_ROWS)
     orgs_total = await db.organizations.count_documents({})
     orgs_active = await db.organizations.count_documents({"is_active": True, "is_suspended": {"$ne": True}})
     orgs_suspended = await db.organizations.count_documents({"is_suspended": True})
@@ -560,27 +597,7 @@ async def platform_analytics(request: Request,
     users_active = await db.users.count_documents({"is_active": True})
     projects_total = await db.projects.count_documents({})
     tasks_total = await db.tasks.count_documents({})
-
-    # Revenue rollup across all orgs (from journal_entries.income lines)
-    revenue = 0.0
-    async for je in db.journal_entries.find({}, {"_id": 0, "lines": 1}):
-        for l in je.get("lines", []):
-            if l.get("account_type") == "income":
-                revenue += float(l.get("credit", 0)) - float(l.get("debit", 0))
-
-    # Per-org revenue leaderboard (top 5)
-    per_org_rev = {}
-    async for je in db.journal_entries.find({}, {"_id": 0, "org_id": 1, "lines": 1}):
-        oid = je.get("org_id") or DEFAULT_ORG_ID
-        for l in je.get("lines", []):
-            if l.get("account_type") == "income":
-                per_org_rev[oid] = per_org_rev.get(oid, 0.0) + float(l.get("credit", 0)) - float(l.get("debit", 0))
-    leaderboard_ids = sorted(per_org_rev.items(), key=lambda x: -x[1])[:5]
-    leaderboard = []
-    for oid, amt in leaderboard_ids:
-        o = await get_org(oid)
-        leaderboard.append({"org_id": oid, "name": o["name"] if o else "Default",
-                           "revenue": round(amt, 2)})
+    commercial = _platform_commercial_summary(org_rows)
 
     return {
         "orgs": {"total": orgs_total, "active": orgs_active,
@@ -588,8 +605,7 @@ async def platform_analytics(request: Request,
         "users": {"total": users_total, "active": users_active},
         "projects": projects_total,
         "tasks": tasks_total,
-        "revenue_total": round(revenue, 2),
-        "leaderboard": leaderboard,
+        **commercial,
     }
 
 

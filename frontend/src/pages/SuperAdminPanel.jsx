@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { dateForInput, formatDate, statusLabel } from "../lib/format";
 import {
-  Crown, Plus, Buildings, Users, Briefcase, CurrencyInr,
+  Crown, Plus, Buildings, Users, Briefcase, CalendarCheck,
   Trash, ShieldCheck, PauseCircle, PlayCircle, Warning, Check,
   Sparkle, ArrowRight, Key, PencilSimpleLine, ChartLineUp, UserCirclePlus,
   Faders,
@@ -136,25 +136,24 @@ export default function SuperAdminPanel() {
                tone="#1D633E" testid="kpi-users" />
           <KPI icon={Briefcase} label="TOTAL PROJECTS"
                value={analytics.projects} tone="#7A1FA2" testid="kpi-projects" />
-          <KPI icon={CurrencyInr} label="PLATFORM REVENUE"
-               display={fmtMoney(analytics.revenue_total)} tone="#7A4E1A" testid="kpi-revenue" />
+          <KPI icon={CalendarCheck} label="RENEWALS TO REVIEW"
+               value={(analytics.renewals?.due_30_days || 0) + (analytics.renewals?.overdue || 0)}
+               tone={analytics.renewals?.overdue ? "#A2352A" : "#7A4E1A"}
+               testid="kpi-renewals" />
         </div>
       )}
 
-      {analytics?.leaderboard?.length > 0 && (
-        <div className="card-flat">
-          <div className="flex items-center justify-between mb-4">
-            <div className="overline"><ChartLineUp size={11} className="inline mr-1"/> REVENUE LEADERBOARD · TOP 5</div>
-          </div>
-          <div className="space-y-2">
-            {analytics.leaderboard.map((row, i) => (
-              <div key={row.org_id} className="flex items-center gap-3 p-2 border border-[var(--line-soft)] hover:bg-[var(--surface-2)]">
-                <div className="font-mono text-xs w-8 text-[var(--ink-3)]">#{i + 1}</div>
-                <div className="flex-1 font-semibold text-sm">{row.name}</div>
-                <div className="font-mono text-sm accent-blue">{fmtMoney(row.revenue)}</div>
-              </div>
-            ))}
-          </div>
+      {analytics?.plans && (
+        <div className="card-flat flex flex-wrap items-center gap-3" data-testid="plan-distribution">
+          <div className="overline mr-2">WORKSPACES BY PLAN</div>
+          {Object.entries(analytics.plans).map(([plan, count]) => (
+            <span key={plan} className="text-xs font-mono uppercase px-2 py-1 bg-[var(--surface-2)] border border-[var(--line-soft)]">
+              {plan} · {count}
+            </span>
+          ))}
+          <span className="ml-auto text-xs text-[var(--ink-2)]">
+            Due in 30 days: {analytics.renewals?.due_30_days || 0} · Overdue: {analytics.renewals?.overdue || 0}
+          </span>
         </div>
       )}
 

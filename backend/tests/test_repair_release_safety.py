@@ -1,6 +1,7 @@
 """Release-blocker regression tests for the repair branch."""
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,7 @@ from starlette.requests import Request
 
 import core.audit as audit_module
 from routes.audit import _export_query
+from routes.platform import _platform_commercial_summary, platform_analytics
 import core.helpers as helpers_module
 import core.jobs as jobs_module
 import core.indexes as indexes_module
@@ -147,6 +149,27 @@ def test_demo_seeding_is_impossible_in_production(monkeypatch):
 
     monkeypatch.setenv("ENV", "development")
     assert _demo_seeding_enabled() is True
+
+
+def test_platform_analytics_uses_platform_metadata_not_customer_finances():
+    summary = _platform_commercial_summary([
+        {"plan": "starter", "billing": {"renewal_date": "2026-11-20"}},
+        {"plan": "pro", "billing": {"renewal_date": "2026-11-01"}},
+        {"plan": "enterprise", "is_suspended": True,
+         "billing": {"renewal_date": "2026-10-01"}},
+        {"plan": "custom"},
+        {"plan": "starter", "is_active": False,
+         "billing": {"renewal_date": "2026-11-15"}},
+    ], today=date(2026, 11, 12))
+
+    assert summary == {
+        "plans": {"starter": 2, "pro": 1, "enterprise": 1, "other": 1},
+        "renewals": {"due_30_days": 1, "overdue": 1},
+    }
+    source = inspect.getsource(platform_analytics)
+    assert "journal_entries" not in source
+    assert "revenue_total" not in source
+    assert "leaderboard" not in source
 
 
 class _Cursor:
