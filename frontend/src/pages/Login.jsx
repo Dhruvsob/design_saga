@@ -65,7 +65,7 @@ export default function Login() {
     setErr("");
     setBusy(true);
     try {
-      await loginWithPassword(identifier.trim(), password);
+      await loginWithPassword(identifier.trim(), password, ws?.slug);
       window.location.href = "/dashboard";
     } catch (ex) {
       setErr(extractError(ex?.response?.data?.detail, "Login failed"));

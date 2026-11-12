@@ -336,6 +336,21 @@ def _identifier_query(identifier: str) -> dict:
     ]}
 
 
+async def _narrow_to_workspace(candidates: list[dict], workspace: Optional[str]) -> list[dict]:
+    """When a login ID exists in several workspaces and the sign-in page names
+    one, try only that workspace's account. Falls back to every candidate when
+    the workspace is unknown or has no such ID, so a stale remembered studio
+    never blocks a valid sign-in."""
+    if not workspace or len(candidates) < 2:
+        return candidates
+    from core.tenancy import DEFAULT_ORG_ID
+    org = await db.organizations.find_one({"slug": workspace}, {"_id": 0, "org_id": 1})
+    if not org:
+        return candidates
+    scoped = [c for c in candidates if (c.get("org_id") or DEFAULT_ORG_ID) == org["org_id"]]
+    return scoped or candidates
+
+
 def _ensure_target_in_actor_tenant(actor: dict, target: dict) -> None:
     """A workspace admin may manage only users of their own workspace, and never
     a platform (Super Admin) identity, even one whose record sits in that
@@ -380,6 +395,7 @@ async def login_password(payload: LoginPasswordIn, response: Response, request: 
     # Fix: fetch ALL candidates for the identifier and authenticate against the
     # one whose password actually matches.
     candidates = await db.users.find(_identifier_query(ident), {"_id": 0}).to_list(50)
+    candidates = await _narrow_to_workspace(candidates, payload.workspace)
 
     matches = await asyncio.to_thread(_password_matches, candidates, payload.password)
     if len(matches) > 1:

@@ -32,6 +32,9 @@ class RegisterIn(BaseModel):
 class LoginPasswordIn(BaseModel):
     identifier: str = Field(min_length=1, max_length=254)  # email OR employee_id
     password: str = Field(min_length=1, max_length=128)
+    # Short name of the studio the sign-in page is showing. It only narrows a
+    # login ID that several workspaces share; it never grants access by itself.
+    workspace: Optional[str] = Field(default=None, max_length=63, pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 
 class ChangePasswordIn(BaseModel):

@@ -223,6 +223,8 @@ export default function SuperAdminPanel() {
         </div>
       )}
 
+      <UsageCard />
+
       {/* Tenant isolation verification */}
       <div className="card-flat" data-testid="isolation-check-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -454,6 +456,126 @@ function ReassignModal({ user, orgs, onClose, onDone }) {
 
 /* ------- KPI card ------- */
 /** Count per category (plans, subscription states) as label + bar. */
+function fmtBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024 * 1024) return `${Math.round(v / 1024)} KB`;
+  if (v < 1024 ** 3) return `${(v / 1024 ** 2).toFixed(1)} MB`;
+  return `${(v / 1024 ** 3).toFixed(2)} GB`;
+}
+
+/** Cell text for a CSV opened in Excel: quoted, and never read as a formula. */
+function csvCell(value) {
+  let s = value == null ? "" : String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function UsageBar({ used, limit }) {
+  if (!limit) return <span className="text-[10px] font-mono text-[var(--ink-3)]">no limit</span>;
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const tone = pct >= 100 ? "var(--danger)" : pct >= 80 ? "var(--warning)" : "var(--accent-strong)";
+  return (
+    <div className="w-24" title={`${pct}% of the plan limit`}>
+      <div className="h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: tone }} />
+      </div>
+    </div>
+  );
+}
+
+/** Seats, projects and file storage per workspace against plan limits (P1.6). */
+function UsageCard() {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    setBusy(true); setErr("");
+    try {
+      const { data: d } = await api.get("/platform/usage");
+      setData(d);
+    } catch (e) {
+      setErr(fmtErr(e?.response?.data?.detail, "Could not load usage"));
+    } finally { setBusy(false); }
+  };
+  const download = () => {
+    const head = ["Workspace", "Short name", "Plan", "Status", "Active users", "User limit",
+      "Projects", "Project limit", "Files", "Storage MB", "Storage quota MB", "Last sign-in"];
+    const lines = [head.map(csvCell).join(",")];
+    for (const w of data.workspaces) {
+      lines.push([
+        w.name, w.slug, w.plan, w.status, w.seats.used, w.seats.limit ?? "", w.projects.used,
+        w.projects.limit ?? "", w.storage.files, (w.storage.bytes / 1048576).toFixed(1),
+        (w.storage.quota_bytes / 1048576).toFixed(0), (w.last_login || "").slice(0, 10),
+      ].map(csvCell).join(","));
+    }
+    const blob = new Blob([`﻿${lines.join("\r\n")}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `workspace-usage-${(data.generated_at || "").slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="card-flat" data-testid="usage-card">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="overline"><ChartLineUp size={11} className="inline mr-1"/> USAGE BY WORKSPACE</div>
+          <div className="text-xs text-[var(--ink-2)] mt-1">
+            Active users, projects and stored files against each plan. Counts and sizes only.
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {data && (
+            <button type="button" onClick={download} className="btn-ghost text-xs" data-testid="usage-csv">
+              Download CSV
+            </button>
+          )}
+          <button type="button" onClick={load} disabled={busy} className="btn-primary text-xs" data-testid="usage-load">
+            {busy ? "Measuring…" : data ? "Refresh" : "Show usage"}
+          </button>
+        </div>
+      </div>
+      {err && <div className="mt-3 text-xs text-[var(--danger)]">{err}</div>}
+      {data && (
+        <div className="mt-4 overflow-x-auto border-t border-[var(--line-soft)]">
+          <table className="w-full min-w-[760px]" data-testid="usage-table">
+            <thead>
+              <tr className="text-left"><Th>Workspace</Th><Th>Users</Th><Th>Projects</Th><Th>Files</Th><Th>Last sign-in</Th></tr>
+            </thead>
+            <tbody>
+              {data.workspaces.map((w) => (
+                <tr key={w.org_id} className="border-t border-[var(--line-soft)]">
+                  <Td>
+                    <div className="font-semibold">{w.name}</div>
+                    <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">{w.plan} · {statusLabel(w.status)}</div>
+                  </Td>
+                  <Td>
+                    <div className="font-mono text-xs mb-1">{w.seats.used}{w.seats.limit ? ` / ${w.seats.limit}` : ""}</div>
+                    <UsageBar used={w.seats.used} limit={w.seats.limit} />
+                  </Td>
+                  <Td>
+                    <div className="font-mono text-xs mb-1">{w.projects.used}{w.projects.limit ? ` / ${w.projects.limit}` : ""}</div>
+                    <UsageBar used={w.projects.used} limit={w.projects.limit} />
+                  </Td>
+                  <Td>
+                    <div className="font-mono text-xs mb-1">
+                      {fmtBytes(w.storage.bytes)} / {fmtBytes(w.storage.quota_bytes)}
+                      <span className="text-[var(--ink-3)]"> · {w.storage.files} files</span>
+                    </div>
+                    <UsageBar used={w.storage.bytes} limit={w.storage.quota_bytes} />
+                  </Td>
+                  <Td className="text-xs text-[var(--ink-2)]">{w.last_login ? formatDate(w.last_login) : "Never"}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MixList({ rows, empty }) {
   const entries = Object.entries(rows || {}).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...entries.map(([, n]) => n));
@@ -1190,7 +1312,13 @@ function OrgHealthModal({ org, onClose, onSaved }) {
                 ))}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {health.usage.storage && (
+                <div className="border border-[var(--line)] rounded-md p-3 sm:order-last">
+                  <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">FILES</div>
+                  <div className="font-mono text-lg">{fmtBytes(health.usage.storage.bytes)}<span className="text-xs text-[var(--ink-3)]"> / {fmtBytes(health.usage.storage.quota_bytes)}</span></div>
+                </div>
+              )}
               <div className="border border-[var(--line)] rounded-md p-3">
                 <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">USERS</div>
                 <div className="font-mono text-lg">{health.usage.users.used}<span className="text-xs text-[var(--ink-3)]"> / {health.usage.users.limit ?? "∞"}</span></div>

@@ -803,11 +803,76 @@ async def org_health(org_id: str, request: Request,
             "users": {"used": active_users, "limit": limits.get("max_users")},
             "projects": {"used": counts.get("projects") or 0,
                          "limit": limits.get("max_projects")},
+            "storage": {**(await _tenant_storage_usage(org_id)),
+                        "quota_bytes": _effective_storage_quota(limits)},
         },
         "admins": admins,
         "last_login": last_login,
         "warnings": warnings,
     }
+
+
+def _dir_usage(paths) -> tuple:
+    """Total bytes and file count under a tenant's folders (finished files only)."""
+    total = files = 0
+    for base in paths:
+        if not base.exists():
+            continue
+        for p in base.rglob("*"):
+            if p.is_file() and not p.name.endswith(".tmp"):
+                try:
+                    total += p.stat().st_size
+                    files += 1
+                except OSError:
+                    pass
+    return total, files
+
+
+async def _tenant_storage_usage(org_id: str) -> dict:
+    import asyncio
+    used, files = await asyncio.to_thread(_dir_usage, _tenant_file_dirs(org_id))
+    return {"bytes": used, "files": files}
+
+
+def _effective_storage_quota(limits: dict) -> int:
+    from services import local_files
+    mb = limits.get("storage_mb")
+    cap = local_files.MAX_TENANT_STORAGE_BYTES
+    return min(int(mb) * 1024 * 1024, cap) if mb else cap
+
+
+@router.get("/usage")
+async def platform_usage(request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    """Seats, projects and file storage per workspace against its plan limits.
+    Counts and sizes only: no record contents and no customer finances."""
+    await require_super_admin(request, session_token, authorization)
+    rows = []
+    async for o in db.organizations.find(
+            {}, {"_id": 0, "org_id": 1, "name": 1, "slug": 1, "plan": 1, "is_active": 1,
+                 "is_suspended": 1, "features": 1, "created_at": 1}).sort("created_at", 1):
+        oid = o["org_id"]
+        mine = {"org_id": oid}
+        if oid == DEFAULT_ORG_ID:          # legacy rows written before org_id existed
+            mine = {"$or": [{"org_id": oid}, {"org_id": {"$exists": False}}]}
+        limits = (o.get("features") or {}).get("limits") or {}
+        seats = await db.users.count_documents({**mine, "is_active": {"$ne": False}})
+        projects = await db.projects.count_documents(mine)
+        storage = await _tenant_storage_usage(oid)
+        last = await db.users.find_one({"org_id": oid, "last_login": {"$ne": None}},
+                                       {"_id": 0, "last_login": 1}, sort=[("last_login", -1)])
+        rows.append({
+            "org_id": oid, "name": o.get("name"), "slug": o.get("slug"),
+            "plan": o.get("plan") or "starter",
+            "status": ("suspended" if o.get("is_suspended")
+                       else "inactive" if o.get("is_active") is False else "active"),
+            "seats": {"used": seats, "limit": limits.get("max_users")},
+            "projects": {"used": projects, "limit": limits.get("max_projects")},
+            "storage": {**storage, "quota_bytes": _effective_storage_quota(limits)},
+            "last_login": (last or {}).get("last_login"),
+        })
+    return {"generated_at": iso_now(), "workspaces": rows}
 
 
 @router.get("/isolation-check")

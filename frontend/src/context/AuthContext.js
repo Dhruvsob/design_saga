@@ -187,8 +187,10 @@ export function AuthProvider({ children }) {
     window.location.href = "/";
   };
 
-  const loginWithPassword = async (identifier, password) => {
-    const { data } = await api.post("/auth/login-password", { identifier, password });
+  const loginWithPassword = async (identifier, password, workspace = null) => {
+    const { data } = await api.post("/auth/login-password", {
+      identifier, password, ...(workspace ? { workspace } : {}),
+    });
     if (data.session_token) setSessionToken(data.session_token);
     setUser(data.user);
     setPinLocked(Boolean(data.user?.app_pin_locked));
