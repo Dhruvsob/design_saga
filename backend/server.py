@@ -59,6 +59,7 @@ from core.tenancy import user_org_id  # noqa: E402
 from models.base import FiniteModel  # noqa: E402
 from models.user import validate_password_strength  # noqa: E402
 from services.local_files import remove_upload, resolve_storage_key, save_upload  # noqa: E402
+from core.limits import enforce_project_limit, tenant_storage_quota_bytes  # noqa: E402
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 EMERGENT_AUTH_BASE = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
@@ -1173,6 +1174,7 @@ async def convert_lead_to_project(lead_id: str, request: Request,
     # an indirect way to bypass the client and project creation boundaries.
     _require_perm(user, "clients.create")
     _require_perm(user, "projects.create")
+    await enforce_project_limit(user.get("org_id"))
     # Reserve this conversion atomically. Without this claim, two near-simultaneous
     # requests can both pass the read check and create duplicate clients/projects.
     conversion_claim = uuid.uuid4().hex
@@ -1528,16 +1530,7 @@ async def create_project(payload: ProjectIn, request: Request,
                          authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     enforce_permission(user, "projects.create")
-    # Plan limit — max projects per tenant
-    _org_id = user.get("org_id")
-    if _org_id:
-        _org = await db.organizations.find_one({"org_id": _org_id}, {"_id": 0, "features": 1})
-        _max = ((_org or {}).get("features") or {}).get("limits", {}).get("max_projects")
-        if _max:
-            _current = await sdb.projects.count_documents({})
-            if _current >= _max:
-                raise HTTPException(status_code=402,
-                                    detail=f"Project limit reached ({_current}/{_max}). Upgrade your plan.")
+    await enforce_project_limit(user.get("org_id"))
     doc = payload.model_dump()
     # Resolve engagement_type from the org's business_mode:
     #   consultancy → forced "consultancy"
@@ -1999,7 +1992,7 @@ async def upload_project_file(
     enforce_permission(user, "files.create")
     await get_visible_project(user, project_id)
     try:
-        stored = await save_upload(upload, user_org_id(user))
+        stored = await save_upload(upload, user_org_id(user), await tenant_storage_quota_bytes(user_org_id(user)))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except OSError as exc:
@@ -3921,6 +3914,8 @@ async def adv_convert(qid: str, request: Request, payload: Optional[QuoteConvert
     target_id = (payload.project_id if payload else None) or None
     _require_perm(user, "projects.update" if target_id else "projects.create")
     _require_perm(user, "tasks.create")
+    if not target_id:
+        await enforce_project_limit(user.get("org_id"))
     target = None
     if target_id:
         target = await get_visible_project(user, target_id, permission="projects.update")

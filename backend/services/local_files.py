@@ -96,7 +96,10 @@ def resolve_storage_key(storage_key: str) -> Path:
     return target
 
 
-async def save_upload(upload: UploadFile, org_id: str) -> dict:
+async def save_upload(upload: UploadFile, org_id: str, quota_bytes: int | None = None) -> dict:
+    """Store one upload under the tenant's folder. `quota_bytes` is the tenant's plan
+    quota; the platform-wide tenant cap still applies so a plan can't overfill the disk."""
+    tenant_limit = min(MAX_TENANT_STORAGE_BYTES, quota_bytes) if quota_bytes else MAX_TENANT_STORAGE_BYTES
     filename = clean_filename(upload.filename)
     raw = await upload.read(MAX_FILE_BYTES + 1)
     if not raw:
@@ -115,7 +118,7 @@ async def save_upload(upload: UploadFile, org_id: str) -> dict:
         tenant_usage = sum(p.stat().st_size for p in tenant_root.glob("*") if p.is_file()) if tenant_root.exists() else 0
         if global_usage + len(raw) > MAX_STORAGE_BYTES:
             raise ValueError("File storage capacity is full; contact the administrator")
-        if tenant_usage + len(raw) > MAX_TENANT_STORAGE_BYTES:
+        if tenant_usage + len(raw) > tenant_limit:
             raise ValueError("Your company file-storage quota has been reached")
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         temporary = target.with_suffix(target.suffix + ".tmp")

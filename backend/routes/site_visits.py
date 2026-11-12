@@ -43,6 +43,7 @@ from core.tenancy import user_org_id
 from models.attendance import CheckInIn
 from routes import attendance as att
 from services.local_files import remove_upload, resolve_storage_key, save_upload
+from core.limits import tenant_storage_quota_bytes
 
 router = APIRouter()
 
@@ -422,7 +423,7 @@ async def add_site_visit_photo(
     if Path(upload.filename or "").suffix.lower() not in PHOTO_EXTENSIONS:
         raise HTTPException(422, "Photos must be JPG, PNG or WebP")
     try:
-        stored = await save_upload(upload, user_org_id(user) or "org_default")
+        stored = await save_upload(upload, user_org_id(user) or "org_default", await tenant_storage_quota_bytes(user_org_id(user)))
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except OSError as exc:

@@ -886,12 +886,9 @@ const ALL_MODULES = [
   { key: "documents",         label: "Documents" },
   { key: "reports",           label: "Reports" },
   { key: "purchase_orders",   label: "Purchase Orders" },
-  { key: "inventory",         label: "Inventory" },
-  { key: "material_tracking", label: "Material Tracking" },
   { key: "vendor_billing",    label: "Vendor Billing" },
-  { key: "labour_billing",    label: "Labour Billing" },
-  { key: "site_material",     label: "Site Material" },
-  { key: "project_costing",   label: "Project Costing" },
+  // Inventory, material tracking, site material, labour billing and project
+  // costing have no screens yet; their toggles return once they are built.
 ];
 
 function ModulesModal({ org, onClose, onSaved }) {

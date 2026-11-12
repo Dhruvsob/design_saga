@@ -24,6 +24,7 @@ from core.scoped_db import sdb
 from core.tenancy import user_org_id
 from models.base import FiniteModel
 from services.local_files import remove_upload, resolve_storage_key, save_upload
+from core.limits import tenant_storage_quota_bytes
 
 router = APIRouter()
 
@@ -87,7 +88,7 @@ async def _store_photo(user: dict, upload: UploadFile) -> dict:
     if Path(upload.filename or "").suffix.lower() not in PHOTO_EXTENSIONS:
         raise HTTPException(status_code=422, detail="Photos must be JPG, PNG or WebP")
     try:
-        stored = await save_upload(upload, user_org_id(user) or "org_default")
+        stored = await save_upload(upload, user_org_id(user) or "org_default", await tenant_storage_quota_bytes(user_org_id(user)))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except OSError as exc:

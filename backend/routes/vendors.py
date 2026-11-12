@@ -45,6 +45,7 @@ from core.finance import require_asset_account
 from core.audit import audit
 from core.url_security import external_http_url
 from services.local_files import remove_upload, resolve_storage_key, save_upload
+from core.limits import tenant_storage_quota_bytes
 from core.access_control import (
     get_visible_project, merge_query, project_visibility_query, task_visibility_query,
     visible_project_ids,
@@ -578,7 +579,7 @@ async def upload_vendor_document(
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     try:
-        stored = await save_upload(upload, user_org_id(user))
+        stored = await save_upload(upload, user_org_id(user), await tenant_storage_quota_bytes(user_org_id(user)))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except OSError as exc:

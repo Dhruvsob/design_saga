@@ -40,6 +40,7 @@ from models.expense import (
     ExpenseCreateIn, ExpenseLineIn, ApprovalDecisionIn, ReimburseIn, ExpensePolicyIn,
 )
 from services.local_files import remove_upload, resolve_storage_key, save_upload
+from core.limits import tenant_storage_quota_bytes
 
 
 router = APIRouter()
@@ -215,7 +216,7 @@ async def upload_receipt(request: Request, upload: UploadFile = File(...),
         raise HTTPException(422, "A receipt must be a photo (JPG, PNG or WebP) or a PDF")
     await _purge_unused_receipts(user)
     try:
-        stored = await save_upload(upload, user_org_id(user))
+        stored = await save_upload(upload, user_org_id(user), await tenant_storage_quota_bytes(user_org_id(user)))
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except OSError as exc:
