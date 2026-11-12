@@ -140,6 +140,10 @@ OTHER_COMPANY_ADMIN = {"user_id": "usr_b", "role": "Admin", "org_id": "org_b",
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(local_files, "STORAGE_ROOT", tmp_path)
+
+    async def no_plan_quota(_org_id):
+        return None
+    monkeypatch.setattr(expenses, "tenant_storage_quota_bytes", no_plan_quota)
     raw = SimpleNamespace(expense_receipts=_Raw(), expenses=_Raw(),
                           expense_policies=_Raw())
     monkeypatch.setattr(expenses, "sdb", SimpleNamespace(**{

@@ -10,6 +10,7 @@ Super Admin owns the whole SaaS deployment. They can:
 All endpoints gated by `require_super_admin`.
 """
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
+from fastapi.responses import StreamingResponse
 from typing import Optional, List
 from pydantic import BaseModel, StrictBool, field_validator
 import datetime as _dt
@@ -37,23 +38,11 @@ import bcrypt
 router = APIRouter(prefix="/platform")
 
 
-TENANT_PURGE_COLLECTIONS = (
-    "users", "leads", "clients", "projects", "tasks", "vendors_acc",
-    "vendor_bills", "vendor_payments", "vendor_commissions", "vendor_ratings",
-    "commission_settlements", "invoices", "quotations", "quotations_adv",
-    "employees", "attendance", "attendance_corrections", "attendance_policies",
-    "leave_applications", "leave_rules", "leaves", "office_locations",
-    "journal_entries", "accounts", "payroll_runs", "notifications", "files",
-    "documents", "milestones", "payment_milestones", "calendar_events",
-    "holidays", "comments", "expenses", "expense_policies", "expense_receipts",
-    "purchase_orders",
-    "goods_receipts", "loans", "recurring_expenses", "user_favorite_accounts",
-    "bank_statement_rows", "bank_statement_batches", "master_data",
-    "chat_messages", "ai_messages", "role_permissions", "counters",
-    "google_calendar_connections", "google_oauth_states",
-    "google_calendar_sync_queue", "google_calendar_synced_events", "audit_log",
-    "site_visits",
+from core.tenant_registry import (  # noqa: E402
+    EXPORT_REDACTED_FIELDS, EXPORT_SKIPPED, TENANT_COLLECTIONS,
 )
+
+TENANT_PURGE_COLLECTIONS = TENANT_COLLECTIONS
 
 
 # ------------------------------------------------------------------
@@ -366,19 +355,115 @@ async def list_contact_requests(request: Request, limit: int = 50,
     ).sort("created_at", -1).limit(safe_limit).to_list(safe_limit)
 
 
+def _tenant_file_dirs(org_id: str) -> list:
+    """Upload and branding folders that belong to one tenant."""
+    from services import local_files
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", org_id)[:64]
+    root = local_files.STORAGE_ROOT
+    branding = root / "branding" / "designsaga-erp"
+    return [root / safe, branding / "org-logos" / safe, branding / "org-signatures" / safe]
+
+
+class _ZipSink:
+    """Write-only target for a streamed zip; drained after each chunk."""
+
+    def __init__(self):
+        self.buf = bytearray()
+
+    def write(self, data) -> int:
+        self.buf += data
+        return len(data)
+
+    def flush(self):
+        pass
+
+    def drain(self) -> bytes:
+        out = bytes(self.buf)
+        self.buf.clear()
+        return out
+
+
+@router.get("/orgs/{org_id}/export")
+async def export_org(org_id: str, request: Request,
+                     session_token: Optional[str] = Cookie(default=None),
+                     authorization: Optional[str] = Header(default=None)):
+    """Complete workspace export: every tenant record (JSON lines per collection,
+    secrets removed) plus uploaded and branding files, streamed as one zip."""
+    sa = await require_super_admin(request, session_token, authorization)
+    org = await get_org(org_id)
+    if not org:
+        raise HTTPException(404, "Organisation not found")
+
+    async def stream():
+        import json
+        import zipfile
+        sink = _ZipSink()
+        zf = zipfile.ZipFile(sink, "w", zipfile.ZIP_DEFLATED)
+        manifest = {"org_id": org_id, "name": org.get("name"), "exported_at": iso_now(),
+                    "collections": {}, "files": 0}
+        zf.writestr("organization.json", json.dumps(org, default=str, indent=1))
+        for coll in TENANT_COLLECTIONS:
+            if coll in EXPORT_SKIPPED:
+                continue
+            projection = {"_id": 0, **{f: 0 for f in EXPORT_REDACTED_FIELDS.get(coll, ())}}
+            count = 0
+            with zf.open(f"data/{coll}.jsonl", "w", force_zip64=True) as entry:
+                async for row in db[coll].find({"org_id": org_id}, projection):
+                    entry.write((json.dumps(row, default=str) + "\n").encode("utf-8"))
+                    count += 1
+                    if len(sink.buf) > 1 << 20:
+                        yield sink.drain()
+            manifest["collections"][coll] = count
+            yield sink.drain()
+        from services import local_files
+        for folder in _tenant_file_dirs(org_id):
+            if not folder.exists():
+                continue
+            for path in sorted(p for p in folder.rglob("*") if p.is_file()):
+                rel = path.relative_to(local_files.STORAGE_ROOT)
+                with zf.open(f"files/{rel.as_posix()}", "w", force_zip64=True) as entry, \
+                        path.open("rb") as src:
+                    for chunk in iter(lambda: src.read(1 << 20), b""):
+                        entry.write(chunk)
+                        yield sink.drain()
+                manifest["files"] += 1
+        zf.writestr("manifest.json", json.dumps(manifest, indent=1))
+        zf.close()
+        yield sink.drain()
+        # Recorded only when the whole archive was produced.
+        await db.organizations.update_one({"org_id": org_id}, {"$set": {"exported_at": iso_now()}})
+        await audit(sa, "org.export", target=org_id, target_type="org",
+                    meta={"org_name": org.get("name"), "records": sum(manifest["collections"].values()),
+                          "files": manifest["files"]})
+
+    filename = f"{org.get('slug') or org_id}-export-{business_today().isoformat()}.zip"
+    return StreamingResponse(stream(), media_type="application/zip",
+                             headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
 @router.delete("/orgs/{org_id}")
 async def delete_org(org_id: str, request: Request,
                      purge: bool = False,
+                     confirm: Optional[str] = None,
                      session_token: Optional[str] = Cookie(default=None),
                      authorization: Optional[str] = Header(default=None)):
-    """Delete an org. By default just marks inactive. `?purge=true`
-    hard-deletes the org AND all its data (dangerous)."""
+    """Deactivate an org (default). `?purge=true` permanently deletes it and all its
+    data, and only for a deactivated workspace that has been exported, with the
+    workspace slug typed in `confirm`."""
     sa = await require_super_admin(request, session_token, authorization)
     if org_id == DEFAULT_ORG_ID:
         raise HTTPException(400, "Default organisation cannot be deleted")
     org = await get_org(org_id)
     if not org:
         raise HTTPException(404, "Organisation not found")
+
+    if purge:
+        if org.get("is_active") is not False:
+            raise HTTPException(409, "Deactivate the workspace before deleting it permanently")
+        if not org.get("exported_at"):
+            raise HTTPException(409, "Download the workspace export before deleting it permanently")
+        if (confirm or "").strip().lower() != str(org.get("slug") or "").lower():
+            raise HTTPException(400, "Type the workspace's short name exactly to confirm")
 
     if not purge:
         await db.organizations.update_one({"org_id": org_id},
@@ -411,6 +496,7 @@ async def delete_org(org_id: str, request: Request,
     }
     if user_ids:
         await db.user_sessions.delete_many({"user_id": {"$in": user_ids}})
+        await db.user_app_locks.delete_many({"user_id": {"$in": user_ids}})
     if login_identifiers:
         await db.login_attempts.delete_many(
             {"identifier": {"$in": sorted(login_identifiers)}})
@@ -421,6 +507,9 @@ async def delete_org(org_id: str, request: Request,
         await db[coll].delete_many({"org_id": org_id})
     await db.audit_chain.delete_one({"chain": org_id})
     await db.organizations.delete_one({"org_id": org_id})
+    import shutil
+    for folder in _tenant_file_dirs(org_id):
+        shutil.rmtree(folder, ignore_errors=True)
     await audit(sa, "org.purge", target=org_id, target_type="org",
                 meta={"org_name": org.get("name")})
     return {"ok": True, "purged": True}

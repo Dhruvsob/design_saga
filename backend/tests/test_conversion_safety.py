@@ -9,6 +9,14 @@ from starlette.requests import Request
 import server
 
 
+@pytest.fixture(autouse=True)
+def _no_plan_limit(monkeypatch):
+    """Plan limits are covered in test_plan_limits; these tests use fake collections."""
+    async def within_plan(_org_id):
+        return None
+    monkeypatch.setattr(server, "enforce_project_limit", within_plan)
+
+
 class _LeadCollection:
     def __init__(self):
         self.row = {"id": "lead_1", "name": "Client", "stage": "Qualified"}

@@ -214,6 +214,10 @@ def world(monkeypatch, tmp_path):
     monkeypatch.setattr(att, "audit", record_audit)
     monkeypatch.setattr(att, "emit_admins", record_alert)
     monkeypatch.setattr(local_files, "STORAGE_ROOT", tmp_path)
+
+    async def no_plan_quota(_org_id):
+        return None
+    monkeypatch.setattr(sv, "tenant_storage_quota_bytes", no_plan_quota)
     return SimpleNamespace(db=db, state=state, root=tmp_path)
 
 

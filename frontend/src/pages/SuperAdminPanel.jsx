@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import api from "../lib/api";
+import api, { API } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { dateForInput, formatDate, statusLabel } from "../lib/format";
@@ -86,10 +86,11 @@ export default function SuperAdminPanel() {
     }
   };
 
-  const deleteOrg = async (org, purge) => {
+  const deleteOrg = async (org, purge, confirm) => {
     try {
-      await api.delete(`/platform/orgs/${org.org_id}${purge ? "?purge=true" : ""}`);
-      setConfirmDelete(null);
+      await api.delete(`/platform/orgs/${org.org_id}`, { params: purge ? { purge: true, confirm } : {} });
+      toast.success(purge ? `${org.name} deleted permanently` : `${org.name} deactivated`);
+      setConfirmDelete(purge ? null : { ...org, is_active: false });
       await load();
     } catch (e) {
       toast.error(fmtErr(e?.response?.data?.detail, "Delete failed"));
@@ -813,33 +814,67 @@ function ResetInline({ onCancel, onConfirm }) {
 }
 
 /* ------- Confirm delete modal ------- */
+/** Offboarding in three steps: deactivate (reversible) → download the full export →
+ *  delete permanently with the workspace's short name typed. The server enforces
+ *  the same order. */
 function ConfirmDeleteModal({ org, onClose, onConfirm }) {
-  const [purge, setPurge] = useState(false);
   const [confirmText, setConfirmText] = useState("");
-  const canDelete = confirmText === org.name;
+  const active = org.is_active !== false;
+  const exported = Boolean(org.exported_at);
+  const slug = org.slug || "";
+  const canPurge = !active && exported && confirmText.trim().toLowerCase() === slug.toLowerCase();
+  const Step = ({ n, done, title, children }) => (
+    <li className={`border rounded-lg p-4 ${done ? "border-[var(--line)] bg-[var(--surface-2)]" : "border-[var(--line)]"}`}>
+      <div className="flex items-center gap-2 font-semibold text-sm mb-2">
+        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs ${done ? "bg-[var(--success)] text-white" : "bg-[var(--line-soft)]"}`}>
+          {done ? <Check size={12} weight="bold" /> : n}
+        </span>
+        {title}
+      </div>
+      {children}
+    </li>
+  );
   return (
-    <Modal onClose={onClose} title="Delete Workspace" eyebrow="DANGER ZONE">
-      <div className="space-y-3">
-        <div className="border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
-          <div className="flex items-center gap-2 font-semibold mb-1">
-            <Warning size={14} /> This action affects <em>{org.name}</em>.
-          </div>
-          Deactivating removes access but preserves data. Purging <strong>permanently deletes</strong> every project, invoice, user and record in this workspace.
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)} />
-          <span>Also permanently delete all workspace data (irreversible)</span>
-        </label>
-        <div className="text-xs text-[var(--ink-2)]">Type <code className="font-mono bg-[var(--line-soft)] px-1">{org.name}</code> to confirm.</div>
-        <input className="input-flat w-full" value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
-               data-testid="delete-confirm-input" />
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="btn-ghost">Cancel</button>
-          <button disabled={!canDelete} onClick={() => onConfirm(org, purge)}
+    <Modal onClose={onClose} title="Remove workspace" eyebrow="DANGER ZONE">
+      <p className="text-sm text-[var(--ink-2)] mb-4">
+        Removing <strong className="text-[var(--ink)]">{org.name}</strong> happens in three steps so a customer&apos;s data is never lost by mistake.
+      </p>
+      <ol className="space-y-3">
+        <Step n={1} done={!active} title="Deactivate (reversible)">
+          <p className="text-xs text-[var(--ink-2)] mb-3">Signs everyone out and blocks access. All data stays and the workspace can be reactivated.</p>
+          {active && (
+            <button onClick={() => onConfirm(org, false)} className="btn-primary" data-testid="deactivate-btn">
+              <PauseCircle size={14} /> Deactivate workspace
+            </button>
+          )}
+        </Step>
+        <Step n={2} done={exported} title="Download the complete export">
+          <p className="text-xs text-[var(--ink-2)] mb-3">
+            Every record (passwords and Google tokens removed) and every uploaded file, as one zip for the customer and your records.
+            {exported && <> Last exported {formatDate(org.exported_at)}.</>}
+          </p>
+          <a href={`${API}/platform/orgs/${org.org_id}/export`} className={`btn-ghost ${active ? "pointer-events-none opacity-50" : ""}`}
+             aria-disabled={active} data-testid="export-btn" onClick={() => toast.success("Export started — reopen this dialog when the download finishes")}>
+            <ArrowRight size={14} /> Download export
+          </a>
+        </Step>
+        <Step n={3} done={false} title="Delete permanently">
+          <p className="text-xs text-[var(--danger)] mb-2">
+            Deletes every project, invoice, employee, file and record of this workspace. This cannot be undone.
+          </p>
+          <label className="block text-xs text-[var(--ink-2)] mb-1" htmlFor="purge-confirm">
+            Type the workspace&apos;s short name <code className="font-mono bg-[var(--line-soft)] px-1">{slug}</code> to confirm
+          </label>
+          <input id="purge-confirm" className="input-flat w-full mb-3" value={confirmText} disabled={active || !exported}
+                 onChange={(e) => setConfirmText(e.target.value)} data-testid="delete-confirm-input" />
+          <button disabled={!canPurge} onClick={() => onConfirm(org, true, confirmText.trim())}
                   className="btn-primary bg-[var(--danger)]" data-testid="delete-confirm-btn">
-            <Trash size={12} /> {purge ? "Purge forever" : "Deactivate"}
+            <Trash size={12} /> Delete permanently
           </button>
-        </div>
+        </Step>
+      </ol>
+      <div className="flex justify-end mt-4">
+        <button onClick={onClose} className="btn-ghost">Close</button>
       </div>
     </Modal>
   );
