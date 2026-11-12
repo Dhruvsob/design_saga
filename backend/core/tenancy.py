@@ -52,6 +52,27 @@ def user_org_id(user: Optional[dict]) -> Optional[str]:
     return user.get("org_id") or DEFAULT_ORG_ID
 
 
+def org_filter_for_id(org_id: str) -> dict:
+    """Scope direct database helpers, including legacy default-org rows."""
+    if org_id == DEFAULT_ORG_ID:
+        return {"$or": [
+            {"org_id": DEFAULT_ORG_ID},
+            {"org_id": {"$exists": False}},
+            {"org_id": None},
+        ]}
+    return {"org_id": org_id}
+
+
+def scoped_org_query(org_id: str, query: Optional[dict] = None) -> dict:
+    """Combine an org boundary with a query without clobbering either `$or`."""
+    scope = org_filter_for_id(org_id)
+    if not query:
+        return scope
+    if org_id == DEFAULT_ORG_ID:
+        return {"$and": [scope, query]}
+    return {**scope, **query}
+
+
 def tenant_filter(user: dict) -> dict:
     """Return a Mongo filter that scopes queries to the user's org.
 
@@ -62,10 +83,7 @@ def tenant_filter(user: dict) -> dict:
     """
     if is_super_admin(user):
         return {}
-    oid = user_org_id(user)
-    if oid == DEFAULT_ORG_ID:
-        return {"$or": [{"org_id": DEFAULT_ORG_ID}, {"org_id": {"$exists": False}}, {"org_id": None}]}
-    return {"org_id": oid}
+    return org_filter_for_id(user_org_id(user))
 
 
 def stamp_org(doc: dict, user: dict) -> dict:

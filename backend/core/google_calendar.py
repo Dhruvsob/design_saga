@@ -18,6 +18,7 @@ from pymongo.errors import DuplicateKeyError
 from .db import db
 from .access_control import unique_legacy_assignee_user_id
 from .helpers import business_today, iso_now, now_utc
+from .tenancy import scoped_org_query
 
 log = logging.getLogger("google_calendar")
 
@@ -263,13 +264,15 @@ async def _attendee_emails(org_id: str, doc: dict, source_type: str) -> list[str
     emails = set()
     if candidate_ids:
         async for user in db.users.find(
-            {"org_id": org_id, "user_id": {"$in": list(candidate_ids)}}, {"_id": 0, "email": 1}
+            scoped_org_query(org_id, {"user_id": {"$in": list(candidate_ids)}}),
+            {"_id": 0, "email": 1},
         ):
             email = _clean_email(user.get("email"))
             if email:
                 emails.add(email)
         async for employee in db.employees.find(
-            {"org_id": org_id, "id": {"$in": list(candidate_ids)}}, {"_id": 0, "email": 1}
+            scoped_org_query(org_id, {"id": {"$in": list(candidate_ids)}}),
+            {"_id": 0, "email": 1},
         ):
             email = _clean_email(employee.get("email"))
             if email:
@@ -277,7 +280,8 @@ async def _attendee_emails(org_id: str, doc: dict, source_type: str) -> list[str
     if source_type == "task" and not emails and doc.get("assignee_name"):
         legacy_uid = await unique_legacy_assignee_user_id(org_id, doc["assignee_name"])
         user = await db.users.find_one(
-            {"org_id": org_id, "user_id": legacy_uid}, {"_id": 0, "email": 1}) if legacy_uid else None
+            scoped_org_query(org_id, {"user_id": legacy_uid}),
+            {"_id": 0, "email": 1}) if legacy_uid else None
         email = _clean_email((user or {}).get("email"))
         if email:
             emails.add(email)
@@ -306,7 +310,8 @@ def _date_time_fields(day: str, start_time: str | None, end_day: str | None = No
 async def _project_name(org_id: str, project_id: str | None) -> str | None:
     if not project_id:
         return None
-    p = await db.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "name": 1})
+    p = await db.projects.find_one(
+        scoped_org_query(org_id, {"id": project_id}), {"_id": 0, "name": 1})
     return (p or {}).get("name")
 
 
@@ -412,7 +417,7 @@ async def _user_identity_ids(org_id: str, user: dict) -> set[str]:
     if user.get("email"):
         terms.append({"email": user["email"]})
     async for employee in db.employees.find(
-        {"org_id": org_id, "$or": terms}, {"_id": 0, "id": 1}
+        scoped_org_query(org_id, {"$or": terms}), {"_id": 0, "id": 1}
     ):
         if employee.get("id"):
             ids.add(employee["id"])
@@ -440,19 +445,18 @@ def _source_visible_to_user(source_type: str, doc: dict, user: dict,
 
 
 def _active_user_filter(org_id: str, user_id: str) -> dict:
-    return {
-        "org_id": org_id,
+    return scoped_org_query(org_id, {
         "user_id": user_id,
         "is_active": {"$ne": False},
         "approval_status": {"$nin": ["pending", "rejected"]},
-    }
+    })
 
 
 async def _queue_source_for_connections(org_id: str, source_type: str, source_id: str,
                                         operation: str = "upsert") -> int:
     collections = {"calendar_event": db.calendar_events, "task": db.tasks}
     doc = None if operation == "delete" else await collections[source_type].find_one(
-        {"org_id": org_id, "id": source_id}, {"_id": 0})
+        scoped_org_query(org_id, {"id": source_id}), {"_id": 0})
     queued = 0
     async for connection in db.google_calendar_connections.find(
         {"org_id": org_id, "status": "connected"}, {"_id": 0, "user_id": 1}
@@ -654,14 +658,16 @@ async def enqueue_user_sources(org_id: str, user_id: str) -> int:
     today = business_today().isoformat()
     count = 0
     async for event in db.calendar_events.find(
-        {"org_id": org_id, "date": {"$gte": today}}, {"_id": 0}
+        scoped_org_query(org_id, {"date": {"$gte": today}}), {"_id": 0}
     ).limit(1000):
         if _source_visible_to_user("calendar_event", event, user, identity_ids):
             await enqueue_sync(org_id, user_id, "calendar_event", event["id"])
             count += 1
     async for task in db.tasks.find(
-        {"org_id": org_id, "status": {"$ne": "done"},
-         "$or": [{"reminder_date": {"$gte": today}}, {"due_date": {"$gte": today}}]},
+        scoped_org_query(org_id, {
+            "status": {"$ne": "done"},
+            "$or": [{"reminder_date": {"$gte": today}}, {"due_date": {"$gte": today}}],
+        }),
         {"_id": 0},
     ).limit(2000):
         if _source_visible_to_user(

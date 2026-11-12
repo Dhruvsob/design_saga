@@ -1561,6 +1561,13 @@ async def create_project(payload: ProjectIn, request: Request,
     if doc.get("fee_structure_type") and doc["fee_structure_type"] not in FEE_STRUCTURE_TYPES:
         raise HTTPException(status_code=400,
                             detail=f"fee_structure_type must be one of: {', '.join(FEE_STRUCTURE_TYPES)}")
+    # Same rule as editing: a chosen fee type must be complete.
+    _required = {**FEE_SUBFIELDS, "per_sqft": {"site_area_sqft", "fee_rate_per_sqft"}}
+    _missing = sorted(f for f in _required.get(doc.get("fee_structure_type") or "", set())
+                      if float(doc.get(f) or 0) <= 0)
+    if _missing:
+        labels = ", ".join(f.replace("fee_", "").replace("_", " ") for f in _missing)
+        raise HTTPException(400, f"Complete the selected fee structure: {labels}")
     # Keep only the inputs of the chosen fee type (a switched form may carry stale ones).
     _keep = FEE_SUBFIELDS.get(doc.get("fee_structure_type") or "", set())
     for _f in ALL_FEE_SUBFIELDS - _keep:

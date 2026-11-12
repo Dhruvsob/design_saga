@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from core.db import db
 from core.rbac import has_any_permission, has_permission
 from core.scoped_db import sdb
+from core.tenancy import scoped_org_query
 
 
 def require_permission(user: dict, permission: str) -> None:
@@ -33,12 +34,11 @@ async def unique_legacy_assignee_user_id(org_id: str, name: str | None) -> str |
     if not clean_name:
         return None
     rows = await db.users.find(
-        {
-            "org_id": org_id,
+        scoped_org_query(org_id, {
             "name": clean_name,
             "is_active": {"$ne": False},
             "approval_status": {"$nin": ["pending", "rejected"]},
-        },
+        }),
         {"_id": 0, "user_id": 1},
     ).limit(2).to_list(2)
     if len(rows) != 1:
