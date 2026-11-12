@@ -21,6 +21,15 @@ export async function session(identifier, password) {
   return ctx;
 }
 
+/** A new workspace owner sets their password from the one-time link. */
+export async function acceptInvite(invitePath, password) {
+  const token = String(invitePath || "").replace(/^\/invite\//, "");
+  const ctx = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL } });
+  const res = await ctx.post("/api/auth/invite/accept", { data: { token, password } });
+  await ctx.dispose();
+  if (!res.ok()) throw new Error(`invite accept failed: ${res.status()} ${await res.text()}`);
+}
+
 export async function ensurePin(ctx) {
   const status = await (await ctx.get("/api/auth/pin/status")).json();
   let res = null;
@@ -50,9 +59,10 @@ export default async function globalSetup() {
   await ensurePin(sa);
   const org = await sa.post("/api/platform/orgs", { data: {
     name: `QA Studio ${stamp}`, admin_email: adminEmail, admin_name: "QA Admin",
-    admin_password: password, business_mode: "hybrid",
+    business_mode: "hybrid",
   } });
   if (!org.ok()) throw new Error(`tenant creation failed: ${org.status()} ${await org.text()}`);
+  await acceptInvite((await org.json()).invite_path, password);
   await sa.dispose();
 
   const admin = await session(adminEmail, password);

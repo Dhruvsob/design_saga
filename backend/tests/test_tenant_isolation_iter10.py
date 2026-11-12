@@ -40,6 +40,23 @@ def _h(token):
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def _accept_invite(invite_path, password):
+    """New workspace owners choose their own password from the one-time link."""
+    token = str(invite_path or "").removeprefix("/invite/")
+    r = requests.post(f"{API}/auth/invite/accept", json={"token": token, "password": password}, timeout=30)
+    assert r.status_code == 200, f"invite accept failed: {r.status_code} {r.text}"
+
+
+def _purge_org(oid, headers):
+    """Permanent deletion needs a deactivated, exported workspace and its slug typed."""
+    org = requests.get(f"{API}/platform/orgs/{oid}", headers=headers, timeout=30).json()
+    slug = (org.get("org") or org).get("slug", "")
+    requests.delete(f"{API}/platform/orgs/{oid}", headers=headers, timeout=30)
+    requests.get(f"{API}/platform/orgs/{oid}/export", headers=headers, timeout=120)
+    return requests.delete(f"{API}/platform/orgs/{oid}", params={"purge": "true", "confirm": slug},
+                           headers=headers, timeout=60)
+
+
 # ---------------------------------------------------------------------------
 # Session-scoped fixture: create a fresh org, log in its admin, tear down.
 # ---------------------------------------------------------------------------
@@ -52,13 +69,13 @@ def iso_org():
         "name": f"Iso Test Studio {ts}",
         "admin_email": admin_email,
         "admin_name": "Iso Admin",
-        "admin_password": admin_password,
     }
     r = requests.post(f"{API}/platform/orgs", json=payload, headers=_h(SA_TOKEN), timeout=30)
     assert r.status_code == 200, f"create_org failed: {r.status_code} {r.text}"
     body = r.json()
     org = body["org"]
     org_id = org["org_id"]
+    _accept_invite(body["invite_path"], admin_password)
 
     # Login the newly-created admin via password.
     lr = requests.post(
@@ -77,12 +94,7 @@ def iso_org():
     yield {"org_id": org_id, "admin_token": admin_token, "admin_email": admin_email}
 
     # Teardown: purge the org.
-    requests.delete(
-        f"{API}/platform/orgs/{org_id}",
-        params={"purge": "true"},
-        headers=_h(SA_TOKEN),
-        timeout=30,
-    )
+    _purge_org(org_id, _h(SA_TOKEN))
 
 
 # ---------------------------------------------------------------------------

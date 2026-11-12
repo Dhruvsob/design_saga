@@ -5,10 +5,9 @@ A single Design Saga deployment can host many independent companies
 Complete data isolation is enforced at the query layer via
 `core.tenancy.tenant_filter()`.
 """
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Literal
 
-from models.user import validate_password_strength
 
 
 BusinessMode = Literal["consultancy", "turnkey", "hybrid"]
@@ -84,7 +83,6 @@ class OrgCreateIn(BaseModel):
     display_name: Optional[str] = None
     admin_email: EmailStr
     admin_name: str = Field(min_length=1, max_length=120)
-    admin_password: str = Field(min_length=8, max_length=128)
     business_mode: BusinessMode = "hybrid"        # consultancy | turnkey | hybrid
     phone: Optional[str] = None
     website: Optional[str] = None
@@ -97,10 +95,6 @@ class OrgCreateIn(BaseModel):
     billing: Optional[OrgBilling] = None
     notes: Optional[str] = None
 
-    @field_validator("admin_password")
-    @classmethod
-    def _admin_password_strength(cls, value: str) -> str:
-        return validate_password_strength(value)
 
 
 class OrgUpdateIn(BaseModel):

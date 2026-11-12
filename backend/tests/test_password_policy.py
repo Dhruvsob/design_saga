@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from models.organization import OrgCreateIn
+from routes.auth import InviteAcceptIn
 from models.user import ChangePasswordIn, RegisterIn, ResetPasswordIn
 from server import EmployeeAccountIn, EmployeePasswordResetIn
 
@@ -15,12 +15,7 @@ def test_every_account_creation_path_rejects_weak_passwords(password):
     with pytest.raises(ValidationError):
         RegisterIn(email="user@example.com", name="User", password=password)
     with pytest.raises(ValidationError):
-        OrgCreateIn(
-            name="Example Studio",
-            admin_email="admin@example.com",
-            admin_name="Admin",
-            admin_password=password,
-        )
+        InviteAcceptIn(token="t" * 43, password=password)   # owner/admin sets it from a link
     with pytest.raises(ValidationError):
         EmployeeAccountIn(password=password)
 
@@ -38,12 +33,7 @@ def test_every_password_reset_path_rejects_weak_passwords(password):
 def test_strong_password_is_accepted_everywhere():
     password = "SecurePass123"
     assert RegisterIn(email="user@example.com", name="User", password=password).password == password
-    assert OrgCreateIn(
-        name="Example Studio",
-        admin_email="admin@example.com",
-        admin_name="Admin",
-        admin_password=password,
-    ).admin_password == password
+    assert InviteAcceptIn(token="t" * 43, password=password).password == password
     assert EmployeeAccountIn(password=password).password == password
     assert EmployeePasswordResetIn(password=password).password == password
 

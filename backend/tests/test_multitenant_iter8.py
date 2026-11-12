@@ -28,6 +28,23 @@ def H(tok):
     return {"Authorization": f"Bearer {tok}"}
 
 
+def _accept_invite(invite_path, password):
+    """New workspace owners choose their own password from the one-time link."""
+    token = str(invite_path or "").removeprefix("/invite/")
+    r = requests.post(f"{API}/auth/invite/accept", json={"token": token, "password": password}, timeout=30)
+    assert r.status_code == 200, f"invite accept failed: {r.status_code} {r.text}"
+
+
+def _purge_org(oid, headers):
+    """Permanent deletion needs a deactivated, exported workspace and its slug typed."""
+    org = requests.get(f"{API}/platform/orgs/{oid}", headers=headers, timeout=30).json()
+    slug = (org.get("org") or org).get("slug", "")
+    requests.delete(f"{API}/platform/orgs/{oid}", headers=headers, timeout=30)
+    requests.get(f"{API}/platform/orgs/{oid}/export", headers=headers, timeout=120)
+    return requests.delete(f"{API}/platform/orgs/{oid}", params={"purge": "true", "confirm": slug},
+                           headers=headers, timeout=60)
+
+
 # ============ Auth / Me ============
 class TestAuthMe:
     def test_legacy_admin_me(self):
@@ -87,7 +104,6 @@ class TestPlatformRoutes:
             "slug": f"test-org-{suffix}",
             "admin_email": f"admin_{suffix}@testorg.co",
             "admin_name": "Admin One",
-            "admin_password": "Test@1234",
         }
         r = requests.post(f"{API}/platform/orgs", headers=H(SA_TOKEN), json=payload, timeout=20)
         assert r.status_code in (200, 201), r.text
@@ -113,21 +129,23 @@ class TestPlatformRoutes:
         r4 = requests.post(
             f"{API}/platform/orgs/{oid}/admins",
             headers=H(SA_TOKEN),
-            json={"email": f"admin2_{suffix}@testorg.co", "name": "Admin Two", "password": "Test@1234"},
+            json={"email": f"admin2_{suffix}@testorg.co", "name": "Admin Two"},
             timeout=15,
         )
         assert r4.status_code in (200, 201), r4.text
         u = r4.json()
+        assert str(u.get("invite_path", "")).startswith("/invite/"), u
         uid = (u.get("user") or u).get("id") or (u.get("user") or u).get("_id")
         if uid:
-            r5 = requests.post(f"{API}/platform/orgs/{oid}/users/{uid}/reset-password", headers=H(SA_TOKEN), timeout=15)
+            r5 = requests.post(f"{API}/platform/orgs/{oid}/users/{uid}/reset-link", headers=H(SA_TOKEN), timeout=15)
             assert r5.status_code == 200, r5.text
+            assert r5.json()["invite_path"].startswith("/invite/")
 
         # delete (soft)
         r6 = requests.delete(f"{API}/platform/orgs/{oid}", headers=H(SA_TOKEN), timeout=15)
         assert r6.status_code in (200, 204), r6.text
         # purge
-        r7 = requests.delete(f"{API}/platform/orgs/{oid}?purge=true", headers=H(SA_TOKEN), timeout=20)
+        r7 = _purge_org(oid, H(SA_TOKEN))
         assert r7.status_code in (200, 204, 404), r7.text
 
     def test_default_org_protected(self):

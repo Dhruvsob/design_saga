@@ -26,7 +26,7 @@ Design decisions
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import asyncio
 import bcrypt
 import hashlib
@@ -41,7 +41,7 @@ from core.deps import ensure_user_access, require_user, get_current_user
 from core.rbac import has_permission, ROLES, normalize_role, expand_permissions
 from models.user import (
     RegisterIn, LoginPasswordIn, ChangePasswordIn,
-    ResetPasswordIn, ApprovalDecisionIn,
+    ResetPasswordIn, ApprovalDecisionIn, validate_password_strength,
 )
 
 
@@ -563,6 +563,56 @@ async def disable_app_pin(payload: AppPinIn, request: Request,
 # ==================================================
 # CHANGE PASSWORD (self)
 # ==================================================
+# ==================================================
+# SET PASSWORD FROM A ONE-TIME LINK (invite / reset)
+# ==================================================
+class InviteAcceptIn(BaseModel):
+    token: str
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def _pw(cls, value: str) -> str:
+        return validate_password_strength(value)
+
+
+@router.get("/auth/invite/{token}")
+async def invite_details(token: str):
+    """What the set-password page shows: whose account and which workspace."""
+    from core.invites import find_valid_invite
+    invite = await find_valid_invite(token)
+    if not invite:
+        raise HTTPException(status_code=404, detail="This link has expired or was already used. Ask for a new one.")
+    user = await db.users.find_one({"user_id": invite["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+    org = await db.organizations.find_one({"org_id": invite.get("org_id")},
+                                          {"_id": 0, "name": 1, "display_name": 1}) or {}
+    if not user:
+        raise HTTPException(status_code=404, detail="This link has expired or was already used. Ask for a new one.")
+    return {"name": user.get("name"), "email": user.get("email"),
+            "workspace": org.get("display_name") or org.get("name"),
+            "purpose": invite.get("purpose"), "expires_at": invite["expires_at"]}
+
+
+@router.post("/auth/invite/accept")
+async def accept_invite(payload: InviteAcceptIn):
+    """Set the account's password from a one-time link; existing sessions end."""
+    from core.invites import find_valid_invite, mark_used
+    invite = await find_valid_invite(payload.token)
+    if not invite or not await mark_used(invite):
+        raise HTTPException(status_code=404, detail="This link has expired or was already used. Ask for a new one.")
+    user = await db.users.find_one({"user_id": invite["user_id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="This link has expired or was already used. Ask for a new one.")
+    password_hash = await asyncio.to_thread(hash_password, payload.password)
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {
+        "password_hash": password_hash, "password_updated_at": iso_now(), "auth_type": "password",
+    }})
+    await reset_user_security_after_admin_password_change(user)
+    await audit(user, "user.password_set_from_link", target=user["user_id"], target_type="user",
+                meta={"purpose": invite.get("purpose")}, org_id=user.get("org_id"))
+    return {"ok": True, "email": user.get("email")}
+
+
 @router.post("/auth/change-password")
 async def change_password(payload: ChangePasswordIn, request: Request, response: Response,
                           session_token: Optional[str] = Cookie(default=None),

@@ -27,22 +27,39 @@ EXPECTED_MODULE_KEYS = {
 _created_org_ids = []
 
 
+def _accept_invite(invite_path, password):
+    """New workspace owners choose their own password from the one-time link."""
+    token = str(invite_path or "").removeprefix("/invite/")
+    r = requests.post(f"{API}/auth/invite/accept", json={"token": token, "password": password}, timeout=30)
+    assert r.status_code == 200, f"invite accept failed: {r.status_code} {r.text}"
+
+
+def _purge_org(oid, headers):
+    """Permanent deletion needs a deactivated, exported workspace and its slug typed."""
+    org = requests.get(f"{API}/platform/orgs/{oid}", headers=headers, timeout=30).json()
+    slug = (org.get("org") or org).get("slug", "")
+    requests.delete(f"{API}/platform/orgs/{oid}", headers=headers, timeout=30)
+    requests.get(f"{API}/platform/orgs/{oid}/export", headers=headers, timeout=120)
+    return requests.delete(f"{API}/platform/orgs/{oid}", params={"purge": "true", "confirm": slug},
+                           headers=headers, timeout=60)
+
+
 def _create_org(mode: str):
     suffix = uuid.uuid4().hex[:8]
     body = {
         "name": f"TEST_{mode}_{suffix}",
         "admin_email": f"test_{mode}_{suffix}@example.com",
         "admin_name": f"Admin {mode}",
-        "admin_password": "TestPass123!",
         "business_mode": mode,
     }
     r = requests.post(f"{API}/platform/orgs", json=body, headers=SA_HDR, timeout=30)
     assert r.status_code == 200, f"Create {mode} org failed: {r.status_code} {r.text}"
     data = r.json()
     _created_org_ids.append(data["org"]["org_id"])
+    _accept_invite(data["invite_path"], "TestPass123!")
     # login as admin
     lr = requests.post(f"{API}/auth/login-password",
-                       json={"identifier": body["admin_email"], "password": body["admin_password"]},
+                       json={"identifier": body["admin_email"], "password": "TestPass123!"},
                        timeout=30)
     assert lr.status_code == 200, f"Admin login failed: {lr.status_code} {lr.text}"
     token = lr.json()["session_token"]
@@ -78,7 +95,7 @@ def cleanup():
     yield
     for oid in _created_org_ids:
         try:
-            requests.delete(f"{API}/platform/orgs/{oid}?purge=true", headers=SA_HDR, timeout=30)
+            _purge_org(oid, SA_HDR)
         except Exception as e:
             print(f"cleanup failed for {oid}: {e}")
 

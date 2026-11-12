@@ -107,7 +107,7 @@ test("lock sits beside the bell; project overview shows facts and attention with
 });
 
 test("ended subscription makes the workspace read-only but viewable", async ({ browser }) => {
-  const { session, ensurePin } = await import("./global-setup.mjs");
+  const { session, ensurePin, acceptInvite } = await import("./global-setup.mjs");
   const { baseURL } = await import("./helpers.mjs");
   const password = process.env.QA_PASSWORD;
   const sa = await session(process.env.QA_SUPERADMIN_EMAIL, password);
@@ -115,7 +115,8 @@ test("ended subscription makes the workspace read-only but viewable", async ({ b
   const stamp = uid();
   const email = `ro-${stamp}@qa.example.com`;
   const org = await json(sa.post("/api/platform/orgs", { data: {
-    name: `RO Studio ${stamp}`, admin_email: email, admin_name: "RO Admin", admin_password: password, business_mode: "hybrid" } }));
+    name: `RO Studio ${stamp}`, admin_email: email, admin_name: "RO Admin", business_mode: "hybrid" } }));
+  await acceptInvite(org.invite_path, password);
   const orgId = org.org_id || org.org?.org_id || org.id;
   const admin = await session(email, password);
   await ensurePin(admin);

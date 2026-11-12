@@ -8,7 +8,7 @@ import {
   Crown, Plus, Buildings, Users, Briefcase, CurrencyInr,
   Trash, ShieldCheck, PauseCircle, PlayCircle, Warning, Check,
   Sparkle, ArrowRight, Key, PencilSimpleLine, ChartLineUp, UserCirclePlus,
-  Faders,
+  Faders, Copy, LinkSimple,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 
@@ -512,21 +512,36 @@ function KPI({ icon: Icon, label, value, total, display, tone, testid }) {
 /* ------- Create org modal ------- */
 function CreateOrgModal({ onClose, onCreated }) {
   const [f, setF] = useState({
-    name: "", admin_name: "", admin_email: "", admin_password: "",
+    name: "", admin_name: "", admin_email: "",
     plan: "starter", gstin: "", industry: "Architecture & Interior Design",
     business_mode: "hybrid",
   });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState(null);
   const submit = async (e) => {
     e.preventDefault(); setErr(""); setBusy(true);
     try {
-      await api.post("/platform/orgs", f);
-      onCreated();
+      const { data } = await api.post("/platform/orgs", f);
+      setCreated({ path: data.invite_path, email: f.admin_email, name: data.org?.name || f.name });
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Create failed"));
     } finally { setBusy(false); }
   };
+  if (created) {
+    return (
+      <Modal onClose={onCreated} title="Workspace ready" eyebrow="NEW TENANT">
+        <p className="text-sm text-[var(--ink-2)] mb-4">
+          <b>{created.name}</b> is set up. Send this link to <b>{created.email}</b> so they can
+          choose their own password and sign in.
+        </p>
+        <InviteLinkPanel path={created.path} />
+        <div className="flex justify-end mt-5">
+          <button type="button" onClick={onCreated} className="btn-primary" data-testid="co-done">Done</button>
+        </div>
+      </Modal>
+    );
+  }
   return (
     <Modal onClose={onClose} title="Create Workspace" eyebrow="NEW TENANT">
       <form onSubmit={submit} className="space-y-4" data-testid="create-org-form">
@@ -563,17 +578,16 @@ function CreateOrgModal({ onClose, onCreated }) {
                  value={f.gstin} onChange={(e) => setF({...f, gstin: e.target.value})} />
         </div>
         <div className="overline text-[var(--accent-strong)]">03 · FIRST ADMIN</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input required data-testid="co-admin-name" className="input-flat" placeholder="Admin name *"
                  value={f.admin_name} onChange={(e) => setF({...f, admin_name: e.target.value})} />
           <input required type="email" data-testid="co-admin-email" className="input-flat" placeholder="Admin email *"
                  value={f.admin_email} onChange={(e) => setF({...f, admin_email: e.target.value})} />
-          <input required type="password" minLength={8} maxLength={128} autoComplete="new-password"
-                 pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
-                 title="Use at least 8 characters with at least one letter and one digit"
-                 data-testid="co-admin-password" className="input-flat" placeholder="Password (letters + digits, min 8) *"
-                 value={f.admin_password} onChange={(e) => setF({...f, admin_password: e.target.value})} />
         </div>
+        <p className="text-[11px] text-[var(--ink-3)] -mt-1">
+          You will get a one-time link (valid 72 hours) for the admin to choose their own password.
+          Nobody at the platform sees or sets it.
+        </p>
         {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
@@ -720,7 +734,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
 function OrgAdminsModal({ org, onClose }) {
   const [users, setUsers] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [resetting, setResetting] = useState(null);
+  const [link, setLink] = useState(null);
   const [err, setErr] = useState("");
   const load = async () => {
     try {
@@ -732,26 +746,28 @@ function OrgAdminsModal({ org, onClose }) {
   };
   useEffect(() => { load(); }, [org.org_id]);
 
-  const [newAdmin, setNewAdmin] = useState({ name: "", email: "", password: "" });
+  const [newAdmin, setNewAdmin] = useState({ name: "", email: "" });
   const [busy, setBusy] = useState(false);
   const createAdmin = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try {
-      await api.post(`/platform/orgs/${org.org_id}/admins`, newAdmin);
-      setNewAdmin({ name: "", email: "", password: "" });
+      const { data } = await api.post(`/platform/orgs/${org.org_id}/admins`, newAdmin);
+      setLink({ path: data.invite_path, email: newAdmin.email, purpose: "invite" });
+      setNewAdmin({ name: "", email: "" });
       setShowCreate(false);
       await load();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Create failed"));
     } finally { setBusy(false); }
   };
-  const doReset = async (uid, pw) => {
+  const issueLink = async (u) => {
+    if (!await confirmAction(`Create a set-password link for ${u.email}? When they use it, their current password, sessions and App PIN stop working. Any earlier unused link stops working now.`)) return;
+    setErr("");
     try {
-      await api.post(`/platform/orgs/${org.org_id}/users/${uid}/reset-password`, { new_password: pw });
-      setResetting(null);
-      await load();
+      const { data } = await api.post(`/platform/orgs/${org.org_id}/users/${u.user_id}/reset-link`);
+      setLink({ path: data.invite_path, email: u.email, purpose: "reset" });
     } catch (e) {
-      setErr(fmtErr(e?.response?.data?.detail, "Reset failed"));
+      setErr(fmtErr(e?.response?.data?.detail, "Could not create the link"));
     }
   };
 
@@ -764,18 +780,24 @@ function OrgAdminsModal({ org, onClose }) {
           <Plus size={11} /> Add admin
         </button>
       </div>
+      {link && (
+        <div className="border border-[var(--accent)] bg-[var(--hover)] p-3 mb-4" data-testid="admin-link-panel">
+          <div className="text-xs text-[var(--ink-2)] mb-2">
+            {link.purpose === "invite" ? "Admin added." : "Set-password link created."} Send this one-time link to <b>{link.email}</b>:
+          </div>
+          <InviteLinkPanel path={link.path} />
+          <div className="text-right mt-2">
+            <button type="button" onClick={() => setLink(null)} className="btn-ghost text-xs">Dismiss</button>
+          </div>
+        </div>
+      )}
       {showCreate && (
-        <form onSubmit={createAdmin} className="border border-[var(--line)] p-3 mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+        <form onSubmit={createAdmin} className="border border-[var(--line)] p-3 mb-4 grid grid-cols-1 md:grid-cols-3 gap-2">
           <input required className="input-flat" placeholder="Name" value={newAdmin.name}
                  onChange={(e) => setNewAdmin({...newAdmin, name: e.target.value})} />
           <input required type="email" className="input-flat" placeholder="Email" value={newAdmin.email}
                  onChange={(e) => setNewAdmin({...newAdmin, email: e.target.value})} />
-          <input required type="password" minLength={8} maxLength={128} autoComplete="new-password"
-                 pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
-                 title="Use at least 8 characters with at least one letter and one digit"
-                 className="input-flat" placeholder="Password (letters + digits, min 8)" value={newAdmin.password}
-                 onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})} />
-          <button disabled={busy} className="btn-primary text-xs">{busy ? "…" : "Create Admin"}</button>
+          <button disabled={busy} className="btn-primary text-xs">{busy ? "…" : "Add admin & get link"}</button>
         </form>
       )}
       <div className="overflow-x-auto"><table className="w-full">
@@ -789,13 +811,10 @@ function OrgAdminsModal({ org, onClose }) {
               <Td className="font-mono text-xs">{u.email}</Td>
               <Td><span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--hover)] text-[#5F5A4B]">{statusLabel(u.role)}</span></Td>
               <Td className="text-right">
-                <button onClick={() => setResetting(u.user_id)} className="btn-ghost text-xs">
-                  <Key size={11} /> Reset password
+                <button onClick={() => issueLink(u)} className="btn-ghost text-xs"
+                        data-testid={`reset-link-${u.user_id}`}>
+                  <LinkSimple size={11} /> Set-password link
                 </button>
-                {resetting === u.user_id && (
-                  <ResetInline onCancel={() => setResetting(null)}
-                               onConfirm={(pw) => doReset(u.user_id, pw)} />
-                )}
               </Td>
             </tr>
           ))}
@@ -805,18 +824,29 @@ function OrgAdminsModal({ org, onClose }) {
   );
 }
 
-function ResetInline({ onCancel, onConfirm }) {
-  const [pw, setPw] = useState("");
+/** A one-time set-password link, shown once, built from this site's own address. */
+function InviteLinkPanel({ path }) {
+  const url = `${window.location.origin}${path}`;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Copy failed. Select the link and copy it manually.");
+    }
+  };
   return (
-    <div className="mt-2 flex items-center gap-2 justify-end">
-      <input type="password" minLength={8} maxLength={128} autoComplete="new-password"
-             pattern="(?=.*[A-Za-z])(?=.*\d).{8,128}"
-             title="Use at least 8 characters with at least one letter and one digit"
-             className="input-flat text-xs" placeholder="Letters + digits, min 8"
-             value={pw} onChange={(e) => setPw(e.target.value)} style={{ width: 160 }} />
-      <button onClick={() => onConfirm(pw)} className="btn-primary text-xs"
-              disabled={!/^(?=.*[A-Za-z])(?=.*\d).{8,128}$/.test(pw)}>Set</button>
-      <button onClick={onCancel} className="btn-ghost text-xs">Cancel</button>
+    <div>
+      <div className="flex items-stretch gap-2">
+        <input readOnly value={url} onFocus={(e) => e.target.select()} aria-label="One-time link"
+               className="input-flat flex-1 min-w-0 font-mono text-xs" data-testid="invite-link" />
+        <button type="button" onClick={copy} className="btn-primary text-xs" data-testid="invite-copy">
+          <Copy size={12} /> Copy
+        </button>
+      </div>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)] mt-1.5">
+        Works once · expires in 72 hours · shown only now
+      </div>
     </div>
   );
 }

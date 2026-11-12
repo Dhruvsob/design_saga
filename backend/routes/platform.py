@@ -12,7 +12,7 @@ All endpoints gated by `require_super_admin`.
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from fastapi.responses import StreamingResponse
 from typing import Optional, List
-from pydantic import BaseModel, StrictBool, field_validator
+from pydantic import BaseModel, EmailStr, StrictBool, field_validator
 import datetime as _dt
 import uuid
 import re
@@ -31,8 +31,6 @@ from models.organization import (
     MODULE_KEYS, OrgCreateIn, OrgUpdateIn, OrgStatusIn, DEFAULT_FEATURES,
     features_for_mode,
 )
-from models.user import RegisterIn, ResetPasswordIn
-import bcrypt
 
 
 router = APIRouter(prefix="/platform")
@@ -52,9 +50,6 @@ def _slugify(name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return s or "org"
 
-
-def _hash(pw: str) -> str:
-    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
 
 
 async def _unique_slug(base: str) -> str:
@@ -184,7 +179,8 @@ async def create_org(payload: OrgCreateIn, request: Request,
         "email": email,
         "name": payload.admin_name.strip(),
         "role": "Admin",
-        "password_hash": _hash(payload.admin_password),
+        # No password: the owner sets their own from a one-time link, so
+        # platform staff never choose or know it.
         "is_active": True,
         "approval_status": "approved",
         "auth_type": "password",
@@ -197,9 +193,11 @@ async def create_org(payload: OrgCreateIn, request: Request,
         # Do not leave an unusable tenant behind if its first login cannot be created.
         await db.organizations.delete_one({"org_id": org_id})
         raise
+    from core.invites import issue_set_password_link
+    invite_path = await issue_set_password_link(admin_doc, "invite", sa["user_id"])
     await audit(sa, "org.create", target=org_id, target_type="org",
                 meta={"admin_user_id": admin_uid, "plan": org_doc["plan"]})
-    return {"org": org_doc, "admin_user_id": admin_uid}
+    return {"org": org_doc, "admin_user_id": admin_uid, "invite_path": invite_path}
 
 
 @router.patch("/orgs/{org_id}")
@@ -528,56 +526,59 @@ async def list_org_users(org_id: str, request: Request,
     return rows
 
 
+class OrgAdminInviteIn(BaseModel):
+    email: EmailStr
+    name: str
+    phone: Optional[str] = None
+
+
 @router.post("/orgs/{org_id}/admins")
-async def add_org_admin(org_id: str, payload: RegisterIn, request: Request,
+async def add_org_admin(org_id: str, payload: OrgAdminInviteIn, request: Request,
                         session_token: Optional[str] = Cookie(default=None),
                         authorization: Optional[str] = Header(default=None)):
+    """Add a workspace admin; they set their own password from the returned link."""
     sa = await require_super_admin(request, session_token, authorization)
     org = await get_org(org_id)
     if not org:
         raise HTTPException(404, "Organisation not found")
     email = payload.email.lower().strip()
+    if not payload.name.strip():
+        raise HTTPException(400, "Name is required")
     if await db.users.find_one({"email": email}):
-        raise HTTPException(409, "Email already registered")
+        raise HTTPException(409, "This email cannot be used. Choose another address.")
     uid = "user_" + uuid.uuid4().hex[:12]
     doc = {
         "user_id": uid, "org_id": org_id,
         "email": email, "name": payload.name.strip(),
         "phone": payload.phone,
         "role": "Admin",
-        "password_hash": _hash(payload.password),
         "is_active": True, "approval_status": "approved",
         "auth_type": "password",
         "created_at": iso_now(), "created_by": sa["user_id"],
     }
     await db.users.insert_one(dict(doc))
+    from core.invites import issue_set_password_link
+    invite_path = await issue_set_password_link(doc, "invite", sa["user_id"])
     await audit(sa, "user.create", target=uid, target_type="user",
-                meta={"role": "Admin"}, org_id=org_id)
-    doc.pop("password_hash", None)
-    return doc
+                meta={"role": "Admin", "via": "invite_link"}, org_id=org_id)
+    return {**doc, "invite_path": invite_path}
 
 
-@router.post("/orgs/{org_id}/users/{user_id}/reset-password")
-async def reset_org_user_password(org_id: str, user_id: str, payload: ResetPasswordIn,
-                                  request: Request,
-                                  session_token: Optional[str] = Cookie(default=None),
-                                  authorization: Optional[str] = Header(default=None)):
+@router.post("/orgs/{org_id}/users/{user_id}/reset-link")
+async def reset_org_user_link(org_id: str, user_id: str, request: Request,
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    """A one-time link with which the user chooses a new password themselves.
+    Their current password keeps working until the link is used."""
     sa = await require_super_admin(request, session_token, authorization)
     user = await db.users.find_one({"user_id": user_id, "org_id": org_id}, {"_id": 0})
     if not user:
         raise HTTPException(404, "User not found in this org")
-    await db.users.update_one(
-        {"user_id": user_id, "org_id": org_id},
-        {"$set": {"password_hash": _hash(payload.new_password),
-                  "password_updated_at": iso_now(),
-                  "password_reset_by": sa["user_id"]}}
-    )
-    from routes.auth import reset_user_security_after_admin_password_change
-    app_pin_reset = await reset_user_security_after_admin_password_change(user)
-    await audit(sa, "user.password_reset", target=user_id, target_type="user",
-                meta={"sessions_revoked": True, "app_pin_reset": app_pin_reset},
+    from core.invites import issue_set_password_link
+    path = await issue_set_password_link(user, "reset", sa["user_id"])
+    await audit(sa, "user.password_reset_link", target=user_id, target_type="user",
                 org_id=org_id)
-    return {"ok": True, "app_pin_reset": app_pin_reset}
+    return {"ok": True, "invite_path": path}
 
 
 # ------------------------------------------------------------------

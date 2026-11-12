@@ -7,7 +7,7 @@ leave a deleted customer's data behind.
 
 TENANT_COLLECTIONS = (
     # People and access
-    "users", "user_app_locks", "role_permissions", "user_favorite_accounts",
+    "users", "user_app_locks", "user_invites", "role_permissions", "user_favorite_accounts",
     "employees", "employee_advances",
     "attendance", "attendance_corrections", "attendance_policies", "office_locations",
     "leave_applications", "leave_rules", "leaves", "holidays", "payroll_runs",
@@ -34,6 +34,7 @@ TENANT_COLLECTIONS = (
 # Integration state with credentials or one-time secrets: purged, never exported
 # (a customer reconnects Google in their new system).
 EXPORT_SKIPPED = frozenset({
+    "user_invites",
     "google_calendar_connections", "google_oauth_states",
     "google_calendar_sync_queue", "google_calendar_synced_events",
 })

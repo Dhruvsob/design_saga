@@ -53,7 +53,7 @@ def test_rate_limit_source_uses_nearest_forwarded_hop_without_real_ip():
 
 @pytest.mark.parametrize("path", [
     "/api/auth/reset-password/user_1",
-    "/api/platform/orgs/org_1/users/user_1/reset-password",
+    "/api/platform/orgs/org_1/users/user_1/reset-link",
     "/api/employees/emp_1/account/reset-password",
 ])
 def test_every_password_reset_route_is_rate_limited(path):
@@ -68,6 +68,7 @@ def test_every_password_reset_route_is_rate_limited(path):
     ("/api/auth/session", 30, "auth"),
     ("/api/auth/pin/unlock", 10, "pin_unlock"),
     ("/api/auth/register", 10, "registration"),
+    ("/api/auth/invite/accept", 20, "set_password_link"),
 ])
 def test_every_authentication_entry_point_is_rate_limited(path, limit, bucket):
     reset_rate_limits()

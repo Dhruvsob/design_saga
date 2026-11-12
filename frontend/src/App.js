@@ -45,6 +45,7 @@ const CompanySettings = lazyPage(() => import("./pages/CompanySettings"));
 const AuditLog = lazyPage(() => import("./pages/AuditLog"));
 const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"));
 const LandingPage = lazyPage(() => import("./pages/LandingPage"));
+const AcceptInvite = lazyPage(() => import("./pages/AcceptInvite"));
 
 const PageFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center overline">LOADING...</div>
@@ -155,6 +156,7 @@ function AppRouter() {
       <Route path="/login" element={<LoginRoute />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/portal/:token" element={<ClientPortal />} />
+      <Route path="/invite/:token" element={<AcceptInvite />} />
       <Route path="/dashboard" element={<ProtectedShell><Dashboard /></ProtectedShell>} />
       <Route path="/crm" element={<ProtectedShell requirePerm="leads.read"><Leads /></ProtectedShell>} />
       <Route path="/projects" element={<ProtectedShell requirePerm="projects.read"><Projects /></ProtectedShell>} />

@@ -273,6 +273,9 @@ def test_every_api_route_has_authentication_or_reviewed_public_delegation():
         "login_password", "google_calendar_callback", "download_logo",
         "public_branding", "account_ledger_csv", "commissions_report_csv",
         "submit_contact",
+        # One-time set-password link: a 256-bit single-use token (hash stored,
+        # 72 h expiry, rate-limited) is the credential.
+        "invite_details", "accept_invite",
     }
     auth_calls = {"require_user", "require_super_admin", "get_current_user", "require_platform_owner"}
     backend = Path(__file__).resolve().parents[1]
@@ -316,6 +319,8 @@ def test_every_mutating_route_has_permission_or_ownership_guard():
         "update_notification_preferences",
         # Public landing-page intake is validated, honeypotted and rate-limited.
         "submit_contact",
+        # Sets only the password of the account the single-use link was issued for.
+        "accept_invite",
     }
     guard = re.compile(
         r"^(enforce_permission|enforce_any_permission|has_permission|"
