@@ -133,7 +133,7 @@ export default function Login() {
 
         {/* Form section */}
         <div className="max-w-[400px]">
-          <div className="overline mb-4 text-[var(--accent-strong)]">{wsName ? "Welcome back" : "Studio Login"}</div>
+          <div className="overline mb-4 text-[var(--accent-strong)]">{wsName ? "Studio sign-in" : "Studio Login"}</div>
           <h1 className="font-display font-bold tracking-tighter text-[2.5rem] leading-[1.1] mb-3 text-[var(--ink)]">
             {wsName ? (<>Sign in to<br /><span className="break-words">{wsName}</span></>) : (<>Your studio,<br />in one place.</>)}
           </h1>
@@ -188,6 +188,7 @@ export default function Login() {
                 data-testid="login-password"
                 className="input-flat w-full pl-9"
                 placeholder="Password"
+                aria-label="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"

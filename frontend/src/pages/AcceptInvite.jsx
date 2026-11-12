@@ -53,7 +53,7 @@ export default function AcceptInvite() {
     <main className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: "var(--app)" }}>
       <div className="w-full max-w-[420px] card-flat p-7 sm:p-8 fade-up" data-testid="invite-page">
         <div className="overline mb-3 text-[var(--accent-strong)]">
-          {isReset ? "Reset password" : "Welcome"}
+          {state === "invalid" ? "Set-password link" : isReset ? "Reset password" : "Welcome"}
         </div>
 
         {state === "loading" && <div className="overline live-dot">CHECKING LINK</div>}

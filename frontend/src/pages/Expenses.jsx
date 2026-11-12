@@ -93,7 +93,7 @@ export default function Expenses() {
         </div>
       )}
 
-      <div className="flex items-center gap-1 border-b border-[var(--line)]">
+      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--line)]">
         {[["all","All"],["mine","My Expenses"],["approvals","Awaiting My Approval"]].map(([k,l]) => (
           <button key={k} onClick={() => setTab(k)}
             className={`px-4 py-2 text-sm border-b-2 ${tab === k ? "border-[var(--accent)] text-[var(--accent-strong)] font-semibold" : "border-transparent text-[var(--ink-2)]"}`}

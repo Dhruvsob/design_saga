@@ -88,7 +88,7 @@ export default function TaskDetail() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--line)]">
+      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--line)]">
         {TABS.map(({ id: tid, label, Icon, testid }) => (
           <button
             key={tid} onClick={() => setTab(tid)}

@@ -154,7 +154,7 @@ export default function CompanySettings() {
         </div>
       )}
 
-      <div className="flex items-center gap-1 border-b border-[var(--line)]">
+      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--line)]">
         {[
           { key: "branding", label: "Brand & Colours", Icon: Palette },
           { key: "profile",  label: "Company Profile", Icon: Buildings },

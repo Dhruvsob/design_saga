@@ -604,37 +604,37 @@ export default function LandingPage() {
               </div>
             ) : (
               <form onSubmit={handleForm} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="landing-two-col" style={{ display: "grid", gap: "0.75rem" }}>
                   <div>
-                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }}>Your name *</label>
-                    <input required minLength={2} maxLength={120} value={formState.name} onChange={e => setFormState(s => ({...s, name: e.target.value}))}
+                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }} htmlFor="lp-name">Your name *</label>
+                    <input required minLength={2} maxLength={120} id="lp-name" autoComplete="name" value={formState.name} onChange={e => setFormState(s => ({...s, name: e.target.value}))}
                       placeholder="e.g. Arjun Sharma"
-                      style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", outline: "none", boxSizing: "border-box" }} />
+                      className="landing-field" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", boxSizing: "border-box" }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }}>Studio name *</label>
-                    <input required minLength={2} maxLength={160} value={formState.company} onChange={e => setFormState(s => ({...s, company: e.target.value}))}
+                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }} htmlFor="lp-company">Studio name *</label>
+                    <input required minLength={2} maxLength={160} id="lp-company" autoComplete="organization" value={formState.company} onChange={e => setFormState(s => ({...s, company: e.target.value}))}
                       placeholder="e.g. Studio 23"
-                      style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", outline: "none", boxSizing: "border-box" }} />
+                      className="landing-field" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", boxSizing: "border-box" }} />
                   </div>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }}>Email *</label>
-                  <input required type="email" maxLength={254} value={formState.email} onChange={e => setFormState(s => ({...s, email: e.target.value}))}
+                  <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }} htmlFor="lp-email">Email *</label>
+                  <input required type="email" maxLength={254} id="lp-email" autoComplete="email" value={formState.email} onChange={e => setFormState(s => ({...s, email: e.target.value}))}
                     placeholder="arjun@studio23.in"
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", outline: "none", boxSizing: "border-box" }} />
+                    className="landing-field" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", boxSizing: "border-box" }} />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="landing-two-col" style={{ display: "grid", gap: "0.75rem" }}>
                   <div>
-                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }}>Phone</label>
-                    <input type="tel" maxLength={40} value={formState.phone} onChange={e => setFormState(s => ({...s, phone: e.target.value}))}
+                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }} htmlFor="lp-phone">Phone</label>
+                    <input type="tel" maxLength={40} id="lp-phone" autoComplete="tel" value={formState.phone} onChange={e => setFormState(s => ({...s, phone: e.target.value}))}
                       placeholder="+91 98765 43210"
-                      style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", outline: "none", boxSizing: "border-box" }} />
+                      className="landing-field" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", boxSizing: "border-box" }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }}>Studio type</label>
-                    <select value={formState.type} onChange={e => setFormState(s => ({...s, type: e.target.value}))}
-                      style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: formState.type ? "#2C2C2C" : "#8B7F6A", outline: "none", boxSizing: "border-box" }}>
+                    <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }} htmlFor="lp-type">Studio type</label>
+                    <select id="lp-type" value={formState.type} onChange={e => setFormState(s => ({...s, type: e.target.value}))}
+                      className="landing-field" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: formState.type ? "#2C2C2C" : "#8B7F6A", boxSizing: "border-box" }}>
                       <option value="">Select…</option>
                       <option value="architecture">Architecture Studio</option>
                       <option value="interior">Interior Design</option>
@@ -645,11 +645,11 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }}>Message</label>
-                  <textarea maxLength={2000} value={formState.message} onChange={e => setFormState(s => ({...s, message: e.target.value}))}
+                  <label style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "#8B7F6A", display: "block", marginBottom: 6 }} htmlFor="lp-message">Message</label>
+                  <textarea maxLength={2000} id="lp-message" value={formState.message} onChange={e => setFormState(s => ({...s, message: e.target.value}))}
                     placeholder="Tell us about your studio size, current tools, and what you're looking to improve."
                     rows={3}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
+                    className="landing-field" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(139,127,106,0.25)", background: "#FAF9F6", fontSize: 13, color: "#2C2C2C", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
                 </div>
                 <input type="text" name="website" value={formState.website}
                   onChange={e => setFormState(s => ({...s, website: e.target.value}))}
@@ -789,6 +789,15 @@ export default function LandingPage() {
           width: 4px; height: 4px;
           border-radius: 50%;
           background: rgba(118,112,94,0.5);
+        }
+
+        .landing-two-col { grid-template-columns: 1fr 1fr; }
+        @media (max-width: 520px) {
+          .landing-two-col { grid-template-columns: 1fr; }
+        }
+        .landing-field:focus-visible {
+          outline: 2px solid #8B7F6A;
+          outline-offset: 1px;
         }
 
         @keyframes float-card {

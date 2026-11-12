@@ -505,6 +505,7 @@ function Overview({ v, onRate, busy, canRate }) {
                 </div>
                 <input type="range" min={0} max={5} step={0.5}
                   value={r[k]} onChange={(e) => setR({ ...r, [k]: parseFloat(e.target.value) })}
+                  aria-label={`${k} rating, 0 to 5`}
                   className="w-full accent-[var(--accent)]" data-testid={`rate-${k}`} />
               </div>
             ))}
