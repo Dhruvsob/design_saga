@@ -41,7 +41,7 @@ jobs:
       - name: Audit Python production dependencies
         run: pip-audit -r requirements.production.txt
       - name: Static backend security analysis
-        run: bandit -r . -x tests -ll -ii
+        run: bandit -r . -x ./tests -ll -ii
       - name: Run security and integrity regressions
         run: >-
           python -m pytest -q
