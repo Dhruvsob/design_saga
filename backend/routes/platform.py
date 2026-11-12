@@ -311,6 +311,9 @@ async def change_org_status(org_id: str, payload: OrgStatusIn, request: Request,
 class OrgSubscriptionIn(BaseModel):
     status: Optional[str] = None          # trial | active | expired | None (no restriction)
     trial_ends_on: Optional[str] = None   # YYYY-MM-DD, used with status "trial"
+    # YYYY-MM-DD, used with status "active": paid up to this day. Omit to keep
+    # the current date (set by paid GAMAA invoices); "" clears it (never lapses).
+    paid_through: Optional[str] = None
 
 
 @router.patch("/orgs/{org_id}/subscription")
@@ -333,11 +336,22 @@ async def set_org_subscription(org_id: str, payload: OrgSubscriptionIn, request:
             raise HTTPException(400, "trial_ends_on (YYYY-MM-DD) is required for a trial")
     sub = {"status": payload.status, "trial_ends_on": payload.trial_ends_on if payload.status == "trial" else None,
            "updated_at": iso_now(), "updated_by": sa["user_id"]}
+    if payload.status == "active":
+        if payload.paid_through is None:
+            keep = (org.get("subscription") or {}).get("paid_through")
+            if keep:
+                sub["paid_through"] = keep
+        elif payload.paid_through:
+            try:
+                sub["paid_through"] = _d.fromisoformat(payload.paid_through).isoformat()
+            except ValueError:
+                raise HTTPException(400, "paid_through must be YYYY-MM-DD")
     if payload.status == "expired":
         sub["ended_on"] = business_today().isoformat()
     await db.organizations.update_one({"org_id": org_id}, {"$set": {"subscription": sub, "updated_at": iso_now()}})
     await audit(sa, "org.subscription", target=org_id, target_type="org",
-                meta={"status": payload.status, "trial_ends_on": sub["trial_ends_on"]})
+                meta={"status": payload.status, "trial_ends_on": sub["trial_ends_on"],
+                      "paid_through": sub.get("paid_through")})
     fresh = await get_org(org_id)
     return {"org_id": org_id, "subscription": sub, "state": subscription_state(fresh)}
 

@@ -11,6 +11,7 @@ import {
   Faders, Copy, LinkSimple,
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
+import PlatformBilling from "../components/PlatformBilling";
 
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
@@ -224,6 +225,8 @@ export default function SuperAdminPanel() {
       )}
 
       <PlansCard />
+
+      <PlatformBilling orgs={orgs} onChanged={load} />
 
       <UsageCard />
 
@@ -1562,10 +1565,16 @@ function SubscriptionControl({ org, onSaved }) {
   const sub = org.subscription || {};
   const [status, setStatus] = useState(sub.status || "");
   const [trialEnd, setTrialEnd] = useState(sub.trial_ends_on || "");
+  const [paidThrough, setPaidThrough] = useState(sub.paid_through || "");
   const [busy, setBusy] = useState(false);
   const today = dateForInput(new Date());
-  const readOnly = sub.status === "expired" || (sub.status === "trial" && sub.trial_ends_on && sub.trial_ends_on < today);
-  const save = async (nextStatus, nextEnd) => {
+  // Paid plans: 7 days' grace after the paid-through date, then read-only.
+  const graceEnds = sub.status === "active" && sub.paid_through
+    ? dateForInput(new Date(new Date(`${sub.paid_through}T00:00:00`).getTime() + 7 * 86400000)) : null;
+  const inGrace = graceEnds && sub.paid_through < today && today <= graceEnds;
+  const readOnly = sub.status === "expired" || (sub.status === "trial" && sub.trial_ends_on && sub.trial_ends_on < today)
+    || (graceEnds && today > graceEnds);
+  const save = async (nextStatus, nextEnd, nextPaid) => {
     if (nextStatus === "trial" && !nextEnd) return;
     if (nextStatus === "expired" && !await confirmAction({
       title: `Make "${org.name}" read-only?`,
@@ -1576,6 +1585,7 @@ function SubscriptionControl({ org, onSaved }) {
     try {
       await api.patch(`/platform/orgs/${org.org_id}/subscription`, {
         status: nextStatus || null, trial_ends_on: nextStatus === "trial" ? nextEnd : null,
+        ...(nextStatus === "active" && nextPaid !== undefined ? { paid_through: nextPaid } : {}),
       });
       toast.success("Subscription updated");
       onSaved?.();
@@ -1596,6 +1606,12 @@ function SubscriptionControl({ org, onSaved }) {
         <input type="date" aria-label="Trial ends on" className="input-flat !py-1 !text-xs !w-auto" value={trialEnd} disabled={busy}
                onChange={(e) => { setTrialEnd(e.target.value); save("trial", e.target.value); }} />
       )}
+      {status === "active" && (
+        <input type="date" aria-label="Paid through" title="Paid through (set automatically when a Gamaa invoice is paid)"
+               className="input-flat !py-1 !text-xs !w-auto" value={paidThrough} disabled={busy}
+               onChange={(e) => { setPaidThrough(e.target.value); save("active", null, e.target.value); }} />
+      )}
+      {inGrace && <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--warning-soft)] text-[var(--warning)] w-fit">grace</span>}
       {readOnly && <span className="text-[10px] font-mono uppercase px-2 py-0.5 bg-[var(--danger-soft)] text-[var(--danger)] w-fit">read-only</span>}
     </div>
   );

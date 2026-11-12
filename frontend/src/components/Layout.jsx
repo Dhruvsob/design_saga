@@ -389,6 +389,12 @@ export default function Layout({ children }) {
             Trial ends {subState.days_left === 0 ? "today" : `in ${subState.days_left} day${subState.days_left === 1 ? "" : "s"}`} ({formatDate(subState.trial_ends_on)}). Your data stays safe; editing pauses when it ends.
           </div>
         )}
+        {subState?.status === "grace" && (
+          <div role="status" className="px-4 lg:px-8 py-2 bg-[var(--warning-soft)] border-b border-[#F3E2C2] text-xs text-[var(--warning)] no-print" data-testid="grace-banner">
+            The plan renewal is overdue. Everything keeps working until {formatDate(subState.grace_ends_on)}; after that editing pauses until it is paid.
+            {hasPerm("*.*") && <> See <NavLink to="/settings/company" className="underline underline-offset-2">Company settings → Plan &amp; usage</NavLink>.</>}
+          </div>
+        )}
         <div className="p-4 lg:p-8 fade-in">{children}</div>
       </main>
 

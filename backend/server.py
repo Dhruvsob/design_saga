@@ -5807,6 +5807,7 @@ from routes.auth import router as auth_router  # noqa: E402
 from routes.notifications import router as notifications_router  # noqa: E402
 from routes.platform import router as platform_router  # noqa: E402
 from routes.organization import router as organization_router  # noqa: E402
+from routes.platform_billing import router as platform_billing_router  # noqa: E402
 from routes.loans import router as loans_router  # noqa: E402
 from routes.audit import router as audit_router  # noqa: E402
 from routes.purchase import router as purchase_router  # noqa: E402
@@ -5832,6 +5833,7 @@ api.include_router(auth_router)
 api.include_router(notifications_router)
 api.include_router(platform_router)
 api.include_router(organization_router)
+api.include_router(platform_billing_router)
 api.include_router(loans_router)
 api.include_router(audit_router)
 api.include_router(purchase_router)
@@ -6078,6 +6080,13 @@ async def _bootstrap_default_org():
                     lease_seconds=5 * 3600)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[Scheduler] recurring-expense scan failed: %s", exc)
+            # GAMAA renewal reminders and overdue invoices (idempotent per day).
+            try:
+                from core.jobs import run_job
+                from core.platform_billing import send_renewal_reminders
+                await run_job("billing_reminders", send_renewal_reminders, lease_seconds=5 * 3600)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[Scheduler] billing reminders failed: %s", type(exc).__name__)
             await asyncio.sleep(6 * 3600)
 
     app.state._scan_task = asyncio.create_task(_scan_loop())
