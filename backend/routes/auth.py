@@ -337,9 +337,17 @@ def _identifier_query(identifier: str) -> dict:
 
 
 def _ensure_target_in_actor_tenant(actor: dict, target: dict) -> None:
+    """A workspace admin may manage only users of their own workspace, and never
+    a platform (Super Admin) identity, even one whose record sits in that
+    workspace: resetting its password or disabling it would hand over or lock
+    the whole platform."""
     from core.tenancy import user_org_id, is_super_admin, DEFAULT_ORG_ID
-    if not is_super_admin(actor) and (target.get("org_id") or DEFAULT_ORG_ID) != user_org_id(actor):
+    if is_super_admin(actor):
+        return
+    if (target.get("org_id") or DEFAULT_ORG_ID) != user_org_id(actor):
         raise HTTPException(status_code=404, detail="User not found")
+    if is_super_admin(target) or normalize_role(target.get("role")) == "SuperAdmin":
+        raise HTTPException(status_code=403, detail="Platform accounts are managed by platform staff only")
 
 
 def _ensure_assignable_role(actor: dict, role: str) -> None:
@@ -593,9 +601,13 @@ async def invite_details(token: str):
                                           {"_id": 0, "name": 1, "display_name": 1}) or {}
     if not user:
         raise HTTPException(status_code=404, detail="This link has expired or was already used. Ask for a new one.")
+    expires = invite["expires_at"]
+    if isinstance(expires, datetime) and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)   # Mongo returns naive UTC
     return {"name": user.get("name"), "email": user.get("email"),
             "workspace": org.get("display_name") or org.get("name"),
-            "purpose": invite.get("purpose"), "expires_at": invite["expires_at"]}
+            "purpose": invite.get("purpose"),
+            "expires_at": expires.isoformat() if isinstance(expires, datetime) else expires}
 
 
 @router.post("/auth/invite/accept")
@@ -726,6 +738,29 @@ async def admin_reset_password(user_id: str, payload: ResetPasswordIn, request: 
     return {"ok": True, "unlocked": True, "app_pin_reset": app_pin_reset}
 
 
+@router.post("/auth/reset-link/{user_id}")
+async def admin_reset_link(user_id: str, request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None)):
+    """Create a one-time link for a user to choose their own password, as an
+    alternative to the admin typing one. Their current password keeps working
+    until the link is used."""
+    admin = await require_user(request, session_token, authorization)
+    if not has_permission(admin, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    _ensure_target_in_actor_tenant(admin, target)
+    if not target.get("email"):
+        raise HTTPException(status_code=400, detail="This user has no email address")
+    from core.invites import issue_set_password_link
+    invite_path = await issue_set_password_link(target, "reset", admin["user_id"])
+    await audit(admin, "user.password_link_created", target=user_id, target_type="user",
+                org_id=target.get("org_id"))
+    return {"invite_path": invite_path}
+
+
 # ==================================================
 # UNLOCK (Admin clears a brute-force lockout)
 # ==================================================
@@ -739,9 +774,7 @@ async def unlock_user(user_id: str, request: Request,
     target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    from core.tenancy import user_org_id as _uoid, is_super_admin as _is_sa, DEFAULT_ORG_ID as _DEF
-    if not _is_sa(admin) and (target.get("org_id") or _DEF) != _uoid(admin):
-        raise HTTPException(status_code=404, detail="User not found")
+    _ensure_target_in_actor_tenant(admin, target)
     await _clear_lockout_for_user(target)
     await audit(admin, "user.unlock", target=user_id, target_type="user",
                 org_id=target.get("org_id"))
@@ -775,9 +808,7 @@ async def approve_user(user_id: str, payload: ApprovalDecisionIn, request: Reque
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     # Tenant isolation: non-super Admins can only approve users in their own org.
-    from core.tenancy import user_org_id as _uoid, is_super_admin as _is_sa, DEFAULT_ORG_ID as _DEF
-    if not _is_sa(admin) and (target.get("org_id") or _DEF) != _uoid(admin):
-        raise HTTPException(status_code=404, detail="User not found")
+    _ensure_target_in_actor_tenant(admin, target)
 
     if payload.decision == "approve":
         role = normalize_role(payload.role or target.get("role") or "Employee")

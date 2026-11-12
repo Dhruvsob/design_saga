@@ -1,6 +1,6 @@
 """One-time set-password links replace passwords chosen by platform staff (P0.6)."""
 import asyncio
-from datetime import timedelta
+from datetime import timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -23,8 +23,10 @@ class _Invites:
 
     async def find_one(self, query, _projection=None):
         for r in self.rows:
+            exp = r["expires_at"]
+            exp = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)   # Mongo stores naive UTC
             if (r["token_hash"] == query["token_hash"] and r["used_at"] is None
-                    and r["expires_at"] > query["expires_at"]["$gt"]):
+                    and exp > query["expires_at"]["$gt"]):
                 return dict(r)
         return None
 
@@ -81,6 +83,9 @@ def test_link_sets_the_password_once_and_ends_sessions(fake):
 
     details = asyncio.run(auth.invite_details(token))
     assert details["workspace"] == "Studio A" and details["email"] == "owner@studio.test"
+    assert details["expires_at"].endswith("+00:00")          # browsers must not read UTC as local
+    fake.db.user_invites.rows[-1]["expires_at"] = fake.db.user_invites.rows[-1]["expires_at"].replace(tzinfo=None)
+    assert asyncio.run(auth.invite_details(token))["expires_at"].endswith("+00:00")
 
     asyncio.run(auth.accept_invite(auth.InviteAcceptIn(token=token, password="NewSecure123")))
     assert auth.verify_password("NewSecure123", fake.db.users.doc["password_hash"])

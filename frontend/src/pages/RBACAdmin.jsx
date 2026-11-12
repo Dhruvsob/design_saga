@@ -7,7 +7,7 @@ import PageHero from "../components/PageHero";
 import { formatDate } from "../lib/format";
 import {
   ShieldCheck, CaretDown, Info, UserPlus, Key, Check, X, Warning,
-  LockKeyOpen, FloppyDisk, ArrowCounterClockwise, Sliders,
+  LockKeyOpen, FloppyDisk, ArrowCounterClockwise, Sliders, Copy, LinkSimple,
 } from "@phosphor-icons/react";
 
 const ROLE_DESCRIPTIONS = {
@@ -29,7 +29,7 @@ function fmtErr(detail, fb = "Failed") {
 }
 
 export default function RBACAdmin() {
-  const { user: me, refresh } = useAuth();
+  const { user: me, refresh, isSuperAdmin } = useAuth();
   const [users, setUsers] = useState([]);
   const [pending, setPending] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -210,6 +210,10 @@ export default function RBACAdmin() {
                   </Td>
                   <Td className="font-mono text-xs">{formatDate(u.created_at)}</Td>
                   <Td className="text-right">
+                    {(u.role === "SuperAdmin" || u.is_super_admin) && !isSuperAdmin ? (
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)]"
+                            title="Platform accounts are managed by platform staff">Platform account</span>
+                    ) : (
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => unlockUser(u.user_id)}
@@ -223,6 +227,7 @@ export default function RBACAdmin() {
                         className="btn-ghost text-xs" data-testid={`reset-pwd-${u.user_id}`}
                       ><Key size={12} /> Reset password</button>
                     </div>
+                    )}
                   </Td>
                 </tr>
               );
@@ -533,6 +538,7 @@ function ResetPasswordModal({ userId, user, onClose }) {
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [link, setLink] = useState("");
   const submit = async (e) => {
     e.preventDefault(); setErr(""); setBusy(true);
     try {
@@ -541,6 +547,19 @@ function ResetPasswordModal({ userId, user, onClose }) {
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Reset failed"));
     } finally { setBusy(false); }
+  };
+  const createLink = async () => {
+    setErr(""); setBusy(true);
+    try {
+      const { data } = await api.post(`/auth/reset-link/${userId}`);
+      setLink(`${window.location.origin}${data.invite_path}`);
+    } catch (ex) {
+      setErr(fmtErr(ex?.response?.data?.detail, "Could not create the link"));
+    } finally { setBusy(false); }
+  };
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(link); toast.success("Link copied"); }
+    catch { toast.error("Copy failed. Select the link and copy it manually."); }
   };
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -559,8 +578,29 @@ function ResetPasswordModal({ userId, user, onClose }) {
           All active sessions will be logged out. An existing app PIN will also be cleared so the user can sign in and set a new one.
         </p>
         {err && <div className="border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
+        <div className="border-t border-[var(--line-soft)] pt-3">
+          {link ? (
+            <div data-testid="reset-link-panel">
+              <div className="text-xs text-[var(--ink-2)] mb-2">Send this one-time link to {user?.name || "the user"}:</div>
+              <div className="flex gap-2">
+                <input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="One-time link"
+                       className="input-flat flex-1 min-w-0 font-mono text-xs" />
+                <button type="button" onClick={copyLink} className="btn-primary text-xs"><Copy size={12} /> Copy</button>
+              </div>
+              <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)] mt-1.5">
+                Works once · expires in 72 hours
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={createLink} disabled={busy || !user?.email}
+                    className="btn-ghost text-xs w-full justify-center" data-testid="reset-link-create"
+                    title={user?.email ? undefined : "This user has no email address"}>
+              <LinkSimple size={12} /> Or create a link so they choose their own password
+            </button>
+          )}
+        </div>
         <div className="flex gap-2 justify-end">
-          <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+          <button type="button" onClick={onClose} className="btn-ghost">{link ? "Done" : "Cancel"}</button>
           <button disabled={busy} className="btn-primary" data-testid="reset-pwd-submit">
             <Key size={12} /> {busy ? "Resetting…" : "Reset password"}
           </button>

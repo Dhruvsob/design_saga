@@ -5184,6 +5184,8 @@ async def set_employee_account_status(eid: str, payload: EmployeeAccountStatusIn
         target_filter, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Linked user not found")
+    from routes.auth import _ensure_target_in_actor_tenant
+    _ensure_target_in_actor_tenant(user, target)
     if target["user_id"] == user["user_id"] and not payload.active:
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
     await db.users.update_one(target_filter,
@@ -5220,9 +5222,12 @@ async def reset_employee_account_password(eid: str, payload: EmployeePasswordRes
     target_filter = _employee_account_filter(emp, user)
     org_id = target_filter["org_id"]
     target = await db.users.find_one(
-        target_filter, {"_id": 0, "user_id": 1, "email": 1, "employee_id": 1})
+        target_filter, {"_id": 0, "user_id": 1, "email": 1, "employee_id": 1,
+                        "org_id": 1, "role": 1, "is_super_admin": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Linked user not found")
+    from routes.auth import _ensure_target_in_actor_tenant
+    _ensure_target_in_actor_tenant(user, target)
     from routes.auth import hash_password as _hash_pw
     await db.users.update_one(target_filter,
                               {"$set": {"password_hash": _hash_pw(payload.password),
