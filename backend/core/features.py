@@ -14,7 +14,7 @@ If the org's `features.modules[key]` is `False`, HTTP 403 is raised.
 from typing import Optional
 from fastapi import HTTPException
 
-from .db import db
+
 from .tenancy import user_org_id, is_super_admin
 
 
@@ -43,15 +43,15 @@ async def require_module(user: dict, module_key: str) -> None:
     Super admins bypass the check (they have no org context)."""
     if is_super_admin(user) and not user.get("org_id"):
         return
-    oid = user_org_id(user)
-    org = await db.organizations.find_one({"org_id": oid}, {"_id": 0, "features": 1})
-    if not org:
+    from .entitlements import for_org_id
+    ent = await for_org_id(user_org_id(user))
+    if not ent:
         return   # default org bootstrap safety
-    enabled = ((org.get("features") or {}).get("modules") or {}).get(module_key)
-    if enabled is False:
+    if ent["modules"].get(module_key) is False:
         label = MODULE_LABEL.get(module_key, module_key)
+        why = (f"is not included in the {ent['plan_name']} plan"
+               if module_key in ent["plan_excluded"] else "is not enabled for this workspace")
         raise HTTPException(
             status_code=403,
-            detail=f"{label} is not enabled for this workspace. "
-                   f"Contact the Platform Owner to enable it.",
+            detail=f"{label} {why}. Contact the Platform Owner to enable it.",
         )

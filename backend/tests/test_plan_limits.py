@@ -66,5 +66,5 @@ def test_plan_storage_quota_is_capped_by_the_platform_limit(tmp_path, monkeypatc
 def test_storage_quota_reads_the_tenant_plan(monkeypatch):
     _patch(monkeypatch, {"storage_mb": 2}, projects=0)
     assert asyncio.run(limits.tenant_storage_quota_bytes("org_a")) == 2 * 1024 * 1024
-    _patch(monkeypatch, {}, projects=0)
-    assert asyncio.run(limits.tenant_storage_quota_bytes("org_a")) is None
+    _patch(monkeypatch, {}, projects=0)               # no own quota: the plan's applies (P1.2)
+    assert asyncio.run(limits.tenant_storage_quota_bytes("org_a")) == 2048 * 1024 * 1024

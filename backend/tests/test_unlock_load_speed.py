@@ -106,17 +106,19 @@ def test_setup_checklist_checks_existence_and_skips_switched_off_modules(monkeyp
     async def user(*_a, **_k):
         return {"user_id": "admin", "org_id": "org_a", "role": "Admin", "permissions": ["*.*"]}
 
-    async def org(_org_id):
-        return {"org_id": "org_a", "features": {"modules": {"vendors": False}}}
+    import core.entitlements as entitlements
+
+    async def ent(_org_id):
+        return entitlements.effective({"org_id": "org_a", "features": {"modules": {"vendors": False}}},
+                                      entitlements.DEFAULT_PLANS)
 
     async def visibility(_u):
         return {}
 
-    import core.tenancy
     monkeypatch.setattr(server, "sdb", fake)
     monkeypatch.setattr(server, "require_user", user)
     monkeypatch.setattr(server, "project_visibility_query", visibility)
-    monkeypatch.setattr(core.tenancy, "get_org", org)
+    monkeypatch.setattr(entitlements, "for_org_id", ent)
 
     status = asyncio.run(server.dashboard_setup_status(_request("/api/dashboard/setup-status")))
 

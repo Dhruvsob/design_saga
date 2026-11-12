@@ -177,17 +177,16 @@ async def enforce_module_access(request: Request, user: dict) -> None:
             break
     if not module:
         return
-    org = await db.organizations.find_one(
-        {"org_id": org_id}, {"_id": 0, "features": 1}
-    )
-    if not org:
+    from .entitlements import for_org_id
+    ent = await for_org_id(org_id)
+    if not ent:
         return
-    modules = (org.get("features") or {}).get("modules") or {}
-    if modules.get(module) is False:
-        raise HTTPException(
-            status_code=403,
-            detail=f"The {module.replace('_', ' ')} module is not enabled for your workspace."
-        )
+    if ent["modules"].get(module) is False:
+        name = module.replace("_", " ")
+        detail = (f"The {name} module is not included in your {ent['plan_name']} plan."
+                  if module in ent["plan_excluded"]
+                  else f"The {name} module is not enabled for your workspace.")
+        raise HTTPException(status_code=403, detail=detail)
 
 
 async def require_user(

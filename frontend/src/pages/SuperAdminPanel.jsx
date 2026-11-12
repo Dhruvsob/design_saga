@@ -223,6 +223,8 @@ export default function SuperAdminPanel() {
         </div>
       )}
 
+      <PlansCard />
+
       <UsageCard />
 
       {/* Tenant isolation verification */}
@@ -499,13 +501,15 @@ function UsageCard() {
   };
   const download = () => {
     const head = ["Workspace", "Short name", "Plan", "Status", "Active users", "User limit",
-      "Projects", "Project limit", "Files", "Storage MB", "Storage quota MB", "Last sign-in"];
+      "Projects", "Project limit", "Files", "Storage MB", "Storage quota MB", "AI requests this month",
+      "AI allowance", "Last sign-in"];
     const lines = [head.map(csvCell).join(",")];
     for (const w of data.workspaces) {
       lines.push([
         w.name, w.slug, w.plan, w.status, w.seats.used, w.seats.limit ?? "", w.projects.used,
         w.projects.limit ?? "", w.storage.files, (w.storage.bytes / 1048576).toFixed(1),
-        (w.storage.quota_bytes / 1048576).toFixed(0), (w.last_login || "").slice(0, 10),
+        (w.storage.quota_bytes / 1048576).toFixed(0), w.ai?.calls ?? 0, w.ai?.allowance ?? "",
+        (w.last_login || "").slice(0, 10),
       ].map(csvCell).join(","));
     }
     const blob = new Blob([`﻿${lines.join("\r\n")}`], { type: "text/csv;charset=utf-8" });
@@ -541,7 +545,7 @@ function UsageCard() {
         <div className="mt-4 overflow-x-auto border-t border-[var(--line-soft)]">
           <table className="w-full min-w-[760px]" data-testid="usage-table">
             <thead>
-              <tr className="text-left"><Th>Workspace</Th><Th>Users</Th><Th>Projects</Th><Th>Files</Th><Th>Last sign-in</Th></tr>
+              <tr className="text-left"><Th>Workspace</Th><Th>Users</Th><Th>Projects</Th><Th>Files</Th><Th>AI this month</Th><Th>Last sign-in</Th></tr>
             </thead>
             <tbody>
               {data.workspaces.map((w) => (
@@ -564,6 +568,10 @@ function UsageCard() {
                       <span className="text-[var(--ink-3)]"> · {w.storage.files} files</span>
                     </div>
                     <UsageBar used={w.storage.bytes} limit={w.storage.quota_bytes} />
+                  </Td>
+                  <Td>
+                    <div className="font-mono text-xs mb-1">{w.ai?.calls ?? 0}{w.ai?.allowance != null ? ` / ${w.ai.allowance}` : ""}</div>
+                    {w.ai?.allowance ? <UsageBar used={w.ai.calls} limit={w.ai.allowance} /> : null}
                   </Td>
                   <Td className="text-xs text-[var(--ink-2)]">{w.last_login ? formatDate(w.last_login) : "Never"}</Td>
                 </tr>
@@ -1185,6 +1193,14 @@ function ModulesModal({ org, onClose, onSaved }) {
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [ent, setEnt] = useState(null);
+  useEffect(() => {
+    api.get(`/platform/orgs/${org.org_id}/entitlements`).then(({ data }) => {
+      setEnt(data);
+      setMods((m) => Object.fromEntries(Object.keys(m).map((k) => [k, data.modules?.[k] !== false])));
+    }).catch(() => {});
+  }, [org.org_id]);
+  const excluded = new Set(ent?.plan_excluded || []);
 
   const toggle = (key) => setMods((s) => ({ ...s, [key]: !s[key] }));
 
@@ -1205,6 +1221,7 @@ function ModulesModal({ org, onClose, onSaved }) {
     <Modal onClose={onClose} title={org.name} eyebrow="MODULE ACCESS" wide>
       <p className="text-sm text-[var(--ink-2)] mb-4">
         Toggle which ERP modules this workspace can access. Disabled modules are hidden from their navigation menu immediately and their API endpoints return 403.
+        {ent?.plan_excluded?.length > 0 && <> Modules marked &ldquo;not in plan&rdquo; are outside the {ent.plan_name} plan; switching one on grants it to this workspace only.</>}
       </p>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xs text-[var(--ink-3)]">{enabledCount} of {ALL_MODULES.length} modules enabled</span>
@@ -1226,7 +1243,12 @@ function ModulesModal({ org, onClose, onSaved }) {
             }`}
             data-testid={`module-toggle-${key}`}
           >
-            <span className="text-sm font-medium">{label}</span>
+            <span className="text-sm font-medium">
+              {label}
+              {excluded.has(key) && !mods[key] && (
+                <span className="block text-[9px] font-mono uppercase text-[var(--ink-3)]">not in plan</span>
+              )}
+            </span>
             <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${
               mods[key]
                 ? "bg-[var(--success-soft)] text-[var(--success)]"
@@ -1248,40 +1270,226 @@ function ModulesModal({ org, onClose, onSaved }) {
   );
 }
 
+const LIMIT_FIELDS = [
+  { key: "max_users", label: "Users" },
+  { key: "max_projects", label: "Projects" },
+  { key: "storage_mb", label: "Storage (MB)" },
+];
+
+/** Plan + this workspace's own overrides. Empty fields follow the plan. */
+function EntitlementEditor({ org, ent, onSaved }) {
+  const [plans, setPlans] = useState([]);
+  const own = (k) => ((ent?.overrides?.limits || []).includes(k) ? String(ent.limits[k]) : "");
+  const [f, setF] = useState(() => ({
+    plan: ent?.plan || org.plan || "starter",
+    max_users: own("max_users"), max_projects: own("max_projects"), storage_mb: own("storage_mb"),
+    ai: ent?.overrides?.ai_credits_monthly && ent.ai_credits_monthly != null ? String(ent.ai_credits_monthly) : "",
+  }));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => { api.get("/platform/plans").then(({ data }) => setPlans(data)).catch(() => {}); }, []);
+  const plan = plans.find((p) => p.key === f.plan);
+  const planAi = plan ? (plan.ai_credits_monthly == null ? "no cap" : String(plan.ai_credits_monthly)) : "";
+
+  const save = async (reset = false) => {
+    setBusy(true); setErr("");
+    try {
+      const payload = reset ? { plan: f.plan, reset_to_plan: true } : {
+        plan: f.plan,
+        ...Object.fromEntries(LIMIT_FIELDS.map(({ key }) => [key, f[key] === "" ? null : Number(f[key])])),
+        ai_credits_monthly: f.ai === "" ? "plan" : Number(f.ai),
+      };
+      await api.patch(`/platform/orgs/${org.org_id}/limits`, payload);
+      toast.success(reset ? "Workspace now follows its plan" : "Plan and limits saved");
+      onSaved?.();
+    } catch (e) {
+      setErr(fmtErr(e?.response?.data?.detail, "Failed to save limits"));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="border-t border-[var(--line-soft)] pt-4" data-testid="entitlement-editor">
+      <div className="overline mb-1">PLAN &amp; LIMITS</div>
+      <p className="text-[11px] text-[var(--ink-3)] mb-3">
+        Leave a field empty to follow the plan (its value is shown in grey). A number here applies to this workspace only.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <label className="text-xs space-y-1 col-span-2 sm:col-span-1">
+          <span className="font-mono uppercase text-[var(--ink-3)]">Plan</span>
+          <select aria-label="Plan" value={f.plan} onChange={(e) => setF({ ...f, plan: e.target.value })}
+                  className="input-flat w-full" data-testid="limits-plan">
+            {(plans.length ? plans : [{ key: "starter", name: "Starter" }, { key: "pro", name: "Professional" },
+              { key: "enterprise", name: "Enterprise" }]).map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+          </select>
+        </label>
+        {LIMIT_FIELDS.map(({ key, label }) => (
+          <label key={key} className="text-xs space-y-1">
+            <span className="font-mono uppercase text-[var(--ink-3)]">{label}</span>
+            <input type="number" min="1" value={f[key]} placeholder={plan ? String(plan.limits[key]) : ""}
+                   onChange={(e) => setF({ ...f, [key]: e.target.value })}
+                   className="input-flat w-full" data-testid={`limits-${key.replace("_", "-")}`} />
+          </label>
+        ))}
+        <label className="text-xs space-y-1">
+          <span className="font-mono uppercase text-[var(--ink-3)]">AI / month</span>
+          <input type="number" min="0" value={f.ai} placeholder={planAi}
+                 onChange={(e) => setF({ ...f, ai: e.target.value })}
+                 className="input-flat w-full" data-testid="limits-ai" />
+        </label>
+      </div>
+      {err && <div className="text-xs text-[var(--danger)] mt-2">{err}</div>}
+      <div className="flex flex-wrap justify-end gap-2 mt-4">
+        <button onClick={() => save(true)} disabled={busy} className="btn-ghost text-xs" data-testid="limits-reset">
+          Use plan values
+        </button>
+        <button onClick={() => save(false)} disabled={busy} className="btn-primary text-xs" data-testid="save-limits-btn">
+          {busy ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The plan catalogue: what each plan includes. Edits apply to every workspace
+ *  on the plan except where that workspace has its own override. */
+function PlansCard() {
+  const [plans, setPlans] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const load = () => api.get("/platform/plans").then(({ data }) => setPlans(data)).catch(() => setPlans([]));
+  useEffect(() => { load(); }, []);
+  const fmtAi = (v) => (v == null ? "No cap" : v === 0 ? "Off" : `${v}/month`);
+  return (
+    <div className="card-flat" data-testid="plans-card">
+      <div className="overline mb-1"><Faders size={11} className="inline mr-1" /> PLANS</div>
+      <div className="text-xs text-[var(--ink-2)] mb-4">
+        What each plan includes. A workspace&apos;s own limits (set in its health view) override its plan.
+      </div>
+      {!plans && <div className="skeleton h-24 w-full" />}
+      {plans && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {plans.map((p) => (
+            <div key={p.key} className="border border-[var(--line)] rounded-md p-4 space-y-2" data-testid={`plan-${p.key}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-display font-bold text-lg leading-tight">{p.name}</div>
+                  <div className="text-[10px] font-mono uppercase text-[var(--ink-3)]">{p.workspaces} workspace{p.workspaces === 1 ? "" : "s"}</div>
+                </div>
+                <button type="button" onClick={() => setEditing(p)} className="btn-ghost text-xs"
+                        aria-label={`Edit the ${p.name} plan`} data-testid={`plan-edit-${p.key}`}>
+                  <PencilSimpleLine size={12} /> Edit
+                </button>
+              </div>
+              <dl className="text-xs grid grid-cols-2 gap-y-1">
+                <dt className="text-[var(--ink-3)]">Users</dt><dd className="font-mono text-right">{p.limits.max_users}</dd>
+                <dt className="text-[var(--ink-3)]">Projects</dt><dd className="font-mono text-right">{p.limits.max_projects}</dd>
+                <dt className="text-[var(--ink-3)]">Storage</dt><dd className="font-mono text-right">{fmtBytes(p.limits.storage_mb * 1048576)}</dd>
+                <dt className="text-[var(--ink-3)]">AI requests</dt><dd className="font-mono text-right">{fmtAi(p.ai_credits_monthly)}</dd>
+                <dt className="text-[var(--ink-3)]">Support</dt><dd className="text-right">{p.support || "—"}</dd>
+              </dl>
+              <div className="text-[11px] text-[var(--ink-2)]">
+                {p.excluded_modules.length ? <>Leaves out: {p.excluded_modules.map(moduleLabel).join(", ")}</> : "All modules"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {editing && <PlanEditModal plan={editing} onClose={() => setEditing(null)}
+                                 onSaved={() => { setEditing(null); load(); }} />}
+    </div>
+  );
+}
+
+function moduleLabel(key) {
+  return ALL_MODULES.find((m) => m.key === key)?.label || key;
+}
+
+function PlanEditModal({ plan, onClose, onSaved }) {
+  const [f, setF] = useState({
+    name: plan.name, support: plan.support || "",
+    max_users: String(plan.limits.max_users), max_projects: String(plan.limits.max_projects),
+    storage_mb: String(plan.limits.storage_mb),
+    ai: plan.ai_credits_monthly == null ? "" : String(plan.ai_credits_monthly),
+    excluded: new Set(plan.excluded_modules),
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const toggle = (key) => setF((s) => {
+    const next = new Set(s.excluded);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return { ...s, excluded: next };
+  });
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true); setErr("");
+    try {
+      await api.put(`/platform/plans/${plan.key}`, {
+        name: f.name, support: f.support,
+        limits: { max_users: Number(f.max_users), max_projects: Number(f.max_projects), storage_mb: Number(f.storage_mb) },
+        excluded_modules: [...f.excluded],
+        ai_credits_monthly: f.ai === "" ? null : Number(f.ai),
+      });
+      toast.success(`${f.name} plan saved`);
+      onSaved();
+    } catch (ex) {
+      setErr(fmtErr(ex?.response?.data?.detail, "Could not save the plan"));
+    } finally { setBusy(false); }
+  };
+  return (
+    <Modal onClose={onClose} title={`Edit plan · ${plan.name}`} eyebrow="PLAN CATALOGUE" wide>
+      <form onSubmit={save} className="space-y-4" data-testid="plan-edit-form">
+        <p className="text-xs text-[var(--ink-2)]">
+          Changes apply at once to the {plan.workspaces} workspace{plan.workspaces === 1 ? "" : "s"} on this plan,
+          except limits a workspace has set for itself. Studios already over a new limit keep their data; they
+          just can&apos;t add more.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="text-xs space-y-1"><span className="font-mono uppercase text-[var(--ink-3)]">Name</span>
+            <input required minLength={2} maxLength={40} className="input-flat w-full" value={f.name}
+                   onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+          <label className="text-xs space-y-1"><span className="font-mono uppercase text-[var(--ink-3)]">Support</span>
+            <input maxLength={80} className="input-flat w-full" value={f.support} placeholder="e.g. Priority"
+                   onChange={(e) => setF({ ...f, support: e.target.value })} /></label>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[["max_users", "Users"], ["max_projects", "Projects"], ["storage_mb", "Storage (MB)"]].map(([k, label]) => (
+            <label key={k} className="text-xs space-y-1"><span className="font-mono uppercase text-[var(--ink-3)]">{label}</span>
+              <input required type="number" min="1" className="input-flat w-full" value={f[k]}
+                     onChange={(e) => setF({ ...f, [k]: e.target.value })} /></label>
+          ))}
+          <label className="text-xs space-y-1"><span className="font-mono uppercase text-[var(--ink-3)]">AI / month</span>
+            <input type="number" min="0" className="input-flat w-full" value={f.ai} placeholder="No cap"
+                   onChange={(e) => setF({ ...f, ai: e.target.value })} /></label>
+        </div>
+        <p className="text-[11px] text-[var(--ink-3)] -mt-2">AI: empty = no monthly cap, 0 = AI switched off.</p>
+        <div>
+          <div className="overline mb-2">INCLUDED MODULES</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {ALL_MODULES.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 text-sm border border-[var(--line-soft)] rounded-md px-3 py-2 cursor-pointer">
+                <input type="checkbox" checked={!f.excluded.has(key)} onChange={() => toggle(key)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+        {err && <div className="text-xs text-[var(--danger)]">{err}</div>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+          <button disabled={busy} className="btn-primary" data-testid="plan-save">{busy ? "Saving…" : "Save plan"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function OrgHealthModal({ org, onClose, onSaved }) {
   const [health, setHealth] = useState(null);
   const [err, setErr] = useState("");
-  const [limits, setLimits] = useState({ max_users: "", max_projects: "", plan: org.plan || "starter" });
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.get(`/platform/orgs/${org.org_id}/health`)
-      .then((r) => {
-        setHealth(r.data);
-        setLimits({
-          max_users: r.data?.usage?.users?.limit ?? "",
-          max_projects: r.data?.usage?.projects?.limit ?? "",
-          plan: r.data?.plan || "starter",
-        });
-      })
+      .then((r) => setHealth(r.data))
       .catch((e) => setErr(fmtErr(e?.response?.data?.detail, "Failed to load health")));
   }, [org.org_id]);
-
-  const saveLimits = async () => {
-    setBusy(true);
-    try {
-      const payload = { plan: limits.plan };
-      if (limits.max_users) payload.max_users = Number(limits.max_users);
-      if (limits.max_projects) payload.max_projects = Number(limits.max_projects);
-      await api.patch(`/platform/orgs/${org.org_id}/limits`, payload);
-      onSaved?.();
-      onClose();
-    } catch (e) {
-      setErr(fmtErr(e?.response?.data?.detail, "Failed to save limits"));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const CountCell = ({ label, value }) => (
     <div className="border border-[var(--line-soft)] p-2">
@@ -1340,37 +1548,8 @@ function OrgHealthModal({ org, onClose, onSaved }) {
               Last login: <span className="font-mono">{(health.last_login || "never").slice(0, 19).replace("T", " ")}</span>
               {" · "}Active admins: <span className="font-mono">{health.admins}</span>
             </div>
-            <div className="border-t border-[var(--line-soft)] pt-4">
-              <div className="overline mb-3">PLAN &amp; LIMITS</div>
-              <div className="grid grid-cols-3 gap-3">
-                <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[var(--ink-3)]">Plan</span>
-                  <select aria-label="Plan" value={limits.plan} onChange={(e) => setLimits({ ...limits, plan: e.target.value })}
-                          className="input w-full" data-testid="limits-plan">
-                    <option value="starter">starter</option>
-                    <option value="pro">pro</option>
-                    <option value="enterprise">enterprise</option>
-                  </select>
-                </label>
-                <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[var(--ink-3)]">Max users</span>
-                  <input type="number" min="1" value={limits.max_users}
-                         onChange={(e) => setLimits({ ...limits, max_users: e.target.value })}
-                         className="input w-full" data-testid="limits-max-users" />
-                </label>
-                <label className="text-xs space-y-1">
-                  <span className="font-mono uppercase text-[var(--ink-3)]">Max projects</span>
-                  <input type="number" min="1" value={limits.max_projects}
-                         onChange={(e) => setLimits({ ...limits, max_projects: e.target.value })}
-                         className="input w-full" data-testid="limits-max-projects" />
-                </label>
-              </div>
-              <div className="flex justify-end mt-4">
-                <button onClick={saveLimits} disabled={busy} className="btn-primary text-xs" data-testid="save-limits-btn">
-                  {busy ? "Saving…" : "Save limits"}
-                </button>
-              </div>
-            </div>
+            <EntitlementEditor org={org} ent={health.entitlements}
+                               onSaved={() => { onSaved?.(); onClose(); }} />
           </>
         )}
       </div>

@@ -690,8 +690,8 @@ async def admin_register(payload: RegisterIn, request: Request,
     if not _org_id:
         raise HTTPException(status_code=400, detail="Select a tenant before creating a tenant user")
     if _org_id:
-        _org = await db.organizations.find_one({"org_id": _org_id}, {"_id": 0, "features": 1})
-        _max = ((_org or {}).get("features") or {}).get("limits", {}).get("max_users")
+        from core.limits import _tenant_limits
+        _max = (await _tenant_limits(_org_id)).get("max_users")
         if _max:
             _current = await db.users.count_documents(
                 {"org_id": _org_id, "is_active": {"$ne": False}})

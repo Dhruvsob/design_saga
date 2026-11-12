@@ -14,9 +14,8 @@ MAX_LIST_ROWS = 20000
 async def _tenant_limits(org_id: Optional[str]) -> dict:
     if not org_id:
         return {}
-    from .db import db
-    org = await db.organizations.find_one({"org_id": org_id}, {"_id": 0, "features": 1})
-    return ((org or {}).get("features") or {}).get("limits") or {}
+    from .entitlements import for_org_id
+    return ((await for_org_id(org_id)) or {}).get("limits") or {}
 
 
 async def enforce_project_limit(org_id: Optional[str]) -> None:

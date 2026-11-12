@@ -139,7 +139,48 @@ async def get_current_org(user=None, request: Request = None,
     if not o:
         # Bootstrap default org for legacy installs
         o = await get_org(DEFAULT_ORG_ID)
-    return _pack_org(o) if o else {"org_id": None}
+    if not o:
+        return {"org_id": None}
+    out = _pack_org(o)
+    # The app hides what the workspace may not use: module switches combined
+    # with the plan (core.entitlements), plus the plan summary for settings.
+    from core.entitlements import for_org
+    ent = await for_org(o)
+    out["features"]["modules"] = ent["modules"]
+    out["entitlements"] = {k: ent[k] for k in ("plan", "plan_name", "support", "limits",
+                                               "ai_credits_monthly", "plan_excluded")}
+    return out
+
+
+@router.get("/current/usage")
+async def current_org_usage(request: Request,
+                            session_token: Optional[str] = Cookie(default=None),
+                            authorization: Optional[str] = Header(default=None)):
+    """The workspace's own plan, limits and how much of each it uses (Admins)."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(403, "Admin only")
+    oid = user_org_id(user)
+    org = await get_org(oid)
+    if not org:
+        raise HTTPException(404, "Workspace not found")
+    from core.entitlements import for_org, ai_calls_this_month
+    from routes.platform import _effective_storage_quota, _tenant_storage_usage
+    ent = await for_org(org)
+    mine = {"org_id": oid}
+    if oid == DEFAULT_ORG_ID:
+        mine = {"$or": [{"org_id": oid}, {"org_id": {"$exists": False}}]}
+    return {
+        "plan": ent["plan"], "plan_name": ent["plan_name"], "support": ent["support"],
+        "users": {"used": await db.users.count_documents({**mine, "is_active": {"$ne": False}}),
+                  "limit": ent["limits"].get("max_users")},
+        "projects": {"used": await db.projects.count_documents(mine),
+                     "limit": ent["limits"].get("max_projects")},
+        "storage": {**(await _tenant_storage_usage(oid)),
+                    "quota_bytes": _effective_storage_quota(ent["limits"])},
+        "ai": {"calls": await ai_calls_this_month(oid), "allowance": ent["ai_credits_monthly"]},
+        "plan_excluded": ent["plan_excluded"],
+    }
 
 
 @router.patch("/current")

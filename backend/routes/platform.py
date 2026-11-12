@@ -12,7 +12,7 @@ All endpoints gated by `require_super_admin`.
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from fastapi.responses import StreamingResponse
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, StrictBool, field_validator
+from pydantic import BaseModel, EmailStr, Field, StrictBool, field_validator
 import datetime as _dt
 import uuid
 import re
@@ -20,6 +20,7 @@ from datetime import timedelta
 
 from core.pdf_brand import BRAND_ACCENT, BRAND_PRIMARY
 from core.employee_ids import derive_prefix, normalize_prefix
+from core import entitlements
 from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.helpers import business_today, iso_now, now_utc, new_id
@@ -30,7 +31,7 @@ from core.tenancy import (
 from core.rbac import normalize_role, expand_permissions
 from core.audit import audit
 from models.organization import (
-    MODULE_KEYS, OrgCreateIn, OrgUpdateIn, OrgStatusIn, DEFAULT_FEATURES,
+    MODULE_KEYS, OrgCreateIn, OrgUpdateIn, OrgStatusIn,
     features_for_mode,
 )
 
@@ -195,10 +196,8 @@ async def create_org(payload: OrgCreateIn, request: Request,
         "branding": (payload.branding.dict() if payload.branding
                      else {"primary_color": BRAND_PRIMARY, "accent_color": BRAND_ACCENT}),
         "billing": payload.billing.dict() if payload.billing else {},
-        "features": {
-            "modules": features_for_mode(payload.business_mode),
-            "limits": DEFAULT_FEATURES["limits"],
-        },
+        # Limits come from the plan (core.entitlements); only modules are stored.
+        "features": {"modules": features_for_mode(payload.business_mode)},
         "is_active": True,
         "is_suspended": False,
         "notes": payload.notes,
@@ -261,11 +260,13 @@ async def update_org(org_id: str, payload: OrgUpdateIn, request: Request,
     if "business_mode" in up and up["business_mode"] != org.get("business_mode"):
         new_modules = features_for_mode(up["business_mode"])
         prev = (org.get("features") or {}).get("modules") or {}
-        # Preserve any admin-toggled overrides that don't conflict with the preset
-        up["features"] = {
-            "modules": {**prev, **new_modules},
-            "limits": (org.get("features") or {}).get("limits", DEFAULT_FEATURES["limits"]),
-        }
+        # Preserve any admin-toggled overrides that don't conflict with the preset.
+        # Only the modules change: limits, grants and AI allowance stay as they are
+        # (writing default limits here would silently override the plan).
+        if isinstance(up.get("features"), dict):
+            up["features"]["modules"] = {**prev, **new_modules}
+        else:
+            up["features.modules"] = {**prev, **new_modules}
     up["updated_at"] = iso_now()
     await db.organizations.update_one({"org_id": org_id}, {"$set": up})
     await audit(sa, "org.update", target=org_id, target_type="org",
@@ -367,9 +368,19 @@ async def set_org_modules(org_id: str, payload: OrgModulesIn, request: Request,
         raise HTTPException(404, "Organisation not found")
     current_modules = (org.get("features") or {}).get("modules") or {}
     new_modules = {**current_modules, **payload.modules}
+    # Switching on a module the plan leaves out grants it to this workspace only.
+    excluded = set((await entitlements.load_plans()).get(
+        org.get("plan") if org.get("plan") in entitlements.PLAN_KEYS else "starter")["excluded_modules"])
+    grants = set((org.get("features") or {}).get("module_grants") or [])
+    for key, on in payload.modules.items():
+        if on and key in excluded:
+            grants.add(key)
+        elif not on:
+            grants.discard(key)
     await db.organizations.update_one(
         {"org_id": org_id},
-        {"$set": {"features.modules": new_modules, "updated_at": iso_now()}}
+        {"$set": {"features.modules": new_modules, "features.module_grants": sorted(grants),
+                  "updated_at": iso_now()}}
     )
     await audit(sa, "org.modules_update", target=org_id, target_type="org",
                 meta={"changes": {k: v for k, v in payload.modules.items()}})
@@ -772,8 +783,8 @@ async def org_health(org_id: str, request: Request,
             counts[coll] = await db[coll].count_documents({"org_id": org_id})
         except Exception:
             counts[coll] = None
-    limits = ((org.get("features") or {}).get("limits")
-              or {"max_users": 25, "max_projects": 200, "storage_mb": 1024})
+    ent = await entitlements.for_org(org)
+    limits = ent["limits"]
     active_users = await db.users.count_documents(
         {"org_id": org_id, "is_active": {"$ne": False}})
     admins = await db.users.count_documents(
@@ -807,6 +818,7 @@ async def org_health(org_id: str, request: Request,
                         "quota_bytes": _effective_storage_quota(limits)},
         },
         "admins": admins,
+        "entitlements": ent,
         "last_login": last_login,
         "warnings": warnings,
     }
@@ -848,15 +860,18 @@ async def platform_usage(request: Request,
     """Seats, projects and file storage per workspace against its plan limits.
     Counts and sizes only: no record contents and no customer finances."""
     await require_super_admin(request, session_token, authorization)
+    plans = await entitlements.load_plans()
     rows = []
     async for o in db.organizations.find(
             {}, {"_id": 0, "org_id": 1, "name": 1, "slug": 1, "plan": 1, "is_active": 1,
-                 "is_suspended": 1, "features": 1, "created_at": 1}).sort("created_at", 1):
+                 "is_suspended": 1, "features": 1, "business_mode": 1,
+                 "created_at": 1}).sort("created_at", 1):
         oid = o["org_id"]
         mine = {"org_id": oid}
         if oid == DEFAULT_ORG_ID:          # legacy rows written before org_id existed
             mine = {"$or": [{"org_id": oid}, {"org_id": {"$exists": False}}]}
-        limits = (o.get("features") or {}).get("limits") or {}
+        ent = entitlements.effective(o, plans)
+        limits = ent["limits"]
         seats = await db.users.count_documents({**mine, "is_active": {"$ne": False}})
         projects = await db.projects.count_documents(mine)
         storage = await _tenant_storage_usage(oid)
@@ -864,12 +879,14 @@ async def platform_usage(request: Request,
                                        {"_id": 0, "last_login": 1}, sort=[("last_login", -1)])
         rows.append({
             "org_id": oid, "name": o.get("name"), "slug": o.get("slug"),
-            "plan": o.get("plan") or "starter",
+            "plan": ent["plan"],
             "status": ("suspended" if o.get("is_suspended")
                        else "inactive" if o.get("is_active") is False else "active"),
             "seats": {"used": seats, "limit": limits.get("max_users")},
             "projects": {"used": projects, "limit": limits.get("max_projects")},
             "storage": {**storage, "quota_bytes": _effective_storage_quota(limits)},
+            "ai": {"calls": await entitlements.ai_calls_this_month(oid),
+                   "allowance": ent["ai_credits_monthly"]},
             "last_login": (last or {}).get("last_login"),
         })
     return {"generated_at": iso_now(), "workspaces": rows}
@@ -918,32 +935,129 @@ async def isolation_check(request: Request,
 async def update_org_limits(org_id: str, payload: dict, request: Request,
                             session_token: Optional[str] = Cookie(default=None),
                             authorization: Optional[str] = Header(default=None)):
-    """Update plan limits for a tenant (max_users / max_projects / storage_mb)."""
+    """Set a workspace's plan and its own overrides. A limit set here wins over the
+    plan; ``null`` (or ``reset_to_plan``) returns it to the plan's value.
+    ``ai_credits_monthly``: a number, ``null`` for no cap, or "plan"."""
     sa = await require_super_admin(request, session_token, authorization)
     org = await get_org(org_id)
     if not org:
         raise HTTPException(404, "Organisation not found")
-    allowed = {}
-    for k in ("max_users", "max_projects", "storage_mb"):
-        if k in payload:
+    sets, unsets = {}, {}
+    if payload.get("reset_to_plan"):
+        unsets["features.limits"] = ""
+        unsets["features.ai_credits_monthly"] = ""
+    for k in entitlements.LIMIT_KEYS:
+        if k in payload and not payload.get("reset_to_plan"):
+            if payload[k] in (None, ""):
+                unsets[f"features.limits.{k}"] = ""
+                continue
             try:
                 v = int(payload[k])
             except (TypeError, ValueError):
                 raise HTTPException(400, f"{k} must be an integer")
             if v < 1:
                 raise HTTPException(400, f"{k} must be >= 1")
-            allowed[f"features.limits.{k}"] = v
+            sets[f"features.limits.{k}"] = v
+    if "ai_credits_monthly" in payload and not payload.get("reset_to_plan"):
+        v = payload["ai_credits_monthly"]
+        if v == "plan":
+            unsets["features.ai_credits_monthly"] = ""
+        elif v is None:
+            sets["features.ai_credits_monthly"] = None
+        else:
+            try:
+                v = int(v)
+            except (TypeError, ValueError):
+                raise HTTPException(400, "ai_credits_monthly must be a whole number")
+            if v < 0:
+                raise HTTPException(400, "ai_credits_monthly must be 0 or more")
+            sets["features.ai_credits_monthly"] = v
     if "plan" in payload:
-        if payload["plan"] not in ("starter", "pro", "enterprise"):
+        if payload["plan"] not in entitlements.PLAN_KEYS:
             raise HTTPException(400, "plan must be starter|pro|enterprise")
-        allowed["plan"] = payload["plan"]
-    if not allowed:
+        sets["plan"] = payload["plan"]
+    if not sets and not unsets:
         raise HTTPException(400, "Nothing to update")
-    allowed["updated_at"] = iso_now()
-    await db.organizations.update_one({"org_id": org_id}, {"$set": allowed})
+    sets["updated_at"] = iso_now()
+    update = {"$set": sets}
+    if unsets:
+        update["$unset"] = unsets
+    await db.organizations.update_one({"org_id": org_id}, update)
     await audit(sa, "org.limits_update", target=org_id, target_type="org",
-                meta={"changes": {k: v for k, v in allowed.items() if k != "updated_at"}})
-    return await get_org(org_id)
+                meta={"changes": {k: v for k, v in sets.items() if k != "updated_at"},
+                      "cleared": sorted(unsets)})
+    fresh = await get_org(org_id)
+    return {**fresh, "entitlements": await entitlements.for_org(fresh)}
+
+
+# ------------------------------------------------------------------
+# PLAN CATALOGUE (entitlements, P1.2)
+# ------------------------------------------------------------------
+class PlanLimitsIn(BaseModel):
+    max_users: int = Field(ge=1, le=100000)
+    max_projects: int = Field(ge=1, le=1000000)
+    storage_mb: int = Field(ge=1, le=10_000_000)
+
+
+class PlanIn(BaseModel):
+    name: str = Field(min_length=2, max_length=40)
+    support: str = Field(default="", max_length=80)
+    limits: PlanLimitsIn
+    excluded_modules: List[str] = []
+    ai_credits_monthly: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+
+    @field_validator("excluded_modules")
+    @classmethod
+    def known_modules(cls, value: List[str]) -> List[str]:
+        unknown = sorted(set(value) - MODULE_KEYS)
+        if unknown:
+            raise ValueError(f"Unknown module key(s): {', '.join(unknown)}")
+        return sorted(set(value))
+
+
+@router.get("/plans")
+async def list_plans(request: Request,
+                     session_token: Optional[str] = Cookie(default=None),
+                     authorization: Optional[str] = Header(default=None)):
+    """The plan catalogue with how many workspaces are on each plan."""
+    await require_super_admin(request, session_token, authorization)
+    plans = await entitlements.load_plans()
+    counts = {k: 0 for k in plans}
+    async for o in db.organizations.find({}, {"_id": 0, "plan": 1}):
+        key = o.get("plan") if o.get("plan") in plans else "starter"
+        counts[key] += 1
+    return [{"key": k, **plans[k], "workspaces": counts[k]} for k in entitlements.PLAN_KEYS]
+
+
+@router.put("/plans/{key}")
+async def update_plan(key: str, payload: PlanIn, request: Request,
+                      session_token: Optional[str] = Cookie(default=None),
+                      authorization: Optional[str] = Header(default=None)):
+    """Edit one plan. Applies at once to every workspace on it, except where a
+    workspace has its own override."""
+    sa = await require_super_admin(request, session_token, authorization)
+    if key not in entitlements.PLAN_KEYS:
+        raise HTTPException(404, "Unknown plan")
+    doc = {"key": key, **payload.model_dump(), "updated_at": iso_now(), "updated_by": sa["user_id"]}
+    doc["name"] = doc["name"].strip()
+    await db.platform_plans.update_one({"key": key}, {"$set": doc}, upsert=True)
+    entitlements.invalidate_plans()
+    await audit(sa, "platform.plan_update", target=key, target_type="plan",
+                meta={"limits": doc["limits"], "excluded_modules": doc["excluded_modules"],
+                      "ai_credits_monthly": doc["ai_credits_monthly"]})
+    return {"key": key, **(await entitlements.load_plans())[key]}
+
+
+@router.get("/orgs/{org_id}/entitlements")
+async def org_entitlements(org_id: str, request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None)):
+    await require_super_admin(request, session_token, authorization)
+    org = await get_org(org_id)
+    if not org:
+        raise HTTPException(404, "Organisation not found")
+    ent = await entitlements.for_org(org)
+    return {**ent, "ai_calls_this_month": await entitlements.ai_calls_this_month(org_id)}
 
 
 class SupportAccessIn(BaseModel):

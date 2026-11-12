@@ -5,9 +5,10 @@ import { confirmAction } from "../lib/confirm";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import MasterDataManager from "../components/MasterDataManager";
+import PlanUsage from "../components/PlanUsage";
 import {
   Palette, Buildings, Upload, Check, Warning, PaintBrush, ImageSquare, X,
-  ListChecks,
+  ListChecks, Gauge,
 } from "@phosphor-icons/react";
 
 const BRAND_PDF_COLOUR = "#76705E";   // matches backend core.pdf_brand.BRAND_PRIMARY
@@ -159,6 +160,7 @@ export default function CompanySettings() {
           { key: "branding", label: "Brand & Colours", Icon: Palette },
           { key: "profile",  label: "Company Profile", Icon: Buildings },
           { key: "masterdata", label: "Master Data", Icon: ListChecks },
+          { key: "plan", label: "Plan & usage", Icon: Gauge },
         ].map(({ key, label, Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-3 text-sm font-semibold border-b-2 transition ${
@@ -357,6 +359,8 @@ export default function CompanySettings() {
           </div>
         </div>
       )}
+
+      {tab === "plan" && <PlanUsage />}
 
       {tab === "masterdata" && (
         <div className="space-y-4">

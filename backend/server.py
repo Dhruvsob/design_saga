@@ -1046,9 +1046,9 @@ async def dashboard_setup_status(request: Request, session_token: Optional[str] 
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "*.*"):
         raise HTTPException(status_code=403, detail="Missing permission: *.*")
-    from core.tenancy import get_org, user_org_id
-    org = await get_org(user_org_id(user))
-    modules = ((org or {}).get("features") or {}).get("modules") or {}
+    from core.tenancy import user_org_id
+    from core.entitlements import for_org_id
+    modules = ((await for_org_id(user_org_id(user))) or {}).get("modules") or {}
 
     async def _exists(module, collection, query):
         if modules.get(module) is False:
@@ -2933,6 +2933,9 @@ async def ai_chat(payload: AIChatIn, request: Request,
         raise HTTPException(status_code=413, detail="Message too long (max 4000 characters)")
     if not (payload.message or "").strip():
         raise HTTPException(status_code=400, detail="Message required")
+    from core.entitlements import consume_ai_credit
+    from core.tenancy import user_org_id as _ai_org
+    await consume_ai_credit(_ai_org(user))
 
     # Sessions are bound to their owner; a guessed/foreign id starts a new one.
     own_prefix = f"ai_{user['user_id']}_"
@@ -4106,6 +4109,9 @@ async def adv_ai_suggest(qid: str, request: Request, session_token: Optional[str
     q = await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
     if not q:
         raise HTTPException(status_code=404, detail="Not found")
+    from core.entitlements import consume_ai_credit
+    from core.tenancy import user_org_id as _ai_org
+    await consume_ai_credit(_ai_org(user))
     body = {}
     try:
         body = await request.json()

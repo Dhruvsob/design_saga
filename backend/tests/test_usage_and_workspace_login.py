@@ -85,15 +85,22 @@ def test_usage_reports_seats_projects_and_files_per_workspace(monkeypatch, tmp_p
     async def super_admin(*_a, **_k):
         return {"user_id": "sa"}
 
+    async def ai_calls(org_id):
+        return {"org_a": 7}.get(org_id, 0)
+
+    import core.entitlements as entitlements
     monkeypatch.setattr(platform, "db", db)
     monkeypatch.setattr(platform, "require_super_admin", super_admin)
+    monkeypatch.setattr(entitlements, "ai_calls_this_month", ai_calls)
     out = asyncio.run(platform.platform_usage(_request()))
     a, b = out["workspaces"]
     assert a["seats"] == {"used": 2, "limit": 5}
     assert a["projects"] == {"used": 2, "limit": 10}
     assert a["storage"] == {"bytes": 2048, "files": 1, "quota_bytes": 100 * 1024 * 1024}
     assert a["last_login"] == "2026-11-12T09:00:00"
+    assert a["ai"] == {"calls": 7, "allowance": None}
     assert b["status"] == "inactive" and b["storage"]["files"] == 0
+    assert b["seats"]["limit"] == 10 and b["plan"] == "starter"   # no own limits: the plan applies
     assert b["storage"]["quota_bytes"] == 512 * 1024 * 1024        # platform cap when no plan quota
 
 
