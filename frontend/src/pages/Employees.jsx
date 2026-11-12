@@ -4,7 +4,8 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import { dateForInput, formatDate, statusLabel } from "../lib/format";
-import { Plus, ArrowRight, MagnifyingGlass, UserMinus, X } from "@phosphor-icons/react";
+import { Plus, ArrowRight, MagnifyingGlass, UserMinus, X, FileArrowUp } from "@phosphor-icons/react";
+import EmployeeImport from "../components/EmployeeImport";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
@@ -25,6 +26,7 @@ export default function Employees() {
   const [meta, setMeta] = useState({ departments: [], employment_types: [], employment_statuses: [] });
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState({ q: "", department: "", status: "" });
   const [form, setForm] = useState({
@@ -105,7 +107,16 @@ export default function Employees() {
             {showForm ? <><X size={14} /> Cancel</> : <><Plus size={14} /> {"New employee"}</>}
           </button>
         )}
+        {canCreate && (
+          <button onClick={() => setShowImport(true)} className="btn-ghost" data-testid="import-employees-btn">
+            <FileArrowUp size={14} /> Import CSV
+          </button>
+        )}
       </PageHero>
+      {showImport && (
+        <EmployeeImport onClose={() => setShowImport(false)}
+                        onDone={() => { setShowImport(false); load(); }} />
+      )}
 
       {showForm && (
         <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3 scale-in" data-testid="new-employee-form">

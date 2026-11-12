@@ -4908,6 +4908,16 @@ async def create_employee(payload: EmployeeIn, request: Request,
     if ((data.get("salary") or data.get("bank") or data.get("monthly_salary") is not None)
             and not has_permission(user, "payroll.create")):
         raise HTTPException(status_code=403, detail="Missing permission: payroll.create")
+    data = await _new_employee_doc(data, user)
+    await sdb.employees.insert_one(dict(data))
+    await audit_log(user, "employee.create", target=data["id"], target_type="employee",
+                    meta={"employee_id": data["employee_id"]})
+    created = await sdb.employees.find_one({"id": data["id"]}, {"_id": 0})
+    return _employee_for_user(created, user)
+
+
+async def _new_employee_doc(data: dict, user: dict) -> dict:
+    """Defaults and identifiers shared by the form and the CSV import."""
     if data.get("employment_type") not in EMPLOYMENT_TYPES:
         data["employment_type"] = "full_time"
     if data.get("employment_status") not in EMPLOYMENT_STATUSES:
@@ -4928,11 +4938,119 @@ async def create_employee(payload: EmployeeIn, request: Request,
     data["employee_id"] = await _next_employee_id(user_org_id(user))
     data["created_at"] = iso(now_utc())
     data["created_by"] = user["user_id"]
-    await sdb.employees.insert_one(dict(data))
-    await audit_log(user, "employee.create", target=data["id"], target_type="employee",
-                    meta={"employee_id": data["employee_id"]})
-    created = await sdb.employees.find_one({"id": data["id"]}, {"_id": 0})
-    return _employee_for_user(created, user)
+    return data
+
+
+EMPLOYEE_IMPORT_MAX_ROWS = 500
+_IMPORT_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y")
+
+
+class EmployeeImportRow(BaseModel):
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    department: Optional[str] = ""
+    designation: Optional[str] = ""
+    joining_date: Optional[str] = ""
+    employment_type: Optional[str] = ""
+    monthly_salary: Optional[str] = ""
+
+
+class EmployeeImportIn(BaseModel):
+    rows: List[EmployeeImportRow] = Field(min_length=1, max_length=EMPLOYEE_IMPORT_MAX_ROWS)
+    dry_run: bool = True
+
+
+def _import_date(value: str) -> Optional[str]:
+    for fmt in _IMPORT_DATE_FORMATS:
+        try:
+            return datetime.strptime(value, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _clean_import_row(row: EmployeeImportRow, can_pay: bool,
+                      seen_emails: set, existing_emails: set) -> tuple:
+    """Validate one CSV row. Returns (employee fields, list of problems)."""
+    clip = lambda v, n=120: str(v or "").strip()[:n]  # noqa: E731
+    out = {
+        "first_name": clip(row.first_name), "last_name": clip(row.last_name),
+        "email": clip(row.email, 254).lower(), "phone": clip(row.phone, 32),
+        "department": clip(row.department) or "Design", "designation": clip(row.designation),
+    }
+    errors = []
+    if not out["first_name"]:
+        errors.append("First name is required")
+    if out["email"]:
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", out["email"]):
+            errors.append("Email is not valid")
+        elif out["email"] in seen_emails:
+            errors.append("Email appears twice in this file")
+        elif out["email"] in existing_emails:
+            errors.append("An employee with this email already exists")
+        seen_emails.add(out["email"])
+    if out["phone"] and not re.fullmatch(r"[0-9+()\-\s]{6,32}", out["phone"]):
+        errors.append("Phone has unexpected characters")
+    joining = clip(row.joining_date, 20)
+    if joining:
+        parsed = _import_date(joining)
+        if parsed:
+            out["joining_date"] = parsed
+        else:
+            errors.append("Joining date must look like 2026-04-01 or 01/04/2026")
+    etype = clip(row.employment_type, 30).lower().replace(" ", "_").replace("-", "_")
+    if etype:
+        if etype in EMPLOYMENT_TYPES:
+            out["employment_type"] = etype
+        else:
+            errors.append(f"Employment type must be one of: {', '.join(sorted(EMPLOYMENT_TYPES))}")
+    salary = clip(row.monthly_salary, 20).replace(",", "")
+    if salary:
+        if not can_pay:
+            errors.append("You do not have permission to set salaries; leave Monthly salary empty")
+        else:
+            try:
+                amount = float(salary)
+                if amount < 0 or amount > 100_000_000:
+                    raise ValueError
+                out["monthly_salary"] = round(amount, 2)
+            except ValueError:
+                errors.append("Monthly salary must be a number")
+    return out, errors
+
+
+@api.post("/employees/import")
+async def import_employees(payload: EmployeeImportIn, request: Request,
+                           session_token: Optional[str] = Cookie(default=None),
+                           authorization: Optional[str] = Header(default=None)):
+    """Bulk-create employees from a spreadsheet. Every row is checked first;
+    nothing is saved unless all rows are valid and dry_run is false."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "employees.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: employees.create")
+    can_pay = has_permission(user, "payroll.create")
+    existing = {str(e.get("email") or "").lower()
+                async for e in sdb.employees.find({"email": {"$nin": [None, ""]}}, {"_id": 0, "email": 1})}
+    seen: set = set()
+    results, cleaned = [], []
+    for i, row in enumerate(payload.rows, start=1):
+        data, errors = _clean_import_row(row, can_pay, seen, existing)
+        results.append({"row": i, "name": f"{data['first_name']} {data['last_name']}".strip(),
+                        "email": data["email"], "errors": errors})
+        cleaned.append(data)
+    invalid = sum(1 for r in results if r["errors"])
+    if payload.dry_run or invalid:
+        return {"created": 0, "valid": len(results) - invalid, "invalid": invalid, "rows": results}
+    created_ids = []
+    for data in cleaned:
+        doc = await _new_employee_doc(EmployeeIn(**data).model_dump(), user)
+        await sdb.employees.insert_one(dict(doc))
+        created_ids.append(doc["employee_id"])
+    await audit_log(user, "employee.import", target_type="employee",
+                    meta={"count": len(created_ids), "first": created_ids[0], "last": created_ids[-1]})
+    return {"created": len(created_ids), "valid": len(results), "invalid": 0, "rows": results}
 
 
 @api.put("/employees/{eid}")
