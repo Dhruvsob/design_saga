@@ -305,7 +305,7 @@ export default function Accounting() {
                     aria-current={tab === id ? "page" : undefined}
                     className={`h-8 px-3 text-xs inline-flex items-center gap-1.5 rounded-md transition ${
                       tab === id
-                        ? "bg-[var(--accent-soft)] text-[var(--accent-strong)] font-semibold"
+                        ? "bg-[var(--accent-soft)] text-[#5F5A4B] font-semibold"
                         : "text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
                     }`}>
                     <Icon size={13} className="shrink-0" /> {label}

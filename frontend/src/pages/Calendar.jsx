@@ -376,7 +376,7 @@ export default function CalendarPage() {
                 <button key={ds} onClick={() => setSelectedDay(selectedDay === ds ? null : ds)}
                   className={`min-h-[92px] flex flex-col justify-start items-stretch border-r border-b border-[var(--line)] p-1 text-left transition hover:bg-[var(--hover)] ${inMonth ? "bg-white" : "bg-[var(--surface-2)]"} ${selectedDay === ds ? "ring-2 ring-inset ring-[var(--accent)]" : ""}`}
                   data-testid={`day-${ds}`}>
-                  <div className={`text-[11px] font-mono mb-1 w-6 h-6 flex items-center justify-center ${isToday ? "bg-[var(--accent)] text-white rounded-full" : inMonth ? "text-[var(--ink)]" : "text-[var(--ink-3)]"}`}>
+                  <div className={`text-[11px] font-mono mb-1 w-6 h-6 flex items-center justify-center ${isToday ? "bg-[var(--accent-strong)] text-white rounded-full" : inMonth ? "text-[var(--ink)]" : "text-[var(--ink-3)]"}`}>
                     {d.getDate()}
                   </div>
                   <div className="space-y-0.5">
