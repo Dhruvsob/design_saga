@@ -12,6 +12,7 @@ All endpoints gated by `require_super_admin`.
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional, List
 from pydantic import BaseModel, StrictBool, field_validator
+import datetime as _dt
 import uuid
 import re
 
@@ -561,26 +562,38 @@ async def platform_analytics(request: Request,
     projects_total = await db.projects.count_documents({})
     tasks_total = await db.tasks.count_documents({})
 
-    # Revenue rollup across all orgs (from journal_entries.income lines)
-    revenue = 0.0
-    async for je in db.journal_entries.find({}, {"_id": 0, "lines": 1}):
-        for l in je.get("lines", []):
-            if l.get("account_type") == "income":
-                revenue += float(l.get("credit", 0)) - float(l.get("debit", 0))
-
-    # Per-org revenue leaderboard (top 5)
-    per_org_rev = {}
-    async for je in db.journal_entries.find({}, {"_id": 0, "org_id": 1, "lines": 1}):
-        oid = je.get("org_id") or DEFAULT_ORG_ID
-        for l in je.get("lines", []):
-            if l.get("account_type") == "income":
-                per_org_rev[oid] = per_org_rev.get(oid, 0.0) + float(l.get("credit", 0)) - float(l.get("debit", 0))
-    leaderboard_ids = sorted(per_org_rev.items(), key=lambda x: -x[1])[:5]
-    leaderboard = []
-    for oid, amt in leaderboard_ids:
-        o = await get_org(oid)
-        leaderboard.append({"org_id": oid, "name": o["name"] if o else "Default",
-                           "revenue": round(amt, 2)})
+    # Commercial metadata only. A tenant's own accounting (journals, invoices,
+    # receipts) is that customer's business and is never read for platform figures.
+    from core.subscription import subscription_state
+    today = business_today()
+    by_plan: dict = {}
+    by_status: dict = {}
+    trials_ending, renewals_due = [], []
+    async for o in db.organizations.find(
+            {}, {"_id": 0, "org_id": 1, "name": 1, "plan": 1, "subscription": 1,
+                 "billing": 1, "is_active": 1}):
+        if o.get("is_active") is False:
+            continue
+        plan = o.get("plan") or "starter"
+        by_plan[plan] = by_plan.get(plan, 0) + 1
+        state = subscription_state(o, today)
+        status = state["status"] or "not_set"
+        by_status[status] = by_status.get(status, 0) + 1
+        if state["status"] == "trial" and state["days_left"] is not None and state["days_left"] <= 14:
+            trials_ending.append({"org_id": o["org_id"], "name": o.get("name"),
+                                  "trial_ends_on": state["trial_ends_on"], "days_left": state["days_left"]})
+        renewal = str((o.get("billing") or {}).get("renewal_date") or "")[:10]
+        try:
+            days = (_dt.date.fromisoformat(renewal) - today).days if renewal else None
+        except ValueError:
+            days = None
+        if days is not None and days <= 30:
+            renewals_due.append({"org_id": o["org_id"], "name": o.get("name"),
+                                 "renewal_date": renewal, "days_left": days,
+                                 "plan": plan})
+    renewals_due.sort(key=lambda r: r["days_left"])
+    trials_ending.sort(key=lambda r: r["days_left"])
+    open_enquiries = await db.contact_requests.count_documents({"status": "new"})
 
     return {
         "orgs": {"total": orgs_total, "active": orgs_active,
@@ -588,8 +601,11 @@ async def platform_analytics(request: Request,
         "users": {"total": users_total, "active": users_active},
         "projects": projects_total,
         "tasks": tasks_total,
-        "revenue_total": round(revenue, 2),
-        "leaderboard": leaderboard,
+        "plans": by_plan,
+        "subscriptions": by_status,
+        "trials_ending": trials_ending,
+        "renewals_due": renewals_due,
+        "open_enquiries": open_enquiries,
     }
 
 

@@ -136,25 +136,23 @@ export default function SuperAdminPanel() {
                tone="#1D633E" testid="kpi-users" />
           <KPI icon={Briefcase} label="TOTAL PROJECTS"
                value={analytics.projects} tone="#7A1FA2" testid="kpi-projects" />
-          <KPI icon={CurrencyInr} label="PLATFORM REVENUE"
-               display={fmtMoney(analytics.revenue_total)} tone="#7A4E1A" testid="kpi-revenue" />
+          <KPI icon={CurrencyInr} label="RENEWALS DUE · 30 DAYS"
+               value={analytics.renewals_due?.length || 0} tone="#7A4E1A" testid="kpi-renewals" />
         </div>
       )}
 
-      {analytics?.leaderboard?.length > 0 && (
-        <div className="card-flat">
-          <div className="flex items-center justify-between mb-4">
-            <div className="overline"><ChartLineUp size={11} className="inline mr-1"/> REVENUE LEADERBOARD · TOP 5</div>
+      {analytics && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" data-testid="platform-commercial">
+          <div className="card-flat">
+            <div className="overline mb-3"><ChartLineUp size={11} className="inline mr-1"/> WORKSPACES BY PLAN</div>
+            <MixList rows={analytics.plans} empty="No active workspaces" />
+            <div className="overline mt-5 mb-3">SUBSCRIPTION STATUS</div>
+            <MixList rows={analytics.subscriptions} empty="No subscriptions set" />
           </div>
-          <div className="space-y-2">
-            {analytics.leaderboard.map((row, i) => (
-              <div key={row.org_id} className="flex items-center gap-3 p-2 border border-[var(--line-soft)] hover:bg-[var(--surface-2)]">
-                <div className="font-mono text-xs w-8 text-[var(--ink-3)]">#{i + 1}</div>
-                <div className="flex-1 font-semibold text-sm">{row.name}</div>
-                <div className="font-mono text-sm accent-blue">{fmtMoney(row.revenue)}</div>
-              </div>
-            ))}
-          </div>
+          <DueList title="RENEWALS DUE · NEXT 30 DAYS" rows={analytics.renewals_due} dateKey="renewal_date"
+                   empty="No renewals in the next 30 days" testid="renewals-due" />
+          <DueList title="TRIALS ENDING · NEXT 14 DAYS" rows={analytics.trials_ending} dateKey="trial_ends_on"
+                   empty="No trials ending soon" testid="trials-ending" />
         </div>
       )}
 
@@ -443,6 +441,47 @@ function ReassignModal({ user, orgs, onClose, onDone }) {
 }
 
 /* ------- KPI card ------- */
+/** Count per category (plans, subscription states) as label + bar. */
+function MixList({ rows, empty }) {
+  const entries = Object.entries(rows || {}).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...entries.map(([, n]) => n));
+  if (!entries.length) return <p className="text-sm text-[var(--ink-3)]">{empty}</p>;
+  return (
+    <ul className="space-y-2">
+      {entries.map(([k, n]) => (
+        <li key={k} className="flex items-center gap-3 text-sm">
+          <span className="w-24 shrink-0">{statusLabel(k)}</span>
+          <span className="flex-1 h-2 rounded-full bg-[var(--line-soft)] overflow-hidden">
+            <span className="block h-full bg-[var(--accent)] rounded-full" style={{ width: `${(n / max) * 100}%` }} />
+          </span>
+          <span className="font-mono tabular-nums w-8 text-right">{n}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Workspaces with an upcoming date (renewal or trial end), soonest first. */
+function DueList({ title, rows, dateKey, empty, testid }) {
+  return (
+    <div className="card-flat" data-testid={testid}>
+      <div className="overline mb-3">{title}</div>
+      {!rows?.length ? <p className="text-sm text-[var(--ink-3)]">{empty}</p> : (
+        <ul className="divide-y divide-[var(--line-soft)]">
+          {rows.map((r) => (
+            <li key={r.org_id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="font-semibold truncate">{r.name}</span>
+              <span className={`text-xs shrink-0 ${r.days_left < 0 ? "text-[var(--danger)] font-semibold" : "text-[var(--ink-2)]"}`}>
+                {formatDate(r[dateKey])} · {r.days_left < 0 ? `${-r.days_left} d overdue` : r.days_left === 0 ? "today" : `in ${r.days_left} d`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function KPI({ icon: Icon, label, value, total, display, tone, testid }) {
   return (
     <div className="card-flat p-5 relative overflow-hidden group hover:-translate-y-0.5 transition" data-testid={testid}>
