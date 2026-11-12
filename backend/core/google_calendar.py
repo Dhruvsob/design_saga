@@ -330,7 +330,7 @@ async def event_body(org_id: str, source_type: str, doc: dict,
         description = "\n\n".join(filter(None, [
             doc.get("description"),
             f"Project: {project_name}" if project_name else None,
-            f"Open in Design Saga: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}/tasks/{doc['id']}",
+            f"Open in Gamaa ERP: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}/tasks/{doc['id']}",
         ]))
         reminder = 15 if start_time else 1440
         location = None
@@ -339,13 +339,13 @@ async def event_body(org_id: str, source_type: str, doc: dict,
         if not day:
             return None
         start_time = doc.get("start_time")
-        summary = doc.get("title") or "Design Saga event"
+        summary = doc.get("title") or "Studio event"
         summary = f"[{project_name}] {summary}" if project_name else f"Studio: {summary}"
         link = (f"/projects/{doc['project_id']}" if doc.get("project_id") else "/calendar")
         description = "\n\n".join(filter(None, [
             doc.get("notes"),
             f"Project: {project_name}" if project_name else "Studio event",
-            f"Open in Design Saga: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}{link}",
+            f"Open in Gamaa ERP: {os.environ.get('APP_BASE_URL', 'https://gamaa.in')}{link}",
         ]))
         reminder = doc.get("reminder_minutes")
         if reminder is None and doc.get("alert_minutes"):

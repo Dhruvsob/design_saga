@@ -1,7 +1,37 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import api from "../lib/api";
+import { forgetWorkspace, isWorkspaceSlug, rememberedWorkspace, rememberWorkspace } from "../lib/workspace";
 import { GoogleLogo, LockKey, User, Warning } from "@phosphor-icons/react";
+
+/** The studio this device last signed in to (or `?workspace=<short-name>`),
+ *  shown so staff recognise their own workspace on the shared Gamaa sign-in. */
+function useWorkspaceBrand() {
+  const [params] = useSearchParams();
+  const [ws, setWs] = useState(null);
+  const asked = params.get("workspace");
+  useEffect(() => {
+    const slug = isWorkspaceSlug(asked) ? asked : rememberedWorkspace();
+    if (!slug) return undefined;
+    let alive = true;
+    api.get(`/org/public/${slug}`)
+      .then(({ data }) => {
+        if (!alive) return;
+        setWs(data);
+        if (asked) rememberWorkspace(slug);
+      })
+      .catch((e) => { if (e?.response?.status === 404) forgetWorkspace(); });
+    return () => { alive = false; };
+  }, [asked]);
+  const clear = () => { forgetWorkspace(); setWs(null); };
+  return [ws, clear];
+}
+
+function initialsOf(name) {
+  return String(name || "").split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((w) => w[0]).join("").toUpperCase() || "G";
+}
 
 function extractError(detail, fallback = "Something went wrong.") {
   if (!detail) return fallback;
@@ -19,6 +49,10 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ws, clearWs] = useWorkspaceBrand();
+  const [logoFailed, setLogoFailed] = useState(false);
+  const wsName = ws?.display_name || ws?.name || "";
+  const wsLogo = !logoFailed && ws?.branding?.logo_url;
 
   const handleGoogle = () => {
     // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
@@ -63,23 +97,32 @@ export default function Login() {
       >
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className="relative w-10 h-10 flex items-center justify-center rounded-xl"
-              style={{
-                background: "linear-gradient(145deg, #9A8F7A 0%, #76705E 100%)",
-                boxShadow: "0 4px 14px -4px rgba(91,78,58,0.5), inset 0 1px 0 rgba(255,255,255,0.22)",
-              }}
-            >
-              <span className="text-white font-display font-bold text-sm select-none">DS</span>
-              <span
-                className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--success)] rounded-full border-2 border-white"
-                style={{ animation: "pulse-dot 2s ease-in-out infinite" }}
-              />
-            </div>
-            <div>
-              <div className="font-display font-bold tracking-tight text-[18px] leading-tight text-[var(--ink)]">Design Saga</div>
-              <div className="text-[9px] font-mono tracking-[0.18em] uppercase text-[var(--ink-3)]">Architecture ERP · by Gamaa</div>
+          <div className="flex items-center gap-3 min-w-0" data-testid="login-brand">
+            {wsLogo ? (
+              <img src={wsLogo} alt="" aria-hidden="true" onError={() => setLogoFailed(true)}
+                   className="w-10 h-10 rounded-xl object-contain bg-white border border-[var(--line)] p-1 shrink-0" />
+            ) : (
+              <div
+                className="relative w-10 h-10 flex items-center justify-center rounded-xl shrink-0"
+                style={{
+                  background: "linear-gradient(145deg, #9A8F7A 0%, #76705E 100%)",
+                  boxShadow: "0 4px 14px -4px rgba(91,78,58,0.5), inset 0 1px 0 rgba(255,255,255,0.22)",
+                }}
+              >
+                <span className="text-white font-display font-bold text-sm select-none">{wsName ? initialsOf(wsName) : "G"}</span>
+                <span
+                  className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--success)] rounded-full border-2 border-white"
+                  style={{ animation: "pulse-dot 2s ease-in-out infinite" }}
+                />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="font-display font-bold tracking-tight text-[18px] leading-tight text-[var(--ink)] truncate" data-testid="login-brand-name">
+                {wsName || "Gamaa"}
+              </div>
+              <div className="text-[9px] font-mono tracking-[0.18em] uppercase text-[var(--ink-3)]">
+                {wsName ? "Studio workspace · on Gamaa" : "Architecture & Interior ERP"}
+              </div>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)]">
@@ -90,12 +133,17 @@ export default function Login() {
 
         {/* Form section */}
         <div className="max-w-[400px]">
-          <div className="overline mb-4 text-[var(--accent-strong)]">Studio Login</div>
+          <div className="overline mb-4 text-[var(--accent-strong)]">{wsName ? "Welcome back" : "Studio Login"}</div>
           <h1 className="font-display font-bold tracking-tighter text-[2.5rem] leading-[1.1] mb-3 text-[var(--ink)]">
-            Your studio,<br />in one place.
+            {wsName ? (<>Sign in to<br /><span className="break-words">{wsName}</span></>) : (<>Your studio,<br />in one place.</>)}
           </h1>
           <p className="text-sm text-[var(--ink-2)] leading-relaxed mb-8 max-w-[320px]">
-            Projects, clients, finances and team — a single calm workspace for architecture &amp; interior design firms.
+            {wsName ? (
+              <>Not your studio?{" "}
+                <button type="button" onClick={clearWs} className="underline underline-offset-4 hover:text-[var(--ink)]"
+                        data-testid="login-other-workspace">Use another workspace</button>
+              </>
+            ) : "Projects, clients, finances and team — a single calm workspace for architecture & interior design firms."}
           </p>
 
           {/* Google SSO */}
@@ -125,7 +173,8 @@ export default function Login() {
                 required
                 data-testid="login-identifier"
                 className="input-flat w-full pl-9"
-                placeholder="Email or Employee ID (e.g. DS0001)"
+                placeholder="Email or Employee ID"
+                aria-label="Email or Employee ID"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 autoComplete="username"

@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { formatDate, formatTime } from "../lib/format";
 import { PinSecurityDialog } from "./AppPinLock";
 import { visibleNavGroups } from "../lib/navigation";
+import { rememberWorkspace } from "../lib/workspace";
 
 // Grouped by how an architecture practice works, not by backend module.
 // URLs, permissions and module flags are unchanged; empty groups are hidden.
@@ -127,6 +128,12 @@ export default function Layout({ children }) {
   // Close the mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
+  // Let the shared sign-in page greet this device's user with their studio.
+  // Platform staff and support sessions never overwrite it.
+  useEffect(() => {
+    if (currentOrg?.slug && !isSuperAdmin && !user?.support_access) rememberWorkspace(currentOrg.slug);
+  }, [currentOrg?.slug, isSuperAdmin, user?.support_access]);
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
@@ -159,10 +166,10 @@ export default function Layout({ children }) {
     const hit = g.items.find((n) => location.pathname.startsWith(n.to));
     if (hit) { currentNav = hit; currentGroup = g; break; }
   }
-  const brandName = currentOrg?.display_name || currentOrg?.name || "DESIGN SAGA";
+  const brandName = currentOrg?.display_name || currentOrg?.name || "Workspace";
   const brandTagline = currentOrg?.branding?.tagline || "STUDIO MANAGEMENT";
   const brandLogo = currentOrg?.branding?.logo_url;
-  const brandInitials = (brandName || "DS").split(/\s+/).slice(0, 2)
+  const brandInitials = brandName.split(/\s+/).slice(0, 2)
     .map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
   return (

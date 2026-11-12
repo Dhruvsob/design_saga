@@ -83,6 +83,7 @@ class OrgCreateIn(BaseModel):
     display_name: Optional[str] = None
     admin_email: EmailStr
     admin_name: str = Field(min_length=1, max_length=120)
+    employee_id_prefix: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{2,4}$")
     business_mode: BusinessMode = "hybrid"        # consultancy | turnkey | hybrid
     phone: Optional[str] = None
     website: Optional[str] = None
@@ -100,6 +101,7 @@ class OrgCreateIn(BaseModel):
 class OrgUpdateIn(BaseModel):
     name: Optional[str] = None
     display_name: Optional[str] = None
+    employee_id_prefix: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{2,4}$")
     business_mode: Optional[BusinessMode] = None
     phone: Optional[str] = None
     website: Optional[str] = None

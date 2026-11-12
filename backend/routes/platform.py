@@ -18,6 +18,7 @@ import uuid
 import re
 
 from core.pdf_brand import BRAND_ACCENT, BRAND_PRIMARY
+from core.employee_ids import derive_prefix, normalize_prefix
 from core.limits import MAX_LIST_ROWS
 from core.db import db
 from core.helpers import business_today, iso_now, now_utc, new_id
@@ -147,6 +148,8 @@ async def create_org(payload: OrgCreateIn, request: Request,
         "slug": slug,
         "name": payload.name.strip(),
         "display_name": payload.display_name or payload.name.strip(),
+        "employee_id_prefix": (normalize_prefix(payload.employee_id_prefix)
+                               or derive_prefix(payload.name)),
         "business_mode": payload.business_mode,
         "phone": payload.phone,
         "website": payload.website,
@@ -175,7 +178,7 @@ async def create_org(payload: OrgCreateIn, request: Request,
     admin_doc = {
         "user_id": admin_uid,
         "org_id": org_id,
-        "employee_id": "DS0001",   # per-org sequence
+        "employee_id": f"{org_doc['employee_id_prefix']}0001",   # per-org sequence
         "email": email,
         "name": payload.admin_name.strip(),
         "role": "Admin",
@@ -209,6 +212,8 @@ async def update_org(org_id: str, payload: OrgUpdateIn, request: Request,
     if not org:
         raise HTTPException(404, "Organisation not found")
     up = {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None}
+    if "employee_id_prefix" in up:
+        up["employee_id_prefix"] = normalize_prefix(up["employee_id_prefix"])
     # Convert nested pydantic to dict
     if "address" in up and hasattr(up["address"], "dict"):
         up["address"] = up["address"].dict()
@@ -546,9 +551,11 @@ async def add_org_admin(org_id: str, payload: OrgAdminInviteIn, request: Request
         raise HTTPException(400, "Name is required")
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "This email cannot be used. Choose another address.")
+    from routes.auth import _next_employee_id  # local import: routes.auth imports core modules only
     uid = "user_" + uuid.uuid4().hex[:12]
     doc = {
         "user_id": uid, "org_id": org_id,
+        "employee_id": await _next_employee_id(org_id),
         "email": email, "name": payload.name.strip(),
         "phone": payload.phone,
         "role": "Admin",

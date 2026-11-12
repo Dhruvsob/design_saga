@@ -213,11 +213,11 @@ export default function CompanySettings() {
                 <ColorField label="PDF colour" value={pdfColour}
                             onChange={(v) => setBranding({ primary_color: v })} testid="color-primary" />
                 <div className="self-end text-xs text-[var(--ink-2)] leading-relaxed">
-                  Headings and rules on invoices, quotations, proposals and payslips. The app itself keeps the Design Saga palette.
+                  Headings and rules on invoices, quotations, proposals and payslips. The app itself keeps its standard palette.
                   {pdfColour.toUpperCase() !== BRAND_PDF_COLOUR && (
                     <button type="button" className="block mt-2 underline underline-offset-4 text-[var(--ink)]"
                             onClick={() => setBranding({ primary_color: BRAND_PDF_COLOUR })} data-testid="color-reset">
-                      Use Design Saga colour
+                      Use default colour
                     </button>
                   )}
                 </div>
@@ -230,7 +230,7 @@ export default function CompanySettings() {
               </div>
               <div className="mt-4">
                 <label className="block text-xs text-[var(--ink-2)] mb-1">PDF Footer note (appears on invoices, quotes, slips)</label>
-                <input className="input-flat w-full" placeholder="e.g. Thank you for your business — Design Saga"
+                <input className="input-flat w-full" placeholder="e.g. Thank you for your business"
                        value={branding.pdf_footer || ""} onChange={(e) => setBranding({ pdf_footer: e.target.value })}
                        data-testid="pdf-footer-input" />
               </div>

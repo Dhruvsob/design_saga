@@ -21,7 +21,8 @@ Design decisions
   → 429 with lockout timer.
 * Session tokens are UUID hex — same shape as Google flow — stored in
   `user_sessions` with 7-day expiry. Cookie set as httpOnly + secure + SameSite=None.
-* Employee ID auto-assigned on user creation: `DS0001`, `DS0002`, …
+* Login ID auto-assigned on user creation with the workspace's prefix:
+  `DS0001`, `DS0002`, … (see core.employee_ids).
 """
 from fastapi import APIRouter, HTTPException, Request, Response, Cookie, Header
 from typing import Optional
@@ -87,18 +88,22 @@ def _password_matches(candidates: list[dict], password: str) -> list[dict]:
 
 
 async def _next_employee_id(org_id: str) -> str:
-    """Return a concurrency-safe, tenant-local DS0001-style login ID."""
+    """Return a concurrency-safe, tenant-local login ID with the workspace's
+    prefix (DS0001 for Design Saga and older workspaces)."""
     from pymongo import ReturnDocument
+    from core.employee_ids import counter_kind, prefix_for_org
+    org = await db.organizations.find_one({"org_id": org_id}, {"_id": 0, "employee_id_prefix": 1})
+    prefix = prefix_for_org(org)
     max_num = 0
-    async for u in db.users.find({"org_id": org_id, "employee_id": {"$regex": "^DS\\d+$"}},
+    async for u in db.users.find({"org_id": org_id, "employee_id": {"$regex": f"^{prefix}\\d+$"}},
                                  {"_id": 0, "employee_id": 1}):
         try:
-            n = int(u["employee_id"][2:])
+            n = int(u["employee_id"][len(prefix):])
             if n > max_num:
                 max_num = n
         except (ValueError, KeyError):
             pass
-    key = {"org_id": org_id, "kind": "user_employee_id"}
+    key = {"org_id": org_id, "kind": counter_kind(prefix)}
     if not await db.counters.find_one(key):
         try:
             await db.counters.insert_one({**key, "seq": max_num})
@@ -106,7 +111,7 @@ async def _next_employee_id(org_id: str) -> str:
             pass  # A concurrent creator won the unique counter insert.
     counter = await db.counters.find_one_and_update(
         key, {"$inc": {"seq": 1}}, return_document=ReturnDocument.AFTER)
-    return f"DS{int(counter['seq']):04d}"
+    return f"{prefix}{int(counter['seq']):04d}"
 
 
 def _pack_user(u: dict) -> dict:

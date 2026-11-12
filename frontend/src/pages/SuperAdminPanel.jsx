@@ -512,7 +512,7 @@ function KPI({ icon: Icon, label, value, total, display, tone, testid }) {
 /* ------- Create org modal ------- */
 function CreateOrgModal({ onClose, onCreated }) {
   const [f, setF] = useState({
-    name: "", admin_name: "", admin_email: "",
+    name: "", admin_name: "", admin_email: "", employee_id_prefix: "",
     plan: "starter", gstin: "", industry: "Architecture & Interior Design",
     business_mode: "hybrid",
   });
@@ -522,7 +522,9 @@ function CreateOrgModal({ onClose, onCreated }) {
   const submit = async (e) => {
     e.preventDefault(); setErr(""); setBusy(true);
     try {
-      const { data } = await api.post("/platform/orgs", f);
+      const { data } = await api.post("/platform/orgs", {
+        ...f, employee_id_prefix: f.employee_id_prefix || undefined,
+      });
       setCreated({ path: data.invite_path, email: f.admin_email, name: data.org?.name || f.name });
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Create failed"));
@@ -576,6 +578,9 @@ function CreateOrgModal({ onClose, onCreated }) {
           </select>
           <input className="input-flat" placeholder="GSTIN (optional)"
                  value={f.gstin} onChange={(e) => setF({...f, gstin: e.target.value})} />
+          <PrefixField value={f.employee_id_prefix}
+                       onChange={(v) => setF({...f, employee_id_prefix: v})}
+                       hint="Optional. Defaults to the studio's initials." />
         </div>
         <div className="overline text-[var(--accent-strong)]">03 · FIRST ADMIN</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -608,6 +613,7 @@ function EditOrgModal({ org, onClose, onSaved }) {
     website: org.website || "", gstin: org.gstin || "", pan: org.pan || "",
     plan: org.plan || "starter", industry: org.industry || "",
     business_mode: org.business_mode || "hybrid",
+    employee_id_prefix: org.employee_id_prefix || "DS",
   });
   const [billing, setBilling] = useState({
     owner_override: b.owner_override || "",
@@ -629,7 +635,9 @@ function EditOrgModal({ org, onClose, onSaved }) {
         amount_charged: billing.amount_charged === "" ? null : Number(billing.amount_charged),
         maintenance_charge: billing.maintenance_charge === "" ? null : Number(billing.maintenance_charge),
       };
-      await api.patch(`/platform/orgs/${org.org_id}`, { ...f, billing: billingPayload });
+      await api.patch(`/platform/orgs/${org.org_id}`, {
+        ...f, employee_id_prefix: f.employee_id_prefix || undefined, billing: billingPayload,
+      });
       onSaved();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Update failed"));
@@ -672,6 +680,9 @@ function EditOrgModal({ org, onClose, onSaved }) {
             <option value="pro">Pro</option>
             <option value="enterprise">Enterprise</option>
           </select>
+          <PrefixField value={f.employee_id_prefix}
+                       onChange={(v) => setF({...f, employee_id_prefix: v})}
+                       hint="Applies to new users only. Existing IDs keep working." />
         </div>
 
         {/* Subscription / billing (manual bookkeeping — no payment gateway) */}
@@ -821,6 +832,22 @@ function OrgAdminsModal({ org, onClose }) {
         </tbody>
       </table></div>
     </Modal>
+  );
+}
+
+/** Two to four letters that start every new login ID in a workspace (DS0001 …). */
+function PrefixField({ value, onChange, hint }) {
+  return (
+    <label className="block">
+      <span className="sr-only">Login ID prefix</span>
+      <input className="input-flat w-full font-mono uppercase" placeholder="Login ID prefix (e.g. DS)"
+             value={value} maxLength={4} pattern="[A-Za-z]{2,4}" title="Two to four letters"
+             onChange={(e) => onChange(e.target.value.replace(/[^A-Za-z]/g, "").toUpperCase())}
+             data-testid="org-id-prefix" />
+      <span className="block text-[10px] text-[var(--ink-3)] mt-1">
+        {value ? `New login IDs look like ${value}0001. ` : ""}{hint}
+      </span>
+    </label>
   );
 }
 

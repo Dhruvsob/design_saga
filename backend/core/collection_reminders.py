@@ -186,7 +186,7 @@ async def _upsert_event(org_id: str, source_type: str, row: dict, occ: list, par
         f"Due date: {due[8:10]}/{due[5:7]}/{due[:4]}" if due else None,
         f"Reference: {row['reference']}" if row.get("reference") else None,
         row.get("notes"),
-        "Record the payment in Design Saga > Accounting > Collections Due when it arrives.",
+        "Record the payment in Accounting > Collections Due when it arrives.",
     ]))
     owner_ids = await _finance_owner_user_ids(org_id)
     doc = {
