@@ -58,7 +58,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.10.1",
-    "@playwright/test": "1.49.1",
+    "@playwright/test": "1.65.0",
     "@vitejs/plugin-react": "6.1.2",
     "autoprefixer": "^10.4.20",
     "eslint": "9.39.5",
