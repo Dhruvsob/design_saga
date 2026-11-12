@@ -22,6 +22,9 @@ class _Cursor:
                 yield dict(r)
         return it()
 
+    async def to_list(self, _n=None):
+        return [dict(r) for r in self.rows]
+
 
 class _Coll:
     def __init__(self, rows=()):
@@ -73,7 +76,9 @@ def test_platform_analytics_uses_commercial_metadata_only(monkeypatch):
     data = asyncio.run(platform.platform_analytics(_request()))
 
     assert "revenue_total" not in data and "leaderboard" not in data
-    assert data["plans"] == {"pro": 1, "starter": 1}           # inactive workspace excluded
+    assert data["plans"] == {"starter": 1, "pro": 2, "enterprise": 0, "other": 0}
+    assert data["renewals"] == {"due_30_days": 1, "overdue": 0}
+    assert data["subscriptions"] == {"not_set": 1, "trial": 1}  # inactive workspace excluded
     assert [r["name"] for r in data["renewals_due"]] == ["Studio A"]
     assert [r["name"] for r in data["trials_ending"]] == ["Studio B"]
     assert data["trials_ending"][0]["days_left"] == 3

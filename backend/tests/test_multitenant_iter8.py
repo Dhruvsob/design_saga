@@ -90,8 +90,8 @@ class TestPlatformRoutes:
         r = requests.get(f"{API}/platform/analytics", headers=H(SA_TOKEN), timeout=20)
         assert r.status_code == 200, r.text
         d = r.json()
-        for k in ("orgs", "users", "projects", "tasks", "plans", "subscriptions",
-                  "renewals_due", "trials_ending"):
+        for k in ("orgs", "users", "projects", "tasks", "plans", "renewals",
+                  "subscriptions", "renewals_due", "trials_ending"):
             assert k in d, f"missing {k} in {d.keys()}"
         # Customer accounting is never reported as platform revenue.
         assert "revenue_total" not in d and "leaderboard" not in d
