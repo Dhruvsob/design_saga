@@ -1856,6 +1856,20 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
         if not c:
             raise HTTPException(status_code=404, detail="Client not found")
         upd["client_name"] = c.get("name")
+    # The fee structure updates as a group: switching the type clears the other
+    # types' inputs, and an empty type ("") clears the whole structure.
+    # Preserve fields already marked for clearing by validation above.
+    fst = upd.get("fee_structure_type")
+    if fst is not None:
+        for f in ALL_FEE_SUBFIELDS - FEE_SUBFIELDS.get(fst, set()):
+            upd.pop(f, None)
+            unset[f] = ""
+        if fst == "":
+            upd.pop("fee_structure_type", None)
+            unset["fee_structure_type"] = ""
+    # Never set and unset the same MongoDB field.
+    for field in unset:
+        upd.pop(field, None)
     upd["updated_at"] = iso(now_utc())
     update_doc = {"$set": upd}
     if unset:
