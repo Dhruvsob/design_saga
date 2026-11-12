@@ -11,6 +11,7 @@ import ProjectSiteVisits from "../components/SiteVisits";
 import ProjectDrawings from "../components/ProjectDrawings";
 import ProjectSnags from "../components/ProjectSnags";
 import ProjectTime from "../components/ProjectTime";
+import ProjectTimeline from "../components/ProjectTimeline";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
 import { feeCalc } from "../lib/fees";
@@ -23,11 +24,11 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
-const TABS = ["Overview", "Phases", "Tasks", "Time", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Activity"];
+const TABS = ["Overview", "Phases", "Timeline", "Tasks", "Time", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Activity"];
 // One project workspace, grouped the way a studio works on a job.
 export const PROJECT_TAB_GROUPS = [
   { id: "overview", label: "Overview", tabs: ["Overview", "Activity"] },
-  { id: "work", label: "Work", tabs: ["Phases", "Tasks", "Time"] },
+  { id: "work", label: "Work", tabs: ["Phases", "Timeline", "Tasks", "Time"] },
   { id: "design", label: "Design", tabs: ["Drawings", "Files"] },
   { id: "site", label: "Site", tabs: ["Site visits", "Snags"] },
   { id: "commercial", label: "Commercial", tabs: ["Milestones", "Invoices", "Vendors"] },
@@ -276,7 +277,7 @@ export default function ProjectDetail() {
       </Link>
 
       <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
+        <div className="min-w-0 max-w-full">
           <div className="overline mb-2">
             {p.project_type} · {p.client_id ? (
               <Link to={`/clients/${p.client_id}`} className="hover:text-[var(--accent-strong)] underline-offset-2 hover:underline">{p.client_name || "—"}</Link>
@@ -289,7 +290,7 @@ export default function ProjectDetail() {
             {p.archived && <span className="ml-2 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--hover)] text-[var(--ink-3)]">ARCHIVED</span>}
           </div>
           <h1 className="font-display font-bold tracking-tight text-4xl">{p.name}</h1>
-          {p.description && <p className="mt-2 text-[var(--ink-2)] max-w-2xl">{p.description}</p>}
+          {p.description && <p className="mt-2 text-[var(--ink-2)] max-w-2xl [overflow-wrap:anywhere]">{p.description}</p>}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {hasPerm("projects.update") && (
@@ -452,6 +453,8 @@ export default function ProjectDetail() {
         <ProjectPhases projectId={id} project={p} canEdit={hasPerm("projects.update")}
           canSeeFinancials={canSeeFinancials} onChanged={load} />
       )}
+
+      {tab === "Timeline" && <ProjectTimeline projectId={id} />}
 
       {tab === "Time" && <ProjectTime projectId={id} canSeeFinancials={hasPerm("finance.read")} />}
 

@@ -5809,6 +5809,7 @@ from routes.platform import router as platform_router  # noqa: E402
 from routes.organization import router as organization_router  # noqa: E402
 from routes.platform_billing import router as platform_billing_router  # noqa: E402
 from routes.timesheets import router as timesheets_router  # noqa: E402
+from routes.timeline import router as timeline_router  # noqa: E402
 from routes.loans import router as loans_router  # noqa: E402
 from routes.audit import router as audit_router  # noqa: E402
 from routes.purchase import router as purchase_router  # noqa: E402
@@ -5836,6 +5837,7 @@ api.include_router(platform_router)
 api.include_router(organization_router)
 api.include_router(platform_billing_router)
 api.include_router(timesheets_router)
+api.include_router(timeline_router)
 api.include_router(loans_router)
 api.include_router(audit_router)
 api.include_router(purchase_router)

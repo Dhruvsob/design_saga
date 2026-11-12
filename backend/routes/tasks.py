@@ -362,7 +362,7 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
     # Track material changes for the timeline audit
     events: List[dict] = []
     tracked = ["title", "priority", "status", "status_detail", "assignee_name",
-               "area", "category", "due_date", "task_type"]
+               "area", "category", "start_date", "due_date", "task_type"]
     for k in tracked:
         if k in updates and updates[k] != existing.get(k):
             if k in ("status", "status_detail"):
@@ -433,6 +433,10 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
             pass
 
     await sync_source(user_org_id(user), "task", task_id)
+    if any(k in updates and updates[k] != existing.get(k) for k in ("start_date", "due_date")):
+        # Tasks that wait for this one move with it (core.scheduling).
+        from routes.timeline import ripple_after_edit
+        await ripple_after_edit(user, task_id)
     return await sdb.tasks.find_one({"id": task_id}, {"_id": 0})
 
 
