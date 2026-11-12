@@ -838,25 +838,63 @@ async def update_org_limits(org_id: str, payload: dict, request: Request,
     return await get_org(org_id)
 
 
+class SupportAccessIn(BaseModel):
+    reason: str
+    mode: str = "read"            # read | write
+    minutes: int = 60
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, value: str) -> str:
+        value = (value or "").strip()
+        if len(value) < 10:
+            raise ValueError("Give a reason of at least 10 characters (for example the support ticket)")
+        return value[:300]
+
+    @field_validator("mode")
+    @classmethod
+    def _mode(cls, value: str) -> str:
+        if value not in ("read", "write"):
+            raise ValueError("mode must be read or write")
+        return value
+
+    @field_validator("minutes")
+    @classmethod
+    def _minutes(cls, value: int) -> int:
+        if not 5 <= value <= 240:
+            raise ValueError("Support access lasts between 5 and 240 minutes")
+        return value
+
+
 @router.post("/impersonate/{org_id}")
-async def impersonate_org(org_id: str, request: Request,
+async def impersonate_org(org_id: str, payload: SupportAccessIn, request: Request,
                           session_token: Optional[str] = Cookie(default=None),
                           authorization: Optional[str] = Header(default=None)):
-    """Apply tenant context only to the current Super Admin session."""
+    """Time-limited support access to one workspace for this Super Admin session only.
+    Read-only unless write is requested; recorded in the customer's own audit log."""
     sa = await require_super_admin(request, session_token, authorization)
     org = await get_org(org_id)
     if not org:
         raise HTTPException(404, "Organisation not found")
+    expires_at = now_utc() + _dt.timedelta(minutes=payload.minutes)
     session_filter = _current_session_filter(session_token, authorization)
-    await db.user_sessions.update_one(
-        session_filter, {"$set": {"impersonated_org_id": org_id}})
+    await db.user_sessions.update_one(session_filter, {"$set": {
+        "impersonated_org_id": org_id, "impersonation_mode": payload.mode,
+        "impersonation_reason": payload.reason, "impersonation_expires_at": expires_at,
+    }})
     # Remove legacy account-wide state left by older deployments.
     await db.users.update_one({"user_id": sa["user_id"]},
                               {"$unset": {"org_id": "", "impersonating": ""}})
+    meta = {"mode": payload.mode, "reason": payload.reason, "minutes": payload.minutes,
+            "by": sa.get("email")}
     platform_actor = {**sa, "org_id": None}
     await audit(platform_actor, "platform.impersonation_start", target=org_id,
-                target_type="org")
-    return {"ok": True, "org_id": org_id, "org": org}
+                target_type="org", meta=meta)
+    # The customer sees every support access in their own audit log.
+    await audit(platform_actor, "support.access_granted", target=org_id,
+                target_type="org", meta=meta, org_id=org_id)
+    return {"ok": True, "org_id": org_id, "org": org, "mode": payload.mode,
+            "expires_at": expires_at.isoformat()}
 
 
 @router.post("/exit-impersonation")
@@ -866,11 +904,16 @@ async def exit_impersonation(request: Request,
     sa = await require_super_admin(request, session_token, authorization)
     previous_org_id = sa.get("org_id")
     session_filter = _current_session_filter(session_token, authorization)
-    await db.user_sessions.update_one(
-        session_filter, {"$unset": {"impersonated_org_id": ""}})
+    await db.user_sessions.update_one(session_filter, {"$unset": {
+        "impersonated_org_id": "", "impersonation_mode": "", "impersonation_reason": "",
+        "impersonation_expires_at": "",
+    }})
     await db.users.update_one({"user_id": sa["user_id"]},
                               {"$unset": {"org_id": "", "impersonating": ""}})
     platform_actor = {**sa, "org_id": None}
     await audit(platform_actor, "platform.impersonation_end",
                 target=previous_org_id or "", target_type="org")
+    if previous_org_id:
+        await audit(platform_actor, "support.access_ended", target=previous_org_id,
+                    target_type="org", org_id=previous_org_id)
     return {"ok": True}

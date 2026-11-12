@@ -128,8 +128,10 @@ def test_superadmin_impersonation_is_session_scoped_and_does_not_mutate_user():
         "user_id": "platform", "role": "SuperAdmin", "is_super_admin": True,
         "org_id": "legacy_global_leak", "impersonating": True,
     }
+    from datetime import datetime, timedelta, timezone
     contextual = deps.apply_session_context(
-        persisted, {"impersonated_org_id": "org_a"})
+        persisted, {"impersonated_org_id": "org_a",
+                    "impersonation_expires_at": datetime.now(timezone.utc) + timedelta(minutes=30)})
 
     assert contextual["org_id"] == "org_a"
     assert contextual["impersonating"] is True

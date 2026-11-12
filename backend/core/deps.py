@@ -55,10 +55,12 @@ def apply_session_context(user: Optional[dict], session: dict) -> Optional[dict]
     # Ignore legacy persisted impersonation, which leaked across every session.
     contextual.pop("org_id", None)
     contextual.pop("impersonating", None)
-    org_id = session.get("impersonated_org_id")
-    if org_id:
-        contextual["org_id"] = org_id
+    from .session_lock import support_access
+    grant = support_access(session)
+    if grant:
+        contextual["org_id"] = grant["org_id"]
         contextual["impersonating"] = True
+        contextual["support_access"] = grant
     return contextual
 
 
@@ -197,8 +199,9 @@ async def require_user(
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     await ensure_user_access(user)
-    from .session_lock import enforce_session_pin
+    from .session_lock import enforce_session_pin, enforce_support_access
     await enforce_session_pin(request)
+    enforce_support_access(request)
     # Expired subscription: viewing stays available, changes are refused.
     from .subscription import enforce_writable
     await enforce_writable(request, user)

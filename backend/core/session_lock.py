@@ -68,6 +68,32 @@ def session_is_recent(session: dict, max_age_seconds: int = 600, at=None) -> boo
     return 0 <= age <= max_age_seconds
 
 
+def support_access(session: dict, at=None) -> dict | None:
+    """The live Super Admin support grant on this session, or None once it expired.
+    Grants without an expiry (from before time limits) count as expired."""
+    org_id = (session or {}).get("impersonated_org_id")
+    expires = _as_utc((session or {}).get("impersonation_expires_at"))
+    if not org_id or not expires or expires <= (at or now_utc()):
+        return None
+    return {"org_id": org_id, "mode": session.get("impersonation_mode") or "read",
+            "expires_at": expires.isoformat(), "reason": session.get("impersonation_reason")}
+
+
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+_SUPPORT_EXEMPT = ("/api/platform/", "/api/auth/")
+
+
+def enforce_support_access(request: Request) -> None:
+    """Read-only support access may look but not change a customer's records."""
+    grant = support_access(getattr(request.state, "auth_session", None))
+    if not grant or grant["mode"] == "write":
+        return
+    if request.method.upper() in _SAFE_METHODS or request.url.path.startswith(_SUPPORT_EXEMPT):
+        return
+    raise HTTPException(status_code=403,
+                        detail="Support access is read-only. Start write access with a reason to change records.")
+
+
 async def enforce_session_pin(request: Request) -> None:
     session = getattr(request.state, "auth_session", None)
     if session and session.get("pin_setup_required"):

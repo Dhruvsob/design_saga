@@ -76,12 +76,12 @@ def scoped_org_query(org_id: str, query: Optional[dict] = None) -> dict:
 def tenant_filter(user: dict) -> dict:
     """Return a Mongo filter that scopes queries to the user's org.
 
-    Super admins get an empty filter (see everything). Regular users
-    get `{"org_id": <their-org>}` — plus we include legacy documents
-    that have no org_id and match the default org for zero-downtime
-    migration.
+    Super admins outside a workspace get an empty filter (see everything);
+    inside one (support access) they are scoped to it. Regular users get
+    `{"org_id": <their-org>}` — plus we include legacy documents that have
+    no org_id and match the default org for zero-downtime migration.
     """
-    if is_super_admin(user):
+    if is_super_admin(user) and not user.get("org_id"):
         return {}
     return org_filter_for_id(user_org_id(user))
 

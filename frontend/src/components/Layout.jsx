@@ -1,5 +1,6 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import api from "../lib/api";
 import {
   SquaresFour, UsersThree, Briefcase, Kanban, Receipt, UserCircle,
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
@@ -354,6 +355,22 @@ export default function Layout({ children }) {
           </div>
         </header>
 
+        {user?.support_access && (
+          <div role="status" className="px-4 lg:px-8 py-2.5 bg-[var(--ink)] text-white text-sm flex flex-wrap items-center gap-x-3 gap-y-1 no-print" data-testid="support-access-banner">
+            <strong>Support access</strong>
+            <span className="opacity-80">
+              {brandName} · {user.support_access.mode === "write" ? "view and change" : "view only"} · ends{" "}
+              {new Date(user.support_access.expires_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <button type="button" className="ml-auto underline underline-offset-2" data-testid="support-exit"
+                    onClick={async () => {
+                      await api.post("/platform/exit-impersonation").catch(() => {});
+                      window.location.assign("/super-admin");
+                    }}>
+              Exit to platform
+            </button>
+          </div>
+        )}
         {subState?.read_only && (
           <div role="status" className="px-4 lg:px-8 py-2.5 bg-[var(--danger-soft)] border-b border-[#F1D3CC] text-sm text-[#7A2A1C] flex items-center gap-2 no-print" data-testid="read-only-banner">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--danger)] shrink-0" />

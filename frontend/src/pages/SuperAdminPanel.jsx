@@ -38,6 +38,7 @@ export default function SuperAdminPanel() {
   const [reassignUser, setReassignUser] = useState(null);
   const [healthOrg, setHealthOrg] = useState(null);
   const [modulesOrg, setModulesOrg] = useState(null);
+  const [supportOrg, setSupportOrg] = useState(null);
   const [isoResult, setIsoResult] = useState(null);
   const [isoBusy, setIsoBusy] = useState(false);
 
@@ -359,6 +360,12 @@ export default function SuperAdminPanel() {
                             className="btn-ghost text-xs" data-testid={`admins-${o.org_id}`}>
                       <ShieldCheck size={12} />
                     </button>
+                    {o.is_active !== false && (
+                      <button title="Support access" onClick={() => setSupportOrg(o)}
+                              className="btn-ghost text-xs" data-testid={`support-${o.org_id}`}>
+                        <Key size={12} />
+                      </button>
+                    )}
                     {!o.is_default && (
                       <button title="Delete" onClick={() => setConfirmDelete(o)}
                               className="btn-ghost text-xs text-[var(--danger)]" data-testid={`delete-${o.org_id}`}>
@@ -386,6 +393,7 @@ export default function SuperAdminPanel() {
       {reassignUser && <ReassignModal user={reassignUser} orgs={orgs} onClose={() => setReassignUser(null)} onDone={() => { setReassignUser(null); load(); }} />}
       {healthOrg && <OrgHealthModal org={healthOrg} onClose={() => setHealthOrg(null)} onSaved={() => { load(); }} />}
       {modulesOrg && <ModulesModal org={modulesOrg} onClose={() => setModulesOrg(null)} onSaved={() => { setModulesOrg(null); load(); }} />}
+      {supportOrg && <SupportAccessModal org={supportOrg} onClose={() => setSupportOrg(null)} />}
     </div>
   );
 }
@@ -876,6 +884,66 @@ function ConfirmDeleteModal({ org, onClose, onConfirm }) {
       <div className="flex justify-end mt-4">
         <button onClick={onClose} className="btn-ghost">Close</button>
       </div>
+    </Modal>
+  );
+}
+
+/* ------- Support access (time-limited, read-only by default) ------- */
+function SupportAccessModal({ org, onClose }) {
+  const [reason, setReason] = useState("");
+  const [mode, setMode] = useState("read");
+  const [minutes, setMinutes] = useState(60);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const start = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError("");
+    try {
+      await api.post(`/platform/impersonate/${org.org_id}`, { reason: reason.trim(), mode, minutes: Number(minutes) });
+      window.location.assign("/dashboard");
+    } catch (err) {
+      setError(fmtErr(err?.response?.data?.detail, "Could not start support access"));
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal onClose={onClose} title="Support access" eyebrow={org.name}>
+      <form onSubmit={start} className="space-y-4">
+        <p className="text-sm text-[var(--ink-2)]">
+          You will see this workspace exactly as its admin does. The customer sees this access, the reason and
+          the time in their own audit log. It ends automatically.
+        </p>
+        <label className="block">
+          <span className="text-xs text-[var(--ink-2)]">Reason (shown to the customer)</span>
+          <textarea className="input-flat w-full mt-1" rows={2} required minLength={10} maxLength={300}
+                    value={reason} onChange={(e) => setReason(e.target.value)}
+                    placeholder="For example: Ticket 42 — invoice PDF shows the wrong address" data-testid="support-reason" />
+        </label>
+        <fieldset className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <legend className="text-xs text-[var(--ink-2)] mb-1">Access</legend>
+          {[["read", "View only", "Recommended. Nothing can be changed."],
+            ["write", "View and change", "Only when the customer asked you to fix something."]].map(([k, t, d]) => (
+            <label key={k} className={`border rounded-lg p-3 cursor-pointer ${mode === k ? "border-[var(--accent)] bg-[var(--hover)]" : "border-[var(--line)]"}`}>
+              <input type="radio" name="support-mode" className="sr-only" checked={mode === k} onChange={() => setMode(k)} />
+              <div className="font-semibold text-sm">{t}</div>
+              <div className="text-[11px] text-[var(--ink-2)]">{d}</div>
+            </label>
+          ))}
+        </fieldset>
+        <label className="block">
+          <span className="text-xs text-[var(--ink-2)]">Ends after</span>
+          <select className="input-flat w-full mt-1" value={minutes} onChange={(e) => setMinutes(e.target.value)}>
+            {[15, 30, 60, 120, 240].map((m) => <option key={m} value={m}>{m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? "s" : ""}`}</option>)}
+          </select>
+        </label>
+        {error && <div className="text-xs text-[var(--danger)]" role="alert">{error}</div>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+          <button className="btn-primary" disabled={busy || reason.trim().length < 10} data-testid="support-start">
+            <Key size={14} /> {busy ? "Opening…" : "Open workspace"}
+          </button>
+        </div>
+      </form>
     </Modal>
   );
 }

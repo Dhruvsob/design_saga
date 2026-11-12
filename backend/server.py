@@ -176,8 +176,9 @@ async def require_user(request: Request, session_token: Optional[str] = Cookie(d
         raise HTTPException(status_code=401, detail="Not authenticated")
     from core.deps import ensure_user_access
     await ensure_user_access(user)
-    from core.session_lock import enforce_session_pin
+    from core.session_lock import enforce_session_pin, enforce_support_access
     await enforce_session_pin(request)
+    enforce_support_access(request)
     from core.subscription import enforce_writable
     await enforce_writable(request, user)
     return user

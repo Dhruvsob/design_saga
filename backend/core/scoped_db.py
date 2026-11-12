@@ -35,7 +35,9 @@ def _is_super_admin_local(user: Optional[dict]) -> bool:
 
 
 def _tenant_filter_local(user: dict) -> dict:
-    if _is_super_admin_local(user):
+    # A Super Admin is unscoped only outside a workspace; inside one (support
+    # access) they see and write exactly that tenant, like its own staff.
+    if _is_super_admin_local(user) and not user.get("org_id"):
         return {}
     oid = user.get("org_id") or DEFAULT_ORG_ID
     if oid == DEFAULT_ORG_ID:
