@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   Plus, X, FileArrowUp, CheckCircle, XCircle, ChatText, PencilSimple, Archive, ArrowCounterClockwise,
-  ClockCounterClockwise, FileXls, Trash, ArrowSquareOut,
+  ClockCounterClockwise, FileXls, Trash, ArrowSquareOut, PaperPlaneTilt,
 } from "@phosphor-icons/react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -46,11 +46,33 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
   const [discipline, setDiscipline] = useState("");
   const [issueFor, setIssueFor] = useState(null);
   const [historyFor, setHistoryFor] = useState(null);
+  const [waiting, setWaiting] = useState({});    // "drawingId:rev" -> pending client request
 
-  const load = () => api.get(`/projects/${projectId}/drawings`, { params: { include_archived: showArchived } })
-    .then(({ data: d }) => setData(d))
-    .catch((e) => { setData({ drawings: [], counts: {}, purposes: {}, disciplines: [] }); toast.error(e?.response?.data?.detail || "Could not load drawings"); });
+  const load = () => {
+    api.get(`/projects/${projectId}/approvals`)
+      .then(({ data: a }) => setWaiting(Object.fromEntries((a.approvals || [])
+        .filter((x) => x.kind === "drawing" && x.status === "pending").map((x) => [`${x.drawing_id}:${x.rev}`, x]))))
+      .catch(() => setWaiting({}));
+    return api.get(`/projects/${projectId}/drawings`, { params: { include_archived: showArchived } })
+      .then(({ data: d }) => setData(d))
+      .catch((e) => { setData({ drawings: [], counts: {}, purposes: {}, disciplines: [] }); toast.error(e?.response?.data?.detail || "Could not load drawings"); });
+  };
   useEffect(() => { load(); }, [projectId, showArchived]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const askClient = async (d) => {
+    const v = await askForm({
+      title: `Ask the client to approve ${d.number} rev ${d.current.rev}`,
+      body: "It appears in the client portal. Only people with a personal link (Client tab) can approve or send it back; their decision is written onto this revision.",
+      fields: [{ name: "note", label: "Message to the client (optional)", multiline: true, placeholder: "Please check the wardrobe elevations" }],
+      confirmLabel: "Send to client",
+    });
+    if (!v) return;
+    try {
+      await api.post(`/projects/${projectId}/approvals`, { kind: "drawing", drawing_id: d.id, note: v.note || null });
+      toast.success(`${d.number} rev ${d.current.rev} sent to the client`);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not send to the client"); }
+  };
 
   const rows = useMemo(() => (data?.drawings || []).filter((d) => !discipline || d.discipline === discipline), [data, discipline]);
   const purposes = data?.purposes || {};
@@ -146,7 +168,10 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
                     <div className="text-xs text-[var(--ink-3)]">{d.discipline}{d.scale ? ` · ${d.scale}` : ""}</div></td>
                   <td className="p-3 font-mono">{cur ? cur.rev : "—"}{d.revision_count > 1 && <span className="text-[10px] text-[var(--ink-3)]"> of {d.revision_count}</span>}</td>
                   <td className="p-3 text-xs">{cur ? purposes[cur.purpose] || cur.purpose : "—"}{cur?.issued_to && <div className="text-[var(--ink-3)]">to {cur.issued_to}</div>}</td>
-                  <td className="p-3"><Chip status={cur?.status} />{cur?.comment && <div className="text-[10px] text-[var(--ink-3)] mt-1 max-w-[220px] truncate" title={cur.comment}>{cur.comment}</div>}</td>
+                  <td className="p-3"><Chip status={cur?.status} />
+                    {cur && waiting[`${d.id}:${cur.rev}`] && <div className="text-[10px] font-semibold text-[var(--accent-strong)] mt-1" data-testid={`drawing-waiting-${d.number}`}>Waiting for client</div>}
+                    {cur?.decided_via === "client_portal" && <div className="text-[10px] text-[var(--ink-2)] mt-1">by {cur.decided_by_name}</div>}
+                    {cur?.comment && <div className="text-[10px] text-[var(--ink-3)] mt-1 max-w-[220px] truncate" title={cur.comment}>{cur.comment}</div>}</td>
                   <td className="p-3 text-xs whitespace-nowrap">{cur ? formatDate(cur.issued_on) : "—"}</td>
                   <td className="p-3 text-right whitespace-nowrap">
                     {canEdit && !d.archived && (
@@ -156,6 +181,7 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
                     )}
                     <RowActions label={`drawing ${d.number}`} testid={`drawing-actions-${d.number}`} actions={[
                       { label: "Open current PDF", icon: ArrowSquareOut, hidden: !url, onSelect: () => window.open(url, "_blank", "noopener") },
+                      { label: "Ask client to approve", icon: PaperPlaneTilt, hidden: !(canDecide && cur?.status === "issued" && !d.archived && !waiting[`${d.id}:${cur.rev}`]), onSelect: () => askClient(d), testid: `drawing-ask-client-${d.number}` },
                       { label: "Approve", icon: CheckCircle, hidden: !(canDecide && cur?.status === "issued"), onSelect: () => decide(d, "approved"), testid: `drawing-approve-${d.number}` },
                       { label: "Ask for changes", icon: XCircle, hidden: !(canDecide && cur?.status === "issued"), onSelect: () => decide(d, "rejected") },
                       { label: "Add comment", icon: ChatText, hidden: !(canDecide && cur?.status === "issued"), onSelect: () => decide(d, "commented") },
@@ -184,7 +210,7 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
                   <span className="text-xs text-[var(--ink-3)] ml-auto">{formatDate(r.issued_on)}</span></div>
                 <div className="text-xs text-[var(--ink-2)]">{purposes[r.purpose] || r.purpose}{r.issued_to ? ` · to ${r.issued_to}` : ""} · {r.created_by_name}</div>
                 {r.note && <div className="text-xs mt-1">{r.note}</div>}
-                {r.decided_by_name && <div className="text-xs mt-1 text-[var(--ink-2)]">{STATUS[r.status]?.[0]} by {r.decided_by_name}{r.comment ? `: ${r.comment}` : ""}</div>}
+                {r.decided_by_name && <div className="text-xs mt-1 text-[var(--ink-2)]">{STATUS[r.status]?.[0]} by {r.decided_by_name}{r.decided_via === "client_portal" ? " in the client portal" : ""}{r.decided_at ? ` on ${formatDate(r.decided_at)}` : ""}{r.comment ? `: ${r.comment}` : ""}</div>}
                 {safeFileUrl(r.file_url) && <a className="text-xs text-[var(--accent-strong)] hover:underline" href={safeFileUrl(r.file_url)} target="_blank" rel="noreferrer">{r.file_name || "Open file"}</a>}
               </li>
             ))}

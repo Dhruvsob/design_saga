@@ -236,6 +236,8 @@ async def issue_revision(drawing_id: str, payload: RevisionIn, request: Request,
         raise HTTPException(status_code=409, detail="Someone issued a revision just now. Refresh and try again.")
     await audit(user, "drawing.revision.issue", target=drawing_id, target_type="drawing",
                 meta={"number": d["number"], "rev": rev["rev"], "purpose": rev["purpose"], "file_id": f["id"]})
+    from routes.approvals import close_for_drawing
+    await close_for_drawing(drawing_id, f"Revision {rev['rev']} was issued")
     return _shape(await sdb.drawings.find_one({"id": drawing_id}, {"_id": 0}))
 
 
@@ -263,6 +265,9 @@ async def decide_revision(drawing_id: str, rev: str, payload: DecisionIn, reques
         raise HTTPException(status_code=409, detail="This revision changed meanwhile. Refresh and check.")
     await audit(user, f"drawing.revision.{payload.decision}", target=drawing_id, target_type="drawing",
                 meta={"number": d["number"], "rev": revs[i]["rev"], "comment": payload.comment})
+    from routes.approvals import close_for_drawing
+    await close_for_drawing(drawing_id, f"Decided in the studio by {user.get('name') or 'the team'}",
+                            rev=revs[i]["rev"], status="withdrawn")
     return _shape(await sdb.drawings.find_one({"id": drawing_id}, {"_id": 0}))
 
 

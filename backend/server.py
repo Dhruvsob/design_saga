@@ -2761,24 +2761,11 @@ def safe_label(text) -> str:
 
 
 async def _public_project_by_token(token: str) -> tuple[dict, str]:
-    """Resolve a share token to one active tenant without request scope."""
-    # Keep existing 12-hex links readable; all new/rotated links use 256 bits.
-    if not (re.fullmatch(r"[a-f0-9]{12}", token or "")
-            or re.fullmatch(r"[A-Za-z0-9_-]{32,64}", token or "")):
-        raise HTTPException(status_code=404, detail="Invalid link")
-    project = await db.projects.find_one({"share_token": token}, {"_id": 0})
-    if not project:
-        raise HTTPException(status_code=404, detail="Invalid link")
-    from core.tenancy import DEFAULT_ORG_ID
-    org_id = project.get("org_id") or DEFAULT_ORG_ID
-    owner = await db.organizations.find_one({
-        "org_id": org_id,
-        "is_active": {"$ne": False},
-        "is_suspended": {"$ne": True},
-    }, {"_id": 0, "org_id": 1})
-    if not owner:
-        raise HTTPException(status_code=404, detail="Invalid link")
-    return project, org_id
+    """Resolve a shared or personal portal link to one active tenant without
+    request scope (core.portal). Existing 12-hex links stay readable; all
+    new/rotated links use 256 bits."""
+    ctx = await client_portal.resolve(db, token)
+    return ctx["project"], ctx["org_id"]
 
 
 @api.get("/invoices/{invoice_id}/pdf")
@@ -2844,9 +2831,32 @@ def _public_milestone_projection(milestones: list[dict]) -> list[dict]:
     return [{key: row.get(key) for key in allowed} for row in milestones]
 
 
+def _portal_invoice_rows(invoices: list[dict], linked: dict[str, float]) -> tuple[list[dict], dict]:
+    """Client-safe invoice rows with paid and balance (same rule as project money)."""
+    rows, invoiced, paid_total = [], 0.0, 0.0
+    for i in invoices:
+        total = float(i.get("total") or 0)
+        direct = (total if i.get("status") == "paid" and not i.get("paid_amount")
+                  else float(i.get("paid_amount") or 0))
+        paid = round(min(total, max(0.0, direct + float(linked.get(i.get("id"), 0) or 0))), 2)
+        is_invoice = i.get("doc_type", "invoice") == "invoice"
+        if is_invoice:
+            invoiced += total
+            paid_total += paid
+        rows.append({"id": i["id"], "number": i.get("number"), "total": i.get("total"),
+                     "status": i.get("status"), "due_date": i.get("due_date"),
+                     "issue_date": i.get("issue_date"), "doc_type": i.get("doc_type"),
+                     "paid": paid if is_invoice else None,
+                     "balance": round(max(0.0, total - paid), 2) if is_invoice else None})
+    return rows, {"invoiced": round(invoiced, 2), "paid": round(paid_total, 2),
+                  "balance": round(max(0.0, invoiced - paid_total), 2)}
+
+
 @api.get("/portal/{token}")
 async def portal_view(token: str):
-    project, org_id = await _public_project_by_token(token)
+    ctx = await client_portal.resolve(db, token)
+    project, org_id = ctx["project"], ctx["org_id"]
+    await client_portal.touch(db, ctx["contact"])
     owned_project = {"project_id": project["id"], "org_id": org_id}
     tasks = await db.tasks.find(owned_project, {"_id": 0}).to_list(MAX_LIST_ROWS)
     files = await db.files.find(
@@ -2855,6 +2865,18 @@ async def portal_view(token: str):
         {**owned_project, "status": {"$in": ["sent", "partially_paid", "paid", "overdue"]}},
         {"_id": 0}).to_list(MAX_LIST_ROWS)
     milestones = await db.payment_milestones.find(owned_project, {"_id": 0}).to_list(MAX_LIST_ROWS)
+    linked: dict[str, float] = {}
+    invoice_ids = [i["id"] for i in invoices if i.get("id")]
+    if invoice_ids:
+        for row in await db.collection_receivables.find(
+                {"org_id": org_id, "invoice_id": {"$in": invoice_ids}, "status": {"$ne": "cancelled"}},
+                {"_id": 0, "invoice_id": 1, "received_amount": 1}).to_list(MAX_LIST_ROWS):
+            linked[row.get("invoice_id")] = linked.get(row.get("invoice_id"), 0.0) + float(row.get("received_amount") or 0)
+    invoice_rows, account = _portal_invoice_rows(invoices, linked)
+    approvals = await portal_approvals(db, ctx, token)
+    org = ctx["org"] or {}
+    from routes.organization import _safe_branding_projection
+    branding = _safe_branding_projection(org.get("branding") or {}, org_id)
 
     stage_index = PROJECT_STAGES.index(project.get("stage", "Requirement")) if project.get("stage") in PROJECT_STAGES else 0
     progress = round(((stage_index + 1) / len(PROJECT_STAGES)) * 100)
@@ -2876,10 +2898,13 @@ async def portal_view(token: str):
             "in_progress": sum(1 for t in tasks if t.get("status") == "in_progress"),
         },
         "files": _public_file_projection(files),
-        "invoices": [{"id": i["id"], "number": i.get("number"), "total": i.get("total"),
-                      "status": i.get("status"), "due_date": i.get("due_date"),
-                      "doc_type": i.get("doc_type")} for i in invoices],
+        "invoices": invoice_rows,
+        "account": account,
         "milestones": _public_milestone_projection(milestones),
+        "approvals": approvals,
+        "viewer": client_portal.viewer(ctx["contact"]),
+        "brand": {"name": org.get("display_name") or org.get("name"),
+                  "logo_url": branding.get("logo_url")},
     }
 
 
@@ -5810,6 +5835,8 @@ from routes.organization import router as organization_router  # noqa: E402
 from routes.platform_billing import router as platform_billing_router  # noqa: E402
 from routes.timesheets import router as timesheets_router  # noqa: E402
 from routes.timeline import router as timeline_router  # noqa: E402
+from routes.approvals import router as approvals_router, for_portal as portal_approvals  # noqa: E402
+from core import portal as client_portal  # noqa: E402
 from routes.loans import router as loans_router  # noqa: E402
 from routes.audit import router as audit_router  # noqa: E402
 from routes.purchase import router as purchase_router  # noqa: E402
@@ -5838,6 +5865,7 @@ api.include_router(organization_router)
 api.include_router(platform_billing_router)
 api.include_router(timesheets_router)
 api.include_router(timeline_router)
+api.include_router(approvals_router)
 api.include_router(loans_router)
 api.include_router(audit_router)
 api.include_router(purchase_router)

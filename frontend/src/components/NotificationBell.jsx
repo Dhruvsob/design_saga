@@ -26,7 +26,8 @@ const KIND_COLOR = {
   leave_decided: "bg-[var(--success-soft)] text-[var(--success)]",
   account_approved: "bg-[var(--success-soft)] text-[var(--success)]",
   account_rejected: "bg-[var(--danger-soft)] text-[var(--danger)]",
-  info: "bg-[var(--line-soft)] text-[var(--ink)]",
+  client_decision: "bg-[var(--info-soft)] text-[var(--accent-strong)]",
+  info:"bg-[var(--line-soft)] text-[var(--ink)]",
 };
 
 const relativeTime = (iso) => {

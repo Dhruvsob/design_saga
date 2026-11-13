@@ -52,6 +52,7 @@ def _active_db(**children):
     organizations = _Collection(find_one=lambda query: {
         "org_id": "org_a", "name": "Tenant A",
     } if query.get("org_id") == "org_a" else None)
+    children.setdefault("approvals", _Collection([]))
     return SimpleNamespace(projects=project, organizations=organizations, **children)
 
 
@@ -88,14 +89,18 @@ def test_public_share_rejects_suspended_tenant(monkeypatch):
 def test_portal_child_queries_are_bound_to_token_owners_tenant(monkeypatch):
     children = {
         name: _Collection([])
-        for name in ("tasks", "files", "invoices", "payment_milestones")
+        for name in ("tasks", "files", "invoices", "payment_milestones", "approvals")
     }
     monkeypatch.setattr(server, "db", _active_db(**children))
 
     result = asyncio.run(server.portal_view(TOKEN))
 
     assert result["project"]["id"] == "shared_project"
+    assert result["viewer"] == {"kind": "shared", "name": None, "can_decide": False}
+    assert result["brand"]["name"] == "Tenant A"
     owned = {"project_id": "shared_project", "org_id": "org_a"}
+    assert children["approvals"].find_queries == [
+        {**owned, "status": {"$in": ["pending", "approved", "changes_requested"]}}]
     assert children["tasks"].find_queries == [owned]
     assert children["payment_milestones"].find_queries == [owned]
     assert children["files"].find_queries == [{**owned, "client_visible": True}]
@@ -167,3 +172,20 @@ def test_new_file_links_are_private_by_default():
     )
 
     assert payload.client_visible is False
+
+
+def test_portal_invoices_show_paid_and_balance_without_counting_proformas():
+    rows, account = server._portal_invoice_rows([
+        {"id": "i1", "number": "INV-1", "total": 100000, "status": "partially_paid", "paid_amount": 30000},
+        {"id": "i2", "number": "INV-2", "total": 50000, "status": "paid"},
+        {"id": "i3", "number": "INV-3", "total": 20000, "status": "sent"},
+        {"id": "p1", "number": "PI-1", "total": 99999, "status": "sent", "doc_type": "proforma"},
+    ], {"i3": 25000.0})   # a Collections receipt cannot count more than the invoice total
+    by = {r["id"]: r for r in rows}
+    assert (by["i1"]["paid"], by["i1"]["balance"]) == (30000, 70000)
+    assert (by["i2"]["paid"], by["i2"]["balance"]) == (50000, 0)
+    assert (by["i3"]["paid"], by["i3"]["balance"]) == (20000, 0)
+    assert by["p1"]["paid"] is None and by["p1"]["balance"] is None
+    assert account == {"invoiced": 170000, "paid": 100000, "balance": 70000}
+    assert set(by["i1"]) == {"id", "number", "total", "status", "due_date", "issue_date",
+                             "doc_type", "paid", "balance"}

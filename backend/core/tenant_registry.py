@@ -16,6 +16,7 @@ TENANT_COLLECTIONS = (
     "leads", "clients", "quotations", "quotations_adv",
     "projects", "project_phases", "tasks", "milestones", "payment_milestones",
     "drawings", "snags", "site_visits", "files", "documents", "comments",
+    "approvals", "portal_access",
     "chat_messages", "ai_messages", "calendar_events",
     # Vendors and procurement
     "vendors", "vendors_acc", "vendor_bills", "vendor_payments", "vendor_commissions",
@@ -35,7 +36,7 @@ TENANT_COLLECTIONS = (
 # Integration state with credentials or one-time secrets: purged, never exported
 # (a customer reconnects Google in their new system).
 EXPORT_SKIPPED = frozenset({
-    "user_invites",
+    "user_invites", "portal_access",
     "google_calendar_connections", "google_oauth_states",
     "google_calendar_sync_queue", "google_calendar_synced_events",
 })

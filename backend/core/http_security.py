@@ -82,7 +82,7 @@ RATE_RULES = [
     ("*", re.compile(r"/reset-(?:password|link)(?:/[^/]+)?$"), "password_reset", 10, 900),
     ("POST", re.compile(r"/account/password$|/auth/change-password$"), "password_change", 10, 900),
     ("*", re.compile(r"^/api/auth/invite(?:/|$)"), "set_password_link", 20, 900),
-    ("POST", re.compile(r"^/api/portal/[^/]+/message$"), "portal_write", 10, 60),
+    ("POST", re.compile(r"^/api/portal/[^/]+/(message|approvals/[^/]+/decision)$"), "portal_write", 10, 60),
     ("*", re.compile(r"^/api/portal/"), "portal", 60, 60),
     ("*", re.compile(r"^/api/org/public/"), "public_branding", 60, 60),
     ("*", re.compile(r"^/api/search"), "search", 60, 60),

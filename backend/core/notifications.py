@@ -44,6 +44,7 @@ VALID_KINDS = {
     "account_approved", "account_rejected",
     "meeting", "reminder",
     "collection_reminder", "collection_due", "collection_overdue",
+    "client_decision",
     "info",
 }
 

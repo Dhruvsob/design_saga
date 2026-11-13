@@ -60,7 +60,7 @@ export const uid = () => Math.random().toString(36).slice(2, 8);
 // Project workspace sections are grouped (Overview · Work · Design · Site · Commercial).
 const PROJECT_TAB_GROUP = { Overview: "overview", Activity: "overview", Phases: "work", Timeline: "work", Tasks: "work", Time: "work",
   Drawings: "design", Files: "design", "Site visits": "site", Snags: "site",
-  Milestones: "commercial", Invoices: "commercial", Vendors: "commercial" };
+  Milestones: "commercial", Invoices: "commercial", Vendors: "commercial", Approvals: "client" };
 export async function openProjectTab(page, name, options = {}) {
   await page.getByTestId(`tab-group-${PROJECT_TAB_GROUP[name]}`).click(options);
   await page.getByTestId(`tab-${name}`).click(options);

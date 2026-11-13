@@ -276,6 +276,9 @@ def test_every_api_route_has_authentication_or_reviewed_public_delegation():
         # One-time set-password link: a 256-bit single-use token (hash stored,
         # 72 h expiry, rate-limited) is the credential.
         "invite_details", "accept_invite",
+        # Client portal: the shared or personal 256-bit link is the credential
+        # (core.portal.resolve, tenant-bound, rate-limited).
+        "portal_approval_file", "portal_decide",
     }
     auth_calls = {"require_user", "require_super_admin", "get_current_user", "require_platform_owner"}
     backend = Path(__file__).resolve().parents[1]
@@ -321,6 +324,9 @@ def test_every_mutating_route_has_permission_or_ownership_guard():
         "submit_contact",
         # Sets only the password of the account the single-use link was issued for.
         "accept_invite",
+        # Records a decision only from a personal client link, only on a
+        # pending request of that link's own project and tenant.
+        "portal_decide",
     }
     guard = re.compile(
         r"^(enforce_permission|enforce_any_permission|has_permission|"

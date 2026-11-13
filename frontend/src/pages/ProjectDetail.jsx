@@ -12,6 +12,7 @@ import ProjectDrawings from "../components/ProjectDrawings";
 import ProjectSnags from "../components/ProjectSnags";
 import ProjectTime from "../components/ProjectTime";
 import ProjectTimeline from "../components/ProjectTimeline";
+import ProjectApprovals from "../components/ProjectApprovals";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
 import { feeCalc } from "../lib/fees";
@@ -24,7 +25,7 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
-const TABS = ["Overview", "Phases", "Timeline", "Tasks", "Time", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Activity"];
+const TABS = ["Overview", "Phases", "Timeline", "Tasks", "Time", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Approvals", "Activity"];
 // One project workspace, grouped the way a studio works on a job.
 export const PROJECT_TAB_GROUPS = [
   { id: "overview", label: "Overview", tabs: ["Overview", "Activity"] },
@@ -32,8 +33,9 @@ export const PROJECT_TAB_GROUPS = [
   { id: "design", label: "Design", tabs: ["Drawings", "Files"] },
   { id: "site", label: "Site", tabs: ["Site visits", "Snags"] },
   { id: "commercial", label: "Commercial", tabs: ["Milestones", "Invoices", "Vendors"] },
+  { id: "client", label: "Client", tabs: ["Approvals"] },
 ];
-const SUBTAB_LABEL = { Milestones: "Fee milestones", Vendors: "Vendors & purchases", Activity: "Activity log" };
+const SUBTAB_LABEL = { Approvals: "Client approvals", Milestones: "Fee milestones", Vendors: "Vendors & purchases", Activity: "Activity log" };
 const inr = (n) => formatINR(n);
 
 export default function ProjectDetail() {
@@ -324,7 +326,7 @@ export default function ProjectDetail() {
           <div className="overline">LIFECYCLE</div>
           <div className="text-xs text-[var(--ink-2)]">Stage {currentIdx + 1} of {STAGES.length} · <span className="font-semibold text-[var(--ink)]">{STAGES[currentIdx] || p.stage}</span></div>
         </div>
-        <ol className="flex flex-wrap lg:flex-nowrap items-start gap-y-3" aria-label="Project stages">
+        <ol className="flex flex-wrap xl:flex-nowrap items-start gap-y-3" aria-label="Project stages">
           {STAGES.map((s, i) => {
             const done = i < currentIdx;
             const current = i === currentIdx;
@@ -349,7 +351,7 @@ export default function ProjectDetail() {
         </ol>
       </div>
 
-      {/* Tabs: five groups; the active group's sections underneath */}
+      {/* Tabs: six groups; the active group's sections underneath */}
       <div className="border-b border-[var(--line)]">
         <div className="flex flex-wrap gap-1" role="tablist" aria-label="Project sections">
           {tabGroups.map((g) => (
@@ -628,6 +630,7 @@ export default function ProjectDetail() {
       )}
 
       {tab === "Drawings" && <ProjectDrawings projectId={id} projectName={p.name} files={p.files || []} onFilesChanged={load} />}
+      {tab === "Approvals" && <ProjectApprovals projectId={id} files={p.files || []} />}
       {tab === "Snags" && <ProjectSnags projectId={id} employees={employees} />}
       {tab === "Site visits" && <ProjectSiteVisits projectId={id} projectName={p.name} />}
 
