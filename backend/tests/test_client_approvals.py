@@ -274,6 +274,7 @@ def test_client_approval_lands_on_the_drawing_and_in_audit(env):
 
     rev = env.raw.drawings.rows[0]["revisions"][0]
     assert rev["status"] == "approved" and rev["decided_by_name"] == "Mrs Mehta (client)"
+    assert rev["decision"] == "approved"      # kept when a newer revision marks this one superseded
     assert rev["decided_via"] == "client_portal" and rev["comment"] == "Looks good"
     assert rev["client_approval_id"] == a["id"]
     row = env.raw.approvals.rows[0]

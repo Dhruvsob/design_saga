@@ -53,6 +53,7 @@ def _active_db(**children):
         "org_id": "org_a", "name": "Tenant A",
     } if query.get("org_id") == "org_a" else None)
     children.setdefault("approvals", _Collection([]))
+    children.setdefault("transmittals", _Collection([]))
     return SimpleNamespace(projects=project, organizations=organizations, **children)
 
 

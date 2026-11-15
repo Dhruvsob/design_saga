@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   Plus, X, FileArrowUp, CheckCircle, XCircle, ChatText, PencilSimple, Archive, ArrowCounterClockwise,
-  ClockCounterClockwise, FileXls, Trash, ArrowSquareOut, PaperPlaneTilt,
+  ClockCounterClockwise, FileXls, Trash, ArrowSquareOut, PaperPlaneTilt, Eye,
 } from "@phosphor-icons/react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -12,10 +12,20 @@ import { askForm, confirmAction } from "../lib/confirm";
 import { safeFileUrl } from "../lib/url";
 import { downloadFile } from "../lib/download";
 import RowActions from "./RowActions";
+import DrawingTransmittals from "./DrawingTransmittals";
+import PdfPreviewModal from "./PdfPreview";
+
+/** API path for an in-app preview, or null for external links (opened in a new tab instead). */
+const previewPath = (url) => (typeof url === "string" && /^\/api\/files\/[A-Za-z0-9_-]+\/content$/.test(url) ? url.slice(4) : null);
 
 const STATUS = {
   issued: ["Issued", "chip-sent"], approved: ["Approved", "chip-paid"], rejected: ["Changes asked", "chip-overdue"],
   commented: ["Commented", "chip-draft"], superseded: ["Superseded", "chip-cancelled"],
+};
+/** What was decided on a revision, even after a newer revision marked it superseded. */
+const decisionLabel = (r) => {
+  const verdict = r.decision || (r.status !== "superseded" ? r.status : null);
+  return verdict && STATUS[verdict] ? STATUS[verdict][0] : "Decided";
 };
 const Chip = ({ status }) => {
   const [label, cls] = STATUS[status] || ["Not issued", "chip-draft"];
@@ -47,6 +57,16 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
   const [issueFor, setIssueFor] = useState(null);
   const [historyFor, setHistoryFor] = useState(null);
   const [waiting, setWaiting] = useState({});    // "drawingId:rev" -> pending client request
+  const [view, setView] = useState("register");
+  const [preview, setPreview] = useState(null);
+  const showRev = (d, r) => {
+    setHistoryFor(null);    // the preview replaces the history dialog instead of opening under it
+    const path = previewPath(r.file_url);
+    if (!path) { const url = safeFileUrl(r.file_url); if (url) window.open(url, "_blank", "noopener"); return; }
+    const latest = d.current?.rev;
+    setPreview({ path, title: `${d.number} rev ${r.rev} · ${d.title}`, filename: r.file_name || `${d.number}-${r.rev}`,
+      banner: r.rev !== latest ? `SUPERSEDED: revision ${latest} is current. Do not use this sheet for work.` : null });
+  };
 
   const load = () => {
     api.get(`/projects/${projectId}/approvals`)
@@ -130,6 +150,16 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
   const c = data?.counts || {};
   return (
     <div className="space-y-4" data-testid="project-drawings">
+      <div className="inline-flex border border-[var(--line)] p-0.5" role="tablist" aria-label="Drawings view">
+        {[["register", "Register"], ["transmittals", "Transmittals"]].map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)}
+            className={`px-3 py-1.5 text-xs font-semibold ${view === k ? "bg-[var(--ink)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"}`}
+            data-testid={`drawings-view-${k}`}>{label}</button>
+        ))}
+      </div>
+      {view === "transmittals" ? (
+        <DrawingTransmittals projectId={projectId} drawings={data?.drawings || []} purposes={purposes} />
+      ) : (<>
       <div className="flex flex-wrap items-center gap-2">
         <div className="text-sm text-[var(--ink-2)] mr-auto" data-testid="drawings-counts">
           {c.total || 0} drawings · {c.approved || 0} approved · {c.awaiting || 0} awaiting decision · {c.construction || 0} issued for construction
@@ -180,6 +210,7 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
                       </button>
                     )}
                     <RowActions label={`drawing ${d.number}`} testid={`drawing-actions-${d.number}`} actions={[
+                      { label: "Preview", icon: Eye, hidden: !cur || !url, onSelect: () => showRev(d, cur), testid: `drawing-preview-${d.number}` },
                       { label: "Open current PDF", icon: ArrowSquareOut, hidden: !url, onSelect: () => window.open(url, "_blank", "noopener") },
                       { label: "Ask client to approve", icon: PaperPlaneTilt, hidden: !(canDecide && cur?.status === "issued" && !d.archived && !waiting[`${d.id}:${cur.rev}`]), onSelect: () => askClient(d), testid: `drawing-ask-client-${d.number}` },
                       { label: "Approve", icon: CheckCircle, hidden: !(canDecide && cur?.status === "issued"), onSelect: () => decide(d, "approved"), testid: `drawing-approve-${d.number}` },
@@ -198,9 +229,12 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
           </tbody>
         </table>
       </div>
+      </>)}
 
       {issueFor && <IssueRevision drawing={issueFor} projectId={projectId} files={files} purposes={purposes}
         onClose={() => setIssueFor(null)} onDone={() => { setIssueFor(null); load(); onFilesChanged && onFilesChanged(); }} />}
+      {preview && <PdfPreviewModal path={preview.path} title={preview.title} filename={preview.filename}
+        banner={preview.banner} onClose={() => setPreview(null)} />}
       {historyFor && (
         <Modal title={`${historyFor.number} · revision history`} onClose={() => setHistoryFor(null)}>
           <ol className="space-y-3" data-testid="drawing-history">
@@ -210,8 +244,13 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
                   <span className="text-xs text-[var(--ink-3)] ml-auto">{formatDate(r.issued_on)}</span></div>
                 <div className="text-xs text-[var(--ink-2)]">{purposes[r.purpose] || r.purpose}{r.issued_to ? ` · to ${r.issued_to}` : ""} · {r.created_by_name}</div>
                 {r.note && <div className="text-xs mt-1">{r.note}</div>}
-                {r.decided_by_name && <div className="text-xs mt-1 text-[var(--ink-2)]">{STATUS[r.status]?.[0]} by {r.decided_by_name}{r.decided_via === "client_portal" ? " in the client portal" : ""}{r.decided_at ? ` on ${formatDate(r.decided_at)}` : ""}{r.comment ? `: ${r.comment}` : ""}</div>}
-                {safeFileUrl(r.file_url) && <a className="text-xs text-[var(--accent-strong)] hover:underline" href={safeFileUrl(r.file_url)} target="_blank" rel="noreferrer">{r.file_name || "Open file"}</a>}
+                {r.decided_by_name && <div className="text-xs mt-1 text-[var(--ink-2)]">{decisionLabel(r)} by {r.decided_by_name}{r.decided_via === "client_portal" ? " in the client portal" : ""}{r.decided_at ? ` on ${formatDate(r.decided_at)}` : ""}{r.comment ? `: ${r.comment}` : ""}</div>}
+                {safeFileUrl(r.file_url) && (
+                  <button type="button" className="text-xs text-[var(--accent-strong)] hover:underline inline-flex items-center gap-1"
+                    onClick={() => showRev(historyFor, r)} data-testid={`drawing-history-preview-${r.rev}`}>
+                    <Eye size={12} /> {r.file_name || "Preview"}{r.status === "superseded" ? " (superseded)" : ""}
+                  </button>
+                )}
               </li>
             ))}
           </ol>

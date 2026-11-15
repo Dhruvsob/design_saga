@@ -279,6 +279,7 @@ def test_every_api_route_has_authentication_or_reviewed_public_delegation():
         # Client portal: the shared or personal 256-bit link is the credential
         # (core.portal.resolve, tenant-bound, rate-limited).
         "portal_approval_file", "portal_decide",
+        "portal_transmittal_file", "portal_transmittal_pdf", "portal_acknowledge",
     }
     auth_calls = {"require_user", "require_super_admin", "get_current_user", "require_platform_owner"}
     backend = Path(__file__).resolve().parents[1]
@@ -327,6 +328,8 @@ def test_every_mutating_route_has_permission_or_ownership_guard():
         # Records a decision only from a personal client link, only on a
         # pending request of that link's own project and tenant.
         "portal_decide",
+        # Acknowledges receipt only for the personal link's own recipient line.
+        "portal_acknowledge",
     }
     guard = re.compile(
         r"^(enforce_permission|enforce_any_permission|has_permission|"

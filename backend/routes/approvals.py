@@ -376,6 +376,7 @@ async def portal_decide(token: str, approval_id: str, payload: ClientDecisionIn)
         written = await db.drawings.update_one(
             {**owned, "id": drawing["id"], f"revisions.{i}.rev": a["rev"], f"revisions.{i}.status": "issued"},
             {"$set": {f"revisions.{i}.status": "approved" if status == "approved" else "rejected",
+                      f"revisions.{i}.decision": "approved" if status == "approved" else "rejected",
                       f"revisions.{i}.decided_at": now, f"revisions.{i}.decided_by": actor["user_id"],
                       f"revisions.{i}.decided_by_name": f"{who} (client)", f"revisions.{i}.comment": comment,
                       f"revisions.{i}.decided_via": "client_portal", f"revisions.{i}.client_approval_id": approval_id,

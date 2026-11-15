@@ -40,6 +40,7 @@ _INDEXES = [
     ("portal_access",      [("token_hash", 1)],
                             {"name": "portal_access_token_unique", "unique": True}),
     ("portal_access",      [("org_id", 1), ("project_id", 1)], {}),
+    ("transmittals",       [("org_id", 1), ("project_id", 1), ("created_at", -1)], {}),
     ("login_attempts",     [("identifier", 1), ("at", -1)], {}),
     ("login_attempts",     [("ip_hash", 1), ("at", -1)], {}),
     ("login_attempts",     [("at", 1)], {"expireAfterSeconds": 86400}),

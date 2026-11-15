@@ -258,7 +258,8 @@ async def decide_revision(drawing_id: str, rev: str, payload: DecisionIn, reques
     i = len(revs) - 1
     result = await sdb.drawings.update_one(
         {"id": drawing_id, f"revisions.{i}.rev": revs[i]["rev"], f"revisions.{i}.status": "issued"},
-        {"$set": {f"revisions.{i}.status": payload.decision, f"revisions.{i}.decided_at": iso_now(),
+        {"$set": {f"revisions.{i}.status": payload.decision, f"revisions.{i}.decision": payload.decision,
+                  f"revisions.{i}.decided_at": iso_now(),
                   f"revisions.{i}.decided_by": user["user_id"], f"revisions.{i}.decided_by_name": user.get("name"),
                   f"revisions.{i}.comment": (payload.comment or "").strip() or None, "updated_at": iso_now()}})
     if not result.modified_count:
@@ -288,7 +289,10 @@ async def drawing_register_export(project_id: str, request: Request,
                          PURPOSES.get(cur.get("purpose"), ""), (cur.get("status") or "not issued").title(),
                          fmt(cur.get("issued_on")), cur.get("issued_to"), bool(d.get("archived"))])
         for r in d.get("revisions") or []:
-            history.append([d["number"], r["rev"], PURPOSES.get(r.get("purpose"), r.get("purpose")), r.get("status", "").title(),
+            status = r.get("status", "").title()
+            if r.get("decision") and r.get("decision") != r.get("status"):
+                status = f"{status} ({r['decision']})"     # e.g. "Superseded (approved)"
+            history.append([d["number"], r["rev"], PURPOSES.get(r.get("purpose"), r.get("purpose")), status,
                             fmt(r.get("issued_on")), r.get("issued_to"), r.get("file_name"), r.get("decided_by_name"),
                             r.get("comment") or r.get("note")])
     data = build_xlsx([("Drawing register", register), ("Revision history", history)])

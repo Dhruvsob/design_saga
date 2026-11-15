@@ -13,6 +13,7 @@ import api, { API } from "../lib/api";
  */
 export function PdfFrame({ path, title, className = "w-full h-full" }) {
   const [url, setUrl] = useState(null);
+  const [isImage, setIsImage] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -23,7 +24,10 @@ export function PdfFrame({ path, title, className = "w-full h-full" }) {
     api.get(path, { responseType: "blob" })
       .then(({ data }) => {
         if (!alive) return;
-        objectUrl = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+        // Drawings may be images; everything else is shown as a PDF.
+        const image = /^image\/(png|jpe?g|webp|gif)$/.test(data?.type || "");
+        objectUrl = URL.createObjectURL(new Blob([data], { type: image ? data.type : "application/pdf" }));
+        setIsImage(image);
         setUrl(objectUrl);
       })
       .catch(() => alive && setError("The PDF could not be loaded. Try Open in new tab."));
@@ -52,11 +56,18 @@ export function PdfFrame({ path, title, className = "w-full h-full" }) {
       </div>
     );
   }
+  if (isImage) {
+    return (
+      <div className={`${className} overflow-auto bg-[var(--surface-2)] flex items-start justify-center`}>
+        <img src={url} alt={title} className="max-w-full h-auto" data-testid="image-frame" />
+      </div>
+    );
+  }
   return <iframe title={title} src={url} className={className} data-testid="pdf-frame" />;
 }
 
 /** Full-screen modal preview with header actions. */
-export default function PdfPreviewModal({ path, title, filename, onClose }) {
+export default function PdfPreviewModal({ path, title, filename, onClose, banner = null }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -86,6 +97,9 @@ export default function PdfPreviewModal({ path, title, filename, onClose }) {
             </button>
           </div>
         </div>
+        {banner && (
+          <div className="px-4 py-2 text-sm font-semibold text-white bg-[var(--danger)]" role="note" data-testid="preview-banner">{banner}</div>
+        )}
         <PdfFrame path={path} title={title} className="w-full flex-1" />
       </div>
     </div>,

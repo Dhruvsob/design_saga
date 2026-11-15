@@ -2874,6 +2874,7 @@ async def portal_view(token: str):
             linked[row.get("invoice_id")] = linked.get(row.get("invoice_id"), 0.0) + float(row.get("received_amount") or 0)
     invoice_rows, account = _portal_invoice_rows(invoices, linked)
     approvals = await portal_approvals(db, ctx, token)
+    transmittals = await portal_transmittals(db, ctx, token)
     org = ctx["org"] or {}
     from routes.organization import _safe_branding_projection
     branding = _safe_branding_projection(org.get("branding") or {}, org_id)
@@ -2902,6 +2903,7 @@ async def portal_view(token: str):
         "account": account,
         "milestones": _public_milestone_projection(milestones),
         "approvals": approvals,
+        "transmittals": transmittals,
         "viewer": client_portal.viewer(ctx["contact"]),
         "brand": {"name": org.get("display_name") or org.get("name"),
                   "logo_url": branding.get("logo_url")},
@@ -5836,6 +5838,7 @@ from routes.platform_billing import router as platform_billing_router  # noqa: E
 from routes.timesheets import router as timesheets_router  # noqa: E402
 from routes.timeline import router as timeline_router  # noqa: E402
 from routes.approvals import router as approvals_router, for_portal as portal_approvals  # noqa: E402
+from routes.transmittals import router as transmittals_router, for_portal as portal_transmittals  # noqa: E402
 from core import portal as client_portal  # noqa: E402
 from routes.loans import router as loans_router  # noqa: E402
 from routes.audit import router as audit_router  # noqa: E402
@@ -5866,6 +5869,7 @@ api.include_router(platform_billing_router)
 api.include_router(timesheets_router)
 api.include_router(timeline_router)
 api.include_router(approvals_router)
+api.include_router(transmittals_router)
 api.include_router(loans_router)
 api.include_router(audit_router)
 api.include_router(purchase_router)

@@ -11,12 +11,61 @@ const DECIDED = {
   changes_requested: ["Changes asked", "chip-overdue"],
 };
 
-/** A link the portal may open: our own portal file route, or a plain http(s) URL. */
+const PORTAL_FILE = /^\/api\/portal\/[A-Za-z0-9_-]+\/(approvals\/[A-Za-z0-9_-]+\/file|transmittals\/[A-Za-z0-9_-]+\/(pdf|items\/\d+\/file))$/;
+
+/** A link the portal may open: our own portal file routes, or a plain http(s) URL. */
 function approvalFileUrl(value) {
-  if (typeof value === "string" && /^\/api\/portal\/[A-Za-z0-9_-]+\/approvals\/[A-Za-z0-9_-]+\/file$/.test(value)) {
+  if (typeof value === "string" && PORTAL_FILE.test(value)) {
     return new URL(value, window.location.origin).href;
   }
   return safeExternalUrl(value);
+}
+
+const ACK_LABEL = { awaiting: "Awaiting receipt", partly_acknowledged: "Partly acknowledged", acknowledged: "Received" };
+
+function TransmittalCard({ t, onAcknowledge }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const pdf = approvalFileUrl(t.pdf_url);
+  const ack = async () => {
+    setBusy(true);
+    setError("");
+    try { await onAcknowledge(t); } catch (ex) { setError(ex?.response?.data?.detail || "Could not save. Please try again."); setBusy(false); }
+  };
+  return (
+    <article className="border border-[var(--line)] p-4 sm:p-5" data-testid={`portal-transmittal-${t.number}`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-mono font-bold">{t.number}</span>
+        <span className="text-sm text-[var(--ink-2)]">{formatDate(t.issued_date)} · {t.purpose}</span>
+        <span className={`status-chip ${t.ack_status === "acknowledged" ? "chip-paid" : "chip-sent"} sm:ml-auto`}>{ACK_LABEL[t.ack_status] || t.ack_status}</span>
+      </div>
+      <ul className="mt-3 divide-y divide-[var(--line-soft)] border-y border-[var(--line-soft)]">
+        {t.items.map((i, n) => {
+          const href = approvalFileUrl(i.file_url);
+          return (
+            <li key={n} className="py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="font-mono font-semibold w-20 shrink-0">{i.number}</span>
+              <span className="font-mono text-xs">rev {i.rev}</span>
+              <span className={`flex-1 min-w-[8rem] [overflow-wrap:anywhere] ${i.superseded_by ? "line-through text-[var(--ink-3)]" : ""}`}>{i.title}</span>
+              {i.superseded_by && <span className="text-xs font-semibold text-[var(--danger)]">Superseded by rev {i.superseded_by}</span>}
+              {href && <a href={href} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--accent-strong)] hover:underline">Open</a>}
+            </li>
+          );
+        })}
+      </ul>
+      {t.note && <p className="mt-2 text-sm text-[var(--ink-2)] [overflow-wrap:anywhere]">{t.note}</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        {pdf && <a href={pdf} target="_blank" rel="noreferrer" className="btn-ghost text-xs"><FileText size={14} /> Transmittal PDF</a>}
+        {t.can_acknowledge && (
+          <button type="button" className="btn-primary text-sm" onClick={ack} disabled={busy} data-testid="portal-acknowledge">
+            <CheckCircle size={16} /> {busy ? "Saving…" : "Acknowledge receipt"}
+          </button>
+        )}
+        {t.you_acknowledged_at && <span className="text-sm text-[var(--success)]">You acknowledged receipt on {formatDate(t.you_acknowledged_at)}</span>}
+        {error && <span className="text-sm text-[var(--danger)]" role="alert">{error}</span>}
+      </div>
+    </article>
+  );
 }
 
 function initials(name) {
@@ -148,6 +197,12 @@ export default function ClientPortal() {
     await load();
   };
 
+  const acknowledge = async (t) => {
+    await api.post(`/portal/${token}/transmittals/${t.id}/acknowledge`, {});
+    setNotice(`Thank you. Receipt of ${t.number} is recorded.`);
+    await load();
+  };
+
   if (err) return (
     <div className="min-h-screen flex items-center justify-center p-8 bg-[var(--surface-2)]">
       <div className="text-center max-w-sm">
@@ -160,7 +215,7 @@ export default function ClientPortal() {
 
   if (!data) return <div className="p-10 overline">LOADING…</div>;
 
-  const { project, tasks_summary, files, invoices, account = {}, approvals = [], viewer = {}, brand = {} } = data;
+  const { project, tasks_summary, files, invoices, account = {}, approvals = [], transmittals = [], viewer = {}, brand = {} } = data;
   const studio = brand.name || "the studio";
   const stageIdx = project.all_stages.indexOf(project.stage);
   const pending = approvals.filter((a) => a.status === "pending");
@@ -254,6 +309,14 @@ export default function ClientPortal() {
           <div className="text-sm text-[var(--ink-2)] mt-2">{money(account.paid)} paid of {money(account.invoiced)}</div>
         </div>
       </section>
+
+      {transmittals.length > 0 && (
+        <Section label="DRAWINGS" title="Drawings issued to you" testid="portal-transmittals">
+          <div className="space-y-3">
+            {transmittals.map((t) => <TransmittalCard key={t.id} t={t} onAcknowledge={acknowledge} />)}
+          </div>
+        </Section>
+      )}
 
       <Section label="DELIVERABLES" title="Files">
         <div className="space-y-2">
