@@ -152,8 +152,16 @@ function Overview({ task, meta, onSave }) {
               onBlur={(v) => commit("quantity", v === "" ? null : Number(v))} />
             <LabeledInput label="Remarks" value={t.remarks || ""}
               onChange={(v) => set("remarks", v)} onBlur={(v) => commit("remarks", v)} />
+            <LabeledInput label="Start date" type="date" value={t.start_date || ""}
+              onChange={(v) => set("start_date", v)} onBlur={(v) => commit("start_date", v)} />
             <LabeledInput label="Due date" type="date" value={t.due_date || ""}
               onChange={(v) => set("due_date", v)} onBlur={(v) => commit("due_date", v)} />
+            <LabeledInput label="Estimate (hours)" type="number" value={t.estimate_hours || ""}
+              onChange={(v) => set("estimate_hours", v)}
+              onBlur={(v) => {
+                const n = v === "" ? 0 : Number(v);     // empty clears the estimate (saved as 0)
+                if (Number.isFinite(n) && n >= 0 && n !== Number(task.estimate_hours || 0)) onSave({ estimate_hours: n });
+              }} />
           </div>
         </div>
 

@@ -362,7 +362,7 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
     # Track material changes for the timeline audit
     events: List[dict] = []
     tracked = ["title", "priority", "status", "status_detail", "assignee_name",
-               "area", "category", "start_date", "due_date", "task_type"]
+               "area", "category", "start_date", "due_date", "task_type", "estimate_hours"]
     for k in tracked:
         if k in updates and updates[k] != existing.get(k):
             if k in ("status", "status_detail"):

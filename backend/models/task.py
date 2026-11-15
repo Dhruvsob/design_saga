@@ -135,6 +135,7 @@ class TaskIn(BaseModel):
     vendor_id: Optional[str] = None           # FK → vendors_acc (primary link)
     vendor_contact: Optional[VendorContact] = None
     start_date: Optional[str] = None          # optional; timeline bars start here
+    estimate_hours: Optional[float] = Field(default=None, ge=0, le=2000)   # planned effort; 0 clears
     due_date: Optional[str] = None
     follow_up_date: Optional[str] = None
     reminder_date: Optional[str] = None
@@ -167,6 +168,7 @@ class TaskUpdate(BaseModel):
     vendor_id: Optional[str] = None           # FK → vendors_acc
     vendor_contact: Optional[VendorContact] = None
     start_date: Optional[str] = None          # optional; timeline bars start here
+    estimate_hours: Optional[float] = Field(default=None, ge=0, le=2000)   # planned effort; 0 clears
     due_date: Optional[str] = None
     follow_up_date: Optional[str] = None
     reminder_date: Optional[str] = None

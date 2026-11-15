@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { CaretLeft, CaretRight, Check, Plus, X, ArrowUUpLeft } from "@phosphor-icons/react";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
+import CapacityHeatmap from "../components/CapacityHeatmap";
 import { formatDate } from "../lib/format";
 import { confirmAction } from "../lib/confirm";
 import { useAuth } from "../context/AuthContext";
@@ -351,7 +352,7 @@ export default function Timesheets() {
   const onLoaded = useCallback((d) => setCaps((c) => c || { approve: d.can_approve, costs: d.can_see_costs, rates: d.can_set_rates }), []);
   useEffect(() => { if (tab !== "week") api.get("/timesheets/week").then(({ data }) => onLoaded(data)).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const tabs = useMemo(() => [["week", "My week"], ...(caps?.approve ? [["approvals", "Approvals"]] : []),
-    ...(caps?.costs ? [["rates", "Cost rates"]] : [])], [caps]);
+    ...(caps?.costs ? [["rates", "Cost rates"]] : []), ["capacity", "Capacity"]], [caps]);
   return (
     <div className="space-y-6" data-testid="timesheets-page">
       <PageHero eyebrow="PROJECTS / TIME" title="Timesheets"
@@ -372,6 +373,7 @@ export default function Timesheets() {
         </div>
       ) : <Approvals onView={setViewing} />)}
       {tab === "rates" && <CostRates canSet={!!caps?.rates} />}
+      {tab === "capacity" && <CapacityHeatmap />}
     </div>
   );
 }

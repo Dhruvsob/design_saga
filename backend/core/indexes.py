@@ -35,6 +35,7 @@ _INDEXES = [
     ("time_entries",       [("org_id", 1), ("project_id", 1), ("status", 1)], {}),
     ("time_entries",       [("org_id", 1), ("status", 1), ("week", -1)], {}),
     ("tasks",              [("org_id", 1), ("project_id", 1), ("due_date", 1)], {}),
+    ("tasks",              [("org_id", 1), ("status", 1), ("due_date", 1)], {}),
     ("approvals",          [("org_id", 1), ("project_id", 1), ("status", 1)], {}),
     ("approvals",          [("org_id", 1), ("drawing_id", 1), ("status", 1)], {}),
     ("portal_access",      [("token_hash", 1)],

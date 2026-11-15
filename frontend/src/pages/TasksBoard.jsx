@@ -45,7 +45,7 @@ const EMPTY_TASK = {
   title: "", description: "", project_id: "", task_type: "employee",
   area: "", category: "", item_description: "", quantity: "",
   priority: "medium", status_detail: "Pending",
-  remarks: "", assignee_name: "", assignee_id: "", assignees: [], due_date: "",
+  remarks: "", assignee_name: "", assignee_id: "", assignees: [], due_date: "", estimate_hours: "",
   vendor_contact: { vendor_name: "", contact_person: "", phone: "", email: "", whatsapp: "" },
 };
 
@@ -155,7 +155,8 @@ export default function TasksBoard() {
 
   const submit = async (e) => {
     e.preventDefault();
-    const payload = { ...form, quantity: form.quantity === "" ? null : Number(form.quantity) };
+    const payload = { ...form, quantity: form.quantity === "" ? null : Number(form.quantity),
+      estimate_hours: form.estimate_hours === "" || form.estimate_hours == null ? null : Number(form.estimate_hours) };
     if (payload.task_type !== "vendor") delete payload.vendor_contact;
     await api.post("/tasks", payload);
     setForm(EMPTY_TASK); setShowForm(false);
@@ -776,6 +777,9 @@ function TaskForm({ form, setForm, onSubmit, projects, vendors, employees = [], 
 
         <input type="date" className="input-flat" value={form.due_date}
           onChange={(e) => set("due_date", e.target.value)} placeholder="Due" />
+        <input className="input-flat" type="number" min="0" max="2000" step="0.5" placeholder="Estimate (hours)"
+          aria-label="Estimate in hours" value={form.estimate_hours ?? ""} data-testid="task-estimate"
+          onChange={(e) => set("estimate_hours", e.target.value)} />
         {isVendor ? (
           <>
             <SearchSelect
