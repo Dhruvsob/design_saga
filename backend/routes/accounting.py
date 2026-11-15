@@ -389,8 +389,15 @@ async def deactivate_account(acc_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.delete"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.delete")
-    # Soft delete — audit-safe
-    await sdb.accounts.update_one({"id": acc_id}, {"$set": {"active": False, "deactivated_at": iso_now()}})
+    # Soft delete — history keeps pointing at it; the change is audited.
+    acc = await sdb.accounts.find_one({"id": acc_id}, {"_id": 0, "id": 1, "name": 1, "code": 1, "active": 1})
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    await sdb.accounts.update_one({"id": acc_id}, {"$set": {"active": False, "deactivated_at": iso_now(),
+                                                            "deactivated_by": user["user_id"]}})
+    if acc.get("active") is not False:
+        await audit(user, "account.deactivate", target=acc_id, target_type="account",
+                    meta={"name": acc.get("name"), "code": acc.get("code")})
     return {"ok": True}
 
 

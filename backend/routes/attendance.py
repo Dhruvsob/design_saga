@@ -367,6 +367,8 @@ async def create_location(payload: GeoLocationIn, request: Request,
     if not has_any_permission(user, "*.*", "attendance.update"):
         raise HTTPException(403, "Admin only")
     doc = payload.dict()
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(project_id=doc.get("project_id"))
     doc["id"] = new_id("loc_")
     doc["created_at"] = iso_now()
     doc["created_by"] = user["user_id"]

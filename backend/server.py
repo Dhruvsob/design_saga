@@ -1532,6 +1532,8 @@ async def create_project(payload: ProjectIn, request: Request,
     user = await require_user(request, session_token, authorization)
     enforce_permission(user, "projects.create")
     await enforce_project_limit(user.get("org_id"))
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(client_id=payload.client_id)
     doc = payload.model_dump()
     # Resolve engagement_type from the org's business_mode:
     #   consultancy → forced "consultancy"
@@ -1820,6 +1822,9 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
     unset = {k: "" for k, v in submitted.items() if v is None and k in clearable}
     if not upd and not unset:
         raise HTTPException(status_code=400, detail="Nothing to update")
+    if upd.get("client_id") and upd["client_id"] != project.get("client_id"):
+        from core.refs import ensure_in_tenant
+        await ensure_in_tenant(client_id=upd["client_id"])
     if upd.get("engagement_type") and upd["engagement_type"] not in ("consultancy", "turnkey"):
         raise HTTPException(status_code=400, detail="engagement_type must be consultancy | turnkey")
     fee_fields = {
@@ -3672,6 +3677,8 @@ async def adv_create(payload: QuotationCreate, request: Request,
     from core.helpers import next_sequence, max_trailing_number
     _org = await db.organizations.find_one({"org_id": user.get("org_id") or "org_default"},
                                            {"_id": 0, "quotation_prefix": 1, "phone": 1})
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(client_id=payload.client_id, project_id=payload.project_id)
     doc = _new_quotation_doc(payload.model_dump(), user, _org)
     _qp = (_org or {}).get("quotation_prefix") or f"Q-{now_utc().year}"
     _seed = await max_trailing_number(sdb.quotations_adv.find({}, {"_id": 0, "number": 1}))
@@ -3708,6 +3715,9 @@ async def adv_update(qid: str, payload: QuotationUpdate, request: Request,
         raise HTTPException(status_code=404, detail="Not found")
     _ensure_quotation_mutable(doc)
     update = {k: v for k, v in payload.model_dump().items() if v is not None}
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(**{k: update[k] for k in ("client_id", "project_id")
+                              if update.get(k) and update[k] != doc.get(k)})
     from core import consultancy_proposal as _cp
     if "type" in update and update["type"] != doc.get("type"):
         if doc.get("status") not in (None, "draft"):

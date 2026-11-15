@@ -160,6 +160,11 @@ async def create_recurring(payload: RecurringIn, request: Request,
         raise HTTPException(400, f"frequency must be one of {FREQUENCIES}")
     if payload.amount <= 0:
         raise HTTPException(400, "amount must be > 0")
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(expense_account_id=payload.expense_account_id,
+                           paid_from_account_id=payload.paid_from_account_id,
+                           vendor_id=payload.vendor_id, project_id=payload.project_id,
+                           client_id=payload.client_id)
 
     doc = payload.model_dump()
     doc["id"] = new_id("rec_")
@@ -190,6 +195,9 @@ async def update_recurring(rec_id: str, payload: RecurringUpdate, request: Reque
         raise HTTPException(400, "Nothing to update")
     if upd.get("frequency") and upd["frequency"] not in FREQUENCIES:
         raise HTTPException(400, f"frequency must be one of {FREQUENCIES}")
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(**{k: upd[k] for k in ("expense_account_id", "paid_from_account_id", "vendor_id",
+                                                  "project_id", "client_id") if upd.get(k)})
     res = await sdb.recurring_expenses.update_one({"id": rec_id}, {"$set": upd})
     if res.matched_count == 0:
         raise HTTPException(404, "Recurring rule not found")

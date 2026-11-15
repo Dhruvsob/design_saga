@@ -221,6 +221,9 @@ async def create_task(payload: TaskIn, request: Request,
     user = await require_user(request, session_token, authorization)
     require_permission(user, "tasks.create")
     doc = payload.model_dump()
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(assignee_id=doc.get("assignee_id"), assignees=doc.get("assignees"),
+                           vendor_id=doc.get("vendor_id"))
     doc["id"] = new_id("tsk_")
     doc["created_at"] = iso_now()
     doc["created_by"] = user["user_id"]
@@ -355,6 +358,10 @@ async def update_task(task_id: str, payload: TaskUpdate, request: Request,
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not updates:
         return existing
+    from core.refs import ensure_in_tenant
+    changed = {k: updates[k] for k in ("assignee_id", "vendor_id") if k in updates and updates[k] != existing.get(k)}
+    new_assignees = [a for a in (updates.get("assignees") or []) if a not in (existing.get("assignees") or [])]
+    await ensure_in_tenant(**changed, assignees=new_assignees)
     if updates.get("project_id") and updates["project_id"] != existing.get("project_id"):
         project = await get_visible_project(user, updates["project_id"])
         updates["project_name"] = project.get("name")
@@ -529,6 +536,8 @@ async def bulk_update(payload: BulkUpdateIn, request: Request,
     upd = {k: v for k, v in payload.model_dump().items() if v is not None and k != "task_ids"}
     if not upd:
         raise HTTPException(status_code=400, detail="no fields to update")
+    from core.refs import ensure_in_tenant
+    await ensure_in_tenant(assignee_id=upd.get("assignee_id"))
     if upd.get("project_id"):
         project = await get_visible_project(user, upd["project_id"])
         upd["project_name"] = project.get("name")
