@@ -16,7 +16,7 @@ backup copy, external alert delivery); see `POST_LAUNCH_BACKLOG.md`.
 | Production checkout | `/opt/design-saga-git`, branch `production` | `git rev-parse --abbrev-ref HEAD` |
 | Running code (release) | backend image rev `46eb9c2`, web image rev `eaecdcf` (no frontend change since) | `docker inspect ... org.opencontainers.image.revision` |
 | Protected files | `deploy/Caddyfile` (local change) and `deploy/Caddyfile.pre-tanvika-20261003T154040Z` untouched | `git status --short` before and after every deploy |
-| GitHub `production`/`main` | still at `88ff4ca`, an ancestor of the live revision (nothing on them is missing from production). Fast-forwarding them to the live line was refused by the agent's permission policy and needs the owner's go-ahead; the live line is GitHub branch `claude/integrate-release-20261111` | `git ls-remote`, `git merge-base --is-ancestor` |
+| GitHub `production`/`main` | were at `88ff4ca` (an ancestor of the live revision); fast-forwarded to the live line on 2026-11-15 with the owner's go-ahead, so GitHub `main`, `production`, the release branch and the VPS checkout point at the same commit | `git ls-remote`, `git merge-base --is-ancestor` |
 | Tanvika (`gamaa.tech`) | HTTP 200 before and after every deploy; no Tanvika service touched | `curl` |
 
 Source and running images agree: the deploy hook labels images with the commit
