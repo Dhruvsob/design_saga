@@ -61,7 +61,8 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
   const [preview, setPreview] = useState(null);
   const showRev = (d, r) => {
     setHistoryFor(null);    // the preview replaces the history dialog instead of opening under it
-    const path = previewPath(r.file_url);
+    // Stored files open through the revision route, which stamps superseded sheets.
+    const path = previewPath(r.file_url) ? `/drawings/${d.id}/revisions/${r.rev}/file` : null;
     if (!path) { const url = safeFileUrl(r.file_url); if (url) window.open(url, "_blank", "noopener"); return; }
     const latest = d.current?.rev;
     setPreview({ path, title: `${d.number} rev ${r.rev} · ${d.title}`, filename: r.file_name || `${d.number}-${r.rev}`,

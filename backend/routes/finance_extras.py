@@ -814,6 +814,8 @@ async def list_bank_batches(account_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(403, "Missing permission: finance.read")
+    if not await sdb.accounts.find_one({"id": account_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(404, "Account not found")
     batches = await sdb.bank_statement_batches.find(
         {"account_id": account_id}, {"_id": 0, "raw_csv": 0},
     ).sort("created_at", -1).to_list(None)
@@ -894,6 +896,8 @@ async def list_bank_rows(account_id: str, request: Request,
     user = await require_user(request, session_token, authorization)
     if not has_permission(user, "finance.read"):
         raise HTTPException(403, "Missing permission: finance.read")
+    if not await sdb.accounts.find_one({"id": account_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(404, "Account not found")
     q: dict = {"account_id": account_id}
     if status:
         q["status"] = status

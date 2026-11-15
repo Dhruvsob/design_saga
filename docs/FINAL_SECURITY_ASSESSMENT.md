@@ -100,9 +100,14 @@ Test: `test_account_deactivation.py`.
 ### 4.3 Accepted as designed (informational)
 * `DELETE /notifications/{id}` is idempotent and owner-filtered: it answers
   `ok` even when nothing matched. No cross-user effect.
-* A few read endpoints answer 200 with an empty result for IDs outside the
-  workspace (bank-reconciliation rows/batches, activity, collection entries).
-  No data is returned; a 404 would be more consistent (backlog).
+* Bank-reconciliation batches/rows, vendor commissions and collection entries
+  answered 200 with an empty result for IDs outside the workspace; they now
+  answer 404 (fixed the same day, `test_foreign_parent_404.py`). The activity
+  timeline still answers with an empty list for unknown targets on purpose:
+  it is audit history and must stay readable for deleted records.
+* GitHub Actions (CI security gates: secrets scan, pip-audit, bandit) has not
+  run since 2026-10-24 because the GitHub account is locked for billing; the
+  same checks were run locally for this release.
 
 ## 5. Remaining security risks
 

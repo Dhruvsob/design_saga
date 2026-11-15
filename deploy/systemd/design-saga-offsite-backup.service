@@ -1,0 +1,18 @@
+[Unit]
+Description=Encrypted off-site copy of the latest Design Saga backup
+After=network-online.target design-saga-backup.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/design-saga/offsite.env
+ExecStart=/opt/design-saga-git/deploy/offsite-backup.sh
+TimeoutStartSec=60min
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/design-saga-git /opt/design-saga-backups /etc/design-saga
+StateDirectory=design-saga-offsite

@@ -2738,6 +2738,10 @@ async def collection_entries(source_type: str, source_id: str, request: Request,
         raise HTTPException(status_code=403, detail="Missing permission: finance.read")
     if source_type not in _COLLECTION_TYPES:
         raise HTTPException(status_code=400, detail="Unknown collection type")
+    source_coll = {"other_receivable": "collection_receivables", "vendor_commission": "vendor_commissions",
+                   "milestone": "payment_milestones", "invoice": "invoices"}[source_type]
+    if not await sdb[source_coll].find_one({"id": source_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Collection not found")
     receipts: list = []
     if source_type == "other_receivable":
         async for r in sdb.collection_receipts.find(

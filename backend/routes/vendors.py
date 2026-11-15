@@ -1877,6 +1877,8 @@ async def list_vendor_commissions(vendor_id: str, request: Request,
                                   authorization: Optional[str] = Header(default=None)):
     user = await require_user(request, session_token, authorization)
     _require(user, "finance.read")
+    if not await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Vendor not found")
     q: dict = {"vendor_id": vendor_id}
     if status:
         q["status"] = status

@@ -79,6 +79,36 @@ Production public endpoints: `/`, `/login`, `/api/` about 0.3 s each.
 No authenticated production timing was taken (no production credentials are
 used by the agent).
 
+## 5a. Concurrent-user load (local, `backend/scripts/load_probe.py`)
+One backend worker (as in production), largest QA tenant, first-screen mix
+(session, dashboard, notifications, projects, org, capacity, clients, leads),
+one connection per request as production nginx does.
+
+| Scenario | Requests | Throughput | Errors | Median | p95 |
+|---|---|---|---|---|---|
+| 40 users, one click every 5 s, 60 s | 478 | 8.0/s | 0 | 142 ms | 1.2 s |
+| 25 users, no pause at all, 60 s | 968 | 16.1/s | 0 | 1.3 s | 3.2 s |
+
+The first run with think time showed connection resets; they came from the
+test client reusing connections that uvicorn closes after 5 s idle. Production
+nginx opens a new backend connection per request, so the probe now does the
+same, and the errors disappeared. This PC is faster than the 1-vCPU VPS, so
+treat these as upper bounds.
+
+## 5b. Added after the first report (same day)
+* Reads keyed by a parent record (bank-reconciliation batches/rows, vendor
+  commissions, collection entries) now answer 404 for another workspace's ID
+  instead of an empty 200 (`test_foreign_parent_404.py`).
+* Superseded drawing revisions are served with a SUPERSEDED stamp (studio
+  preview, client-portal transmittal and approval files); stored originals are
+  untouched; a PDF that cannot be parsed is served as-is with the in-app banner
+  (`test_superseded_stamp.py`, verified in the browser on a real PDF).
+* Off-site backup script tested locally: not configured (no-op), missing
+  passphrase (recorded failure), success (encrypted, read back, retention),
+  tampered local backup (refused). Monitor off-site check tested for five states.
+* Backend suite after these changes: 650 passed, 1 skipped; cross-tenant probe
+  clean (64 GET, 144 write, 62 body references).
+
 ## 6. Not tested (honest list)
 * Authenticated production smoke test with a real employee account (owner:
   10-minute check tomorrow morning, see release doc).

@@ -23,7 +23,6 @@ import re
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Cookie, Header, HTTPException, Request
-from fastapi.responses import FileResponse
 from pydantic import Field
 
 from core import portal
@@ -311,21 +310,14 @@ async def portal_approval_file(token: str, approval_id: str):
     if not a or not a.get("file_id"):
         raise HTTPException(status_code=404, detail="File not found")
     f = await db.files.find_one({**owned, "id": a["file_id"]}, {"_id": 0})
-    if not f or not f.get("storage_key"):
-        raise HTTPException(status_code=404, detail="File not found")
-    from services.local_files import resolve_storage_key
-    try:
-        path = resolve_storage_key(f["storage_key"])
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="File not found") from exc
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Stored file is unavailable")
-    media_type = f.get("content_type") or "application/octet-stream"
-    disposition = "inline" if media_type == "application/pdf" or media_type.startswith("image/") else "attachment"
-    return FileResponse(path, media_type=media_type,
-                        filename=f.get("original_name") or f.get("name") or "document",
-                        content_disposition_type=disposition,
-                        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+    current, superseded = None, False
+    if a.get("kind") == "drawing" and a.get("drawing_id"):
+        d = await db.drawings.find_one({**owned, "id": a["drawing_id"]}, {"_id": 0, "revisions": 1})
+        revs = (d or {}).get("revisions") or []
+        current = revs[-1].get("rev") if revs else None
+        superseded = bool(current and current != a.get("rev"))
+    from core.stamp import serve_drawing_file
+    return await serve_drawing_file(f, current, superseded=superseded)
 
 
 @router.post("/portal/{token}/approvals/{approval_id}/decision")

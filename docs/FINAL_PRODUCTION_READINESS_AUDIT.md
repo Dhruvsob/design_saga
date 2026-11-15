@@ -112,5 +112,5 @@ the same VPS disk.
 | Implemented and verified (this audit) | Tenant isolation on ID routes; body-reference checks; RBAC for Employee role; journals balanced; no duplicate payroll/invoices/attendance; backups + isolated restore; deploy, health and rollback path; capacity, transmittals, approvals, timeline releases |
 | Implemented, verified by existing automated tests only | Attendance paid-leave rules, payroll calculations, accounting reports, invoices/receipts, CRM, quotations, procurement |
 | Not verified here | Live production sign-in/PIN timings with a real account (no production credentials used by design); Safari/iOS; load beyond a few concurrent users |
-| Blocked by external configuration | Off-site backup target; external alert channel; Google OAuth publishing; credential rotation SEC-01; e-mail delivery |
-| Deferred (release risk / roadmap) | Product & material library, selections, object storage, email/WhatsApp channels, stamping superseded drawing files |
+| Blocked by external configuration | GitHub Actions (account locked for billing since 2026-10-24); off-site backup target and alert channel (both built and tested, waiting for an account: `docs/runbooks/OFFSITE-BACKUP-AND-ALERTS.md`); Google OAuth publishing; credential rotation SEC-01; e-mail delivery |
+| Deferred (roadmap) | Product & material library, selections, object storage, email/WhatsApp channels |

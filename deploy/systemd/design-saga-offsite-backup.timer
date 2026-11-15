@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily encrypted off-site copy of the Design Saga backup (after the 18:22 UTC backup)
+
+[Timer]
+OnCalendar=*-*-* 19:15:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

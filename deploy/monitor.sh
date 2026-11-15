@@ -13,6 +13,10 @@ min_tls_valid_seconds=${DESIGN_SAGA_MIN_TLS_VALID_SECONDS:-1209600}
 max_backend_5xx_count=${DESIGN_SAGA_MAX_BACKEND_5XX_COUNT:-5}
 public_host=${DESIGN_SAGA_PUBLIC_HOST:-gamaa.in}
 webhook=${DESIGN_SAGA_ALERT_WEBHOOK_URL:-}
+telegram_token=${DESIGN_SAGA_ALERT_TELEGRAM_BOT_TOKEN:-}
+telegram_chat=${DESIGN_SAGA_ALERT_TELEGRAM_CHAT_ID:-}
+offsite_state=${DESIGN_SAGA_OFFSITE_STATE_DIR:-/var/lib/design-saga-offsite}
+max_offsite_age=${DESIGN_SAGA_MAX_OFFSITE_AGE_SECONDS:-129600}
 
 mkdir -p "$state_dir"
 state_file="$state_dir/state"
@@ -28,7 +32,7 @@ add_problem() {
 
 for setting in "$max_backup_age" "$max_disk_percent" "$max_memory_percent" \
   "$max_load_per_cpu_percent" "$max_db_connection_percent" "$min_tls_valid_seconds" \
-  "$max_backend_5xx_count"; do
+  "$max_backend_5xx_count" "$max_offsite_age"; do
   case "$setting" in
     ''|*[!0-9]*) echo "Monitor thresholds must be non-negative integers" >&2; exit 2 ;;
   esac
@@ -137,6 +141,19 @@ else
   (cd "$latest" && sha256sum -c SHA256SUMS >/dev/null 2>&1) || add_problem "latest backup checksum failed"
 fi
 
+# Off-site copy (deploy/offsite-backup.sh): checked once it has run at least once.
+if [ -f "$offsite_state/last-success" ] || [ -f "$offsite_state/last-failure" ]; then
+  if [ ! -f "$offsite_state/last-success" ]; then
+    add_problem "off-site backup has never succeeded"
+  else
+    offsite_age=$(( $(date +%s) - $(stat -c %Y "$offsite_state/last-success") ))
+    [ "$offsite_age" -le "$max_offsite_age" ] || add_problem "off-site backup is ${offsite_age}s old"
+    if [ -f "$offsite_state/last-failure" ] && [ "$offsite_state/last-failure" -nt "$offsite_state/last-success" ]; then
+      add_problem "latest off-site backup failed"
+    fi
+  fi
+fi
+
 new_state=ok
 [ -z "$problems" ] || new_state="failed: $problems"
 old_state=$(cat "$state_file" 2>/dev/null || true)
@@ -154,6 +171,9 @@ if [ "$new_state" != "$old_state" ]; then
     curl -fsS --max-time 15 -H 'Content-Type: application/json' \
       --data "{\"text\":\"$escaped\"}" "$webhook" >/dev/null || \
       logger -p user.err -t design-saga-monitor "alert webhook delivery failed"
+  fi
+  if [ -n "$telegram_token" ] && [ -n "$telegram_chat" ]; then
+    curl -fsS --max-time 15 --data-urlencode "chat_id=$telegram_chat"       --data-urlencode "text=$message"       "https://api.telegram.org/bot${telegram_token}/sendMessage" >/dev/null 2>&1 ||       logger -p user.err -t design-saga-monitor "alert telegram delivery failed"
   fi
   printf '%s\n' "$new_state" > "$state_file"
 fi

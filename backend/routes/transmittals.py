@@ -25,7 +25,7 @@ from datetime import date as _date
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Cookie, Header, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import Field
 from pymongo import ReturnDocument
 
@@ -441,22 +441,12 @@ async def portal_transmittal_file(token: str, transmittal_id: str, index: int):
     items = t.get("items") or []
     if index < 0 or index >= len(items) or not items[index].get("file_id"):
         raise HTTPException(status_code=404, detail="File not found")
-    f = await db.files.find_one({"id": items[index]["file_id"], "project_id": ctx["project"]["id"],
+    item = items[index]
+    f = await db.files.find_one({"id": item["file_id"], "project_id": ctx["project"]["id"],
                                  "org_id": ctx["org_id"]}, {"_id": 0})
-    if not f or not f.get("storage_key"):
-        raise HTTPException(status_code=404, detail="File not found")
-    from services.local_files import resolve_storage_key
-    try:
-        path = resolve_storage_key(f["storage_key"])
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="File not found") from exc
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Stored file is unavailable")
-    media_type = f.get("content_type") or "application/octet-stream"
-    disposition = "inline" if media_type == "application/pdf" or media_type.startswith("image/") else "attachment"
-    return FileResponse(path, media_type=media_type, filename=f.get("original_name") or f.get("name") or "drawing",
-                        content_disposition_type=disposition,
-                        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+    current = (await _current_revs(db, ctx["org_id"], [t])).get(item.get("drawing_id"), {}).get("rev")
+    from core.stamp import serve_drawing_file
+    return await serve_drawing_file(f, current, superseded=bool(current and current != item.get("rev")))
 
 
 @router.get("/portal/{token}/transmittals/{transmittal_id}/pdf")

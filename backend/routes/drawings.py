@@ -272,6 +272,24 @@ async def decide_revision(drawing_id: str, rev: str, payload: DecisionIn, reques
     return _shape(await sdb.drawings.find_one({"id": drawing_id}, {"_id": 0}))
 
 
+@router.get("/drawings/{drawing_id}/revisions/{rev}/file")
+async def revision_file(drawing_id: str, rev: str, request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    """Open one revision's file; superseded revisions come back stamped (core.stamp)."""
+    user = await require_user(request, session_token, authorization)
+    _require(user, "files.read")
+    d = await _drawing(user, drawing_id, "projects.read")
+    revs = d.get("revisions") or []
+    r = next((x for x in revs if x.get("rev") == rev.upper()), None)
+    if not r or not r.get("file_id"):
+        raise HTTPException(status_code=404, detail="Revision not found")
+    f = await sdb.files.find_one({"id": r["file_id"], "project_id": d["project_id"]}, {"_id": 0})
+    from core.stamp import serve_drawing_file
+    current = revs[-1].get("rev")
+    return await serve_drawing_file(f, current, superseded=r["rev"] != current)
+
+
 @router.get("/projects/{project_id}/drawings/register.xlsx")
 async def drawing_register_export(project_id: str, request: Request,
                                   session_token: Optional[str] = Cookie(default=None),
