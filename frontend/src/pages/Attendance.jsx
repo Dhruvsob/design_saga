@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { errText } from "../lib/errors";
+import CreateMyProfile from "../components/CreateMyProfile";
 import PageHero from "../components/PageHero";
 import GeoFenceMap from "../components/GeoFenceMap";
 import {
@@ -314,17 +315,10 @@ export default function Attendance() {
                    options={[["me", "My day"], ["team", "Team"]]} />
       )}
 
-      {activeTab === "today" && todayMode === "me" && noProfile && (
-        <div className="card-flat" data-testid="attendance-no-profile">
-          <div className="overline mb-2">MY ATTENDANCE</div>
-          <p className="text-sm text-[var(--ink)]">
-            Your login is not linked to an employee profile, so personal check-in, leave and
-            correction requests are not available for this account.
-          </p>
-          <p className="text-xs text-[var(--ink-2)] mt-2">
-            To track your own attendance, open Employees, edit your employee record and link it to
-            this login. Team attendance, approvals and settings remain available in the other tabs.
-          </p>
+      {activeTab === "today" && noProfile && (
+        <div data-testid="attendance-no-profile">
+          <CreateMyProfile canCreate={hasPerm("employees.create")}
+            onCreated={() => { noProfileRef.current = false; setNoProfile(false); loadMe(); }} />
         </div>
       )}
 

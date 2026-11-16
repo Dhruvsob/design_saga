@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, Clock, Kanban, CalendarCheck, CaretRight } from "@phosphor-icons/react";
 import api from "../lib/api";
+import CreateMyProfile from "./CreateMyProfile";
 import { formatDate } from "../lib/format";
 
 const time = (iso) => {
@@ -15,12 +16,14 @@ const time = (iso) => {
 export default function MyDay() {
   const [d, setD] = useState(null);
   const navigate = useNavigate();
-  useEffect(() => { api.get("/dashboard/my-day").then(({ data }) => setD(data)).catch(() => setD(null)); }, []);
+  const load = () => api.get("/dashboard/my-day").then(({ data }) => setD(data)).catch(() => setD(null));
+  useEffect(() => { load(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   if (!d) return null;
   const t = d.tasks || {};
   const a = d.attendance;
   const l = d.leave;
-  if (!t.open && !a && !l) return null;   // nothing personal to show (e.g. an owner with no staff record)
+  const unlinked = d.profile && d.profile.linked === false;
+  if (!t.open && !a && !l && !unlinked) return null;   // nothing personal to show
   return (
     <section className="fade-up card-flat" data-testid="my-day" aria-label="My day">
       <div className="flex items-center justify-between mb-4">
@@ -62,6 +65,7 @@ export default function MyDay() {
           )}
         </div>
         <div className="space-y-3">
+          {unlinked && <CreateMyProfile compact canCreate={d.profile.can_create} onCreated={load} />}
           {a && (
             <button type="button" onClick={() => navigate("/attendance")} data-testid="my-day-attendance"
               className="w-full text-left border border-[var(--line)] rounded-md p-3 hover:border-[var(--accent-strong)] transition">

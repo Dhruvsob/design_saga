@@ -4959,8 +4959,69 @@ async def create_employee(payload: EmployeeIn, request: Request,
     return _employee_for_user(created, user)
 
 
-async def _new_employee_doc(data: dict, user: dict) -> dict:
-    """Defaults and identifiers shared by the form and the CSV import."""
+class SelfProfileIn(BaseModel):
+    designation: Optional[str] = Field(default=None, max_length=80)
+    phone: Optional[str] = Field(default=None, max_length=30)
+
+
+@api.post("/employees/me")
+async def create_my_employee_profile(request: Request, payload: Optional[SelfProfileIn] = None,
+                                     session_token: Optional[str] = Cookie(default=None),
+                                     authorization: Optional[str] = Header(default=None)):
+    """One click for a studio owner/admin whose login has no employee record.
+
+    Creates (or links) the caller's own record so attendance, leave and My day
+    work for them too. Idempotent: an existing linked record is returned; an
+    unlinked record with the same email is linked instead of duplicated. The
+    record reuses the login's employee code when that code is still free.
+    """
+    user = await require_user(request, session_token, authorization)
+    from core.tenancy import is_super_admin as _is_platform_admin
+    if _is_platform_admin(user) and not user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Open a workspace first")
+    if not has_permission(user, "employees.create"):
+        raise HTTPException(status_code=403,
+                            detail="Ask your administrator to add your employee profile")
+    links = [{"user_id": user["user_id"]}] + ([{"email": user["email"]}] if user.get("email") else [])
+    existing = await sdb.employees.find_one({"$or": links}, {"_id": 0})
+    if existing:
+        if not existing.get("user_id"):
+            await sdb.employees.update_one({"id": existing["id"], "user_id": {"$in": [None, ""]}},
+                                           {"$set": {"user_id": user["user_id"]}})
+            await audit_log(user, "employee.self_link", target=existing["id"], target_type="employee",
+                            meta={"employee_id": existing.get("employee_id")})
+            existing = await sdb.employees.find_one({"id": existing["id"]}, {"_id": 0})
+        return {"created": False, "employee": _employee_for_user(existing, user)}
+
+    from core.helpers import business_today
+    parts = str(user.get("name") or "").strip().split()
+    first = parts[0] if parts else (user.get("email") or "Owner").split("@")[0]
+    data = EmployeeIn(
+        first_name=first, last_name=" ".join(parts[1:]), email=user.get("email") or "",
+        phone=((payload.phone if payload else None) or user.get("phone") or "").strip(),
+        department="Management",
+        designation=((payload.designation if payload else None) or "").strip()
+        or ("Principal" if user.get("role") in ("Admin", "Owner") else str(user.get("role") or "")),
+        joining_date=business_today().isoformat(), user_id=user["user_id"],
+        shift_start=None, shift_end=None,          # follow the workspace's office hours
+    ).model_dump()
+    login_code = str(user.get("employee_id") or "").strip()
+    reuse = login_code if login_code and not await sdb.employees.find_one(
+        {"employee_id": login_code}, {"_id": 0, "id": 1}) else None
+    data = await _new_employee_doc(data, user, employee_id=reuse)
+    await sdb.employees.insert_one(dict(data))
+    if not login_code:
+        await db.users.update_one({"user_id": user["user_id"], "org_id": user_org_id(user)},
+                                  {"$set": {"employee_id": data["employee_id"]}})
+    await audit_log(user, "employee.self_profile", target=data["id"], target_type="employee",
+                    meta={"employee_id": data["employee_id"]})
+    created = await sdb.employees.find_one({"id": data["id"]}, {"_id": 0})
+    return {"created": True, "employee": _employee_for_user(created, user)}
+
+
+async def _new_employee_doc(data: dict, user: dict, employee_id: Optional[str] = None) -> dict:
+    """Defaults and identifiers shared by the form, the CSV import and the
+    owner's own profile (which may keep the login's existing code)."""
     if data.get("employment_type") not in EMPLOYMENT_TYPES:
         data["employment_type"] = "full_time"
     if data.get("employment_status") not in EMPLOYMENT_STATUSES:
@@ -4978,7 +5039,7 @@ async def _new_employee_doc(data: dict, user: dict) -> dict:
     }
     data["id"] = new_id("emp_")
     from core.tenancy import user_org_id
-    data["employee_id"] = await _next_employee_id(user_org_id(user))
+    data["employee_id"] = employee_id or await _next_employee_id(user_org_id(user))
     data["created_at"] = iso(now_utc())
     data["created_by"] = user["user_id"]
     return data

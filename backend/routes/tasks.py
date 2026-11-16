@@ -818,6 +818,13 @@ async def my_day(request: Request,
                 overlap = float(lv.get("days") or 0)
             used += min(float(lv.get("days") or 0), max(0, overlap))
         leave = {"used_this_month": used, "free_per_month": 1, "free_left": max(0.0, 1 - used)}
+    # Owners/admins without an employee record can create one in one click
+    # (POST /employees/me); staff without one are told to ask an administrator.
+    from core.rbac import has_permission
+    from core.tenancy import is_super_admin
+    platform_only = is_super_admin(user) and not user.get("org_id")
+    profile = {"linked": bool(emp),
+               "can_create": not emp and not platform_only and has_permission(user, "employees.create")}
     return {"date": today, "tasks": {"open": len(open_tasks), "overdue": len(overdue),
                                      "due_today": len(due_today), "focus": focus},
-            "attendance": attendance, "leave": leave}
+            "attendance": attendance, "leave": leave, "profile": profile}
