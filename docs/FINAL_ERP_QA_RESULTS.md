@@ -109,6 +109,26 @@ treat these as upper bounds.
 * Backend suite after these changes: 650 passed, 1 skipped; cross-tenant probe
   clean (64 GET, 144 write, 62 body references).
 
+## 5c. Product & Material Library (P2.2, 2026-11-16)
+* Unit tests (`test_products.py`, 9 cases): input cleaning and tag de-dup,
+  search/filters/preferred-first ordering/pagination/facets, append-only
+  prices with latest price on the product, BOQ snapshot line (latest price,
+  spec summary, vendor, product_id; refused for discontinued products),
+  delete refused once used in a quotation, image/datasheet type checks with
+  tenant-folder storage and no storage keys in responses, Employee
+  read-only / HR no access / Designer cannot delete, another workspace's
+  products invisible (404).
+* Browser (local, separate preview on port 4175 so the other session's
+  preview was not disturbed): created a product with specs and tags, added
+  an image and a PDF datasheet, two prices (history newest first), opened
+  the datasheet preview, added the product to a turnkey quotation BOQ
+  ("From library" line with ₹4,450 snapshot; amount ₹5,117.50 with 15%
+  margin after save), and deletion was refused with 409 "Used in 1
+  quotation". Phone width: no page-level horizontal scroll.
+* Cross-tenant probe: clean with product routes included (68 GET, 150
+  write, 63 body references incl. default_vendor_id).
+* Backend suite after merging production 4a08e11: 665 passed.
+
 ## 6. Not tested (honest list)
 * Authenticated production smoke test with a real employee account (owner:
   10-minute check tomorrow morning, see release doc).

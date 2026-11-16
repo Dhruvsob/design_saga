@@ -14,12 +14,9 @@ import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
 import { formatDate, formatINR } from "../lib/format";
 import { safeExternalUrl } from "../lib/url";
+import { errText } from "../lib/errors";
 
 const SOURCE = { manual: "Entered", quote: "Vendor quote", po: "Purchase order" };
-const errText = (e, fallback) => {
-  const d = e?.response?.data?.detail;
-  return typeof d === "string" ? d : Array.isArray(d) ? d.map((x) => x?.msg || String(x)).join(" · ") : fallback;
-};
 
 function Panel({ title, onClose, children, wide = false, testid }) {
   return createPortal(
