@@ -12,6 +12,7 @@ import { ProposalDetails, ProposalFees } from "../components/ConsultancyProposal
 import { askForm, confirmAction } from "../lib/confirm";
 import useUnsavedWarning from "../lib/useUnsavedWarning";
 import { PdfFrame } from "../components/PdfPreview";
+import ProductPicker from "../components/ProductPicker";
 
 const TABS = ["Overview", "BOQ Builder", "Rooms", "Materials", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
 const CONSULT_TABS = ["Overview", "Fee Schedule", "Costing", "Payment Plan", "Timeline", "Terms", "Versions", "Preview"];
@@ -350,7 +351,17 @@ function Overview({ q, update, isConsult }) {
 function BoqBuilder({ q, update, tpl, isConsult }) {
   const [showCatForm, setShowCatForm] = useState(false);
   const [newCat, setNewCat] = useState("");
+  const [pickFor, setPickFor] = useState(null);   // category index receiving a library product
   const lib = isConsult ? (tpl.consultancy_fee_templates || {}) : tpl.boq_templates;
+
+  // A product from the studio library arrives as a ready BOQ line (snapshot, not a live link).
+  const addFromLibrary = (line) => {
+    const boq = JSON.parse(JSON.stringify(q.boq));
+    boq[pickFor].items.push({ ...line, room: tpl.rooms.includes(line.room) ? line.room : tpl.rooms[0] });
+    update({ boq });
+    toast.success("Added from the library");
+    setPickFor(null);
+  };
 
   const addTemplateCat = (name) => {
     const items = (lib[name] || []).map((it) => ({
@@ -448,7 +459,14 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
                   return (
                     <tr key={ii} className="border-b border-[var(--line-soft)]">
                       <td><input className="input-flat" style={{ padding: "6px 8px" }} value={it.code || ""} onChange={(e) => updateItem(ci, ii, "code", e.target.value)} /></td>
-                      <td><input className="input-flat" style={{ padding: "6px 8px" }} value={it.description || ""} onChange={(e) => updateItem(ci, ii, "description", e.target.value)} /></td>
+                      <td>
+                        <input className="input-flat" style={{ padding: "6px 8px" }} value={it.description || ""} onChange={(e) => updateItem(ci, ii, "description", e.target.value)} />
+                        {it.product_snapshot && (
+                          <div className="text-[10px] text-[var(--ink-3)] mt-0.5" data-testid="boq-library-note">
+                            From library{it.product_snapshot.price != null ? ` · price ${formatINR(it.product_snapshot.price)}` : ""}{it.product_snapshot.price_valid_from ? ` from ${it.product_snapshot.price_valid_from}` : ""}
+                          </div>
+                        )}
+                      </td>
                       <td><input className="input-flat" style={{ padding: "6px 8px", width: 70 }} value={it.unit || ""} onChange={(e) => updateItem(ci, ii, "unit", e.target.value)} /></td>
                       <td><input type="number" min="0" className="input-flat text-right" style={{ padding: "6px 8px", width: 80 }} value={it.quantity} onChange={(e) => updateItem(ci, ii, "quantity", Number(e.target.value) || 0)} /></td>
                       <td><input type="number" min="0" className="input-flat text-right" style={{ padding: "6px 8px", width: 100 }} value={it.rate} onChange={(e) => updateItem(ci, ii, "rate", Number(e.target.value) || 0)} /></td>
@@ -475,11 +493,19 @@ function BoqBuilder({ q, update, tpl, isConsult }) {
               </tbody>
             </table>
           </div>
-          <button onClick={() => addItem(ci)} className="btn-ghost text-xs mt-3">
-            <Plus size={12} /> Add line item
-          </button>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button onClick={() => addItem(ci)} className="btn-ghost text-xs">
+              <Plus size={12} /> Add line item
+            </button>
+            {!isConsult && (
+              <button type="button" onClick={() => setPickFor(ci)} className="btn-ghost text-xs" data-testid={`boq-from-library-${ci}`}>
+                <Plus size={12} /> From product library
+              </button>
+            )}
+          </div>
         </Card>
       ))}
+      {pickFor !== null && <ProductPicker room={tpl.rooms[0]} onPick={addFromLibrary} onClose={() => setPickFor(null)} />}
       {(!q.boq || q.boq.length === 0) && (
         <Card title={isConsult ? "EMPTY FEE SCHEDULE" : "EMPTY BOQ"}>
           <p className="text-sm text-[var(--ink-2)]">
