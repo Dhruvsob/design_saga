@@ -46,8 +46,9 @@ const relativeTime = (iso) => {
 };
 
 export default function NotificationBell() {
-  const { user, isPending, isRejected } = useAuth();
-  const canPoll = !!user && !isPending && !isRejected;
+  const { user, isPending, isRejected, pinLocked } = useAuth();
+  // No polling while the App PIN lock is up (the server answers 423 anyway).
+  const canPoll = !!user && !isPending && !isRejected && !pinLocked;
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
@@ -57,8 +58,10 @@ export default function NotificationBell() {
   const boxRef = useRef(null);
   const timerRef = useRef(null);
 
-  const load = async () => {
+  const load = async ({ force = false } = {}) => {
     if (!canPoll) return;
+    // A hidden tab skips the 30 s refresh; it catches up as soon as it is shown.
+    if (!force && typeof document !== "undefined" && document.visibilityState === "hidden") return;
     try {
       const { data } = await api.get("/notifications", { params: { limit: 30 } });
       setItems(data.notifications || []);
@@ -71,9 +74,14 @@ export default function NotificationBell() {
   // Poll every 30 s while mounted AND user is fully approved.
   useEffect(() => {
     if (!canPoll) return;
-    load();
+    load({ force: true });
     timerRef.current = setInterval(load, 30_000);
-    return () => clearInterval(timerRef.current);
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timerRef.current);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canPoll]);
 

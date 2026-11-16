@@ -15,6 +15,16 @@ def _valid_hhmm(value: Optional[str]) -> Optional[str]:
         raise ValueError("Time must be HH:MM in 24-hour format")
     return value
 
+
+def _optional_hhmm(value: Optional[str]) -> Optional[str]:
+    """Optional time fields: a blank form input means "not set", not an error.
+
+    Production 2026-11-16: a site-visit check-in left "Expected time" blank, the
+    form sent "" and the check-in failed with 422."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    return _valid_hhmm(value.strip())
+
 # Default annual leave allowance per type (used when creating an Employee LeaveBalance)
 DEFAULT_LEAVE_ALLOWANCE = {
     "casual": 12,
@@ -53,7 +63,7 @@ class CheckInIn(BaseModel):
     @field_validator("expected_time")
     @classmethod
     def _expected_time(cls, value):
-        return _valid_hhmm(value)
+        return _optional_hhmm(value)
 
 
 class GeoLocationIn(BaseModel):
@@ -212,7 +222,7 @@ class EmployeeAttendanceConfigIn(BaseModel):
     @field_validator("shift_start", "shift_end")
     @classmethod
     def _shift_time(cls, value):
-        return _valid_hhmm(value)
+        return _optional_hhmm(value)
 
     @field_validator("weekly_offs")
     @classmethod

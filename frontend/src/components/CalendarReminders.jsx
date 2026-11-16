@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Bell } from "@phosphor-icons/react";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 // App-wide calendar reminder poller. Renders nothing — it periodically asks the
 // backend for the current user's imminent events (based on each event's
@@ -44,11 +45,17 @@ const shownKey = (id, date) => `calrem_${date}_${id}`;
 export default function CalendarReminders() {
   const navigate = useNavigate();
   const timer = useRef(null);
+  // Reminders keep running in a background tab (that is when the beep matters),
+  // but not while the App PIN lock is up: the server refuses those calls (423).
+  const { pinLocked } = useAuth();
+  const locked = useRef(pinLocked);
+  locked.current = pinLocked;
 
   useEffect(() => {
     let alive = true;
 
     const check = async () => {
+      if (locked.current) return;
       try {
         const { data } = await api.get("/calendar/reminders/due");
         if (!alive) return;
