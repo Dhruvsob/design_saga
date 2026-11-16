@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { errText } from "../lib/errors";
 import PageHero from "../components/PageHero";
 import GeoFenceMap from "../components/GeoFenceMap";
 import {
@@ -207,9 +208,11 @@ export default function Attendance() {
       };
       if (opts.lateReason) base.late_reason = opts.lateReason;
       if (opts.lateCategory) base.late_category = opts.lateCategory;
+      // Blank optional fields are left out rather than sent as "" (a blank
+      // expected time used to fail the whole check-in).
       const extra = attType === "office"
         ? { location: "Office" }
-        : { ...siteForm };
+        : Object.fromEntries(Object.entries(siteForm).filter(([, v]) => String(v ?? "").trim() !== ""));
       await api.post("/attendance/check-in", { ...base, ...extra });
       setSiteVisit(false);
       setSiteForm({ project_id: "", site_location: "", reason: "", expected_time: "" });
@@ -224,9 +227,7 @@ export default function Attendance() {
       } else if (detail && typeof detail === "object" && detail.code === "late_reason_required") {
         setLateReasonNeeded(detail);
       } else {
-        const msg = typeof detail === "string" ? detail
-          : (detail?.message || e?.message || "Check-in failed");
-        toast.error(msg);
+        toast.error(errText(e, "Check-in failed. Please try again."));
       }
     } finally { setCheckInBusy(false); }
   };

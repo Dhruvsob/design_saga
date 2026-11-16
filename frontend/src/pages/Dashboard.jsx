@@ -27,8 +27,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { hasPerm, user } = useAuth();
+  // Staff without dashboard.read get their own "My day" only. Calling the
+  // studio statistics for them was refused (403) and the page then showed
+  // misleading zeros such as "Overdue tasks 0 - All clear".
+  const canStats = hasPerm("dashboard.read");
 
   const load = async () => {
+    if (!canStats) { setLoading(false); return; }
     try {
       const { data } = await api.get("/dashboard/stats");
       setStats(data);
@@ -37,7 +42,7 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [canStats]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const kpis = stats?.kpis || {};
   const pipeline = stats?.pipeline || [];
@@ -89,7 +94,7 @@ export default function Dashboard() {
 
       <MyDay />
 
-      {loading ? <DashboardSkeleton /> : <>
+      {!canStats ? null : loading ? <DashboardSkeleton /> : <>
       {/* ============== KPI ROW ============== */}
       <div className="fade-up">
         <div className={`grid grid-cols-1 md:grid-cols-2 ${kpiGrid} border-t border-l border-[var(--line)] kpi-grid`}>

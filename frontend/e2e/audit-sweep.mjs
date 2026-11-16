@@ -9,7 +9,10 @@ const PAGES = [
   "accounting?tab=receivables", "accounting?tab=daybook", "accounting?tab=reports", "accounting?tab=balance",
   "accounting?tab=cashflow", "accounting?tab=coa", "accounting?tab=commissions", "accounting?tab=validation",
   "expenses", "loans", "employees", "attendance", "holidays", "settings/company", "admin/rbac", "settings/audit",
+  "timesheets", "timesheets?tab=capacity", "timesheets?tab=approvals", "payroll", "live-map",
+  "settings/company?tab=plan",
 ];
+const PROJECT_TABS = ["Timeline", "Time", "Drawings", "Files", "Approvals", "Milestones", "Invoices", "Site visits", "Snags"];
 const BAD_TEXT = [/\bundefined\b/, /\bNaN\b/, /Invalid Date/, /\[object Object\]/, /₹-\d/, /\bnull\b/];
 const SNAKE = /\b[a-z]{3,}_[a-z_]{3,}\b/g;
 const IGNORE_SNAKE = new Set(["e.g", "user_id"]);
@@ -30,6 +33,11 @@ async function detailLinks(ctx) {
                              ["employees", "employees"], ["tasks", "tasks"], ["leads", "crm"]]) {
     const id = await pick(api);
     if (id) out.push(`${path}/${id}`);
+    if (id && api === "projects") PROJECT_TABS.forEach((t) => out.push(`projects/${id}?tab=${encodeURIComponent(t)}`));
+  }
+  for (const [api, path] of [["quotations-adv", "quotations"], ["invoices", "invoices"], ["purchase-orders", "purchase-orders"]]) {
+    const id = await pick(api);
+    if (id && path !== "purchase-orders") out.push(`${path}/${id}`);
   }
   return out;
 }
