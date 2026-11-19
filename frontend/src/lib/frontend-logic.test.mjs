@@ -54,3 +54,65 @@ test("SearchSelect reads native <option>/<optgroup> children unchanged", () => {
     { value: "b1", label: "HDFC", disabled: true, group: "Bank" },
   ]);
 });
+
+// ---------------------------------------------------------------- stale bundles after a deploy
+import { isChunkError, reloadForNewVersion, withChunkReload } from "./chunks.js";
+
+function fakeWindow({ storageThrows = false } = {}) {
+  const store = new Map();
+  const win = {
+    reloads: 0,
+    location: { reload: () => { win.reloads += 1; } },
+    sessionStorage: {
+      getItem: (k) => { if (storageThrows) throw new Error("blocked"); return store.get(k) ?? null; },
+      setItem: (k, v) => { if (storageThrows) throw new Error("blocked"); store.set(k, v); },
+    },
+  };
+  globalThis.window = win;
+  return win;
+}
+
+test("recognises the browsers' stale-bundle errors and nothing else", () => {
+  assert.ok(isChunkError(new TypeError("Failed to fetch dynamically imported module: https://gamaa.in/assets/Library-6iu.js")));
+  assert.ok(isChunkError(new TypeError("Importing a module script failed.")));
+  assert.ok(isChunkError(new TypeError("error loading dynamically imported module")));
+  assert.ok(!isChunkError(new TypeError("Cannot read properties of undefined (reading 'map')")));
+  assert.ok(!isChunkError(null));
+});
+
+test("reloads once for a stale bundle, then lets the error through instead of looping", async () => {
+  const win = fakeWindow();
+  const stale = () => Promise.reject(new TypeError("Failed to fetch dynamically imported module: x.js"));
+  const pending = withChunkReload(stale)();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(win.reloads, 1);                                   // first failure: reload, keep loading
+  assert.equal(await Promise.race([pending, Promise.resolve("still loading")]), "still loading");
+  await assert.rejects(withChunkReload(stale)(), /dynamically imported/);   // again within a minute: show it
+  assert.equal(win.reloads, 1);
+});
+
+test("never reloads when it cannot remember having reloaded, and rethrows real page errors", async () => {
+  const win = fakeWindow({ storageThrows: true });
+  assert.equal(reloadForNewVersion(), false);
+  assert.equal(win.reloads, 0);
+  fakeWindow();
+  await assert.rejects(withChunkReload(() => Promise.reject(new Error("render bug")))(), /render bug/);
+});
+
+// ---------------------------------------------------------------- 422 lists become text once
+import { normalizeErrorDetail } from "./errors.js";
+
+test("a FastAPI validation list becomes readable text a toast can render", () => {
+  const list = [{ type: "string_too_long", loc: ["body", "client_name"], msg: "String should have at most 160 characters" }];
+  const err = normalizeErrorDetail({ response: { status: 422, data: { detail: list } } });
+  assert.equal(err.response.data.detail, "Client name: String should have at most 160 characters");
+  assert.deepEqual(err.response.data.errors, list);
+});
+
+test("string and structured details are left alone", () => {
+  const structured = { code: "visit_open", message: "Finish the open visit first" };
+  assert.equal(normalizeErrorDetail({ response: { data: { detail: "Leave dates overlap" } } }).response.data.detail, "Leave dates overlap");
+  assert.equal(normalizeErrorDetail({ response: { data: { detail: structured } } }).response.data.detail, structured);
+  assert.doesNotThrow(() => normalizeErrorDetail({ message: "Network Error" }));
+  assert.doesNotThrow(() => normalizeErrorDetail({ response: { data: "<html>502</html>" } }));
+});

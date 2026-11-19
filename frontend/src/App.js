@@ -8,9 +8,15 @@ import AuthCallback from "./pages/AuthCallback";
 import Layout from "./components/Layout";
 import { MandatoryPinSetupOverlay, PinLockOverlay } from "./components/AppPinLock";
 import { ConfirmHost } from "./lib/confirm";
+import { withChunkReload } from "./lib/chunks";
+import PageErrorBoundary from "./components/PageErrorBoundary";
 
 // lazy() plus .preload(), so a page's code can download while the PIN screen is up.
-const lazyPage = (factory) => Object.assign(lazy(factory), { preload: factory });
+// withChunkReload: a tab opened before a deploy reloads once instead of blanking.
+const lazyPage = (factory) => {
+  const load = withChunkReload(factory);
+  return Object.assign(lazy(load), { preload: () => load().catch(() => {}) });
+};
 
 const Dashboard = lazyPage(() => import("./pages/Dashboard"));
 const Leads = lazyPage(() => import("./pages/Leads"));
@@ -153,7 +159,7 @@ function AppRouter() {
     return <AuthCallback />;
   }
   return (
-    <Suspense fallback={<PageFallback />}><Routes>
+    <PageErrorBoundary resetKey={location.pathname} bare><Suspense fallback={<PageFallback />}><Routes>
       <Route path="/" element={<PublicRoot />} />
       <Route path="/login" element={<LoginRoute />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -193,7 +199,7 @@ function AppRouter() {
       <Route path="/settings/audit" element={<ProtectedShell requirePerm="*.*"><AuditLog /></ProtectedShell>} />
       <Route path="/super-admin" element={<ProtectedShell requireSuperAdmin><SuperAdminPanel /></ProtectedShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes></Suspense>
+    </Routes></Suspense></PageErrorBoundary>
   );
 }
 

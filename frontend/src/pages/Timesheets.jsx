@@ -8,6 +8,7 @@ import CapacityHeatmap from "../components/CapacityHeatmap";
 import { formatDate } from "../lib/format";
 import { confirmAction } from "../lib/confirm";
 import { useAuth } from "../context/AuthContext";
+import { errText } from "../lib/errors";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const STATUS = {
@@ -21,13 +22,6 @@ const inr = (n) => `Rs. ${Number(n || 0).toLocaleString("en-IN", { maximumFracti
 
 /** 6 -> "6", 2.5 -> "2.5", 1.25 -> "1.25" */
 const fmtH = (n) => String(Math.round(Number(n || 0) * 100) / 100);
-
-function errText(e, fallback) {
-  const d = e?.response?.data?.detail;
-  if (typeof d === "string") return d;
-  if (Array.isArray(d)) return d.map((x) => x?.msg || String(x)).join(" · ");
-  return fallback;
-}
 
 function shiftWeek(iso, weeks) {
   const d = new Date(`${iso}T00:00:00`);

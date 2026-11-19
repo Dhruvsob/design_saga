@@ -22,3 +22,17 @@ export function errText(e, fallback = "Something went wrong. Please try again.")
   }
   return fallback;
 }
+
+// FastAPI validation errors (422) arrive as a list of objects. Screens pass
+// `detail` straight to a toast, and rendering a list of objects throws ("Objects
+// are not valid as a React child"), taking the page down. The API layer calls
+// this once so every screen gets readable text; the raw list stays in `errors`.
+export function normalizeErrorDetail(error) {
+  const data = error?.response?.data;
+  if (data && typeof data === "object" && Array.isArray(data.detail)) {
+    const text = errText(error);
+    data.errors = data.detail;
+    data.detail = text;
+  }
+  return error;
+}

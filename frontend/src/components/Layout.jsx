@@ -16,6 +16,7 @@ import { formatDate, formatTime } from "../lib/format";
 import { PinSecurityDialog } from "./AppPinLock";
 import { visibleNavGroups } from "../lib/navigation";
 import { rememberWorkspace } from "../lib/workspace";
+import PageErrorBoundary from "./PageErrorBoundary";
 
 // Grouped by how an architecture practice works, not by backend module.
 // URLs, permissions and module flags are unchanged; empty groups are hidden.
@@ -397,7 +398,7 @@ export default function Layout({ children }) {
             {hasPerm("*.*") && <> See <NavLink to="/settings/company" className="underline underline-offset-2">Company settings → Plan &amp; usage</NavLink>.</>}
           </div>
         )}
-        <div className="p-4 lg:p-8 fade-in">{children}</div>
+        <div className="p-4 lg:p-8 fade-in"><PageErrorBoundary resetKey={location.pathname}>{children}</PageErrorBoundary></div>
       </main>
 
       <CommandPalette open={paletteOpen} setOpen={setPaletteOpen} />

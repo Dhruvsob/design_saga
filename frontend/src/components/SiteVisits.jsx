@@ -12,6 +12,7 @@ import { useAuth } from "../context/AuthContext";
 import RowActions from "./RowActions";
 import CheckInMap, { MapLegend } from "./CheckInMap";
 import GeoFenceMap from "./GeoFenceMap";
+import { errText } from "../lib/errors";
 
 // ------------------------------------------------------------------ helpers
 export function getGPS() {
@@ -32,14 +33,6 @@ export function getGPS() {
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
     );
   });
-}
-
-export function errText(e, fallback) {
-  const d = e?.response?.data?.detail;
-  if (typeof d === "string") return d;
-  if (d && typeof d === "object" && !Array.isArray(d) && d.message) return d.message;
-  if (Array.isArray(d) && d[0]?.msg) return d[0].msg;
-  return fallback;
 }
 
 export function fmtDuration(min) {

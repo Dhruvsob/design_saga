@@ -5,6 +5,7 @@ import { FlagBanner, X } from "@phosphor-icons/react";
 import api from "../lib/api";
 import { formatDate } from "../lib/format";
 import { confirmAction } from "../lib/confirm";
+import { errText } from "../lib/errors";
 
 const ROW = 34;
 const NAME_W = 230;
@@ -18,13 +19,6 @@ const addDays = (iso, n) => {
 };
 const localIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const todayIso = () => localIso(new Date());
-
-function errText(e, fallback) {
-  const d = e?.response?.data?.detail;
-  if (typeof d === "string") return d;
-  if (Array.isArray(d)) return d.map((x) => x?.msg || String(x)).join(" · ");
-  return fallback;
-}
 
 function Editor({ task, tasks, onClose, onSaved }) {
   const [start, setStart] = useState(task.start_date || task.start || "");

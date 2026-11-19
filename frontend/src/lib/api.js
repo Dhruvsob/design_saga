@@ -1,4 +1,5 @@
 import axios from "axios";
+import { normalizeErrorDetail } from "./errors";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
@@ -75,6 +76,7 @@ api.interceptors.response.use(
   (response) => { writeFinished(response.config); return response; },
   (error) => {
     writeFinished(error?.config);
+    normalizeErrorDetail(error);
     if (typeof window !== "undefined") {
       if (error?.response?.status === 423) {
         window.dispatchEvent(new CustomEvent("app-pin-locked"));

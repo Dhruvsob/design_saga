@@ -10,7 +10,7 @@ const PAGES = [
   "accounting?tab=cashflow", "accounting?tab=coa", "accounting?tab=commissions", "accounting?tab=validation",
   "expenses", "loans", "employees", "attendance", "holidays", "settings/company", "admin/rbac", "settings/audit",
   "timesheets", "timesheets?tab=capacity", "timesheets?tab=approvals", "payroll", "live-map",
-  "settings/company?tab=plan",
+  "settings/company?tab=plan", "library",
 ];
 const PROJECT_TABS = ["Timeline", "Time", "Drawings", "Files", "Approvals", "Milestones", "Invoices", "Site visits", "Snags"];
 const BAD_TEXT = [/\bundefined\b/, /\bNaN\b/, /Invalid Date/, /\[object Object\]/, /₹-\d/, /\bnull\b/];

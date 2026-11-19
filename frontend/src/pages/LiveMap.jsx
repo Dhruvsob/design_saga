@@ -6,7 +6,8 @@ import { dateForInput, formatDate, formatTime, statusLabel } from "../lib/format
 import { useAuth } from "../context/AuthContext";
 import PageHero from "../components/PageHero";
 import CheckInMap, { MapLegend } from "../components/CheckInMap";
-import { GEO_LABEL, errText } from "../components/SiteVisits";
+import { GEO_LABEL } from "../components/SiteVisits";
+import { errText } from "../lib/errors";
 
 const TYPE_LABEL = {
   office: "Office check-in", site_visit: "Site visit", client_meeting: "Client meeting",

@@ -4,6 +4,7 @@ import { FilePdf, Plus, Receipt, Gear, X } from "@phosphor-icons/react";
 import api, { API } from "../lib/api";
 import { confirmAction } from "../lib/confirm";
 import { dateForInput, formatDate } from "../lib/format";
+import { errText } from "../lib/errors";
 
 const inr = (n) => `Rs. ${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const STATUS = {
@@ -16,13 +17,6 @@ const STATUS = {
 };
 const METHODS = [["bank_transfer", "Bank transfer"], ["upi", "UPI"], ["cheque", "Cheque"],
   ["cash", "Cash"], ["card", "Card"], ["other", "Other"]];
-
-function errText(e, fallback) {
-  const d = e?.response?.data?.detail;
-  if (typeof d === "string") return d;
-  if (Array.isArray(d)) return d.map((x) => x?.msg || String(x)).join(" · ");
-  return fallback;
-}
 
 function Dialog({ title, eyebrow, onClose, children, testid }) {
   useEffect(() => {
