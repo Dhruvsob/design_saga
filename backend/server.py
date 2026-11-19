@@ -6202,6 +6202,21 @@ async def _bootstrap_default_org():
 
     app.state._scan_task = asyncio.create_task(_scan_loop())
 
+    # Evening "you haven't checked out" reminders (core.checkout_reminders);
+    # cheap, idempotent per person per day, so it can run every 15 minutes.
+    async def _checkout_reminder_loop():
+        await asyncio.sleep(90)
+        while True:
+            try:
+                from core.jobs import run_job
+                from core.checkout_reminders import send_checkout_reminders
+                await run_job("checkout_reminders", send_checkout_reminders, lease_seconds=600, retries=1)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[Scheduler] checkout reminders failed: %s", type(exc).__name__)
+            await asyncio.sleep(15 * 60)
+
+    app.state._checkout_task = asyncio.create_task(_checkout_reminder_loop())
+
     # Retry Google Calendar writes without making ERP saves depend on an
     # external API. Disabled automatically until OAuth credentials exist.
     async def _google_calendar_sync_loop():

@@ -76,6 +76,16 @@ export default function MyDay() {
               {!a.checked_in && <div className="text-[11px] text-[var(--accent-strong)] mt-0.5">Open Attendance to check in</div>}
             </button>
           )}
+          {a && a.missing_checkout && (
+            <button type="button" onClick={() => navigate(`/attendance?tab=leaves&correct=${a.missing_checkout}`)}
+              data-testid="my-day-missing-checkout"
+              className="w-full text-left border border-[var(--warning)] bg-[var(--warning-soft)] rounded-md p-3 hover:border-[var(--ink)] transition">
+              <div className="text-xs font-semibold text-[var(--warning)]">
+                No check-out on {formatDate(a.missing_checkout)}{a.missing_checkout_count > 1 ? ` (+${a.missing_checkout_count - 1} more this week)` : ""}
+              </div>
+              <div className="text-[11px] text-[var(--ink-2)] mt-0.5">Ask for a correction with the time you left</div>
+            </button>
+          )}
           {l && (
             <div className="border border-[var(--line)] rounded-md p-3" data-testid="my-day-leave">
               <div className="flex items-center gap-2 text-xs text-[var(--ink-2)]"><CalendarCheck size={14} /> Leave this month</div>

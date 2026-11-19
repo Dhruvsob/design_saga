@@ -801,6 +801,18 @@ async def my_day(request: Request,
             "checked_out": bool(rec and rec.get("check_out")),
             "check_in": (rec or {}).get("check_in"), "status": (rec or {}).get("status"),
         }
+        # Past days this week with a check-in but no check-out (and no correction
+        # asked for yet): production had 51 such rows, so My day points them out.
+        week_ago = (business_today() - timedelta(days=7)).isoformat()
+        open_days = await sdb.attendance.find(
+            {"employee_id": emp["id"], "date": {"$gte": week_ago, "$lt": today},
+             "check_in": {"$nin": [None, ""]}, "check_out": {"$in": [None, ""]}},
+            {"_id": 0, "date": 1}).sort("date", -1).to_list(7)
+        asked = {c.get("date") async for c in sdb.attendance_corrections.find(
+            {"employee_id": emp["id"], "date": {"$gte": week_ago}, "status": "pending"}, {"_id": 0, "date": 1})}
+        missing = [r["date"] for r in open_days if r.get("date") not in asked]
+        attendance["missing_checkout"] = missing[0] if missing else None
+        attendance["missing_checkout_count"] = len(missing)
         month_start = today[:8] + "01"
         _bt = business_today()
         month_end = ((_bt.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)).isoformat()

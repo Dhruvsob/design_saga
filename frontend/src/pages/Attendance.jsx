@@ -89,6 +89,15 @@ export default function Attendance() {
   const [leaveForm, setLeaveForm] = useState({ leave_type: "casual", from_date: "", to_date: "", reason: "" });
   const [showCorrForm, setShowCorrForm] = useState(false);
   const [corrForm, setCorrForm] = useState({ date: "", in_time: "", out_time: "", reason: "" });
+  // My day links here with ?tab=leaves&correct=YYYY-MM-DD for a missing check-out.
+  const correctDate = params.get("correct");
+  useEffect(() => {
+    if (correctDate && /^\d{4}-\d{2}-\d{2}$/.test(correctDate)) {
+      setShowCorrForm(true);
+      setShowLeaveForm(false);
+      setCorrForm((f) => ({ ...f, date: correctDate, reason: f.reason || "Forgot to check out" }));
+    }
+  }, [correctDate]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [siteVisit, setSiteVisit] = useState(false);
   const [projects, setProjects] = useState([]);
   const [siteForm, setSiteForm] = useState({ project_id: "", site_location: "", reason: "", expected_time: "" });
