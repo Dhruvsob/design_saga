@@ -5911,6 +5911,7 @@ from routes.timeline import router as timeline_router  # noqa: E402
 from routes.approvals import router as approvals_router, for_portal as portal_approvals  # noqa: E402
 from routes.transmittals import router as transmittals_router, for_portal as portal_transmittals  # noqa: E402
 from routes.capacity import router as capacity_router  # noqa: E402
+from routes.products import router as products_router  # noqa: E402
 from core import portal as client_portal  # noqa: E402
 from routes.loans import router as loans_router  # noqa: E402
 from routes.audit import router as audit_router  # noqa: E402
@@ -5943,6 +5944,7 @@ api.include_router(timeline_router)
 api.include_router(approvals_router)
 api.include_router(transmittals_router)
 api.include_router(capacity_router)
+api.include_router(products_router)
 api.include_router(loans_router)
 api.include_router(audit_router)
 api.include_router(purchase_router)

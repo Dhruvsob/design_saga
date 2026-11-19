@@ -29,7 +29,9 @@ today are recorded in `FINAL_ERP_QA_RESULTS.md`, not here.
 
 ## P3: product roadmap (from `docs/GAMAA_SAAS_PRODUCT_GAP_ANALYSIS.md`)
 * P2.1 object storage (signed URLs, per-tenant quotas)
-* P2.2 Product & Material Library (brand, model, images, specs, supplier, price history, reuse across projects)
+* P2.2 Product & Material Library: **delivered 2026-11-16** (Procurement → Library; BOQ "From product library").
+  Follow-ups: web-clipper / product-URL import, alternatives per product, price comparison across vendors,
+  library images in the quotation PDF, bulk import from a spreadsheet
 * P2.3 Project selections → client approval → BOQ → PO → delivery
 * P2.9 HR checklists, document-expiry alerts, appraisal notes, leave carry-forward
 * P2.10 Accounting: TDS, credit notes, Tally export, budgets vs actuals, cash-flow forecast

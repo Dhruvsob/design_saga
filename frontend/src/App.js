@@ -34,6 +34,7 @@ const RBACAdmin = lazyPage(() => import("./pages/RBACAdmin"));
 const Employees = lazyPage(() => import("./pages/Employees"));
 const EmployeeDetail = lazyPage(() => import("./pages/EmployeeDetail"));
 const Vendors = lazyPage(() => import("./pages/Vendors"));
+const Library = lazyPage(() => import("./pages/Library"));
 const VendorDetail = lazyPage(() => import("./pages/VendorDetail"));
 const ClientPortal = lazyPage(() => import("./pages/ClientPortal"));
 const Loans = lazyPage(() => import("./pages/Loans"));
@@ -177,6 +178,7 @@ function AppRouter() {
       <Route path="/employees" element={<ProtectedShell requirePerm="employees.read"><Employees /></ProtectedShell>} />
       <Route path="/employees/:id" element={<ProtectedShell requirePerm="employees.read"><EmployeeDetail /></ProtectedShell>} />
       <Route path="/vendors" element={<ProtectedShell requirePerm="vendors.read"><Vendors /></ProtectedShell>} />
+      <Route path="/library" element={<ProtectedShell requirePerm="vendors.read"><Library /></ProtectedShell>} />
       <Route path="/vendors/:id" element={<ProtectedShell requirePerm="vendors.read"><VendorDetail /></ProtectedShell>} />
       <Route path="/attendance" element={<ProtectedShell requirePerm="attendance.read"><Attendance /></ProtectedShell>} />
       <Route path="/holidays" element={<ProtectedShell requirePerm="holidays.read"><Holidays /></ProtectedShell>} />

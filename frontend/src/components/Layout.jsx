@@ -6,7 +6,7 @@ import {
   Files as FilesIcon, SignOut, MagnifyingGlass, Bell, CaretRight, ShieldCheck,
   IdentificationCard, Clock, Bank, HardHat, Buildings, Palette, Crown, CreditCard, CalendarCheck,
   Package, Wallet, List, X, CalendarBlank, ArrowsOut, ArrowsIn, MapTrifold,
-  Scroll, LockKey, CaretDoubleLeft, CaretDoubleRight, Money, Timer,
+  Scroll, LockKey, CaretDoubleLeft, CaretDoubleRight, Money, Timer, Books,
 } from "@phosphor-icons/react";
 import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
@@ -36,6 +36,7 @@ const NAV_GROUPS = [
   ] },
   { id: "procurement", label: "Procurement", items: [
     { to: "/vendors",     label: "Vendors",      perm: "vendors.read",   Icon: HardHat },
+    { to: "/library",     label: "Library",      perm: "vendors.read",   Icon: Books },
     { to: "/purchase-orders", label: "Purchase Orders", perm: "purchase_orders.read", Icon: Package, module: "purchase_orders" },
   ] },
   { id: "finance", label: "Finance", items: [

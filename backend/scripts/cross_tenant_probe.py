@@ -53,7 +53,7 @@ PARAM_COLL = {
     "grn_id": "goods_receipts", "comment_id": "comments", "phase_id": "project_phases",
     "receivable_id": "collection_receivables", "loc_id": "office_locations", "rec_id": "collection_receivables",
     "record_id": "attendance", "source_id": "invoices", "target_id": "projects", "item_id": "master_data",
-    "session_id": "ai_messages",
+    "session_id": "ai_messages", "product_id": "products",
 }
 FIXED = {"rev": "A", "index": "0", "kind": "invoice", "source_type": "invoice", "target_type": "project",
          "date_str": "2026-11-10", "role": "Employee", "name": "probe", "key": "probe"}
@@ -63,7 +63,7 @@ BODY_REFS = {"project_id": "projects", "client_id": "clients", "vendor_id": "ven
              "lead_id": "leads", "task_id": "tasks", "invoice_id": "invoices", "account_id": "accounts",
              "salary_account_id": "accounts", "paid_from_account_id": "accounts", "expense_account_id": "accounts",
              "drawing_id": "drawings", "file_id": "files", "po_id": "purchase_orders", "assignee_id": "employees",
-             "project_manager_id": "employees", "bill_id": "vendor_bills"}
+             "project_manager_id": "employees", "bill_id": "vendor_bills", "default_vendor_id": "vendors_acc"}
 
 
 def foreign(coll):
