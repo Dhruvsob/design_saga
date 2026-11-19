@@ -17,9 +17,9 @@ import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
 
 const STATUS_COLORS = {
-  present: "#1D633E", late: "#7A4E1A", absent: "#B22B22", half_day: "#B87500",
+  present: "#1D633E", late: "#7A4E1A", absent: "#B22B22", half_day: "#8C5A00",
   leave: "#2B5299", paid_leave: "#2B5299", auto_paid_leave: "#1a7f5a", unpaid_leave: "#B22B22",
-  holiday: "#2B5299", week_off: "#5C5C5C", pending_approval: "#B87500",
+  holiday: "#2B5299", week_off: "#5C5C5C", pending_approval: "#8C5A00",
   upcoming: "#C9C9C9", site_visit: "#0E7490",
 };
 const WEEKDAYS = [
@@ -517,7 +517,7 @@ export default function Attendance() {
                       style={{ background: `${STATUS_COLORS[dSt] || "#EEE"}12` }}
                       title={`${formatDate(d.date)} · ${dLabel}${d.check_in ? ` · in ${d.check_in}` : ""}${d.check_out ? ` · out ${d.check_out}` : ""}`}>
                       <div className="text-[10px] font-mono">{Number(d.date.slice(8, 10))}</div>
-                      <div className="text-[9px] capitalize truncate" style={{ color: STATUS_COLORS[dSt] || "#6E6A63" }}>
+                      <div className="text-[9px] capitalize truncate" style={{ color: dSt === "upcoming" ? "#6E6A63" : (STATUS_COLORS[dSt] || "#6E6A63") }}>
                         {dLabel.replace(/_/g, " ")}
                       </div>
                     </div>
@@ -1889,7 +1889,7 @@ function MonthPicker({ ym, setYm }) {
       <select aria-label="M" className="input-flat" value={ym.m} onChange={(e) => setYm({ ...ym, m: Number(e.target.value) })}>
         {months.map((mn, i) => <option key={mn} value={i+1}>{mn}</option>)}
       </select>
-      <input type="number" min="2000" max="2100" className="input-flat w-24" value={ym.y} onChange={(e) => setYm({ ...ym, y: Number(e.target.value) })} />
+      <input type="number" aria-label="Year" min="2000" max="2100" className="input-flat w-24" value={ym.y} onChange={(e) => setYm({ ...ym, y: Number(e.target.value) })} />
     </div>
   );
 }
