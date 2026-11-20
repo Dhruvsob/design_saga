@@ -1,10 +1,11 @@
 # GAMAA ERP: production sign-off (2026-11-20, second release of the day)
 
-**Verdict: GO WITH LIMITATIONS** for revision `1cdac8c` on production
-(`gamaa.in`, host `srv2020574`, checkout `/opt/design-saga-git`).
-**It is already live**: deployed 2026-11-20 13:26 UTC, verified 13:30 UTC.
-The day's releases: `504a2c3` (09:06), `74aff6e` (11:18), `915a6f2` (drill
-script only, no runtime change), `1cdac8c` (variation billing, 13:26).
+**Verdict: GO WITH LIMITATIONS** for revision `6647768` on production
+(`gamaa.in`, host `srv2020574`, checkout `/opt/design-saga-git`): web image
+`6647768`, backend image `1cdac8c` (the last backend change).
+**It is already live** and verified. The day's releases: `504a2c3` (09:06 UTC),
+`74aff6e` (11:18), `915a6f2` (drill script only), `1cdac8c` (variation
+billing, 13:26), `6647768` (invoice form, privacy policy; frontend only).
 
 No open critical access-control, data-loss, accounting or payroll defect is
 known. Three P1 defects were found and fixed in this release (client PDF
@@ -16,8 +17,8 @@ need a real person or device.
 
 | Item | Observed | Evidence |
 |---|---|---|
-| Application images | backend and web both labelled `revision:1cdac8c` | `docker inspect` labels |
-| Production checkout | `1cdac8c` (fast-forwards only: `504a2c3`, `74aff6e`, `915a6f2`, `1cdac8c`) | `git log --oneline -1` on the VPS |
+| Application images | web `revision:6647768`, backend `revision:1cdac8c` (deploy hook rebuilds only what changed) | `docker inspect` labels |
+| Production checkout | `6647768` (fast-forwards only: `504a2c3`, `74aff6e`, `915a6f2`, `1cdac8c`, `2cdc879`, `6647768`) | `git log --oneline -1` on the VPS |
 | Containers | backend, web healthy; FerretDB, Postgres healthy; Caddy up 4 days | `docker compose ps` |
 | Protected files | only `M deploy/Caddyfile` and `?? deploy/Caddyfile.pre-tanvika-20261003T154040Z` | `git status --short` |
 | Tanvika (`gamaa.tech`) | HTTP 200 after every deploy (one client-side connection failure at 13:28 UTC; 200 three times right after and from the server; no Caddy errors); nothing of Tanvika touched | `curl` |
@@ -30,7 +31,7 @@ need a real person or device.
 | Build and lint | pass | `FINAL_TEST_RESULTS.md` §1 |
 | Backend tests (non-live) | **702 passed**, 0 failed | §1 |
 | Frontend logic tests | 11 passed | §1 |
-| Browser tests | `74aff6e`: desktop **75 passed** across all 19 suites, phone **27 passed**; `1cdac8c`: selections (3), ux, a11y, smoke (21) rerun, all pass | §1 |
+| Browser tests | `74aff6e`: desktop **75 passed** across all 19 suites, phone **27 passed**; `1cdac8c`: selections (3), ux, a11y, smoke (21); `6647768`: forms, money, a11y, navigation on desktop and phone (24 passed) | §1 |
 | Screen sweep, 7 widths x 2 roles | 29 findings (all at 768 px) fixed; re-sweep at 768/1024 px: 0 | §2 |
 | Accounting fixtures | 37/37 | `FINAL_BUSINESS_LOGIC_VERIFICATION.md` |
 | Payroll proration (hand-worked) | 4 tests, defect fixed | same |
@@ -44,7 +45,10 @@ need a real person or device.
 
 ## 3. Post-deploy checks (production, read-only)
 
-* `gamaa.in` 200, `/api/` 200; the new endpoints refuse unauthenticated calls (401).
+* `gamaa.in` 200, `/api/` 200, `/privacy` 200; the new endpoints refuse
+  unauthenticated calls (401). The live privacy page names Gamaa (no "Design
+  Saga") and describes the per-user Google connection, "Last updated: 20
+  November 2026" (read in the browser).
 * Backend: 0 tracebacks or errors after the `74aff6e` deploy (100 minutes
   observed) and after `1cdac8c`; non-2xx responses were only 401s (my
   unauthenticated probes and one expired session).
@@ -81,7 +85,8 @@ need a real person or device.
 * Money postings, permissions and backups verified as listed above.
 
 **What still needs attention**
-* Reconnect Google Calendar; publish the OAuth app.
+* Reconnect Google Calendar; publish the OAuth app (the privacy policy it
+  links to is now accurate: platform name and per-user connection).
 * Off-site backup copy, alert channel, GitHub billing, SEC-01 credential rotation.
 * Screen-reader and real-device (iPhone/Android, Safari) checks.
 * October payroll for the employee who joined on 23 Oct: the corrected figure

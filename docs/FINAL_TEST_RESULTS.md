@@ -17,6 +17,8 @@ are read-only. The morning release (`504a2c3`) and earlier cycles:
 | Browser, desktop, all 19 suites | `playwright test smoke a11y forms navigation ux phases money period-close drawings procurement-chain snags crm-chain site-visits collections consistency phase2 expense-receipts proposal selections --project=desktop` | **75 passed**, 2 skipped (phone-only), 9.6 min |
 | Browser, phone | `playwright test smoke navigation ux forms selections phases --project=mobile` | **27 passed**, 6 skipped (desktop-only), 2.7 min |
 | Browser after `1cdac8c` | `selections.spec` (3, including variation → milestone); `ux`, `a11y`, `smoke` | 3 passed; 21 passed, 1 skipped |
+| Browser after `6647768` | `forms`, `money`, `a11y`, `navigation`, desktop and phone | 24 passed, 8 skipped (layout-specific) |
+| Frontend logic after `6647768` | `node --test src/lib/frontend-logic.test.mjs` | 12 passed |
 | Accounting acceptance | `python scripts/accounting_acceptance.py` (fresh local workspace) | **37/37** |
 | Generated PDFs | `python scripts/pdf_inspection.py` | **37/37** (quotation, invoice, purchase order, payslip) |
 | Permissions | `python scripts/role_probe.py` (6 roles, 25 resource/actions, lifecycle) | **153/153** |

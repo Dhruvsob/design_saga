@@ -14,8 +14,10 @@ screen-by-screen work: `docs/ux/FRONTEND_UX_STATUS.md`,
 | Purchase order form | No project field at all, no specification per line; buyers could order unapproved finishes | Project picker; "N selections are not approved by the client yet" warning; "Add the approved selections as lines" | `selections.spec` |
 | Quotation builder | "Mark approved" was the only record of client acceptance | "Send to client for acceptance" and a status line ("Accepted by Anita Mehta on 20/11/2026: version 1, ₹…") | `selections.spec` |
 | Client portal | — | New request kinds read "Material or finish" and "Quotation"; the quotation opens as its PDF | `selections.spec` |
+| Invoice preview | Showed "DESIGN SAGA · Studio OS" in every firm's workspace | The signed-in firm's own name (customer branding) | `forms.spec` |
+| Privacy policy (public) | Named the wrong product and described an admin-only Google connection | Names Gamaa; per-user connection described accurately | read on production |
 | Client approvals tab | An approved variation stayed a total on the tab; billing it meant retyping it as a milestone | "Add to fee milestones" on the approved variation (amount and approver carried over, optional due date), then "In fee milestones" in its place | `selections.spec` |
-| New employee / new project forms | Placeholders only (gone once you type), an unlabelled joining date; server errors as a passing toast | Visible labels; an error summary at the top that takes focus, lists each problem and jumps to the field; typed input kept (GOV.UK error summary; WCAG 2.2 3.3.1, 3.3.2) | `errorItems` unit test; lint; build |
+| New employee / new project / invoice forms | Placeholders only (gone once you type), an unlabelled joining date, unlabelled invoice lines; server errors as a passing toast | Visible labels; an error summary at the top that takes focus, lists each problem and jumps to the field; typed input kept (GOV.UK error summary; WCAG 2.2 3.3.1, 3.3.2) | `errorItems` unit test; lint; build |
 | Top bar at tablet width | At 768 px the bell and lock were pushed 8-91 px off the screen on 20 pages | Breadcrumb truncates; section name only on wide screens (WCAG 1.4.10 Reflow) | sweep at 768/1024 px: 0 findings |
 | Calendar, Google connection | Message shown twice, cut off on phones, no date, no reason, no way to disconnect | One status with a text label, date, reason, consequence and both actions (WCAG 1.4.1) | browser screenshots |
 | Notification bell (phones) | Panel started 22-45 px off the left edge | Full width under the top bar on small screens | measured bounds |
@@ -64,7 +66,7 @@ needs a bundled Unicode font (not done).
 | axe-core WCAG 2.0/2.1 A and AA | every primary page and create form (`a11y.spec`) | pass |
 | Widths 320, 360, 390, 683 (200% zoom of 1366), 768, 1366, 1920 px | every page, Admin and Employee | 0 findings after the 768 px fix |
 | Keyboard (partial) | Enter to submit, arrows in pickers, Escape to close (`forms.spec`, `ux.spec`) | pass |
-| Error summary focus | summary takes focus on a failed save; each entry moves focus to its field | implemented; the error list is unit-tested, the focus behaviour was not exercised in a browser |
+| Error summary focus | summary takes focus on a failed save; "Line 1 rate" moves focus to that field; typed input kept | pass (`forms.spec`, desktop and phone, `6647768`) |
 | Phone layouts | `smoke`, `navigation`, `ux`, `forms`, `selections`, `phases` on the mobile project | 27 passed |
 
 Not performed (needs a person or device): screen reader (NVDA/VoiceOver),
@@ -74,7 +76,7 @@ touch on a real phone, rotation, iOS Safari. **Status: NOT YET VERIFIED.**
 
 | Issue | Where | Suggested next step |
 |---|---|---|
-| Error summary only on the new-project and new-employee forms | invoice, BOQ, other long forms | Apply `ErrorSummary` as those forms are touched |
+| Error summary on project, employee and invoice forms only | BOQ (quotation builder), other long forms | Apply `ErrorSummary` as those forms are touched |
 | Owner Drawings shows as a negative number in its ledger | Accounting ledger | Correct (it reduces equity); a "reduces equity" hint would help owners |
 | A calendar paused before 20 Nov cannot show its pause date | Calendar | Resolves after the next reconnect |
 | Reminders reach only an open browser tab | all | `FEATURE_RECOMMENDATIONS_FOR_APPROVAL.md` #1 |

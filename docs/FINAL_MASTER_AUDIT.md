@@ -1,4 +1,4 @@
-# GAMAA ERP: master audit (release `1cdac8c`, 2026-11-20)
+# GAMAA ERP: master audit (release `6647768`, 2026-11-20)
 
 Companion reports: `FINAL_SECURITY_REPORT.md`, `FINAL_BUSINESS_LOGIC_VERIFICATION.md`,
 `FINAL_UI_UX_REVIEW.md`, `FINAL_BACKUP_AND_RECOVERY.md`, `FINAL_TEST_RESULTS.md`,
@@ -10,7 +10,7 @@ Earlier cycles: `FINAL_PRODUCTION_READINESS_AUDIT.md` (2026-11-15),
 
 * Repository `Dhruvsob/design_saga`; release branch `claude/improvements-20261116`.
 * Production `gamaa.in` = host `srv2020574`, checkout `/opt/design-saga-git` at
-  `1cdac8c`; application images labelled `1cdac8c` (verified 13:30 UTC).
+  `6647768`; web image `6647768`, backend image `1cdac8c` (no backend change since).
 * GitHub `main` / `production`: aligned with the release branch after this
   report (fast-forward, separate pushes; see the sign-off). No staging
   environment exists; the local QA stack plays that role.
@@ -62,7 +62,7 @@ BLOCKED, REQUIRES OWNER APPROVAL, NOT YET VERIFIED. Revision `74aff6e` unless no
 | Restricted roles' pages (studio overrides) | Designer | `ux.spec` desktop + phone | FIXED AND VERIFIED | none |
 | Client-facing PDFs (margin, wrapping, totals, A4, headers) | client, supplier | `pdf_inspection.py` 37/37; before/after | FIXED AND VERIFIED | ₹ glyph needs a bundled font |
 | Layout at 320-1920 px, 200% zoom | all | sweep: 29 → 0 | FIXED AND VERIFIED | none |
-| Form labels and error summary | all | unit test; build | FIXED (2 forms) | Focus behaviour not exercised in a browser; remaining long forms |
+| Form labels and error summary | all | unit tests; `forms.spec` (summary takes focus, link jumps to line 1's rate, input kept) on desktop and phone | FIXED AND VERIFIED (project, employee, invoice forms) | Add to other long forms as they are touched |
 | Accessibility (axe A/AA) | all | `a11y.spec` | VERIFIED | Screen reader, real devices: NOT YET VERIFIED |
 | Performance (search, reports, PDFs, PIN → dashboard) | all | `perf_release.py` | VERIFIED (local) | Production timing with a real account: NOT YET VERIFIED |
 | Backups and isolated restore | operator | drill pass 12:24 UTC | FIXED AND VERIFIED (drill script) | Off-site: EXTERNALLY BLOCKED |
@@ -91,6 +91,9 @@ BLOCKED, REQUIRES OWNER APPROVAL, NOT YET VERIFIED. Revision `74aff6e` unless no
 | 15 | P3 | Quotation PDF amounts in Western grouping without paise | `:,.0f` formatting | Indian grouping with paise | `74aff6e` |
 | 16 | P3 (ops) | Restore drill failed on the pre-deploy backup of a release that adds tables | Compared with live table count | Live count reported, not failed | `915a6f2` |
 | 17 | P2 | An approved variation had no path to billing (only a total on the Approvals tab) | Approvals and milestones not connected | "Add to fee milestones": one milestone per approved variation, linked, refused twice | `1cdac8c` |
+| 18 | P2 (branding) | The invoice preview said "DESIGN SAGA · Studio OS" in every firm's workspace | Hard-coded text from before multi-tenancy | Signed-in firm's name | `6647768` |
+| 19 | P2 (compliance) | The public privacy policy named "Design Saga ERP" and described a tenant-admin Google connection; Google's OAuth review reads this page | Not updated with the Gamaa rebrand (12 Nov) or per-user calendar sync (10 Nov) | Names Gamaa; describes per-user connections; nothing else changed | `6647768` |
+| 20 | P3 | Invoice form fields had no labels; a refused save showed only a toast | Placeholder-only inputs | Labels, field names, error summary with line numbers | `6647768` |
 
 Production impact of #9 (read-only): one employee joined on 23 Oct; the only
 October payroll run was reversed, so no wrong payment stands. Nothing in
@@ -106,5 +109,5 @@ finalised history was recomputed.
 * **Verification that needs a person or device:** screen reader, real
   iPhone/Android and Safari, production sign-in timing with a real account,
   Google reconnect.
-* **Small follow-ups (no approval needed):** error summary on the remaining
-  long forms; ₹ font for PDFs.
+* **Small follow-ups (no approval needed):** error summary on other long
+  forms as they are touched; ₹ font for PDFs (needs a bundled Unicode font).
