@@ -54,7 +54,8 @@ test("drawing register: revisions A then B, supersession, approval, staff cannot
   await staff.dispose();
 
   await page.getByTestId("drawing-actions-A-101").click();
-  await page.getByRole("menuitem", { name: "Approve" }).click();
+  // The menu also offers "Ask client to approve" (P2.7); pick the studio's own approval.
+  await page.getByTestId("drawing-approve-A-101").click();
   await page.getByTestId("confirm-ok").click();
   await expect(row).toContainText("Approved", { timeout: 20000 });
   await expect(page.getByTestId("drawings-counts")).toContainText("1 approved");
