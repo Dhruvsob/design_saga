@@ -133,6 +133,23 @@ export default function ProjectApprovals({ projectId, files = [], onCount }) {
     catch (e) { toast.error(e?.response?.data?.detail || "Could not withdraw"); }
   };
 
+  // An approved variation becomes one fee milestone when the studio decides to
+  // bill it; it then follows Collections Due like any other milestone.
+  const addToMilestones = async (a) => {
+    const v = await askForm({
+      title: `Bill “${a.title}”`,
+      body: `Adds a fee milestone of ${formatINR(Number(a.amount || 0))} to this project. Nothing is invoiced or booked until you raise the invoice or receive the money.`,
+      fields: [{ name: "due_date", label: "Due date (optional)", type: "date" }],
+      confirmLabel: "Add milestone",
+    });
+    if (!v) return;
+    try {
+      await api.post(`/approvals/${a.id}/add-to-milestones`, { due_date: v.due_date || null });
+      toast.success("Added to fee milestones");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not add the milestone"); }
+  };
+
   if (!data) return <div className="overline p-4">LOADING…</div>;
   const people = data.people || [];
   const rows = data.approvals || [];
@@ -224,6 +241,14 @@ export default function ProjectApprovals({ projectId, files = [], onCount }) {
                     )}
                     {a.closed_reason && !a.decided_at && <div className="text-xs text-[var(--ink-3)] mt-1">{a.closed_reason}</div>}
                   </div>
+                  {canManage && a.kind === "variation" && a.status === "approved" && Number(a.amount) > 0 && !a.milestone_id && (
+                    <button type="button" className="btn-ghost text-xs" onClick={() => addToMilestones(a)} data-testid={`approval-bill-${a.id}`}>
+                      <Plus size={13} /> Add to fee milestones
+                    </button>
+                  )}
+                  {a.kind === "variation" && a.milestone_id && (
+                    <span className="text-xs text-[var(--success)]" data-testid={`approval-billed-${a.id}`}>In fee milestones</span>
+                  )}
                   {canManage && a.status === "pending" && (
                     <button type="button" className="btn-ghost text-xs" onClick={() => withdraw(a)} data-testid={`approval-withdraw-${a.id}`}>
                       <ArrowCounterClockwise size={13} /> Withdraw

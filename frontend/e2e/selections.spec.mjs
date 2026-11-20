@@ -2,7 +2,7 @@
 // portal: the studio proposes, the client decides with their personal link,
 // the studio sees who approved, and purchasing picks up only approved items.
 import { test, expect } from "@playwright/test";
-import { api, json, uid, authFile, closeExtraContexts } from "./helpers.mjs";
+import { api, json, uid, authFile, closeExtraContexts, openProjectTab } from "./helpers.mjs";
 
 test.afterEach(closeExtraContexts);
 test.use({ storageState: authFile("admin") });
@@ -88,5 +88,32 @@ test("the client accepts the exact quotation version from the portal", async ({ 
   await page.reload();
   await expect(page.getByTestId("client-acceptance")).toContainText("Accepted by Anita Mehta");
   await expect(page.getByTestId("client-acceptance")).toContainText("version 1");
+  await ctx.dispose();
+});
+
+test("an approved variation is added to the fee milestones once", async ({ page }) => {
+  const ctx = await api("admin");
+  const { project, token } = await projectWithClientLink(ctx);
+  const title = `False ceiling ${uid()}`;
+  const v = await json(ctx.post(`/api/projects/${project.id}/approvals`, { data: {
+    kind: "variation", title, amount: 85000, days: 5 } }));
+  // The client approves with their personal link (public portal API).
+  const portal = await ctx.post(`/api/portal/${token}/approvals/${v.id}/decision`, {
+    data: { decision: "approve" }, headers: { Cookie: "" } });
+  expect(portal.ok()).toBeTruthy();
+
+  await page.goto(`/projects/${project.id}`);
+  await openProjectTab(page, "Approvals", { timeout: 20000 });
+  await page.getByTestId(`approval-bill-${v.id}`).click();
+  await page.getByTestId("confirm-ok").click();
+  await expect(page.getByTestId(`approval-billed-${v.id}`)).toHaveText("In fee milestones");
+  await expect(page.getByTestId(`approval-bill-${v.id}`)).toHaveCount(0);
+
+  const milestones = await json(ctx.get(`/api/projects/${project.id}/milestones`));
+  const rows = (Array.isArray(milestones) ? milestones : milestones.items || milestones.milestones || [])
+    .filter((m) => m.approval_id === v.id);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].amount).toBe(85000);
+  expect(rows[0].name).toBe(`Variation: ${title}`);
   await ctx.dispose();
 });

@@ -56,7 +56,7 @@ def env(monkeypatch):
         projects=_Coll([{"id": "p1", "org_id": "org_a", "name": "Villa", "share_token": "s" * 43}]),
         organizations=_Coll([{"org_id": "org_a", "name": "Arc Studio", "display_name": "Arc Studio"}]),
         portal_access=_Coll(), approvals=_Coll(), drawings=_Coll(), files=_Coll(),
-        project_selections=_Coll(),
+        project_selections=_Coll(), payment_milestones=_Coll(),
         products=_Coll([{"id": "prd_1", "org_id": "org_a", "name": "Calacatta quartz", "brand": "Stonex",
                          "finish": "Honed", "dimensions": "3200 x 1600 x 20 mm", "unit": "sqft",
                          "specs": [{"label": "Edge", "value": "Mitred 40 mm"}], "default_vendor_id": "ven_1"}]),
@@ -272,3 +272,42 @@ def test_portal_serves_the_quotation_pdf_and_refuses_a_stale_one(env, monkeypatc
     with pytest.raises(HTTPException) as exc:
         run(ap.portal_approval_file(token, a["id"]))
     assert exc.value.status_code == 409
+
+
+# ------------------------------------------------------------------ variations -> billing
+def test_approved_variation_becomes_one_fee_milestone(env):
+    token = person()["token"]
+    v = run(ap.request_approval("p1", ap.ApprovalIn(kind="variation", title="False ceiling, bedroom 2",
+                                                    amount=85000, days=5), request=None))
+    with pytest.raises(HTTPException) as early:
+        run(ap.add_variation_to_milestones(v["id"], request=None))
+    assert early.value.status_code == 409               # not approved yet
+    decide(token, v["id"])
+    out = run(ap.add_variation_to_milestones(v["id"], request=None,
+                                             payload=ap.VariationMilestoneIn(due_date="2026-12-15")))
+    ms = env.raw.payment_milestones.rows
+    assert len(ms) == 1 and ms[0]["amount"] == 85000 and ms[0]["status"] == "pending"
+    assert ms[0]["name"] == "Variation: False ceiling, bedroom 2" and ms[0]["due_date"] == "2026-12-15"
+    assert ms[0]["approval_id"] == v["id"] and "Mrs Mehta" in ms[0]["notes"]
+    assert out["approval"]["milestone_id"] == ms[0]["id"]
+    with pytest.raises(HTTPException) as twice:
+        run(ap.add_variation_to_milestones(v["id"], request=None))
+    assert twice.value.status_code == 409 and len(env.raw.payment_milestones.rows) == 1
+
+
+def test_cost_reduction_or_bad_date_is_not_billed(env):
+    token = person()["token"]
+    cut = run(ap.request_approval("p1", ap.ApprovalIn(kind="variation", title="Drop the bar unit",
+                                                      amount=-40000), request=None))
+    decide(token, cut["id"])
+    with pytest.raises(HTTPException) as exc:
+        run(ap.add_variation_to_milestones(cut["id"], request=None))
+    assert exc.value.status_code == 409
+    up = run(ap.request_approval("p1", ap.ApprovalIn(kind="variation", title="Extra wardrobe",
+                                                     amount=60000), request=None))
+    decide(token, up["id"])
+    # The shared model rejects a malformed due date before the route runs (422).
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        ap.VariationMilestoneIn(due_date="15/12/2026")
+    assert env.raw.payment_milestones.rows == []

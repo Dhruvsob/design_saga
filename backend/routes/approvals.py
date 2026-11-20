@@ -64,6 +64,10 @@ class QuoteSendIn(FiniteModel):
     note: Optional[str] = Field(default=None, max_length=1000)
 
 
+class VariationMilestoneIn(FiniteModel):
+    due_date: Optional[str] = Field(default=None, max_length=10)
+
+
 class WithdrawIn(FiniteModel):
     reason: Optional[str] = Field(default=None, max_length=300)
 
@@ -201,6 +205,56 @@ async def withdraw_approval(approval_id: str, request: Request, payload: Optiona
     await audit(user, "approval.withdraw", target=approval_id, target_type="approval",
                 meta={"project_id": a["project_id"], "title": a.get("title"), "reason": reason})
     return await sdb.approvals.find_one({"id": approval_id}, {"_id": 0})
+
+
+@router.post("/approvals/{approval_id}/add-to-milestones")
+async def add_variation_to_milestones(approval_id: str, request: Request,
+                                      payload: Optional[VariationMilestoneIn] = None,
+                                      session_token: Optional[str] = Cookie(default=None),
+                                      authorization: Optional[str] = Header(default=None)):
+    """Bill an approved variation: one fee milestone, linked both ways, once.
+
+    The approved amount used to stay a total on the Approvals tab with no path
+    to billing. This is a deliberate studio action (nothing is invoiced or
+    posted automatically): the milestone joins Collections Due like any other,
+    and money is booked only when it is received.
+    """
+    user = await require_user(request, session_token, authorization)
+    _require(user, "projects.update")
+    a = await sdb.approvals.find_one({"id": approval_id}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Request not found")
+    await get_visible_project(user, a["project_id"])
+    if a.get("kind") != "variation" or a.get("status") != "approved":
+        raise HTTPException(status_code=409, detail="Only a variation the client approved can be billed")
+    amount = round(float(a.get("amount") or 0), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=409, detail="This variation reduces or keeps the cost; adjust the existing milestones instead")
+    due = (payload.due_date if payload else None) or None
+    if due:
+        from datetime import date as _d
+        try:
+            _d.fromisoformat(due)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Due date must be a date like 2026-12-15")
+    milestone_id = new_id("ms_")
+    claimed = await sdb.approvals.update_one(
+        {"id": approval_id, "status": "approved", "milestone_id": None},
+        {"$set": {"milestone_id": milestone_id, "milestone_added_at": iso_now()},
+         "$push": {"history": _event("added to fee milestones", user.get("name"))}})
+    if not claimed.modified_count:
+        raise HTTPException(status_code=409, detail="This variation is already in the fee milestones")
+    who = a.get("decided_by_name") or "the client"
+    when = (a.get("decided_at") or "")[:10]
+    doc = {"id": milestone_id, "project_id": a["project_id"], "org_id": user.get("org_id"),
+           "name": f"Variation: {a.get('title')}"[:160], "percent": None, "amount": amount,
+           "due_date": due, "status": "pending",
+           "notes": f"Approved by {who} on {when} (client approval {approval_id})",
+           "approval_id": approval_id, "created_at": iso_now(), "created_by": user["user_id"]}
+    await sdb.payment_milestones.insert_one(dict(doc))
+    await audit(user, "approval.variation.milestone", target=approval_id, target_type="approval",
+                meta={"project_id": a["project_id"], "milestone_id": milestone_id, "amount": amount})
+    return {"milestone": doc, "approval": await sdb.approvals.find_one({"id": approval_id}, {"_id": 0})}
 
 
 @router.post("/quotations-adv/{quotation_id}/send-for-acceptance")
