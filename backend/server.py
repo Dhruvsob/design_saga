@@ -6223,11 +6223,15 @@ async def _bootstrap_default_org():
         await asyncio.sleep(45)
         while True:
             try:
-                from core.google_calendar import is_configured, process_sync_queue
+                from core.google_calendar import (
+                    is_configured, notify_paused_connections, process_sync_queue)
                 if is_configured():
                     result = await process_sync_queue(100)
                     if result["processed"]:
                         logger.info("[Scheduler] Google Calendar sync: %s", result)
+                    notified = await notify_paused_connections()
+                    if notified:
+                        logger.info("[Scheduler] Google Calendar reconnect notices: %s", notified)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[Scheduler] Google Calendar sync failed: %s", type(exc).__name__)
             await asyncio.sleep(5 * 60)

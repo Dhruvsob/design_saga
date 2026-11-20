@@ -35,13 +35,31 @@ class GoogleCalendarError(RuntimeError):
     pass
 
 
+class SafeSyncError(GoogleCalendarError):
+    """A failure whose message we wrote ourselves, safe to store and show."""
+
+
+class GoogleUnavailable(SafeSyncError):
+    """Google could not be reached or answered with a server error. Retry later;
+    the user's authorization is still good."""
+
+
 RECONNECT_REQUIRED_MESSAGE = (
     "Google authorization expired. Reconnect Google Calendar to resume sync."
+)
+TEMPORARY_UNAVAILABLE_MESSAGE = (
+    "Google is not responding right now. Sync will retry automatically."
+)
+SERVER_CONFIG_MESSAGE = (
+    "Google Calendar sign-in is misconfigured on the server. Ask your administrator."
 )
 GOOGLE_ACCOUNT_IN_USE_MESSAGE = (
     "This Google account is already connected to another ERP user. "
     "Each employee must connect their own Google account."
 )
+# Google expires refresh tokens 7 days after consent while the OAuth app's
+# publishing status is "Testing" and it asks for a non-basic scope (calendar).
+TESTING_MODE_LIMIT_DAYS = 7
 
 
 def _safe_sync_error(exc: Exception) -> str:
@@ -59,14 +77,33 @@ def _safe_sync_error(exc: Exception) -> str:
 
 def _sync_failure(exc: Exception) -> tuple[str, bool]:
     """Return a safe queue error and whether OAuth reconnection is required."""
-    reconnect_required = (
-        isinstance(exc, GoogleCalendarError)
-        and str(exc) == RECONNECT_REQUIRED_MESSAGE
-    )
-    return (
-        RECONNECT_REQUIRED_MESSAGE if reconnect_required else _safe_sync_error(exc),
-        reconnect_required,
-    )
+    if isinstance(exc, GoogleCalendarError) and str(exc) == RECONNECT_REQUIRED_MESSAGE:
+        return RECONNECT_REQUIRED_MESSAGE, True
+    if isinstance(exc, SafeSyncError):
+        return str(exc)[:200], False
+    if isinstance(exc, httpx.TransportError):
+        return TEMPORARY_UNAVAILABLE_MESSAGE, False
+    return _safe_sync_error(exc), False
+
+
+def _refresh_rejection(response: httpx.Response) -> str:
+    """Classify a failed token refresh: "reconnect", "config" or "temporary".
+
+    Only Google's own verdict that the grant is gone (invalid_grant, or another
+    client-side refusal) needs the user to reconnect. A Google outage or rate
+    limit used to pause sync until the user noticed and reconnected, although
+    their authorization was still valid.
+    """
+    if response.status_code >= 500 or response.status_code == 429:
+        return "temporary"
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if error in ("invalid_client", "unauthorized_client"):
+        return "config"
+    return "reconnect"
 
 
 def is_configured() -> bool:
@@ -179,6 +216,9 @@ async def save_connection(org_id: str, user_id: str, token: dict, email: str) ->
                 "access_token_expires_at": expires_at,
                 "status": "connected",
                 "last_error": None,
+                "authorized_at": iso_now(),
+                "reconnect_required_at": None,
+                "reconnect_notified_at": None,
                 "updated_at": iso_now(),
             }, "$setOnInsert": {"created_at": iso_now()}},
             upsert=True,
@@ -195,6 +235,106 @@ async def connection_for(org_id: str, user_id: str) -> dict | None:
         {"org_id": org_id, "user_id": user_id}, {"_id": 0})
 
 
+def _as_utc(value) -> datetime | None:
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def authorization_summary(connection: dict | None) -> dict:
+    """When the grant started and stopped, for the Calendar page.
+
+    `testing_limit_likely` flags the pattern of Google's 7-day limit for OAuth
+    apps still in Testing mode: the grant stopped working 7 days after consent.
+    Legacy rows (paused before these fields existed) report what is known.
+    """
+    connection = connection or {}
+    authorized = _as_utc(connection.get("authorized_at") or connection.get("created_at"))
+    paused = _as_utc(connection.get("reconnect_required_at"))
+    lasted = None
+    if authorized and paused and paused >= authorized:
+        lasted = round((paused - authorized).total_seconds() / 86400, 1)
+    return {
+        "authorized_at": authorized.isoformat() if authorized else None,
+        "paused_since": paused.isoformat() if paused else None,
+        "authorization_days": lasted,
+        "testing_limit_likely": bool(
+            lasted is not None
+            and TESTING_MODE_LIMIT_DAYS - 0.5 <= lasted < TESTING_MODE_LIMIT_DAYS + 1.5),
+    }
+
+
+# Rows paused before this field existed have no value at all; match both forms
+# explicitly rather than rely on null matching a missing field.
+_NOT_NOTIFIED = {"$or": [
+    {"reconnect_notified_at": None},
+    {"reconnect_notified_at": {"$exists": False}},
+]}
+
+
+async def notify_reconnect_required(connection: dict) -> bool:
+    """Tell the person once per authorization that their sync is paused.
+
+    Without this the only sign was a line on the Calendar page, so a paused
+    calendar could go unnoticed for weeks while ERP changes stopped reaching
+    the phone.
+    """
+    owner = {"org_id": connection["org_id"], "user_id": connection["user_id"]}
+    claimed = await db.google_calendar_connections.update_one(
+        {**owner, "status": "reconnect_required", **_NOT_NOTIFIED},
+        {"$set": {"reconnect_notified_at": iso_now()}},
+    )
+    if not getattr(claimed, "modified_count", 0):
+        return False
+    try:
+        from .notifications import emit
+        email = connection.get("connected_email") or "your Google account"
+        await emit(
+            [connection["user_id"]], "calendar_sync", "Reconnect Google Calendar",
+            f"Google stopped accepting the calendar authorization for {email}. "
+            "Your ERP data is safe; open Calendar and choose Reconnect Google "
+            "to resume sync.",
+            link="/calendar", priority="high",
+            dedup_key=f"gcal-reconnect:{connection.get('connection_id') or 'legacy'}",
+        )
+    except Exception as exc:  # noqa: BLE001 - a missed bell must not stop sync work
+        log.warning("Google Calendar reconnect notice failed: %s", type(exc).__name__)
+    return True
+
+
+async def mark_reconnect_required(connection: dict) -> None:
+    owner = {"org_id": connection["org_id"], "user_id": connection["user_id"]}
+    now = iso_now()
+    await db.google_calendar_connections.update_one(
+        {**owner, "status": {"$ne": "reconnect_required"}},
+        {"$set": {
+            "status": "reconnect_required",
+            "last_error": RECONNECT_REQUIRED_MESSAGE,
+            "reconnect_required_at": now,
+            "reconnect_notified_at": None,
+            "updated_at": now,
+        }},
+    )
+    await notify_reconnect_required(connection)
+
+
+async def notify_paused_connections(limit: int = 50) -> int:
+    """Catch connections paused before notices existed (or whose notice failed)."""
+    sent = 0
+    async for connection in db.google_calendar_connections.find(
+        {"status": "reconnect_required", **_NOT_NOTIFIED},
+        {"_id": 0, "org_id": 1, "user_id": 1, "connected_email": 1, "connection_id": 1},
+    ).limit(limit):
+        if connection.get("org_id") and connection.get("user_id"):
+            sent += int(await notify_reconnect_required(connection))
+    return sent
+
+
 async def _access_token(connection: dict) -> str:
     expires_at = connection.get("access_token_expires_at")
     if isinstance(expires_at, str):
@@ -205,22 +345,24 @@ async def _access_token(connection: dict) -> str:
         return decrypt_token(connection["access_token_enc"])
 
     refresh_token = decrypt_token(connection["refresh_token_enc"])
-    async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(TOKEN_URL, data={
-            "client_id": os.environ["GOOGLE_CALENDAR_CLIENT_ID"],
-            "client_secret": os.environ["GOOGLE_CALENDAR_CLIENT_SECRET"],
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        })
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(TOKEN_URL, data={
+                "client_id": os.environ["GOOGLE_CALENDAR_CLIENT_ID"],
+                "client_secret": os.environ["GOOGLE_CALENDAR_CLIENT_SECRET"],
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            })
+    except httpx.TransportError as exc:
+        raise GoogleUnavailable(TEMPORARY_UNAVAILABLE_MESSAGE) from exc
     if response.status_code != 200:
-        await db.google_calendar_connections.update_one(
-            {"org_id": connection["org_id"], "user_id": connection["user_id"]},
-            {"$set": {
-                "status": "reconnect_required",
-                "last_error": RECONNECT_REQUIRED_MESSAGE,
-                "updated_at": iso_now(),
-            }},
-        )
+        verdict = _refresh_rejection(response)
+        if verdict == "temporary":
+            raise GoogleUnavailable(TEMPORARY_UNAVAILABLE_MESSAGE)
+        if verdict == "config":
+            log.warning("Google Calendar token refresh rejected the OAuth client")
+            raise SafeSyncError(SERVER_CONFIG_MESSAGE)
+        await mark_reconnect_required(connection)
         raise GoogleCalendarError(RECONNECT_REQUIRED_MESSAGE)
     token = response.json()
     expires_at = now_utc() + timedelta(seconds=max(60, int(token.get("expires_in") or 3600) - 60))
@@ -509,7 +651,8 @@ async def sync_sources(org_id: str, source_type: str, source_ids: list[str],
 
 
 async def _google_request(connection: dict, method: str, event_id: str,
-                          body: dict | None = None) -> httpx.Response:
+                          body: dict | None = None,
+                          _refreshed: bool = False) -> httpx.Response:
     token = await _access_token(connection)
     calendar_id = quote(connection.get("calendar_id") or "primary", safe="")
     event_path = quote(event_id, safe="")
@@ -521,11 +664,26 @@ async def _google_request(connection: dict, method: str, event_id: str,
             f'{connection["org_id"]}:{connection["user_id"]}'.encode("utf-8")).hexdigest()[:40]}
         if method in ("POST", "PUT", "DELETE"):
             params["sendUpdates"] = "all"
-        return await client.request(
+        response = await client.request(
             method, url, json=body,
             params=params,
             headers={"Authorization": f"Bearer {token}"},
         )
+    if response.status_code == 401 and not _refreshed:
+        # The cached access token stopped working before its expiry (revoked
+        # or rotated by Google). Refresh once; a refresh that fails pauses the
+        # connection with the reconnect message instead of a bare 401.
+        return await _google_request(
+            {**connection, "access_token_expires_at": None},
+            method, event_id, body, _refreshed=True)
+    return response
+
+
+def _remote_failure(action: str, status_code: int) -> SafeSyncError:
+    if status_code >= 500 or status_code == 429:
+        return GoogleUnavailable(TEMPORARY_UNAVAILABLE_MESSAGE)
+    return SafeSyncError(
+        f"Google refused a calendar {action} (HTTP {status_code}). Sync will retry.")
 
 
 async def _upsert_remote(connection: dict, body: dict) -> None:
@@ -533,13 +691,13 @@ async def _upsert_remote(connection: dict, body: dict) -> None:
     if response.status_code == 409:
         response = await _google_request(connection, "PUT", body["id"], body)
     if response.status_code not in (200, 201):
-        raise GoogleCalendarError(f"Google event sync failed ({response.status_code})")
+        raise _remote_failure("update", response.status_code)
 
 
 async def _delete_remote(connection: dict, event_id: str) -> None:
     response = await _google_request(connection, "DELETE", event_id)
     if response.status_code not in (200, 204, 404, 410):
-        raise GoogleCalendarError(f"Google event delete failed ({response.status_code})")
+        raise _remote_failure("delete", response.status_code)
 
 
 async def process_sync_queue(limit: int = 50, org_id: str | None = None,
@@ -627,7 +785,7 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
             # Preserve the actionable reconnect reason written by _access_token.
             # A generic exception name made the UI look broken and hid the one
             # recovery action the user actually needs to take.
-            message, reconnect_required = _sync_failure(exc)
+            message, _reconnect = _sync_failure(exc)
             delay = min(3600, 30 * (2 ** min(attempts, 7)))
             await db.google_calendar_sync_queue.update_one(
                 {"sync_key": row["sync_key"]},
@@ -635,12 +793,11 @@ async def process_sync_queue(limit: int = 50, org_id: str | None = None,
                           "next_attempt_at": now_utc() + timedelta(seconds=delay),
                           "updated_at": iso_now()}},
             )
-            connection_update = {"last_error": message, "updated_at": iso_now()}
-            if reconnect_required:
-                connection_update["status"] = "reconnect_required"
+            # _access_token already paused the connection (and told the
+            # person) when the grant is gone; here only the reason is kept.
             await db.google_calendar_connections.update_one(
                 {"org_id": row["org_id"], "user_id": user_id},
-                {"$set": connection_update})
+                {"$set": {"last_error": message, "updated_at": iso_now()}})
             result["failed"] += 1
             log.warning("Google Calendar sync failed for %s: %s", row["sync_key"], message)
     return result
@@ -657,11 +814,13 @@ async def enqueue_user_sources(org_id: str, user_id: str) -> int:
     )
     today = business_today().isoformat()
     count = 0
+    queued: set[tuple[str, str]] = set()
     async for event in db.calendar_events.find(
         scoped_org_query(org_id, {"date": {"$gte": today}}), {"_id": 0}
     ).limit(1000):
         if _source_visible_to_user("calendar_event", event, user, identity_ids):
             await enqueue_sync(org_id, user_id, "calendar_event", event["id"])
+            queued.add(("calendar_event", event["id"]))
             count += 1
     async for task in db.tasks.find(
         scoped_org_query(org_id, {
@@ -674,5 +833,42 @@ async def enqueue_user_sources(org_id: str, user_id: str) -> int:
                 "task", task, user, identity_ids,
                 legacy_name_allowed=legacy_allowed):
             await enqueue_sync(org_id, user_id, "task", task["id"])
+            queued.add(("task", task["id"]))
+            count += 1
+    count += await _enqueue_stale_copies(
+        org_id, user, identity_ids, legacy_allowed, queued)
+    return count
+
+
+async def _enqueue_stale_copies(org_id: str, user: dict, identity_ids: set[str],
+                                legacy_allowed: bool,
+                                queued: set[tuple[str, str]]) -> int:
+    """Queue removal of Google copies whose ERP item went away meanwhile.
+
+    While a connection is paused nothing is queued for it, so a task deleted,
+    completed or reassigned during the pause (or an event cancelled) kept its
+    Google copy after reconnecting. Decided from the ERP side only; past items
+    that are still visible are left alone, so no extra Google calls.
+    """
+    collections = {"calendar_event": db.calendar_events, "task": db.tasks}
+    count = 0
+    async for mapping in db.google_calendar_synced_events.find(
+        {"org_id": org_id, "user_id": user["user_id"]},
+        {"_id": 0, "source_type": 1, "source_id": 1},
+    ).limit(5000):
+        source_type, source_id = mapping.get("source_type"), mapping.get("source_id")
+        if (source_type, source_id) in queued or source_type not in collections or not source_id:
+            continue
+        doc = await collections[source_type].find_one(
+            scoped_org_query(org_id, {"id": source_id}), {"_id": 0})
+        stale = (
+            doc is None
+            or (source_type == "task" and doc.get("status") == "done")
+            or not _source_visible_to_user(
+                source_type, doc, user, identity_ids,
+                legacy_name_allowed=legacy_allowed and source_type == "task")
+        )
+        if stale:
+            await enqueue_sync(org_id, user["user_id"], source_type, source_id, "delete")
             count += 1
     return count

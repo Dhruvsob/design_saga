@@ -45,6 +45,7 @@ VALID_KINDS = {
     "meeting", "reminder",
     "collection_reminder", "collection_due", "collection_overdue",
     "client_decision",
+    "calendar_sync",
     "info",
 }
 
@@ -56,7 +57,7 @@ NOTIFICATION_CATEGORY_BY_KIND = {
     "payroll_due": "finance",
     "leave_request": "attendance", "leave_decided": "attendance",
     "attendance_pending": "attendance", "attendance_decided": "attendance",
-    "meeting": "calendar", "reminder": "calendar",
+    "meeting": "calendar", "reminder": "calendar", "calendar_sync": "calendar",
     "collection_reminder": "finance", "collection_due": "finance", "collection_overdue": "finance",
 }
 

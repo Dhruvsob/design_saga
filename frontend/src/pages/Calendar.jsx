@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import PageHero from "../components/PageHero";
 import { useAuth } from "../context/AuthContext";
-import { dateForInput, empName } from "../lib/format";
+import { dateForInput, empName, formatDate } from "../lib/format";
 import {
   CaretLeft, CaretRight, Plus, X, Trash, MapPin, Clock as ClockIcon,
   Bell, Users, Lock, Globe, HardHat, UserCircle, SpeakerHigh, SpeakerSlash,
@@ -238,24 +238,49 @@ export default function CalendarPage() {
 
       {google?.can_manage && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-y border-[var(--line)] py-3" data-testid="google-calendar-status">
-          <div className="flex min-w-0 items-center gap-3">
-            <GoogleLogo size={22} weight="bold" className={google.connected ? "text-[var(--success)]" : "text-[var(--ink-2)]"} />
+          <div className={`flex min-w-0 gap-3 ${googleNeedsReconnect ? "items-start" : "items-center"}`}>
+            <GoogleLogo size={22} weight="bold" aria-hidden="true" className={`shrink-0 ${google.connected ? "text-[var(--success)]" : "text-[var(--ink-2)]"}`} />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-sm font-medium">
                 Google Calendar
                 {google.connected && <CheckCircle size={14} weight="fill" className="text-[var(--success)]" />}
+                {googleNeedsReconnect && <span className="status-chip chip-pending" data-testid="google-calendar-paused">Paused</span>}
               </div>
-              <div className="truncate text-xs text-[var(--ink-2)]">
-                {google.connected
-                  ? `${google.email || "Connected"}${google.pending ? ` · ${google.pending} pending` : ""}`
-                  : googleNeedsReconnect
-                    ? `${google.email || "Your Google account"} must be reconnected. Your ERP data is safe; sync is paused.`
-                    : google.configured ? "Personal connection: use your own Google account. Only your own, assigned, or explicitly shared items sync." : "OAuth setup is required on the server"}
-              </div>
-              {google.last_error && <div className="text-xs text-[var(--danger)]">{google.last_error}</div>}
+              {googleNeedsReconnect ? (
+                <div className="max-w-2xl space-y-1 text-xs text-[var(--ink-2)]" data-testid="google-calendar-reconnect-help">
+                  <p>
+                    <span className="font-medium text-[var(--ink)] break-all">{google.email || "Your Google account"}</span>
+                    {" "}needs reconnecting. Google stopped accepting its authorization
+                    {google.paused_since ? ` on ${formatDate(google.paused_since)}` : ""}, so new and changed
+                    ERP items are not reaching your Google Calendar. Your ERP data is safe; reconnecting
+                    sends everything that changed meanwhile.
+                  </p>
+                  {google.testing_limit_likely && (
+                    <p className="text-[var(--warning)]">
+                      Google ended it {Math.round(google.authorization_days)} days after it was granted. Google does
+                      this every 7 days while the studio&apos;s Google sign-in app is in Testing mode. Ask your
+                      administrator to publish the app in Google Cloud Console so it stops expiring.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="truncate text-xs text-[var(--ink-2)]">
+                    {google.connected
+                      ? `${google.email || "Connected"}${google.pending ? ` · ${google.pending} pending` : ""}`
+                      : google.configured ? "Personal connection: use your own Google account. Only your own, assigned, or explicitly shared items sync." : "OAuth setup is required on the server"}
+                  </div>
+                  {google.last_error && <div className="text-xs text-[var(--warning)]">{google.last_error}</div>}
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {googleNeedsReconnect && (
+              <button type="button" className="btn-ghost text-xs text-[var(--danger)]" onClick={disconnectGoogle} disabled={googleBusy} data-testid="google-calendar-disconnect">
+                Disconnect
+              </button>
+            )}
             {google.connected ? (
               <>
                 <button type="button" className="btn-ghost text-xs" onClick={syncGoogle} disabled={googleBusy} data-testid="google-calendar-sync">

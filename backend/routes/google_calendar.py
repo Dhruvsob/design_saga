@@ -12,7 +12,7 @@ from core.audit import audit
 from core.db import db
 from core.deps import require_user
 from core.google_calendar import (
-    connection_for, enqueue_user_sources, exchange_code,
+    authorization_summary, connection_for, enqueue_user_sources, exchange_code,
     google_email, is_configured, new_oauth_state, oauth_url, process_sync_queue,
     GOOGLE_ACCOUNT_IN_USE_MESSAGE, GoogleCalendarError,
     RECONNECT_REQUIRED_MESSAGE, save_connection, state_hash,
@@ -38,11 +38,22 @@ def _require_calendar_user(user: dict) -> str:
     return user_org_id(user)
 
 
+RETRY_MESSAGE = "The last Google sync attempt failed. It will retry automatically."
+
+
 def _status_error(connection: dict | None) -> str | None:
-    """Do not leak a stale generic worker error after a refresh grant expires."""
+    """A sentence the person can act on, never a bare exception name.
+
+    Older rows hold class names such as "GoogleCalendarError" or
+    "HTTPStatusError (HTTP 503)"; messages the sync code writes itself start
+    with "Google".
+    """
     if connection and connection.get("status") == "reconnect_required":
         return RECONNECT_REQUIRED_MESSAGE
-    return (connection or {}).get("last_error")
+    error = (connection or {}).get("last_error")
+    if not error:
+        return None
+    return error if str(error).startswith("Google ") else RETRY_MESSAGE
 
 
 @router.get("/calendar/google/status")
@@ -61,6 +72,7 @@ async def google_calendar_status(request: Request,
         "email": (connection or {}).get("connected_email"),
         "last_sync_at": (connection or {}).get("last_sync_at"),
         "last_error": _status_error(connection),
+        **authorization_summary(connection),
         "pending": pending,
         "can_manage": bool(has_permission(user, "calendar.read")),
         "personal": True,
