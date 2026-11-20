@@ -4,15 +4,15 @@ const sections = [
   {
     title: "Information we process",
     body: [
-      "Design Saga ERP processes account and organization details, employee records, project and task data, attendance records, uploaded business documents, and finance records entered by authorized users.",
+      "Gamaa processes account and organization details, employee records, project and task data, attendance records, uploaded business documents, and finance records entered by authorized users of each organization (studio) that uses it.",
       "Attendance features may process a device's location when a user explicitly checks in or checks out. Location is used to validate the attendance event and is not collected continuously by the ERP.",
     ],
   },
   {
     title: "Google Calendar data",
     body: [
-      "A tenant administrator may optionally connect a Google account. The integration uses the account identity to identify the connected calendar and uses Google Calendar event access to create, update, or remove events generated from ERP calendar items and task dates.",
-      "When an administrator tags employees, their work email addresses may be added as event attendees so Google can deliver invitations and reminders. The ERP does not sell Google user data, use it for advertising, or use it to train general-purpose AI models.",
+      "Each user may optionally connect their own Google account; one Google account can be connected to only one ERP user. The integration uses the account identity to identify the connected calendar and uses Google Calendar event access to create, update, or remove events generated from that user's own, assigned, or explicitly shared ERP calendar items and task dates.",
+      "When the creator of an event tags employees, their work email addresses may be added as event attendees so Google can deliver invitations and reminders. The ERP does not sell Google user data, use it for advertising, or use it to train general-purpose AI models.",
       "OAuth refresh and access tokens are encrypted at rest. Disconnecting Google Calendar removes the stored connection and tokens from the ERP. Events already created in Google Calendar remain there until a calendar owner removes them.",
     ],
   },
@@ -33,7 +33,7 @@ const sections = [
   {
     title: "Your choices",
     body: [
-      "Users can decline optional Google Calendar access. A tenant administrator can disconnect the integration from the ERP Calendar page and can revoke access at any time from the Google Account security settings.",
+      "Users can decline optional Google Calendar access. Each user can disconnect their own Google Calendar from the ERP Calendar page and can revoke access at any time from their Google Account security settings.",
       "For access, correction, deletion, or privacy questions, contact your tenant administrator or use the support contact shown on the Google authorization screen.",
     ],
   },
@@ -45,7 +45,7 @@ export default function PrivacyPolicy() {
       <header className="border-b border-[var(--line)] bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
           <Link to="/" className="font-display text-xl font-semibold text-[var(--ink)]">
-            Design Saga ERP
+            Gamaa
           </Link>
           <Link to="/" className="text-sm font-medium text-[var(--accent-strong)] hover:text-[var(--ink)]">
             Return to sign in
@@ -57,10 +57,10 @@ export default function PrivacyPolicy() {
         <div className="mb-10 border-b border-[var(--line)] pb-8">
           <p className="overline mb-3">LEGAL</p>
           <h1 className="font-display text-4xl font-semibold sm:text-5xl">Privacy Policy</h1>
-          <p className="mt-4 text-sm text-[var(--ink-2)]">Last updated: 16 October 2026</p>
+          <p className="mt-4 text-sm text-[var(--ink-2)]">Last updated: 20 November 2026</p>
           <p className="mt-6 max-w-3xl leading-7 text-[var(--ink-2)]">
-            This policy explains how Design Saga ERP handles information when organizations and
-            their authorized users use the service at gamaa.in.
+            This policy explains how Gamaa, the studio management platform at gamaa.in, handles
+            information when organizations and their authorized users use the service.
           </p>
         </div>
 
@@ -76,7 +76,7 @@ export default function PrivacyPolicy() {
         </div>
 
         <footer className="mt-14 border-t border-[var(--line)] pt-6 text-sm text-[var(--ink-2)]">
-          This policy applies to Design Saga ERP at gamaa.in and its optional Google Calendar
+          This policy applies to Gamaa at gamaa.in and its optional Google Calendar
           integration.
         </footer>
       </article>

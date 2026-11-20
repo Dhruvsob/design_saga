@@ -133,3 +133,11 @@ test("errorItems keeps each validation problem with its field for the error summ
   assert.deepEqual(errorItems({ code: "ERR_NETWORK" }, "x"),
     [{ field: null, text: "No connection to the server. Check your internet and try again." }]);
 });
+
+test("errorItems keeps the line number for a problem in an invoice line", async () => {
+  const { errorItems } = await import("./errors.js");
+  const err = { response: { status: 422, data: { detail: [
+    { loc: ["body", "items", 2, "rate"], msg: "Input should be greater than or equal to 0" },
+  ] } } };
+  assert.deepEqual(errorItems(err), [{ field: "items.2.rate", text: "Input should be greater than or equal to 0" }]);
+});

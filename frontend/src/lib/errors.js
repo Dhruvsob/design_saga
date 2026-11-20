@@ -44,8 +44,9 @@ export function errorItems(error, fallback = "Something went wrong. Please try a
   const list = Array.isArray(data?.errors) ? data.errors : Array.isArray(data?.detail) ? data.detail : null;
   if (list && list.length) {
     return list.map((x) => {
-      const loc = Array.isArray(x?.loc) ? x.loc : [];
-      const field = [...loc].reverse().find((p) => typeof p === "string" && p !== "body") || null;
+      // Full path without "body": "first_name", or "items.2.rate" for a line.
+      const loc = (Array.isArray(x?.loc) ? x.loc : []).filter((p) => p !== "body");
+      const field = loc.length ? loc.join(".") : null;
       return { field, text: String(x?.msg || x).replace(/^Value error, /, "") };
     });
   }

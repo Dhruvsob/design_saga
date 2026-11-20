@@ -5,6 +5,8 @@ import { useEffect, useRef } from "react";
 // entry jumps to its field. What the person typed stays in the form.
 export default function ErrorSummary({ items, formRef, labels = {} }) {
   const ref = useRef(null);
+  // labels: a map { field: "Label" } or a function field => label (for lines).
+  const labelFor = typeof labels === "function" ? labels : (field) => labels[field];
   useEffect(() => {
     if (items?.length) ref.current?.focus();
   }, [items]);
@@ -24,8 +26,8 @@ export default function ErrorSummary({ items, formRef, labels = {} }) {
       <ul className="mt-1 list-disc pl-5 text-sm text-[var(--danger)]">
         {items.map((it, i) => (
           <li key={`${it.field || "form"}-${i}`}>
-            {it.field && labels[it.field]
-              ? <a href={`#${it.field}`} onClick={go(it.field)} className="underline underline-offset-2">{labels[it.field]}: {it.text}</a>
+            {it.field && labelFor(it.field)
+              ? <a href={`#${it.field}`} onClick={go(it.field)} className="underline underline-offset-2">{labelFor(it.field)}: {it.text}</a>
               : it.text}
           </li>
         ))}

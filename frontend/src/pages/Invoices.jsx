@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import api, { API, optionalList } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -12,12 +12,26 @@ import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
 import { Receipt } from "@phosphor-icons/react";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
+import ErrorSummary from "../components/ErrorSummary";
+import { errorItems } from "../lib/errors";
+
+const INVOICE_FIELDS = { client_id: "Client", project_id: "Project", due_date: "Due date", tax_rate: "Tax %",
+  notes: "Notes", items: "Line items", milestone_id: "Milestone" };
+const LINE_FIELDS = { description: "description", quantity: "quantity", rate: "rate", amount: "amount" };
+// "items.2.rate" -> "Line 3 rate"; plain fields from INVOICE_FIELDS.
+const invoiceFieldLabel = (field) => {
+  const m = /^items\.(\d+)\.(\w+)$/.exec(field || "");
+  if (m) return `Line ${Number(m[1]) + 1} ${LINE_FIELDS[m[2]] || m[2]}`;
+  return INVOICE_FIELDS[field];
+};
 import PageHero from "../components/PageHero";
 import { MoneyInTabs, useReminderFlow } from "../components/MoneyIn";
 import { BellRinging } from "@phosphor-icons/react";
 
 export default function Invoices({ docType = "invoice" }) {
-  const { hasPerm } = useAuth();
+  const { hasPerm, currentOrg } = useAuth();
+  const [formErrors, setFormErrors] = useState(null);
+  const formRef = useRef(null);
   const canCreate = hasPerm("invoices.create");
   const canUpdate = hasPerm("invoices.update");
   const canDelete = hasPerm("invoices.delete");
@@ -188,11 +202,18 @@ export default function Invoices({ docType = "invoice" }) {
         amount: Number(it.quantity) * Number(it.rate),
       })),
     };
-    if (editingId) {
-      const { status, doc_type, ...patch } = payload;
-      await api.patch(`/invoices/${editingId}`, patch);
-    } else {
-      await api.post("/invoices", payload);
+    setFormErrors(null);
+    try {
+      if (editingId) {
+        const { status, doc_type, ...patch } = payload;
+        await api.patch(`/invoices/${editingId}`, patch);
+      } else {
+        await api.post("/invoices", payload);
+      }
+    } catch (ex) {
+      // Keep everything typed; list each problem and link to its field.
+      setFormErrors(errorItems(ex, "The invoice could not be saved."));
+      return;
     }
     setForm(initialForm(docType));
     setEditingId(null);
@@ -302,15 +323,16 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
       {docType === "invoice" && <MoneyInTabs />}
 
       {showForm && (
-        <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="invoice-form">
+        <form ref={formRef} onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="invoice-form">
+          <ErrorSummary items={formErrors} formRef={formRef} labels={invoiceFieldLabel} />
           <div className="card-flat space-y-4">
             <div className="overline">DETAILS</div>
             <div className="grid grid-cols-2 gap-3">
-              <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+              <SearchSelect className="input-flat" name="client_id" aria-label="Client" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
                 <option value="">Select client</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </SearchSelect>
-              <SearchSelect className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
+              <SearchSelect className="input-flat" name="project_id" aria-label="Project" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
                 <option value="">Select project</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </SearchSelect>
@@ -325,23 +347,23 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
                   ))}
                 </select>
               )}
-              <input type="date" aria-label="Due date" className="input-flat" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-              <input type="number" min="0" className="input-flat" placeholder="Tax %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
+              <input type="date" name="due_date" aria-label="Due date" className="input-flat" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+              <input type="number" min="0" name="tax_rate" aria-label="Tax %" className="input-flat" placeholder="Tax %" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
             </div>
 
             <div className="overline">LINE ITEMS</div>
             <div className="space-y-2">
               {form.items.map((it, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <input className="input-flat col-span-6" placeholder="Description" value={it.description} onChange={(e) => updateItem(i, "description", e.target.value)} />
-                  <input type="number" min="0" className="input-flat col-span-2" placeholder="Qty" value={it.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value)} />
-                  <input type="number" min="0" className="input-flat col-span-3" placeholder="Rate" value={it.rate} onChange={(e) => updateItem(i, "rate", e.target.value)} />
-                  <button type="button" onClick={() => removeItem(i)} className="text-[var(--danger)]"><Trash size={14} /></button>
+                  <input className="input-flat col-span-6" name={`items.${i}.description`} aria-label={`Line ${i + 1} description`} placeholder="Description" value={it.description} onChange={(e) => updateItem(i, "description", e.target.value)} />
+                  <input type="number" min="0" className="input-flat col-span-2" name={`items.${i}.quantity`} aria-label={`Line ${i + 1} quantity`} placeholder="Qty" value={it.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value)} />
+                  <input type="number" min="0" className="input-flat col-span-3" name={`items.${i}.rate`} aria-label={`Line ${i + 1} rate`} placeholder="Rate" value={it.rate} onChange={(e) => updateItem(i, "rate", e.target.value)} />
+                  <button type="button" onClick={() => removeItem(i)} className="text-[var(--danger)]" aria-label={`Remove line ${i + 1}`}><Trash size={14} /></button>
                 </div>
               ))}
             </div>
             <button type="button" onClick={addItem} className="btn-ghost text-xs">+ Add line</button>
-            <textarea className="input-flat" rows={3} placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <textarea className="input-flat" rows={3} name="notes" aria-label="Notes" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
 
           {/* Live preview */}
@@ -349,7 +371,8 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
             <div className="flex items-start justify-between mb-6">
               <div>
                 <div className="font-display font-bold text-3xl tracking-tight accent-blue">{docType === "quotation" ? "QUOTATION" : "INVOICE"}</div>
-                <div className="text-xs font-mono mt-1">DESIGN SAGA · Studio OS</div>
+                {/* The signed-in firm's own name; this preview was hard-coded to one customer. */}
+                <div className="text-xs font-mono mt-1 uppercase" data-testid="invoice-preview-studio">{currentOrg?.display_name || currentOrg?.name || "Your studio"}</div>
               </div>
               <div className="text-right text-xs font-mono">
                 <div>DATE · {formatDate(new Date())}</div>

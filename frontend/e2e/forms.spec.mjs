@@ -21,7 +21,8 @@ test("client picker searches a long list and the invoice saves that client", asy
   await page.goto("/invoices");
   await clientsLoaded;
   await page.getByRole("button", { name: /new invoice/i }).click();
-  const client = page.getByRole("combobox", { name: /select client/i });
+  // The picker is labelled "Client" (its name used to be the placeholder text).
+  const client = page.getByRole("combobox", { name: "Client", exact: true });
   await client.click();
   const search = page.getByPlaceholder("Type to search…");
   await expect(search, "search appears for long lists").toBeVisible();
@@ -59,4 +60,33 @@ test("double-clicking Save creates one record, not two", async ({ page }) => {
   const rows = (await json(ctx.get("/api/clients"))).filter((c) => c.name === name);
   expect(rows, "exactly one client saved").toHaveLength(1);
   await ctx.dispose();
+});
+
+test("a refused invoice lists each problem, jumps to the field and keeps what was typed", async ({ page }) => {
+  // GOV.UK-style error summary. The server's answer is stubbed so the test
+  // controls exactly which fields are wrong; everything else is the real page.
+  await page.route(/\/api\/invoices$/, (route) => (route.request().method() === "POST"
+    ? route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: [
+      { loc: ["body", "items", 0, "rate"], msg: "Rate looks too high for this line" },
+      { loc: ["body", "client_id"], msg: "Choose a client" },
+    ] }) })
+    : route.continue()));
+  await page.goto("/invoices");
+  await page.getByTestId("new-invoice-btn").click();
+  const form = page.getByTestId("invoice-form");
+  await expect(form.getByTestId("invoice-preview-studio")).not.toHaveText(/design saga/i);
+  await form.getByLabel("Line 1 description").fill("Concept design");
+  await form.getByLabel("Line 1 quantity").fill("1");
+  await form.getByLabel("Line 1 rate").fill("125000");
+  await form.getByTestId("invoice-submit").click();
+
+  const summary = page.getByTestId("error-summary");
+  await expect(summary).toBeFocused();
+  await expect(summary).toContainText("There is a problem");
+  await expect(summary).toContainText("Line 1 rate: Rate looks too high for this line");
+  await expect(summary).toContainText("Client: Choose a client");
+  await summary.getByRole("link", { name: /Line 1 rate/ }).click();
+  await expect(form.getByLabel("Line 1 rate")).toBeFocused();
+  await expect(form.getByLabel("Line 1 rate")).toHaveValue("125000");
+  await expect(form.getByLabel("Line 1 description")).toHaveValue("Concept design");
 });
