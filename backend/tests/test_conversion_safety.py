@@ -133,7 +133,14 @@ def _allow_quotation_user(monkeypatch, collection):
     async def user(*_args, **_kwargs):
         return {"user_id": "admin", "name": "Admin", "org_id": "org_a"}
 
-    monkeypatch.setattr(server, "sdb", SimpleNamespace(quotations_adv=collection))
+    class _NoPendingClientRequests:
+        # Quotation edits and status changes close pending client-portal
+        # requests (routes/approvals.py); none exist in these tests.
+        async def update_many(self, *_args, **_kwargs):
+            return SimpleNamespace(modified_count=0, matched_count=0)
+
+    monkeypatch.setattr(server, "sdb", SimpleNamespace(quotations_adv=collection,
+                                                       approvals=_NoPendingClientRequests()))
     monkeypatch.setattr(server, "require_user", user)
     monkeypatch.setattr(server, "_require_perm", lambda *_args: None)
     monkeypatch.setattr(server, "has_permission", lambda *_args: True)

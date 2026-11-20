@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { optionalList } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -7,7 +7,15 @@ import { Plus, ArrowRight, CaretRight, MagnifyingGlass, SquaresFour, ListBullets
 import RowActions from "../components/RowActions";
 import { confirmAction } from "../lib/confirm";
 import { toast } from "sonner";
-import { errText } from "../lib/errors";
+import { errText, errorItems } from "../lib/errors";
+import ErrorSummary from "../components/ErrorSummary";
+
+const PROJECT_LABELS = {
+  name: "Project name", client_id: "Client", budget: "Budget", description: "Description",
+  site_address: "Site address", site_area_sqft: "Site area", fee_structure_type: "Fee type",
+  fee_lump_sum_amount: "Fixed fee", fee_project_value: "Project value", fee_percentage: "Fee %",
+  fee_contract_value: "Contract value", fee_rate_per_sqft: "Rate per sq ft", engagement_type: "Engagement",
+};
 import PageHero from "../components/PageHero";
 import { formatINR, empName } from "../lib/format";
 import { feeCalc, projectFeeDisplay, FEE_LABELS } from "../lib/fees";
@@ -42,7 +50,8 @@ export default function Projects() {
     fee_percentage: "", fee_contract_value: "", fee_rate_per_sqft: "",
   };
   const [form, setForm] = useState(EMPTY_FORM);
-  const [err, setErr] = useState("");
+  const [formErrors, setFormErrors] = useState(null);
+  const formRef = useRef(null);
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [sort, setSort] = useState("recent");
@@ -88,7 +97,7 @@ export default function Projects() {
     }));
 
   const submit = async (e) => {
-    e.preventDefault(); setErr("");
+    e.preventDefault(); setFormErrors(null);
     try {
       await api.post("/projects", {
         ...form,
@@ -108,8 +117,7 @@ export default function Projects() {
       setForm(EMPTY_FORM);
       load();
     } catch (ex) {
-      const d = ex?.response?.data?.detail;
-      setErr(typeof d === "string" ? d : (d?.msg || "Create failed"));
+      setFormErrors(errorItems(ex, "The project could not be created."));
     }
   };
 
@@ -158,8 +166,9 @@ export default function Projects() {
       </PageHero>
 
       {showForm && (
-        <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-2 gap-4 scale-in" data-testid="project-form">
-          <input className="input-flat" placeholder="Project name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="project-name" />
+        <form ref={formRef} onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-2 gap-4 scale-in" data-testid="project-form">
+          <ErrorSummary items={formErrors} formRef={formRef} labels={PROJECT_LABELS} />
+          <input className="input-flat" placeholder="Project name" required name="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="project-name" />
           <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
             <option value="">Select client (optional)</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -189,15 +198,15 @@ export default function Projects() {
               </div>
             </label>
           )}
-          <input className="input-flat" type="number" min="0" placeholder="Enter Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="project-budget" />
-          <input className="input-flat" placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          <input className="input-flat" placeholder="Site address (optional)" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
-          <input className="input-flat" type="number" min="0" placeholder="Site area (sq ft, optional)" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} data-testid="project-site-area" />
+          <input className="input-flat" type="number" min="0" placeholder="Enter Budget (₹)" name="budget" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} data-testid="project-budget" />
+          <input className="input-flat" placeholder="Short description" name="description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <input className="input-flat" placeholder="Site address (optional)" name="site_address" value={form.site_address} onChange={(e) => setForm({ ...form, site_address: e.target.value })} />
+          <input className="input-flat" type="number" min="0" placeholder="Site area (sq ft, optional)" name="site_area_sqft" value={form.site_area_sqft} onChange={(e) => setForm({ ...form, site_area_sqft: e.target.value })} data-testid="project-site-area" />
 
           {/* Fee structure — how this project's fee is charged */}
           <div className="md:col-span-2 border-t border-[var(--line-soft)] pt-3 space-y-2">
             <div className="overline text-[10px]">FEE STRUCTURE (OPTIONAL)</div>
-            <select aria-label="Fee structure type" className="input-flat w-full"
+            <select aria-label="Fee structure type" name="fee_structure_type" className="input-flat w-full"
               value={form.fee_structure_type}
               onChange={(e) => setForm({ ...form, fee_structure_type: e.target.value })}
               data-testid="project-fee-type">
@@ -209,27 +218,27 @@ export default function Projects() {
             </select>
             {form.fee_structure_type === "lump_sum" && (
               <input className="input-flat w-full" type="number" min="0" placeholder="Fixed fee amount (₹)"
-                value={form.fee_lump_sum_amount}
+                name="fee_lump_sum_amount" value={form.fee_lump_sum_amount}
                 onChange={(e) => setForm({ ...form, fee_lump_sum_amount: e.target.value })} />
             )}
             {form.fee_structure_type === "percentage_consultancy" && (
               <div className="grid grid-cols-2 gap-2">
                 <input className="input-flat" type="number" min="0" placeholder="Total project value (₹)"
-                  value={form.fee_project_value}
+                  name="fee_project_value" value={form.fee_project_value}
                   onChange={(e) => setForm({ ...form, fee_project_value: e.target.value })} />
                 <input className="input-flat" type="number" min="0" max="100" step="0.1" placeholder="Fee %"
-                  value={form.fee_percentage}
+                  name="fee_percentage" value={form.fee_percentage}
                   onChange={(e) => setForm({ ...form, fee_percentage: e.target.value })} />
               </div>
             )}
             {form.fee_structure_type === "turnkey" && (
               <input className="input-flat w-full" type="number" min="0" placeholder="Turnkey contract value (₹)"
-                value={form.fee_contract_value}
+                name="fee_contract_value" value={form.fee_contract_value}
                 onChange={(e) => setForm({ ...form, fee_contract_value: e.target.value })} />
             )}
             {form.fee_structure_type === "per_sqft" && (
               <input className="input-flat w-full" type="number" min="0" placeholder="Rate per sq ft (₹/sq ft)"
-                value={form.fee_rate_per_sqft}
+                name="fee_rate_per_sqft" value={form.fee_rate_per_sqft}
                 onChange={(e) => setForm({ ...form, fee_rate_per_sqft: e.target.value })} />
             )}
             {feeCalc(form) !== null && (
@@ -280,7 +289,6 @@ export default function Projects() {
               </div>
             </div>
           </div>
-          {err && <div className="md:col-span-2 border border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)] text-xs px-3 py-2">{err}</div>}
           <button className="btn-primary md:col-span-2" data-testid="project-submit" type="submit">Create project</button>
         </form>
       )}

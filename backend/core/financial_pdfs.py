@@ -158,25 +158,39 @@ def generate_purchase_order_pdf(po: dict, org: Optional[dict] = None,
 
     table_header()
     for index, line in enumerate(po.get("lines") or [], 1):
-        if pdf.get_y() > pdf.h - 37:
-            pdf.add_page()
-            table_header()
         qty = float(line.get("quantity") or 0)
         rate = float(line.get("unit_price") or 0)
         amount = round(qty * rate, 2)
         description = str(line.get("item_name") or "Item")
         if line.get("description"):
             description += f" - {line['description']}"
-        values = [str(index), safe_text(description)[:58], f"{qty:g}", line.get("unit") or "-",
+        # The supplier works from this sheet: wrap the full specification
+        # (it used to be cut at 58 characters) and keep each row on one page.
+        description = safe_text(description)[:600]
+        pdf.set_font("Helvetica", "", 8.2)
+        lines = pdf.multi_cell(widths[1], 4.6, description, dry_run=True, output="LINES")
+        row_h = max(7, 4.6 * len(lines) + 2.4)
+        if pdf.get_y() + row_h > pdf.h - 30:
+            pdf.add_page()
+            table_header()
+            pdf.set_font("Helvetica", "", 8.2)
+        values = [str(index), description, f"{qty:g}", line.get("unit") or "-",
                   inr(rate).replace("Rs. ", ""), f"{float(line.get('tax_rate') or 0):g}%",
                   inr(amount).replace("Rs. ", "")]
-        pdf.set_x(LEFT)
-        pdf.set_font("Helvetica", "", 8.2)
         pdf.set_text_color(*INK)
+        top = pdf.get_y()
+        x = LEFT
         for width, value, label in zip(widths, values, headers):
-            pdf.cell(width, 7, safe_text(value), "B", 0,
-                     "R" if label in {"QTY", "RATE", "TAX", "AMOUNT"} else "L")
-        pdf.ln()
+            pdf.set_xy(x, top + 1.2)
+            if label == "ITEM / DESCRIPTION":
+                pdf.multi_cell(width, 4.6, value, 0, "L")
+            else:
+                pdf.cell(width, 4.6, safe_text(value), 0, 0,
+                         "R" if label in {"QTY", "RATE", "TAX", "AMOUNT"} else "L")
+            x += width
+        pdf.set_draw_color(220, 220, 220)
+        pdf.line(LEFT, top + row_h, LEFT + sum(widths), top + row_h)
+        pdf.set_xy(LEFT, top + row_h)
 
     pdf.ln(3)
     totals = [

@@ -67,3 +67,42 @@ test("drawing register: revisions A then B, supersession, approval, staff cannot
   expect((await xlsx.body()).subarray(0, 2).toString()).toBe("PK");
   await ctx.dispose();
 });
+
+test("a newer review draft does not replace the construction sheet the site builds from", async ({ browser }) => {
+  // The release brief's case: R2 issued for construction, then a newer draft R3.
+  const ctx = await api("admin");
+  const client = await json(ctx.post("/api/clients", { data: { name: `Site ${uid()}` } }));
+  const project = await json(ctx.post("/api/projects", { data: { name: `Site copy ${uid()}`, client_id: client.id, engagement_type: "consultancy" } }));
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto(`/projects/${project.id}`);
+  await openProjectTab(page, "Drawings", { timeout: 20000 });
+  await page.getByTestId("drawing-add").click();
+  await page.getByTestId("form-field-number").fill("a-201");
+  await page.getByTestId("form-field-title").fill("Kitchen elevations");
+  await page.getByTestId("confirm-ok").click();
+  const row = page.getByTestId("drawing-row-A-201");
+  await expect(row).toContainText("Kitchen elevations", { timeout: 20000 });
+
+  await page.getByTestId("drawing-issue-A-201").click();
+  await page.getByTestId("drawing-file").setInputFiles({ name: "a201-a.pdf", mimeType: "application/pdf", buffer: PDF });
+  await page.getByTestId("drawing-purpose").selectOption("construction");
+  await page.getByTestId("drawing-issue-save").click();
+  await expect(row).toContainText("For construction", { timeout: 20000 });
+
+  await page.getByTestId("drawing-issue-A-201").click();
+  await page.getByTestId("drawing-purpose").selectOption("review");
+  await expect(page.getByTestId("drawing-issue-impact")).toContainText("Rev A stays the site copy");
+  await page.getByTestId("drawing-file").setInputFiles({ name: "a201-b.pdf", mimeType: "application/pdf", buffer: PDF });
+  await page.getByTestId("drawing-issue-save").click();
+  await expect(row.locator("td").nth(2)).toContainText("B", { timeout: 20000 });
+  await expect(page.getByTestId("drawing-site-copy-A-201")).toContainText("On site: rev A");
+
+  const list = await json(ctx.get(`/api/projects/${project.id}/drawings`));
+  const d = list.drawings.find((x) => x.number === "A-201");
+  expect(d.revisions.map((r) => [r.rev, r.status])).toEqual([["A", "issued"], ["B", "issued"]]);
+  // The site copy's file is served clean, not stamped SUPERSEDED.
+  const sheet = await ctx.get(`/api/drawings/${d.id}/revisions/A/file`);
+  expect(sheet.status()).toBe(200);
+  expect(sheet.headers()["x-superseded-stamp"]).toBeUndefined();
+  await ctx.dispose();
+});

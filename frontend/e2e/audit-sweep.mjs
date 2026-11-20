@@ -42,9 +42,16 @@ async function detailLinks(ctx) {
   return out;
 }
 
+// SWEEP_WIDTHS=320,360,390,683,768,1366,1920 checks the release brief's widths
+// (683 = 1366 px at 200% zoom; 320 = WCAG reflow). Default: desktop + phone.
+const VIEWPORTS = process.env.SWEEP_WIDTHS
+  ? process.env.SWEEP_WIDTHS.split(",").map((w) => [`${w}px`, { width: Number(w), height: Number(w) < 768 ? 800 : 900 }])
+  : [["desktop", { width: 1440, height: 900 }], ["phone", { width: 390, height: 844 }]];
+const ROLES = (process.env.SWEEP_ROLES || "admin,employee").split(",");
+
 const browser = await chromium.launch();
-for (const role of ["admin", "employee"]) {
-  for (const [vp, size] of [["desktop", { width: 1440, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+for (const role of ROLES) {
+  for (const [vp, size] of VIEWPORTS) {
     const ctx = await browser.newContext({ baseURL, storageState: authFile(role), viewport: size });
     const page = await ctx.newPage();
     let current = "";
@@ -69,10 +76,24 @@ for (const role of ["admin", "employee"]) {
       }
       const snakes = [...new Set((text.match(SNAKE) || []).filter((w) => !IGNORE_SNAKE.has(w)))];
       if (snakes.length) note(role, vp, p, "RAW-CODE", snakes.slice(0, 8).join(", "));
-      if (vp === "phone") {
-        const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-        if (over > 2) note(role, vp, p, "SIDEWAYS", `${over}px wider than the screen`);
-      }
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      if (over > 2) note(role, vp, p, "SIDEWAYS", `${over}px wider than the screen`);
+      // Content cut off at the left edge (not inside a scroller) cannot be scrolled to.
+      const cut = await page.evaluate(() => {
+        for (const el of document.querySelectorAll("main *")) {
+          const r = el.getBoundingClientRect();
+          if (r.width > 8 && r.height > 8 && r.left < -2 && getComputedStyle(el).visibility !== "hidden") {
+            let scroller = false;
+            for (let a = el.parentElement; a; a = a.parentElement) {
+              const ox = getComputedStyle(a).overflowX;
+              if (ox === "auto" || ox === "scroll" || ox === "hidden") { scroller = true; break; }
+            }
+            if (!scroller) return `${el.tagName.toLowerCase()} left=${Math.round(r.left)} ${(el.innerText || "").slice(0, 30).replace(/\s+/g, " ")}`;
+          }
+        }
+        return "";
+      });
+      if (cut) note(role, vp, p, "CUT-OFF", cut);
     }
     await ctx.close();
   }

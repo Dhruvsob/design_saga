@@ -116,3 +116,20 @@ test("string and structured details are left alone", () => {
   assert.doesNotThrow(() => normalizeErrorDetail({ message: "Network Error" }));
   assert.doesNotThrow(() => normalizeErrorDetail({ response: { data: "<html>502</html>" } }));
 });
+
+test("errorItems keeps each validation problem with its field for the error summary", async () => {
+  const { errorItems, normalizeErrorDetail } = await import("./errors.js");
+  const err = { response: { status: 422, data: { detail: [
+    { loc: ["body", "first_name"], msg: "Field required" },
+    { loc: ["body", "email"], msg: "Value error, value is not a valid email address" },
+  ] } } };
+  normalizeErrorDetail(err);   // what the API layer does first
+  assert.deepEqual(errorItems(err), [
+    { field: "first_name", text: "Field required" },
+    { field: "email", text: "value is not a valid email address" },
+  ]);
+  assert.deepEqual(errorItems({ response: { data: { detail: "Email already in use" } } }),
+    [{ field: null, text: "Email already in use" }]);
+  assert.deepEqual(errorItems({ code: "ERR_NETWORK" }, "x"),
+    [{ field: null, text: "No connection to the server. Check your internet and try again." }]);
+});

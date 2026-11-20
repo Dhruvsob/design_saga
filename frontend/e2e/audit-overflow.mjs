@@ -1,8 +1,8 @@
-// Which elements stick out past a phone screen? node e2e/audit-overflow.mjs <path>...
+// Which elements stick out past the screen? OVERFLOW_WIDTH=768 node e2e/audit-overflow.mjs <path>...
 import { chromium } from "@playwright/test";
 import { authFile, baseURL } from "./helpers.mjs";
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ baseURL, storageState: authFile("admin"), viewport: { width: 390, height: 844 } });
+const ctx = await browser.newContext({ baseURL, storageState: authFile("admin"), viewport: { width: Number(process.env.OVERFLOW_WIDTH || 390), height: 844 } });
 const page = await ctx.newPage();
 for (const p of process.argv.slice(2)) {
   await ctx.request.post("/api/auth/pin/unlock", { data: { pin: process.env.QA_PIN }, headers: { Origin: baseURL } });

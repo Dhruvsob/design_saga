@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../lib/api";
+import api, { optionalList } from "../lib/api";
 import PageHero from "../components/PageHero";
 import { formatDate, roundPaise, formatINR, statusLabel } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
@@ -137,13 +137,37 @@ export default function PurchaseOrders() {
 }
 
 function CreatePO({ vendors, onClose, onCreated }) {
+  const { hasPerm } = useAuth();
   const [f, setF] = useState({
-    vendor_id: vendors[0]?.id || "", expected_delivery: "", payment_terms: "Net 30",
-    delivery_address: "", notes: "", lines: [{ item_name: "", quantity: 1, unit: "nos", unit_price: "", tax_rate: 18 }],
+    vendor_id: vendors[0]?.id || "", project_id: "", expected_delivery: "", payment_terms: "Net 30",
+    delivery_address: "", notes: "", lines: [{ item_name: "", description: "", quantity: 1, unit: "nos", unit_price: "", tax_rate: 18 }],
   });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  // The order can belong to a project (the API always allowed it; the form had
+  // no field), and the project's client-approved selections can become lines.
+  const [projects, setProjects] = useState([]);
+  const [selections, setSelections] = useState(null);
+  useEffect(() => {
+    optionalList(hasPerm("projects.read"), "/projects").then(({ data }) =>
+      setProjects((Array.isArray(data) ? data : data?.items || []).filter((p) => !p.archived)));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setSelections(null);
+    if (!f.project_id) return;
+    api.get(`/projects/${f.project_id}/selections`).then(({ data }) => setSelections(data.selections || []))
+      .catch(() => setSelections([]));
+  }, [f.project_id]);
+  const approved = (selections || []).filter((x) => x.status === "approved");
+  const notApproved = (selections || []).filter((x) => x.status !== "approved");
+  const addApproved = () => setF((s) => ({
+    ...s,
+    lines: [...s.lines.filter((l) => l.item_name || l.unit_price !== ""), ...approved.map((x) => ({
+      item_name: `${x.room}: ${x.item}`.slice(0, 160), description: x.specification || "",
+      quantity: x.quantity || 1, unit: x.unit || "nos", unit_price: "", tax_rate: 18,
+    }))],
+  }));
 
-  const addLine = () => setF((s) => ({ ...s, lines: [...s.lines, { item_name: "", quantity: 1, unit: "nos", unit_price: "", tax_rate: 18 }] }));
+  const addLine = () => setF((s) => ({ ...s, lines: [...s.lines, { item_name: "", description: "", quantity: 1, unit: "nos", unit_price: "", tax_rate: 18 }] }));
   const upLine = (i, patch) => setF((s) => ({ ...s, lines: s.lines.map((l, j) => j === i ? { ...l, ...patch } : l) }));
   const delLine = (i) => setF((s) => ({ ...s, lines: s.lines.filter((_, j) => j !== i) }));
   // Mirrors backend _po_totals: round each line and its tax to the paisa.
@@ -154,7 +178,10 @@ function CreatePO({ vendors, onClose, onCreated }) {
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try {
-      await api.post("/purchase-orders", f);
+      await api.post("/purchase-orders", {
+        ...f, project_id: f.project_id || undefined,
+        lines: f.lines.map((l) => ({ ...l, description: l.description || undefined })),
+      });
       onCreated();
     } catch (ex) {
       setErr(fmtErr(ex?.response?.data?.detail, "Create failed"));
@@ -174,7 +201,31 @@ function CreatePO({ vendors, onClose, onCreated }) {
           <F label="Expected delivery"><input type="date" className="input-flat w-full" value={f.expected_delivery} onChange={(e) => setF({...f, expected_delivery: e.target.value})} /></F>
           <F label="Payment terms"><input className="input-flat w-full" value={f.payment_terms} onChange={(e) => setF({...f, payment_terms: e.target.value})} /></F>
         </div>
-        <F label="Delivery address"><input className="input-flat w-full" value={f.delivery_address} onChange={(e) => setF({...f, delivery_address: e.target.value})} /></F>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <F label="Project">
+            <SearchSelect data-testid="po-project" className="input-flat w-full" value={f.project_id}
+                          onChange={(e) => setF({ ...f, project_id: e?.target ? e.target.value : e })}>
+              <option value="">Not for a project</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </SearchSelect>
+          </F>
+          <F label="Delivery address"><input className="input-flat w-full" value={f.delivery_address} onChange={(e) => setF({...f, delivery_address: e.target.value})} /></F>
+        </div>
+        {f.project_id && selections && (notApproved.length > 0 || approved.length > 0) && (
+          <div className={`border-l-4 pl-3 py-1 text-sm ${notApproved.length ? "border-[var(--warning)]" : "border-[var(--success)]"}`} role="status" data-testid="po-selection-check">
+            {notApproved.length > 0 && (
+              <p className="text-[var(--warning)]">
+                {notApproved.length} selection{notApproved.length === 1 ? " is" : "s are"} not approved by the client yet:{" "}
+                {notApproved.slice(0, 4).map((x) => `${x.room}: ${x.item}`).join("; ")}{notApproved.length > 4 ? "; …" : ""}. Check before ordering these.
+              </p>
+            )}
+            {approved.length > 0 && (
+              <button type="button" className="btn-ghost text-xs mt-1" onClick={addApproved} data-testid="po-add-approved">
+                <Plus size={11} /> Add the {approved.length} approved selection{approved.length === 1 ? "" : "s"} as lines
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="overline">LINE ITEMS</div>
         <div className="space-y-2">
@@ -186,7 +237,9 @@ function CreatePO({ vendors, onClose, onCreated }) {
               <input type="number" min="0" placeholder="Price" step="0.01" className="input-flat col-span-2 font-mono" value={l.unit_price} onChange={(e) => upLine(i, {unit_price: e.target.value === "" ? "" : Number(e.target.value)})} />
               <input type="number" min="0" placeholder="Tax %" className="input-flat col-span-1 font-mono" value={l.tax_rate} onChange={(e) => upLine(i, {tax_rate: e.target.value === "" ? "" : Number(e.target.value)})} />
               <div className="col-span-1 font-mono text-xs text-right">{fmtMoney((Number(l.quantity) || 0) * (Number(l.unit_price) || 0))}</div>
-              <button type="button" onClick={() => delLine(i)} className="btn-ghost col-span-1 text-[var(--danger)]"><X size={12}/></button>
+              <button type="button" onClick={() => delLine(i)} className="btn-ghost col-span-1 text-[var(--danger)]" aria-label={`Remove line ${i + 1}`}><X size={12}/></button>
+              <input placeholder="Specification for the supplier (optional)" aria-label={`Line ${i + 1} specification`}
+                     className="input-flat col-span-12 text-sm" value={l.description || ""} onChange={(e) => upLine(i, { description: e.target.value })} />
             </div>
           ))}
           <button type="button" onClick={addLine} className="btn-ghost text-xs" data-testid="po-add-line"><Plus size={11}/> Add line</button>

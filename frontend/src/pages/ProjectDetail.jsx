@@ -13,6 +13,7 @@ import ProjectSnags from "../components/ProjectSnags";
 import ProjectTime from "../components/ProjectTime";
 import ProjectTimeline from "../components/ProjectTimeline";
 import ProjectApprovals from "../components/ProjectApprovals";
+import ProjectSelections from "../components/ProjectSelections";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
 import { feeCalc } from "../lib/fees";
@@ -25,12 +26,12 @@ import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 
 const FALLBACK_STAGES = ["Requirement", "Concept", "Design Dev", "Tech Drawings", "Review", "Signoff", "Procurement", "Execution", "Handover"];
-const TABS = ["Overview", "Phases", "Timeline", "Tasks", "Time", "Milestones", "Vendors", "Files", "Drawings", "Site visits", "Snags", "Invoices", "Approvals", "Activity"];
+const TABS = ["Overview", "Phases", "Timeline", "Tasks", "Time", "Milestones", "Vendors", "Files", "Drawings", "Selections", "Site visits", "Snags", "Invoices", "Approvals", "Activity"];
 // One project workspace, grouped the way a studio works on a job.
 export const PROJECT_TAB_GROUPS = [
   { id: "overview", label: "Overview", tabs: ["Overview", "Activity"] },
   { id: "work", label: "Work", tabs: ["Phases", "Timeline", "Tasks", "Time"] },
-  { id: "design", label: "Design", tabs: ["Drawings", "Files"] },
+  { id: "design", label: "Design", tabs: ["Drawings", "Selections", "Files"] },
   { id: "site", label: "Site", tabs: ["Site visits", "Snags"] },
   { id: "commercial", label: "Commercial", tabs: ["Milestones", "Invoices", "Vendors"] },
   { id: "client", label: "Client", tabs: ["Approvals"] },
@@ -631,6 +632,7 @@ export default function ProjectDetail() {
 
       {tab === "Drawings" && <ProjectDrawings projectId={id} projectName={p.name} files={p.files || []} onFilesChanged={load} />}
       {tab === "Approvals" && <ProjectApprovals projectId={id} files={p.files || []} />}
+      {tab === "Selections" && <ProjectSelections projectId={id} />}
       {tab === "Snags" && <ProjectSnags projectId={id} employees={employees} />}
       {tab === "Site visits" && <ProjectSiteVisits projectId={id} projectName={p.name} />}
 

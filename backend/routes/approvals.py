@@ -39,7 +39,8 @@ from models.base import FiniteModel
 
 router = APIRouter()
 
-KIND_LABEL = {"drawing": "Drawing", "variation": "Variation", "document": "Document"}
+KIND_LABEL = {"drawing": "Drawing", "variation": "Variation", "document": "Document",
+              "selection": "Selection", "quotation": "Quotation"}
 STATUS_LABEL = {"pending": "waiting for a decision", "approved": "approved",
                 "changes_requested": "sent back for changes", "withdrawn": "withdrawn",
                 "superseded": "replaced by a newer revision"}
@@ -56,6 +57,10 @@ class ApprovalIn(FiniteModel):
     file_id: Optional[str] = None
     amount: Optional[float] = Field(default=None, ge=-1e10, le=1e10)
     days: Optional[int] = Field(default=None, ge=-3650, le=3650)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class QuoteSendIn(FiniteModel):
     note: Optional[str] = Field(default=None, max_length=1000)
 
 
@@ -186,9 +191,82 @@ async def withdraw_approval(approval_id: str, request: Request, payload: Optiona
          "$push": {"history": _event("withdrawn", user.get("name"), reason)}})
     if not result.modified_count:
         raise HTTPException(status_code=409, detail=f"This request is already {STATUS_LABEL.get(a['status'], a['status'])}")
+    if a.get("kind") == "selection":
+        from routes.selections import reopen_after_withdraw
+        await reopen_after_withdraw(a)
+    elif a.get("kind") == "quotation":
+        await sdb.quotations_adv.update_one(
+            {"id": a.get("quotation_id"), "approval.client_approval_id": approval_id},
+            {"$set": {"approval.client_status": "withdrawn"}})
     await audit(user, "approval.withdraw", target=approval_id, target_type="approval",
                 meta={"project_id": a["project_id"], "title": a.get("title"), "reason": reason})
     return await sdb.approvals.find_one({"id": approval_id}, {"_id": 0})
+
+
+@router.post("/quotations-adv/{quotation_id}/send-for-acceptance")
+async def send_quotation_for_acceptance(quotation_id: str, request: Request,
+                                        payload: Optional[QuoteSendIn] = None,
+                                        session_token: Optional[str] = Cookie(default=None),
+                                        authorization: Optional[str] = Header(default=None)):
+    """Put this exact version of a quotation in the client portal for acceptance.
+
+    The quotation's existing approval model already had a client side that
+    nothing could fill ("Client decisions require a verified client approval
+    link"); a personal portal link is that verified link. The client accepts
+    or asks for changes; the decision names the person, and any later edit to
+    the quotation makes the pending request stale.
+    """
+    user = await require_user(request, session_token, authorization)
+    _require(user, "quotations.update")
+    q = await sdb.quotations_adv.find_one({"id": quotation_id}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="Quotation not found")
+    if q.get("status") == "converted" or q.get("converted_project_id"):
+        raise HTTPException(status_code=409, detail="This quotation is already converted into a project")
+    if not q.get("project_id"):
+        raise HTTPException(status_code=409, detail="Link this quotation to a project first: the client portal belongs to a project")
+    await get_visible_project(user, q["project_id"])
+    total = float((q.get("cost") or {}).get("grand_total") or 0)
+    if total <= 0:
+        raise HTTPException(status_code=409, detail="Add the quotation's items or fee first; its total is zero")
+    if not await sdb.portal_access.count_documents({"project_id": q["project_id"], "revoked_at": None}):
+        raise HTTPException(status_code=409, detail="Add a client contact under the project's Approvals first, so someone can accept")
+    pending = await sdb.approvals.find_one({"quotation_id": quotation_id, "status": "pending"}, {"_id": 0})
+    if pending and pending.get("quotation_updated_at") == q.get("updated_at"):
+        raise HTTPException(status_code=409, detail="This version is already waiting for the client")
+    now = iso_now()
+    if pending:
+        await sdb.approvals.update_many({"quotation_id": quotation_id, "status": "pending"},
+                                        {"$set": {"status": "superseded", "closed_at": now,
+                                                  "closed_reason": "A newer version was sent"}})
+    version = int(q.get("version") or 1)
+    note = _clean(payload.note if payload else None)
+    approval_id = new_id("apr_")
+    approval = dict(q.get("approval") or {})
+    if approval.get("internal_status") != "approved":
+        approval.update({"internal_status": "approved", "internal_at": now, "internal_by": user.get("name"),
+                         "internal_response": "Approved when sent to the client"})
+    approval.update({"client_status": "pending", "client_requested_at": now,
+                     "client_approval_id": approval_id, "client_by": None, "client_at": None,
+                     "client_response": None})
+    result = await sdb.quotations_adv.update_one(
+        {"id": quotation_id, "updated_at": q.get("updated_at"), "converted_project_id": None},
+        {"$set": {"approval": approval, "status": "sent", "updated_at": now}})
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
+    label = q.get("number") or "Quotation"
+    doc = {"id": approval_id, "project_id": q["project_id"], "kind": "quotation",
+           "quotation_id": quotation_id, "quotation_version": version, "quotation_updated_at": now,
+           "title": f"{label} v{version}: {q.get('project_title') or ''}".strip(": ")[:160],
+           "description": f"Total Rs. {total:,.2f} including tax. Open the PDF for the full scope, items and payment plan.",
+           "amount": round(total, 2), "note": note, "status": "pending", "requested_at": now,
+           "requested_by": user["user_id"], "requested_by_name": user.get("name"),
+           "history": [_event("requested", user.get("name"), note)]}
+    await sdb.approvals.insert_one(dict(doc))
+    await audit(user, "quotation.client.requested", target=quotation_id, target_type="quotation",
+                meta={"approval_id": approval_id, "version": version, "total": round(total, 2),
+                      "project_id": q["project_id"]})
+    return {"approval": doc, "quotation": await sdb.quotations_adv.find_one({"id": quotation_id}, {"_id": 0})}
 
 
 async def close_for_drawing(drawing_id: str, reason: str, rev: Optional[str] = None,
@@ -292,7 +370,11 @@ async def for_portal(database, ctx: dict, token: str) -> list[dict]:
     out = []
     for r in rows:
         item = {k: r.get(k) for k in keep}
-        item["file_url"] = _file_link(token, r, files.get(r.get("file_id")))
+        if r.get("kind") == "quotation":
+            item["file_url"] = f"/api/portal/{token}/approvals/{r['id']}/file"
+            item["file_name"] = f"{r.get('title') or 'Quotation'}.pdf"
+        else:
+            item["file_url"] = _file_link(token, r, files.get(r.get("file_id")))
         out.append(item)
     # waiting first (oldest first), then decided (newest first)
     pending = sorted([x for x in out if x["status"] == "pending"], key=lambda x: x.get("requested_at") or "")
@@ -307,6 +389,8 @@ async def portal_approval_file(token: str, approval_id: str):
     owned = {"project_id": ctx["project"]["id"], "org_id": ctx["org_id"]}
     a = await db.approvals.find_one({**owned, "id": approval_id, "status": {"$in": list(CLIENT_VISIBLE)}},
                                     {"_id": 0})
+    if a and a.get("kind") == "quotation":
+        return await _quotation_pdf(owned, a)
     if not a or not a.get("file_id"):
         raise HTTPException(status_code=404, detail="File not found")
     f = await db.files.find_one({**owned, "id": a["file_id"]}, {"_id": 0})
@@ -315,7 +399,8 @@ async def portal_approval_file(token: str, approval_id: str):
         d = await db.drawings.find_one({**owned, "id": a["drawing_id"]}, {"_id": 0, "revisions": 1})
         revs = (d or {}).get("revisions") or []
         current = revs[-1].get("rev") if revs else None
-        superseded = bool(current and current != a.get("rev"))
+        from routes.drawings import is_superseded_file
+        superseded = is_superseded_file(revs, a.get("rev"))
     from core.stamp import serve_drawing_file
     return await serve_drawing_file(f, current, superseded=superseded)
 
@@ -340,6 +425,19 @@ async def portal_decide(token: str, approval_id: str, payload: ClientDecisionIn)
     who = contact.get("name") or "Client"
     now = iso_now()
 
+    if a.get("kind") == "selection":
+        sel = await db.project_selections.find_one({**owned, "id": a.get("selection_id")}, {"_id": 0})
+        if not sel or sel.get("status") != "sent" or sel.get("approval_id") != approval_id:
+            await _supersede(owned, approval_id, now, "The selection changed before a decision was made")
+            raise HTTPException(status_code=409, detail="The studio has changed this selection since it was sent. They will share the latest version.")
+    quote = None
+    if a.get("kind") == "quotation":
+        quote = await db.quotations_adv.find_one({**owned, "id": a.get("quotation_id")}, {"_id": 0})
+        if (not quote or quote.get("converted_project_id")
+                or quote.get("updated_at") != a.get("quotation_updated_at")):
+            await _supersede(owned, approval_id, now, "The quotation changed before a decision was made")
+            raise HTTPException(status_code=409, detail="The studio has changed this quotation since it was sent. They will share the latest version.")
+
     drawing, index = None, None
     if a.get("kind") == "drawing":
         drawing = await db.drawings.find_one({**owned, "id": a.get("drawing_id")}, {"_id": 0})
@@ -363,6 +461,28 @@ async def portal_decide(token: str, approval_id: str, payload: ClientDecisionIn)
 
     actor = {"user_id": f"portal:{contact['id']}", "email": contact.get("email"), "role": "Client",
              "org_id": org_id, "name": who}
+    if a.get("kind") == "selection":
+        from routes.selections import apply_client_decision
+        if not await apply_client_decision(db, owned, a, status, who, comment, now):
+            await _supersede(owned, approval_id, now, "The selection changed before the decision was saved")
+            raise HTTPException(status_code=409, detail="The studio has changed this selection since it was sent. They will share the latest version.")
+    if quote is not None:
+        accepted = status == "approved"
+        written = await db.quotations_adv.update_one(
+            {**owned, "id": quote["id"], "updated_at": a.get("quotation_updated_at"), "converted_project_id": None},
+            {"$set": {"approval.client_status": "approved" if accepted else "changes_requested",
+                      "approval.client_at": now, "approval.client_by": who,
+                      "approval.client_by_email": contact.get("email"),
+                      "approval.client_response": comment, "approval.client_version": a.get("quotation_version"),
+                      "approval.client_total": a.get("amount"),
+                      "status": "approved" if accepted else "under_review", "updated_at": now}})
+        if not written.modified_count:
+            await _supersede(owned, approval_id, now, "The quotation changed before the decision was saved")
+            raise HTTPException(status_code=409, detail="The studio has changed this quotation since it was sent. They will share the latest version.")
+        await audit(actor, f"quotation.client.{'accepted' if accepted else 'changes_requested'}",
+                    target=quote["id"], target_type="quotation", org_id=org_id,
+                    meta={"version": a.get("quotation_version"), "total": a.get("amount"),
+                          "comment": comment, "by": who, "approval_id": approval_id})
     if drawing is not None:
         i = index
         written = await db.drawings.update_one(
@@ -396,3 +516,32 @@ async def portal_decide(token: str, approval_id: str, payload: ClientDecisionIn)
     except Exception:  # noqa: BLE001 - a missed bell must not undo the decision
         pass
     return {"ok": True, "status": status}
+
+
+async def _supersede(owned: dict, approval_id: str, now: str, reason: str) -> None:
+    await db.approvals.update_one(
+        {**owned, "id": approval_id, "status": {"$in": ["pending", "approved", "changes_requested"]}},
+        {"$set": {"status": "superseded", "closed_at": now, "closed_reason": reason}})
+
+
+async def _quotation_pdf(owned: dict, a: dict):
+    """The quotation being decided, as the PDF the studio would send."""
+    import io
+    from fastapi.responses import StreamingResponse
+    from core.downloads import content_disposition
+    q = await db.quotations_adv.find_one({**owned, "id": a.get("quotation_id")}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="File not found")
+    if a.get("status") == "pending" and q.get("updated_at") != a.get("quotation_updated_at"):
+        raise HTTPException(status_code=409, detail="The studio has changed this quotation since it was sent. They will share the latest version.")
+    org = await db.organizations.find_one({"org_id": owned["org_id"]}, {"_id": 0})
+    if q.get("type") == "consultancy" and q.get("proposal"):
+        from core.consultancy_proposal import generate_proposal_pdf
+        pdf_bytes = generate_proposal_pdf(q, org)
+    else:
+        from server import generate_quotation_pdf_adv
+        pdf_bytes = generate_quotation_pdf_adv(q, org)
+    name = f'{q.get("number") or "quotation"}-v{a.get("quotation_version") or 1}.pdf'
+    return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf",
+                             headers={"Content-Disposition": content_disposition("inline", name, "quotation.pdf"),
+                                      "Cache-Control": "private, no-store"})

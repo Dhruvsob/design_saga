@@ -8,6 +8,11 @@ Lifecycle of a revision: issued (for review / approval / construction / as
 built) -> approved | rejected | commented. Issuing a new revision supersedes
 the previous one; history is never rewritten. A drawing with issued
 revisions is archived, not deleted.
+
+Site copy: the latest revision issued for construction (or as built) stays
+what the site builds from until a newer construction revision is issued. A
+later revision issued only for review, approval or information does not
+supersede it, so an unapproved draft never silently replaces the GFC sheet.
 """
 import re
 from datetime import date as _date
@@ -95,10 +100,32 @@ def _clean_number(raw: str) -> str:
     return number
 
 
+SITE_PURPOSES = ("construction", "as_built")
+
+
+def site_copy(revs: list[dict]) -> Optional[dict]:
+    """The revision the site should use: the latest construction / as-built
+    issue that no later construction issue has replaced."""
+    for r in reversed(revs or []):
+        if r.get("purpose") in SITE_PURPOSES and r.get("status") not in ("superseded", "rejected"):
+            return r
+    return None
+
+
+def is_superseded_file(revs: list[dict], rev: Optional[str]) -> bool:
+    """Stamp a sheet SUPERSEDED unless it is the latest revision or the site copy."""
+    if not revs or not rev:
+        return False
+    site = site_copy(revs)
+    return rev != revs[-1].get("rev") and rev != (site or {}).get("rev")
+
+
 def _shape(d: dict) -> dict:
     revs = d.get("revisions") or []
     current = revs[-1] if revs else None
-    return {**d, "current": current, "revision_count": len(revs)}
+    site = site_copy(revs)
+    return {**d, "current": current, "revision_count": len(revs),
+            "site_copy": site, "site_copy_differs": bool(site and current and site.get("rev") != current.get("rev"))}
 
 
 async def _drawing(user: dict, drawing_id: str, perm: str) -> dict:
@@ -128,7 +155,7 @@ async def list_drawings(project_id: str, request: Request, include_archived: boo
             counts["approved"] += 1
         if cur.get("status") == "issued" and cur.get("purpose") in ("review", "approval"):
             counts["awaiting"] += 1
-        if cur.get("purpose") == "construction":
+        if d.get("site_copy"):
             counts["construction"] += 1
     return {"drawings": shaped, "counts": counts, "purposes": PURPOSES, "disciplines": list(DISCIPLINES)}
 
@@ -223,8 +250,14 @@ async def issue_revision(drawing_id: str, payload: RevisionIn, request: Request,
            "created_at": iso_now(), "created_by": user["user_id"], "created_by_name": user.get("name")}
     # Compare-and-set on the revision count so two people cannot issue the same letter.
     new_revs = [dict(r) for r in revs]
-    if new_revs:
-        prev = new_revs[-1]
+    for_site = payload.purpose in SITE_PURPOSES
+    for prev in new_revs:
+        if prev.get("superseded_by") or prev.get("status") == "superseded":
+            continue
+        # A review/approval/information issue replaces earlier drafts but
+        # leaves the construction set in force until a new one is issued.
+        if prev.get("purpose") in SITE_PURPOSES and prev.get("status") != "rejected" and not for_site:
+            continue
         prev["superseded_by"] = rev["rev"]
         if prev.get("status") != "rejected":
             prev["status"] = "superseded"
@@ -287,7 +320,7 @@ async def revision_file(drawing_id: str, rev: str, request: Request,
     f = await sdb.files.find_one({"id": r["file_id"], "project_id": d["project_id"]}, {"_id": 0})
     from core.stamp import serve_drawing_file
     current = revs[-1].get("rev")
-    return await serve_drawing_file(f, current, superseded=r["rev"] != current)
+    return await serve_drawing_file(f, current, superseded=is_superseded_file(revs, r["rev"]))
 
 
 @router.get("/projects/{project_id}/drawings/register.xlsx")

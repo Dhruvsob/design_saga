@@ -36,3 +36,18 @@ export function normalizeErrorDetail(error) {
   }
   return error;
 }
+
+// One entry per problem for ErrorSummary: field-level validation errors keep
+// their field name (so the summary can jump to it); anything else is one line.
+export function errorItems(error, fallback = "Something went wrong. Please try again.") {
+  const data = error?.response?.data;
+  const list = Array.isArray(data?.errors) ? data.errors : Array.isArray(data?.detail) ? data.detail : null;
+  if (list && list.length) {
+    return list.map((x) => {
+      const loc = Array.isArray(x?.loc) ? x.loc : [];
+      const field = [...loc].reverse().find((p) => typeof p === "string" && p !== "body") || null;
+      return { field, text: String(x?.msg || x).replace(/^Value error, /, "") };
+    });
+  }
+  return [{ field: null, text: errText(error, fallback) }];
+}

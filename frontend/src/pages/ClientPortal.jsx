@@ -5,7 +5,8 @@ import api, { API } from "../lib/api";
 import { safeExternalUrl, safeFileUrl } from "../lib/url";
 import { formatDate, formatINR, statusLabel } from "../lib/format";
 
-const KIND = { drawing: "Drawing", variation: "Change to the work", document: "Document" };
+const KIND = { drawing: "Drawing", variation: "Change to the work", document: "Document",
+  selection: "Material or finish", quotation: "Quotation" };
 const DECIDED = {
   approved: ["Approved", "chip-paid"],
   changes_requested: ["Changes asked", "chip-overdue"],

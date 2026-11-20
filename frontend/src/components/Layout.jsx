@@ -304,24 +304,26 @@ export default function Layout({ children }) {
             <List size={18} />
           </button>
           {/* breadcrumb */}
-          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-3 text-sm text-[var(--ink-2)]" data-testid="breadcrumb">
-            <NavLink to="/dashboard" className="text-[var(--ink-3)] hover:text-[var(--ink)] hover:underline underline-offset-4" data-testid="crumb-home">{brandName}</NavLink>
+          {/* At tablet width the crumbs truncate instead of pushing the bell and
+              lock off the screen (8-91 px overflow at 768 px before). */}
+          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-3 min-w-0 shrink text-sm text-[var(--ink-2)] whitespace-nowrap" data-testid="breadcrumb">
+            <NavLink to="/dashboard" className="truncate max-w-[9rem] xl:max-w-[16rem] text-[var(--ink-3)] hover:text-[var(--ink)] hover:underline underline-offset-4" data-testid="crumb-home" title={brandName}>{brandName}</NavLink>
             {currentGroup?.label && currentGroup.label !== currentNav?.label && (
-              <>
-                <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
+              <span className="hidden xl:contents">
+                <CaretRight size={10} className="text-[var(--ink-3)] shrink-0" aria-hidden="true" />
                 <span>{currentGroup.label}</span>
-              </>
+              </span>
             )}
-            <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
+            <CaretRight size={10} className="text-[var(--ink-3)] shrink-0" aria-hidden="true" />
             {currentNav && location.pathname !== currentNav.to ? (
               <>
                 {/* on a detail page the list name links back to the list */}
-                <NavLink to={currentNav.to} end className="hover:text-[var(--ink)] hover:underline underline-offset-4" data-testid="crumb-list">{currentNav.label}</NavLink>
-                <CaretRight size={10} className="text-[var(--ink-3)]" aria-hidden="true" />
-                <span className="text-[var(--ink)] font-semibold" aria-current="page">{SUB_PAGES[location.pathname] || "Details"}</span>
+                <NavLink to={currentNav.to} end className="truncate hover:text-[var(--ink)] hover:underline underline-offset-4" data-testid="crumb-list">{currentNav.label}</NavLink>
+                <CaretRight size={10} className="text-[var(--ink-3)] shrink-0" aria-hidden="true" />
+                <span className="truncate text-[var(--ink)] font-semibold" aria-current="page">{SUB_PAGES[location.pathname] || "Details"}</span>
               </>
             ) : (
-              <span className="text-[var(--ink)] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
+              <span className="truncate text-[var(--ink)] font-semibold" aria-current="page">{currentNav?.label || "Page"}</span>
             )}
           </nav>
 
@@ -338,7 +340,7 @@ export default function Layout({ children }) {
             <kbd className="hidden md:inline-block px-1.5 py-0.5 rounded bg-[var(--hover)] border border-[var(--line)] font-mono text-[10px] text-[var(--ink-2)]">⌘K</kbd>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="hidden xl:block text-xs text-[var(--ink-3)] tabular whitespace-nowrap">
               {formatDate(now)} · {fmtClock(now)}
             </div>

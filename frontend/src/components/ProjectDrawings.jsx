@@ -197,7 +197,16 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
                   <td className="p-3 font-mono font-semibold whitespace-nowrap">{d.number}</td>
                   <td className="p-3"><div className="font-semibold">{d.title}</div>
                     <div className="text-xs text-[var(--ink-3)]">{d.discipline}{d.scale ? ` · ${d.scale}` : ""}</div></td>
-                  <td className="p-3 font-mono">{cur ? cur.rev : "—"}{d.revision_count > 1 && <span className="text-[10px] text-[var(--ink-3)]"> of {d.revision_count}</span>}</td>
+                  <td className="p-3 font-mono">{cur ? cur.rev : "—"}{d.revision_count > 1 && <span className="text-[10px] text-[var(--ink-3)]"> of {d.revision_count}</span>}
+                    {/* A newer draft does not replace the construction set: say which sheet the site uses. */}
+                    {d.site_copy_differs && (
+                      <a href={`/api/drawings/${d.id}/revisions/${d.site_copy.rev}/file`} target="_blank" rel="noreferrer"
+                         className="block mt-1 font-sans text-[11px] font-semibold text-[var(--success)] hover:underline whitespace-nowrap"
+                         data-testid={`drawing-site-copy-${d.number}`}>
+                        On site: rev {d.site_copy.rev} ({purposes[d.site_copy.purpose] || d.site_copy.purpose})
+                      </a>
+                    )}
+                  </td>
                   <td className="p-3 text-xs">{cur ? purposes[cur.purpose] || cur.purpose : "—"}{cur?.issued_to && <div className="text-[var(--ink-3)]">to {cur.issued_to}</div>}</td>
                   <td className="p-3"><Chip status={cur?.status} />
                     {cur && waiting[`${d.id}:${cur.rev}`] && <div className="text-[10px] font-semibold text-[var(--accent-strong)] mt-1" data-testid={`drawing-waiting-${d.number}`}>Waiting for client</div>}
@@ -213,6 +222,8 @@ export default function ProjectDrawings({ projectId, projectName, files = [], on
                     <RowActions label={`drawing ${d.number}`} testid={`drawing-actions-${d.number}`} actions={[
                       { label: "Preview", icon: Eye, hidden: !cur || !url, onSelect: () => showRev(d, cur), testid: `drawing-preview-${d.number}` },
                       { label: "Open current PDF", icon: ArrowSquareOut, hidden: !url, onSelect: () => window.open(url, "_blank", "noopener") },
+                      { label: `Open site copy (rev ${d.site_copy?.rev})`, icon: ArrowSquareOut, hidden: !d.site_copy_differs,
+                        onSelect: () => window.open(`/api/drawings/${d.id}/revisions/${d.site_copy.rev}/file`, "_blank", "noopener") },
                       { label: "Ask client to approve", icon: PaperPlaneTilt, hidden: !(canDecide && cur?.status === "issued" && !d.archived && !waiting[`${d.id}:${cur.rev}`]), onSelect: () => askClient(d), testid: `drawing-ask-client-${d.number}` },
                       { label: "Approve", icon: CheckCircle, hidden: !(canDecide && cur?.status === "issued"), onSelect: () => decide(d, "approved"), testid: `drawing-approve-${d.number}` },
                       { label: "Ask for changes", icon: XCircle, hidden: !(canDecide && cur?.status === "issued"), onSelect: () => decide(d, "rejected") },
@@ -302,7 +313,20 @@ function IssueRevision({ drawing, projectId, files, purposes, onClose, onDone })
   return (
     <Modal title={`Issue ${drawing.number} rev ${rev}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3" data-testid="drawing-issue-form">
-        {drawing.current && <p className="text-xs text-[var(--ink-2)]">Rev {drawing.current.rev} will be marked superseded. Its file and history stay.</p>}
+        {drawing.current && (() => {
+          // Mirrors routes/drawings.py: a review/approval issue leaves the construction set in force.
+          const site = drawing.site_copy;
+          const forSite = ["construction", "as_built"].includes(form.purpose);
+          if (site && !forSite) {
+            return (
+              <p className="text-xs text-[var(--ink-2)]" data-testid="drawing-issue-impact">
+                Rev {site.rev} stays the site copy ({purposes[site.purpose] || site.purpose}) until a revision is issued for construction.
+                {drawing.current.rev !== site.rev ? ` Rev ${drawing.current.rev} will be marked superseded.` : ""} Files and history stay.
+              </p>
+            );
+          }
+          return <p className="text-xs text-[var(--ink-2)]" data-testid="drawing-issue-impact">Rev {drawing.current.rev} will be marked superseded{site && site.rev !== drawing.current.rev ? `, and so will site copy rev ${site.rev}` : ""}. Its file and history stay.</p>;
+        })()}
         <div className="flex gap-3 text-sm">
           <label className="flex items-center gap-1"><input type="radio" checked={mode === "upload"} onChange={() => setMode("upload")} /> Upload file</label>
           <label className="flex items-center gap-1"><input type="radio" checked={mode === "existing"} onChange={() => setMode("existing")} disabled={!files.length} /> Use a project file</label>

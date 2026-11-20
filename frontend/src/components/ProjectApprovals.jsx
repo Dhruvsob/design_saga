@@ -10,7 +10,7 @@ import { formatDate, formatINR } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import RowActions from "./RowActions";
 
-const KIND = { drawing: "Drawing", variation: "Variation", document: "Document" };
+const KIND = { drawing: "Drawing", variation: "Variation", document: "Document", selection: "Selection", quotation: "Quotation" };
 export const APPROVAL_STATUS = {
   pending: ["Waiting for client", "chip-sent"],
   approved: ["Approved by client", "chip-paid"],
@@ -212,6 +212,7 @@ export default function ProjectApprovals({ projectId, files = [], onCount }) {
                     <div className="font-semibold mt-1 [overflow-wrap:anywhere]">{a.title}</div>
                     <div className="text-xs text-[var(--ink-2)]">
                       {a.kind === "variation" && <span className="font-mono">{signed(Number(a.amount || 0))}{a.days ? ` · ${a.days > 0 ? "+" : ""}${a.days} days` : ""} · </span>}
+                      {a.kind === "quotation" && <span className="font-mono">Total {formatINR(Number(a.amount || 0))} · </span>}
                       Sent {formatDate(a.requested_at)} by {a.requested_by_name || "—"}
                       {file && <> · <a className="text-[var(--accent-strong)] hover:underline" href={file} target="_blank" rel="noreferrer">{a.file_name || "file"}</a></>}
                     </div>

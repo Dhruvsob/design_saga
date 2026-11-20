@@ -107,6 +107,7 @@ async def monthly_summary(emp: dict, year: int, month: int,
         "present", "late", "late_pending", "late_rejected", "half_day", "absent",
         "paid_leave", "unpaid_leave", "week_off", "holidays", "site_visit",
         "auto_paid_leave", "working_days", "total_working_minutes",
+        "not_employed",
     ]}
     daily = []
     payable = 0.0
@@ -130,13 +131,21 @@ async def monthly_summary(emp: dict, year: int, month: int,
         is_weekly_off = cur.weekday() in weekly_offs
         is_holiday = iso_d in holiday_dates or rstatus == "holiday"
         worked = rec is not None and rstatus in WORKED_STATUSES
+        # Days before joining or after the exit date are not paid, whatever
+        # the calendar says. Sundays and holidays outside the employment
+        # window used to count as paid weekly-offs, overpaying anyone who
+        # joined or left mid-month (e.g. Rs. 5,667 on Rs. 85,000 for two
+        # Sundays before a 16 Oct joining).
+        outside_employment = bool((join_iso and iso_d < join_iso) or (exit_iso and iso_d > exit_iso))
 
-        # Precedence: worked > holiday > weekly-off > leave > absent > upcoming
+        # Precedence: worked > outside employment > holiday > weekly-off > leave > absent > upcoming
         # Rule: first absence each month is auto-converted to free paid leave when
         # the monthly allowance has not yet been consumed by an approved leave.
         auto_pl = False   # True when this absent day is auto-converted to paid leave
         if worked:
             status = rstatus
+        elif outside_employment:
+            status = "absent"
         elif is_holiday:
             status = "holiday"
         elif is_weekly_off or rstatus == "week_off":
@@ -220,6 +229,8 @@ async def monthly_summary(emp: dict, year: int, month: int,
             payable += 1
         elif status == "absent":
             summary["absent"] += 1
+            if outside_employment:
+                summary["not_employed"] += 1
             lop += 1
         # "upcoming" contributes nothing
 
@@ -240,6 +251,7 @@ async def monthly_summary(emp: dict, year: int, month: int,
             "check_out": _hhmm_ist(co),
             "working_minutes": wm,
             "status": status,
+            "outside_employment": outside_employment and not worked,
             "auto_paid_leave": auto_pl,
             "late_minutes": (rec or {}).get("late_minutes") or 0,
             "late_reason": (rec or {}).get("late_reason"),

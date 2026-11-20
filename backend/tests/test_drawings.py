@@ -77,8 +77,22 @@ def test_register_lifecycle(monkeypatch):
                 await dr.decide_revision(d["id"], "A", dr.DecisionIn(decision="approved"), None)
             ok = await dr.decide_revision(d["id"], "b", dr.DecisionIn(decision="approved"), None)
             assert ok["current"]["status"] == "approved" and ok["current"]["decided_by_name"] == "Architect"
+            # A newer revision for review (C) must not silently replace the
+            # approved construction set (B): the site keeps building from B.
             c = await dr.issue_revision(d["id"], dr.RevisionIn(file_id=f"f2_{org}"), None)
-            assert c["revisions"][1]["status"] == "superseded" and c["current"]["rev"] == "C"
+            assert c["current"]["rev"] == "C" and c["current"]["purpose"] == "review"
+            assert c["revisions"][1]["status"] == "approved" and not c["revisions"][1].get("superseded_by")
+            assert c["site_copy"]["rev"] == "B" and c["site_copy_differs"] is True
+            assert dr.is_superseded_file(c["revisions"], "B") is False
+            assert dr.is_superseded_file(c["revisions"], "A") is True
+            listed = await dr.list_drawings("prj_1", None)
+            assert listed["counts"]["construction"] == 1
+            # Issuing D for construction replaces both B and the C draft.
+            dd = await dr.issue_revision(d["id"], dr.RevisionIn(file_id=f"f2_{org}", purpose="construction"), None)
+            assert [x["status"] for x in dd["revisions"]] == ["rejected", "superseded", "superseded", "issued"]
+            assert dd["revisions"][1]["superseded_by"] == "D" and dd["site_copy"]["rev"] == "D"
+            assert dd["site_copy_differs"] is False
+            assert dr.is_superseded_file(dd["revisions"], "B") is True
 
             with pytest.raises(HTTPException):     # number fixed once issued
                 await dr.update_drawing(d["id"], dr.DrawingUpdate(number="A-102"), None)
@@ -88,7 +102,7 @@ def test_register_lifecycle(monkeypatch):
             listed = await dr.list_drawings("prj_1", None)
             assert listed["drawings"] == []
             listed = await dr.list_drawings("prj_1", None, include_archived=True)
-            assert listed["drawings"][0]["revision_count"] == 3
+            assert listed["drawings"][0]["revision_count"] == 4
 
             draft = await dr.create_drawing("prj_1", dr.DrawingIn(number="ID-01", title="Ceiling", discipline="Interior"), None)
             await dr.delete_drawing(draft["id"], None)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { formatINR } from "../lib/format";
+import { formatDate, formatINR } from "../lib/format";
+import { errText } from "../lib/errors";
 import { toast } from "sonner";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { API } from "../lib/api";
@@ -82,6 +83,24 @@ export default function QuotationBuilder() {
   const setStatus = async (status) => {
     await api.post(`/quotations-adv/${id}/status`, { status });
     load();
+  };
+
+  // Puts this exact version in the project's client portal; the client accepts
+  // or asks for changes with their personal link, and the decision names them.
+  const sendForAcceptance = async () => {
+    if (dirty) { toast.error("Save your changes first, so the client sees this version."); return; }
+    const v = await askForm({
+      title: "Send to the client for acceptance",
+      body: "The client sees this version (PDF and total) in the project's portal and can accept it or ask for changes. If you edit the quotation afterwards, the request closes and you send the new version.",
+      fields: [{ name: "note", label: "Message to the client (optional)", multiline: true, placeholder: "Revised after our site meeting" }],
+      confirmLabel: "Send to client",
+    });
+    if (!v) return;
+    try {
+      await api.post(`/quotations-adv/${id}/send-for-acceptance`, { note: v.note || null });
+      toast.success("Sent to the client portal");
+      load();
+    } catch (e) { toast.error(errText(e, "Could not send the quotation")); }
   };
 
   const newVersion = async () => {
@@ -216,10 +235,14 @@ export default function QuotationBuilder() {
         </button>}
         {canUpdate && ["draft", "rejected"].includes(q.status) && <button onClick={() => setStatus("sent")} className="btn-ghost">Mark sent</button>}
         {canUpdate && ["sent", "rejected"].includes(q.status) && <button onClick={() => setStatus("approved")} className="btn-ghost">Mark approved</button>}
+        {canUpdate && q.status !== "converted" && <button onClick={sendForAcceptance} className="btn-ghost" data-testid="send-for-acceptance">
+          <CheckCircle size={14} /> Send to client for acceptance
+        </button>}
         {canConvert && ["approved", "sent", "under_review"].includes(q.status) && <button onClick={convert} className="btn-ghost">
           <ArrowRight size={14} /> Convert to project
         </button>}
       </div>
+      <ClientAcceptance approval={q.approval} />
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 border-b border-[var(--line)]">
@@ -895,4 +918,22 @@ function Row({ label, val }) {
       <span className="font-mono">{fmt(val)}</span>
     </div>
   );
+}
+
+function ClientAcceptance({ approval }) {
+  const a = approval || {};
+  if (!a.client_status) return null;
+  const by = a.client_by || "The client";
+  const text = {
+    pending: `Waiting for the client to accept in the portal (sent ${formatDate(a.client_requested_at)}).`,
+    approved: `Accepted by ${by} on ${formatDate(a.client_at)}: version ${a.client_version || "-"}, ${formatINR(a.client_total || 0)}.`,
+    changes_requested: `${by} asked for changes on ${formatDate(a.client_at)}${a.client_response ? `: "${a.client_response}"` : "."}`,
+    superseded: "The quotation changed after it was sent, so the client's request closed. Send this version again when it is ready.",
+    withdrawn: "The request to the client was withdrawn.",
+  }[a.client_status];
+  if (!text) return null;
+  const tone = a.client_status === "approved" ? "border-[var(--success)] text-[var(--success)]"
+    : a.client_status === "changes_requested" ? "border-[var(--danger)] text-[var(--danger)]"
+      : "border-[var(--line-strong)] text-[var(--ink-2)]";
+  return <p className={`border-l-4 pl-3 text-sm ${tone}`} role="status" data-testid="client-acceptance">{text}</p>;
 }

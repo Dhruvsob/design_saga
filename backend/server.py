@@ -3608,6 +3608,17 @@ QUOTATION_STATUS_TRANSITIONS = {
 }
 
 
+async def _close_client_quote_requests(qid: str, reason: str) -> None:
+    """A client must never accept a version that has since changed: close any
+    pending portal request for this quotation (routes/approvals.py)."""
+    res = await sdb.approvals.update_many(
+        {"quotation_id": qid, "status": "pending"},
+        {"$set": {"status": "superseded", "closed_at": iso(now_utc()), "closed_reason": reason}})
+    if res.modified_count:
+        await sdb.quotations_adv.update_one({"id": qid, "approval.client_status": "pending"},
+                                            {"$set": {"approval.client_status": "superseded"}})
+
+
 def _ensure_quotation_mutable(doc: dict):
     if doc.get("status") == "converted" or doc.get("converted_project_id"):
         raise HTTPException(
@@ -3749,6 +3760,7 @@ async def adv_update(qid: str, payload: QuotationUpdate, request: Request,
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     await audit_log(user, "quotation.update", target=qid, target_type="quotation",
                     meta={"fields": sorted(update.keys())})
+    await _close_client_quote_requests(qid, "The studio edited the quotation after sending it")
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3772,6 +3784,10 @@ async def adv_delete(qid: str, request: Request, session_token: Optional[str] = 
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     await audit_log(user, "quotation.delete", target=qid, target_type="quotation",
                     meta={"number": doc.get("number")})
+    await sdb.approvals.update_many(
+        {"quotation_id": qid, "status": "pending"},
+        {"$set": {"status": "withdrawn", "closed_at": iso(now_utc()),
+                  "closed_reason": "The studio deleted the quotation"}})
     return {"ok": True}
 
 
@@ -3800,6 +3816,7 @@ async def adv_status(qid: str, payload: StatusUpdate, request: Request,
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
     await audit_log(user, "quotation.status", target=qid, target_type="quotation",
                     meta={"from": current, "to": payload.status})
+    await _close_client_quote_requests(qid, f"The studio marked the quotation {payload.status}")
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
 
 
@@ -3900,6 +3917,7 @@ async def adv_new_version(qid: str, request: Request, session_token: Optional[st
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=409, detail="Quotation changed; refresh and retry")
+    await _close_client_quote_requests(qid, "A newer version of the quotation was made")
     await audit_log(user, "quotation.version", target=qid, target_type="quotation",
                     meta={"from": src.get("version", 1), "to": new_v})
     return await sdb.quotations_adv.find_one({"id": qid}, {"_id": 0})
@@ -4195,6 +4213,18 @@ async def adv_ai_suggest(qid: str, request: Request, session_token: Optional[str
 
 
 # ---------- Premium PDF ----------
+def _amount(value) -> str:
+    """Indian grouping with paise, no currency prefix (table columns say Rs.)."""
+    return _inr(value).replace("Rs. ", "")
+
+
+def _client_rate(item: dict) -> float:
+    """Rate the client pays per unit: the studio's rate with its margin included."""
+    from core.money import percent_of, round_paise, to_decimal
+    rate = round_paise(to_decimal(item.get("rate", 0) or 0))
+    return float(rate + percent_of(rate, item.get("margin_pct", 0) or 0))
+
+
 def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
     from core.pdf_brand import Brand, BrandedPDF, draw_letterhead, draw_bank_block
     brand = Brand(org)
@@ -4369,23 +4399,20 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
             pdf.cell(0, 9, _safe("Line items, fully detailed."), ln=1)
         hr()
 
+        # The client copy shows the selling rate (margin included) and never
+        # the studio's margin column: the PDF is what the client receives.
+        # Long descriptions wrap instead of being cut at 55 characters.
+        widths = (95, 18, 17, 25, 25)
+
         def boq_header():
             pdf.set_font("Helvetica", "B", 8)
             pdf.set_fill_color(*klein)
             pdf.set_text_color(255, 255, 255)
-            if is_consult:
-                pdf.cell(95, 7, " Professional Service", 0, 0, "L", fill=True)
-                pdf.cell(20, 7, "Unit", 0, 0, "C", fill=True)
-                pdf.cell(18, 7, "Qty", 0, 0, "R", fill=True)
-                pdf.cell(25, 7, "Rate", 0, 0, "R", fill=True)
-                pdf.cell(22, 7, "Amount", 0, 1, "R", fill=True)
-            else:
-                pdf.cell(80, 7, " Description", 0, 0, "L", fill=True)
-                pdf.cell(20, 7, "Unit", 0, 0, "C", fill=True)
-                pdf.cell(18, 7, "Qty", 0, 0, "R", fill=True)
-                pdf.cell(25, 7, "Rate", 0, 0, "R", fill=True)
-                pdf.cell(15, 7, "Mgn%", 0, 0, "R", fill=True)
-                pdf.cell(22, 7, "Amount", 0, 1, "R", fill=True)
+            first = " Professional Service" if is_consult else " Description"
+            for w, label, align in zip(widths, (first, "Unit", "Qty", "Rate (Rs.)", "Amount (Rs.)"),
+                                       ("L", "C", "R", "R", "R")):
+                pdf.cell(w, 7, label, 0, 0, align, fill=True)
+            pdf.ln(7)
             pdf.set_text_color(*ink)
 
         def boq_room(height):
@@ -4400,27 +4427,24 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
             pdf.set_font("Helvetica", "B", 10)
             pdf.set_fill_color(245, 245, 245)
             pdf.cell(0, 6, _safe(f"  {cat.get('category', 'Misc')}"), 0, 1, "L", fill=True)
-            pdf.set_font("Helvetica", "", 9)
             for it in cat.get("items", []):
-                boq_room(6)
                 pdf.set_font("Helvetica", "", 9)
-                if is_consult:
-                    pdf.cell(95, 6, _safe(it.get("description", ""))[:65], 0, 0, "L")
-                    pdf.cell(20, 6, _safe(it.get("unit", "")), 0, 0, "C")
-                    pdf.cell(18, 6, f"{it.get('quantity', 0):g}", 0, 0, "R")
-                    pdf.cell(25, 6, f"{it.get('rate', 0):,.0f}", 0, 0, "R")
-                    pdf.cell(22, 6, f"{it.get('amount', 0):,.0f}", 0, 1, "R")
-                else:
-                    pdf.cell(80, 6, _safe(it.get("description", ""))[:55], 0, 0, "L")
-                    pdf.cell(20, 6, _safe(it.get("unit", "")), 0, 0, "C")
-                    pdf.cell(18, 6, f"{it.get('quantity', 0):g}", 0, 0, "R")
-                    pdf.cell(25, 6, f"{it.get('rate', 0):,.0f}", 0, 0, "R")
-                    pdf.cell(15, 6, f"{it.get('margin_pct', 0):g}", 0, 0, "R")
-                    pdf.cell(22, 6, f"{it.get('amount', 0):,.0f}", 0, 1, "R")
+                desc = " " + (_safe(it.get("description", "")) or "-")[:600]
+                lines = pdf.multi_cell(widths[0], 5, desc, dry_run=True, output="LINES")
+                row_h = max(6, 5 * len(lines))
+                boq_room(row_h)
+                x, y = pdf.get_x(), pdf.get_y()
+                pdf.multi_cell(widths[0], 5, desc, 0, "L")
+                pdf.set_xy(x + widths[0], y)
+                pdf.cell(widths[1], 5, _safe(it.get("unit", "")), 0, 0, "C")
+                pdf.cell(widths[2], 5, f"{float(it.get('quantity') or 0):g}", 0, 0, "R")
+                pdf.cell(widths[3], 5, _amount(_client_rate(it)), 0, 0, "R")
+                pdf.cell(widths[4], 5, _amount(it.get("amount")), 0, 0, "R")
+                pdf.set_xy(x, y + row_h)
             boq_room(6)
             pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(158, 6, _safe(f"Sub-total: {cat.get('category')}"), 0, 0, "R")
-            pdf.cell(22, 6, f"{cat.get('category_total', 0):,.0f}", 0, 1, "R")
+            pdf.cell(sum(widths[:4]), 6, _safe(f"Sub-total: {cat.get('category')}"), 0, 0, "R")
+            pdf.cell(widths[4], 6, _amount(cat.get("category_total")), 0, 1, "R")
             grand += cat.get("category_total", 0)
             pdf.ln(2)
 
@@ -4439,7 +4463,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.set_font("Helvetica", "", 10)
         for r in doc.get("room_totals", []):
             pdf.cell(120, 6, _safe(f"  {r.get('room')}"), 0, 0, "L")
-            pdf.cell(60, 6, f"{r.get('total', 0):,.0f}", 0, 1, "R")
+            pdf.cell(60, 6, _amount(r.get("total")), 0, 1, "R")
 
     # ============ MATERIALS ============
     if doc.get("materials") and not is_consult:
@@ -4480,7 +4504,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.set_font("Helvetica", "", 11)
         for label, val in rows:
             pdf.cell(140, 7, _safe(label), 0, 0, "R")
-            pdf.cell(40, 7, f"{val:,.0f}", 0, 1, "R")
+            pdf.cell(40, 7, _amount(val), 0, 1, "R")
         pdf.set_draw_color(*ink)
         pdf.set_line_width(0.4)
         pdf.line(15, pdf.get_y(), 195, pdf.get_y())
@@ -4488,7 +4512,7 @@ def generate_quotation_pdf_adv(doc: dict, org: Optional[dict] = None) -> bytes:
         pdf.set_font("Helvetica", "B", 14)
         pdf.cell(140, 9, "GRAND TOTAL", 0, 0, "R")
         pdf.set_text_color(*klein)
-        pdf.cell(40, 9, f"{cost.get('grand_total', 0):,.0f}", 0, 1, "R")
+        pdf.cell(40, 9, _safe(_inr(cost.get("grand_total"))), 0, 1, "R")
         pdf.set_text_color(*ink)
 
     # ============ PAYMENT PLAN ============
@@ -5912,6 +5936,7 @@ from routes.approvals import router as approvals_router, for_portal as portal_ap
 from routes.transmittals import router as transmittals_router, for_portal as portal_transmittals  # noqa: E402
 from routes.capacity import router as capacity_router  # noqa: E402
 from routes.products import router as products_router  # noqa: E402
+from routes.selections import router as selections_router  # noqa: E402
 from core import portal as client_portal  # noqa: E402
 from routes.loans import router as loans_router  # noqa: E402
 from routes.audit import router as audit_router  # noqa: E402
@@ -5942,6 +5967,7 @@ api.include_router(platform_billing_router)
 api.include_router(timesheets_router)
 api.include_router(timeline_router)
 api.include_router(approvals_router)
+api.include_router(selections_router)
 api.include_router(transmittals_router)
 api.include_router(capacity_router)
 api.include_router(products_router)

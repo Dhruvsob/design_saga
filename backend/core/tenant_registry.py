@@ -17,6 +17,7 @@ TENANT_COLLECTIONS = (
     "projects", "project_phases", "tasks", "milestones", "payment_milestones",
     "drawings", "snags", "site_visits", "files", "documents", "comments",
     "approvals", "portal_access", "transmittals", "products", "product_prices",
+    "project_selections",
     "chat_messages", "ai_messages", "calendar_events",
     # Vendors and procurement
     "vendors", "vendors_acc", "vendor_bills", "vendor_payments", "vendor_commissions",

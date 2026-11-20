@@ -107,7 +107,9 @@ def decorate(t: dict, current: dict[str, dict]) -> dict:
     items = []
     for it in t.get("items") or []:
         now = current.get(it.get("drawing_id")) or {}
-        newer = now.get("rev") if now.get("rev") and now.get("rev") != it.get("rev") else None
+        # The construction set stays valid while only a review draft is newer.
+        newer = (now.get("rev") if now.get("rev") and now.get("rev") != it.get("rev")
+                 and now.get("site") != it.get("rev") else None)
         items.append({**it, "superseded_by": newer})
     recips = t.get("recipients") or []
     done = sum(1 for r in recips if r.get("acknowledged_at"))
@@ -128,7 +130,9 @@ async def _current_revs(database, org_id: Optional[str], rows: list[dict]) -> di
     out = {}
     for d in await database.drawings.find(q, {"_id": 0, "id": 1, "revisions": 1, "archived": 1}).to_list(MAX_LIST_ROWS):
         revs = d.get("revisions") or []
-        out[d["id"]] = {"rev": revs[-1].get("rev") if revs else None, "archived": bool(d.get("archived"))}
+        from routes.drawings import site_copy
+        out[d["id"]] = {"rev": revs[-1].get("rev") if revs else None, "archived": bool(d.get("archived")),
+                        "site": (site_copy(revs) or {}).get("rev")}
     return out
 
 
@@ -444,9 +448,11 @@ async def portal_transmittal_file(token: str, transmittal_id: str, index: int):
     item = items[index]
     f = await db.files.find_one({"id": item["file_id"], "project_id": ctx["project"]["id"],
                                  "org_id": ctx["org_id"]}, {"_id": 0})
-    current = (await _current_revs(db, ctx["org_id"], [t])).get(item.get("drawing_id"), {}).get("rev")
+    now = (await _current_revs(db, ctx["org_id"], [t])).get(item.get("drawing_id"), {})
+    current = now.get("rev")
     from core.stamp import serve_drawing_file
-    return await serve_drawing_file(f, current, superseded=bool(current and current != item.get("rev")))
+    return await serve_drawing_file(f, current, superseded=bool(
+        current and current != item.get("rev") and now.get("site") != item.get("rev")))
 
 
 @router.get("/portal/{token}/transmittals/{transmittal_id}/pdf")

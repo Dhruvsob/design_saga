@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -6,6 +6,15 @@ import PageHero from "../components/PageHero";
 import { dateForInput, formatDate, statusLabel } from "../lib/format";
 import { Plus, ArrowRight, MagnifyingGlass, UserMinus, X, FileArrowUp } from "@phosphor-icons/react";
 import EmployeeImport from "../components/EmployeeImport";
+import ErrorSummary from "../components/ErrorSummary";
+import { errorItems } from "../lib/errors";
+
+const FIELD = "text-xs font-semibold text-[var(--ink-2)]";
+const EMPLOYEE_LABELS = {
+  first_name: "First name", last_name: "Last name", designation: "Designation", email: "Work email",
+  phone: "Phone", department: "Department", employment_type: "Employment type",
+  employment_status: "Employment status", joining_date: "Joining date",
+};
 import { confirmAction } from "../lib/confirm";
 import RowActions from "../components/RowActions";
 import { usePaged } from "../components/Pager";
@@ -28,6 +37,8 @@ export default function Employees() {
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState(null);
+  const formRef = useRef(null);
   const [filter, setFilter] = useState({ q: "", department: "", status: "" });
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", phone: "",
@@ -51,6 +62,7 @@ export default function Employees() {
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setFormErrors(null);
     try {
       const { data } = await api.post("/employees", form);
       setShowForm(false);
@@ -62,6 +74,8 @@ export default function Employees() {
       });
       await load();
       navigate(`/employees/${data.id}`);
+    } catch (ex) {
+      setFormErrors(errorItems(ex, "The employee could not be added."));
     } finally {
       setSaving(false);
     }
@@ -119,22 +133,41 @@ export default function Employees() {
       )}
 
       {showForm && (
-        <form onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3 scale-in" data-testid="new-employee-form">
-          <input required className="input-flat" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} data-testid="emp-first-name" />
-          <input className="input-flat" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
-          <input className="input-flat" placeholder="Designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
-          <input className="input-flat" type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input className="input-flat" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <select aria-label="Department" className="input-flat" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
-            {meta.departments.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <select aria-label="Employment type" className="input-flat" value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value })}>
-            {meta.employment_types.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
-          </select>
-          <select aria-label="Employment status" className="input-flat" value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })}>
-            {meta.employment_statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-          </select>
-          <input required className="input-flat" type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} />
+        <form ref={formRef} onSubmit={submit} className="card-flat grid grid-cols-1 md:grid-cols-3 gap-3 scale-in" data-testid="new-employee-form">
+          <ErrorSummary items={formErrors} formRef={formRef} labels={EMPLOYEE_LABELS} />
+          <label className={FIELD}>First name *
+            <input required name="first_name" className="input-flat w-full mt-1" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} data-testid="emp-first-name" />
+          </label>
+          <label className={FIELD}>Last name
+            <input name="last_name" className="input-flat w-full mt-1" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          </label>
+          <label className={FIELD}>Designation
+            <input name="designation" className="input-flat w-full mt-1" placeholder="Interior designer" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
+          </label>
+          <label className={FIELD}>Work email
+            <input name="email" className="input-flat w-full mt-1" type="email" autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </label>
+          <label className={FIELD}>Phone
+            <input name="phone" className="input-flat w-full mt-1" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </label>
+          <label className={FIELD}>Department
+            <select name="department" className="input-flat w-full mt-1" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+              {meta.departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </label>
+          <label className={FIELD}>Employment type
+            <select name="employment_type" className="input-flat w-full mt-1" value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value })}>
+              {meta.employment_types.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
+            </select>
+          </label>
+          <label className={FIELD}>Employment status
+            <select name="employment_status" className="input-flat w-full mt-1" value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })}>
+              {meta.employment_statuses.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+            </select>
+          </label>
+          <label className={FIELD}>Joining date *
+            <input required name="joining_date" className="input-flat w-full mt-1" type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} />
+          </label>
           <button disabled={saving} className="btn-primary md:col-span-3" type="submit" data-testid="emp-submit">
             {saving ? "Creating…" : "Create employee"}
           </button>
