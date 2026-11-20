@@ -1,94 +1,80 @@
-# GAMAA ERP: feature recommendations for approval (2026-11-20)
+# GAMAA ERP: feature recommendations for approval (2026-11-20, after `74aff6e`)
 
-Each proposal was checked against what already exists in release `504a2c3`, so
-nothing below repeats a built feature. Candidates from the brief that turned
-out to be **already built**:
+Each proposal was checked against what exists in release `74aff6e`, so nothing
+below repeats a built feature.
+
+## Built on 2026-11-20 (owner: "continue ... don't ask for any permission")
+
+| Proposal (morning list) | What was built | Where |
+|---|---|---|
+| #1 Room-wise selections and finish approvals (P2.3) | Selections per room/area (library product or free text, specification, supplier, quantity); send to the client portal; decisions name the client; a change after a decision asks again; studio can record a decision given in person; purchase orders warn about unapproved selections and add approved ones as lines | Project → Design → Selections; `routes/selections.py` |
+| #3 Quotation acceptance in the client portal | "Send to client for acceptance" puts the exact version and its PDF in the project portal; acceptance records person, version and total; edits, new versions, status changes and deletes close the pending request | Quotation builder; `routes/approvals.py` |
+
+## Already built before (candidates from the brief)
 
 | Candidate | What exists | Where |
 |---|---|---|
-| Drawing issue register | Drawings carry approved / issued / superseded status; superseded sheets are stamped; transmittals record the revision, recipients and date | `routes/drawings.py`, `routes/transmittals.py` (P2.7) |
-| Site snag register linked to tasks | Snags with photo evidence, area, priority, assignee or agency, due date, a photo of the fix and verified close / reopen | `routes/snags.py`, `snags.spec` |
-| Fee and effort by phase | Phase plans with fee shares; timesheets by phase; project time and profitability views | `routes/phases.py`, `routes/timesheets.py` |
-| Design decision and variation log | Client approvals for drawings and variations in the client portal | `routes/approvals.py` (P2.6) |
+| Drawing issue register | Approved / issued / superseded revisions, stamped superseded sheets, transmittals with recipients and acknowledgement; since `74aff6e` the construction set stays the site copy | `routes/drawings.py`, `routes/transmittals.py` |
+| Site snag register | Snags with photo evidence, area, priority, assignee or agency, due date, fix photo and verified close / reopen | `routes/snags.py` |
+| Fee and effort by phase | Phase plans with fee shares; timesheets by phase; project time and profitability | `routes/phases.py`, `routes/timesheets.py` |
+| Design decision and variation log | Client approvals for drawings, variations, documents, now selections and quotations | `routes/approvals.py` |
 
-## The three most valuable gaps
+## The three most valuable remaining gaps
 
-### 1. Room-wise selections and finish approvals (roadmap P2.3)
-
-* **User and problem:** a designer cannot tell, per room, which finish the
-  client approved and what still needs a decision before the BOQ line is
-  released for purchase. Today that lives in chats and spreadsheets.
-* **Closest screens:** Product & Material Library (P2.2, with price history),
-  client portal approvals (P2.6), BOQ, purchase orders.
-* **Smallest useful version:** on a project, a "Selections" list: room/area,
-  item from the library (or free text), specification, supplier, status
-  (proposed / sent to client / approved / changed), decision date. "Send to
-  client" reuses the portal approval. An approved selection can be linked to a
-  BOQ line; unapproved lines are flagged before a PO is raised.
-* **Frequency and benefit:** weekly on every interior project; removes the
-  most common "which tile did they approve?" question on site.
-* **Dependencies:** library and portal approvals (both live).
-* **Effort:** about 1-1.5 weeks. Maintenance: one new collection, registered
-  for tenant export/purge; reuses existing permissions.
-* **Acceptance test:** a client approves "Kitchen floor: Product X" in the
-  portal; the designer sees "Approved, 20 Nov" against the kitchen; a PO for a
-  BOQ line linked to an unapproved selection shows a warning.
-* **Recommendation:** build next.
-
-### 2. Reminders that reach a phone (e-mail first, then push)
+### 1. Reminders that reach a phone (e-mail first, then push)
 
 * **User and problem:** reminders, check-out prompts and calendar notices only
-  appear in an open browser tab. Google Calendar was the phone route, and it
+  appear in an open browser tab; Google Calendar, the current phone route,
   silently stopped for a month (7-day OAuth Testing limit).
-* **Closest screens:** notification bell and per-user notification settings;
-  Google Calendar sync.
-* **Smallest useful version:** (a) owner publishes the Google OAuth app (no
-  code, no cost) so calendar sync stops expiring; (b) e-mail delivery for
-  high-priority notices (invites, payslips, overdue items) via a transactional
-  e-mail provider, honouring the same per-user settings.
-* **Frequency and benefit:** daily, every employee.
-* **Dependencies:** an e-mail provider account and a sending domain (SPF/DKIM).
-  **This is a paid external service and an external data transfer: needs
-  your approval.**
-* **Effort:** about 3-4 days for e-mail; Web Push/PWA later (about 1 week).
-* **Acceptance test:** an employee with the browser closed receives the
-  check-out reminder by e-mail within 15 minutes of shift end plus an hour,
-  exactly once.
-* **Recommendation:** approve (a) now; approve (b) with a provider choice.
+* **Smallest useful version:** (a) publish the Google OAuth app (owner, no
+  code, no cost); (b) e-mail for high-priority notices (invites, payslips,
+  overdue items, client-portal requests) through a transactional e-mail
+  provider, honouring the per-user notification settings.
+* **Frequency and benefit:** daily, every employee and client contact.
+* **Dependencies:** e-mail provider account and sending domain (SPF/DKIM).
+  **Paid external service and external data transfer: needs your approval.**
+* **Effort:** 3-4 days for e-mail; Web Push / PWA later (about 1 week).
+* **Acceptance test:** with the browser closed, an employee receives the
+  check-out reminder by e-mail once, within 15 minutes of shift end + 1 hour.
+* **Recommendation:** approve (a) now; choose a provider for (b).
 
-### 3. Quotation acceptance in the client portal
+### 2. Investment register
 
-* **User and problem:** quotations still need offline sign-off, so the step
-  from quotation to project waits on a PDF and a phone call, and the accepted
-  version is not recorded. (A quotation can be shared today as a generic
-  "document" approval, but without its revision, amount or a convert step.)
-* **Closest screens:** quotation builder, client portal (drawings and
-  variations approvals already work there).
-* **Smallest useful version:** "Send for acceptance" puts a quotation revision
-  in the portal; the client accepts or asks for changes; acceptance records
-  the revision, time and name and offers "Convert to project".
-* **Frequency and benefit:** every new project; shortens enquiry → project.
-* **Dependencies:** portal approvals (live).
-* **Effort:** about 3-5 days.
-* **Acceptance test:** the client accepts R2 while R3 is a draft; the
-  quotation shows "R2 accepted 20 Nov by <client>" and converting creates one
-  project even if clicked twice.
-* **Recommendation:** build after #1.
+* **User and problem:** gold and other investments can be bought but not
+  partly sold; quantity (grams), carrying value and realised gain need a
+  manual journal and accountant judgment (found by today's fixture).
+* **Smallest useful version:** holdings with quantity and cost; a partial sale
+  computes carrying value (policy: average cost or specific lot) and posts
+  proceeds, carrying value and gain/loss.
+* **Frequency:** rare for a studio; matters at year end.
+* **Dependencies:** **the accountant's valuation policy** (accounting policy:
+  needs your approval).
+* **Effort:** 3-4 days. **Acceptance test:** buy 20 g for Rs 2,00,000, sell 10 g
+  for Rs 1,20,000: gold Rs 1,00,000, gain Rs 20,000, bank +1,20,000.
+* **Recommendation:** decide the policy, then build.
 
-## Also considered (lower value or premature)
+### 3. Tally-compatible export
+
+* **User and problem:** the year-end accountant re-keys vouchers into Tally.
+* **Smallest useful version:** export the day book for a period as Tally XML
+  vouchers with ledger names mapped once.
+* **Dependencies:** confirm the accountant uses Tally and which version.
+* **Effort:** 3-5 days. **Acceptance test:** an exported month imports into
+  Tally with the same trial balance.
+* **Recommendation:** confirm with the accountant first.
+
+## Also considered
 
 | Idea | Why not first |
 |---|---|
-| Investment register (gold quantity, partial sale, realised gain) | Found by today's fixture: the ERP records purchases only; sales need a manual journal. Rare for a studio; needs the accountant's valuation policy (average cost vs specific lot) first |
-| Tally-compatible export | Useful at year end; need to confirm the accountant uses Tally and which version |
-| Form-level error summary (GOV.UK pattern) on long forms | Small UX improvement; can be done without approval when scheduled |
-| Server-side pagination for tasks and invoices | Only matters at 5,000+ tasks; no production tenant is near that |
-| Consultant coordination, handover packs, vendor quote comparison | No evidence yet of demand in the studio's data |
-| Branches (offices) inside a firm | Not modelled today (one workspace per firm). A data-architecture change across permissions, reports and numbering; only worth it if a customer runs several offices |
+| Branches (offices) inside a firm | Not modelled (one workspace per firm). A data-architecture change across permissions, reports and numbering; only worth it if a customer runs several offices |
+| ₹ glyph in PDFs | Needs a bundled Unicode font; "Rs." is unambiguous meanwhile |
+| Error summary on the remaining long forms | No approval needed; add as forms are touched |
+| Server-side pagination for tasks and invoices | Only matters at 5,000+ tasks |
 
 ## Decisions needed
 
-1. Approve #1 (selections) to start.
-2. Publish the Google OAuth app; choose an e-mail provider for #2(b).
-3. Approve #3 after #1.
-4. Accountant's policy for investment valuation, if an investment register is wanted.
+1. Publish the Google OAuth app; choose an e-mail provider (#1).
+2. The accountant's valuation policy for investments (#2).
+3. Whether the accountant uses Tally (#3).
+4. Branches: only if a multi-office customer needs them.

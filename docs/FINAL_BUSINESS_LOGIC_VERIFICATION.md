@@ -1,6 +1,6 @@
-# GAMAA ERP: business logic verification (2026-11-20)
+# GAMAA ERP: business logic verification (2026-11-20, release `74aff6e`)
 
-Release candidate `504a2c3`. Script: `backend/scripts/accounting_acceptance.py`
+Accounting fixtures run on `504a2c3` (accounting code unchanged in `74aff6e`); payroll, drawings, selections and quotation acceptance on `74aff6e`. Script: `backend/scripts/accounting_acceptance.py`
 (refuses non-local targets). Each run creates a **new, empty workspace**
 through the real API (`POST /api/platform/orgs`, invite, PIN) and drives the
 same endpoints the screens use. Expected figures below were worked out by hand
@@ -94,24 +94,57 @@ accountant's judgment of carrying value (average cost was assumed). See
 | Trial balance FY 2025-26 and FY 2026-27 | balanced | balanced |
 | Balance sheet FY 2026-27 | balanced | 4,68,000 = 4,68,000 |
 
-## 6. Payroll, advances, periods (browser tests, rerun on `504a2c3`)
+## 6. Payroll and attendance
 
-All rows below passed again on 2026-11-20 (`money.spec`, `period-close.spec`).
+### 6.1 Mid-month joining and leaving (hand-worked, `tests/test_payroll_proration.py`)
+
+Fixture: Rs 85,000 a month, 30-day basis (Rs 2,833.33 a day), Sundays off,
+2 Oct 2026 a holiday. October 2026 has 31 days; 1 Oct is a Thursday, so the
+Sundays are 4, 11, 18 and 25 Oct. Policy applied (the firm's existing rule):
+salary minus Rs per day x loss-of-pay days, whole rupees.
+
+| Case | Expected (by hand) | Before the fix | After |
+|---|---|---|---|
+| Joins 16 Oct | 1-15 Oct outside employment = 15 LOP days; Rs 85,000 - 42,500 = **Rs 42,500** | 12 LOP days (holiday and 2 Sundays paid): Rs 51,000, **overpaid Rs 8,500** | Rs 42,500 |
+| Leaves 10 Oct (last day) | 11-31 Oct = 21 LOP days; **Rs 25,500** | Sundays 11, 18, 25 paid | Rs 25,500 |
+| Full month | Rs 85,000 | Rs 85,000 | Rs 85,000 |
+| A day actually worked before the recorded joining date | paid | paid | paid (14 LOP days) |
+
+**Defect (P1, fixed in `74aff6e`):** weekly-offs and holidays outside the
+employment window were paid. Production (read-only): 7 employees, 3 mid-month
+joinings since April; the only payroll run in a joining month (October) was
+already reversed, so no wrong amount stands in the books. The October joiner
+(23 Oct) will be computed Rs 2,308 lower than the old engine showed (three
+Sundays before joining). Finalised history is not recomputed.
+
+### 6.2 Browser tests rerun on `74aff6e`
 
 | Workflow | Test | Status |
 |---|---|---|
-| Invoice partial + full collection, idempotent retry, Cash/Bank guard | `money.spec` | VERIFIED (2026-11-20) |
-| Bank salary posts once to the chosen bank; reversal | `money.spec` | VERIFIED (2026-11-20) |
-| Paid salary edited in place, old entry leaves the books | `money.spec` | VERIFIED (2026-11-20) |
-| Employee advance 5,000 recovered 2,000 + 3,000 through payroll | `money.spec` | VERIFIED (2026-11-20) |
-| Period close: check + export, locked days refuse entries, reopen with reason | `period-close.spec` | VERIFIED (2026-11-20) |
-| Attendance: open check-ins reminded; corrections from My day | `test_checkout_reminders.py`, browser | VERIFIED (2026-11-19/20) |
+| Invoice partial + full collection, idempotent retry, Cash/Bank guard | `money.spec` | VERIFIED |
+| Bank salary posts once to the chosen bank; reversal | `money.spec` | VERIFIED |
+| Paid salary edited in place, old entry leaves the books | `money.spec` | VERIFIED |
+| Employee advance 5,000 recovered 2,000 + 3,000 through payroll | `money.spec` | VERIFIED |
+| Period close: check + export, locked days refuse entries, reopen with reason | `period-close.spec` | VERIFIED |
+| Site visit: location, approval | `site-visits.spec` | VERIFIED |
+| Attendance: open check-ins reminded; corrections from My day | `test_checkout_reminders.py` | VERIFIED |
 | Production books (read-only): journals balanced, no duplicate payroll/invoices | `FINAL_ERP_QA_RESULTS.md` §3 | VERIFIED (2026-11-15) |
 
-Not run this cycle: mid-month joining/resignation proration and half-day/short
-leave against hand-worked payslips. Those rules are covered by the backend
-payroll and attendance unit tests (part of the 684), not by a hand-worked
-fixture. **Status: PARTIAL.**
+Half-day, short leave, late fines and the free monthly leave are covered by the
+backend unit tests (part of the 700); not re-derived by hand this cycle.
+
+## 6a. Project workflows checked this cycle
+
+| Journey | Expected | Observed | Evidence |
+|---|---|---|---|
+| Lead -> project, retried | one project; retry refused | atomic claim, 409 on retry | `test_conversion_safety.py` |
+| Quotation -> project, retried | one project | atomic claim, 409 on retry | same |
+| Fee type switched (lump sum -> per sq ft ...) | obsolete inputs not stored | server keeps only the chosen type's fields (`FEE_SUBFIELDS`) | code + existing tests |
+| Drawing R2 issued for construction, newer R3 for review | site keeps R2 | **was R3 (defect, fixed)**; the register now shows "On site: rev 2" and the R2 sheet is not stamped | `test_drawings.py`, `drawings.spec` |
+| Selection -> client approval -> purchase order | only approved items ordered, approver named | approved in the portal by the named contact; PO form warns about unapproved items and adds approved ones as lines | `selections.spec` |
+| Approved variation -> fee milestone | one milestone with the approved amount, linked, never twice; no posting until money is received | as expected; reductions refused | `test_approved_variation_becomes_one_fee_milestone`, `selections.spec` |
+| Quotation sent -> client accepts | the exact version and total recorded; edits after sending close the request | as expected; a stale version is refused (409) | `test_selections_and_quote_acceptance.py`, `selections.spec` |
+| Snag photo upload fails on a phone | input kept, retry possible, no half record | form keeps fields and photo; one request creates snag + photo | code review |
 
 ## 7. Reconciliation differences
 

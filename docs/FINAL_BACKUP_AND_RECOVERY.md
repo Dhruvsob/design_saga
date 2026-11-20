@@ -1,4 +1,4 @@
-# GAMAA ERP: backup and recovery (2026-11-20)
+# GAMAA ERP: backup and recovery (2026-11-20, releases `504a2c3` and `74aff6e`)
 
 Production host `srv2020574`, shared with Tanvika (never touched). Procedure,
 rollback steps and earlier drills: `FINAL_RELEASE_AND_RECOVERY.md`; disaster
@@ -10,15 +10,15 @@ runbook: `docs/runbooks/DISASTER-RECOVERY.md`; off-site design:
 | Item | Observed |
 |---|---|
 | Daily backup | `design-saga-backup.timer`, next 2026-11-20 18:25 UTC; last run success 2026-11-19 18:26 UTC |
-| Pre-deploy backup | taken by the deploy script for every release; today `20261120T090540Z` (release `504a2c3`) |
+| Pre-deploy backup | taken by the deploy script for every release; today `20261120T090540Z` (`504a2c3`), `20261120T111819Z` (`74aff6e`), `20261120T132645Z` (`1cdac8c`) |
 | Contents | `pg_dump` custom archive, globals, file-storage copy with SHA-256 manifest, image list, git commit |
 | Retention | newest 4 kept, 7 days; 937 MB on disk |
-| Integrity | `sha256sum -c SHA256SUMS` passes for `20261120T090540Z` |
+| Integrity | `sha256sum -c SHA256SUMS` passes for all three of today's pre-deploy backups |
 | Encryption | none on the host (`backup.sh` has no encryption step); the off-site script encrypts with gpg AES-256 before upload |
 | Off-host copy | **none**. No off-site timer or configuration present (`/etc/design-saga/offsite.env` absent) |
 | Monitoring | `design-saga-monitor.timer` every 5 min, last result success; alerts stay in the server journal |
 
-## 2. Isolated restore (run 2026-11-20 09:08 UTC)
+## 2. Isolated restores (2026-11-20)
 
 `systemctl start design-saga-restore-drill.service` restores the newest backup
 into a throw-away PostgreSQL/DocumentDB container with its own volume, compares
@@ -26,16 +26,26 @@ counts, then removes both. Customer data never leaves the host.
 
 | Backup | Tables | Documents restored | Live documents | Files | Restore | Wall clock | Result |
 |---|---|---|---|---|---|---|---|
-| `20261120T090540Z` | 166 | 2,468 | 2,469 | 14 | 2 s | 9.6 s | **pass**; no leftover restore containers |
+| `20261120T090540Z` (09:08 UTC) | 166 | 2,468 | 2,469 | 14 | 2 s | 9.6 s | **pass**; no leftover restore containers |
+| `20261120T111819Z` (12:22 UTC) | 166 | 2,469 | 2,469 | 14 | 2 s | 10 s | **fail**: "Table-count mismatch: source=168 restored=166" (false failure, below) |
+| `20261120T111819Z` (12:24 UTC, after `915a6f2`) | 166 (live 168) | 2,469 | 2,469 | 14 | 2 s | ~10 s | **pass**; no leftover restore containers |
+| `20261120T132645Z` (13:29 UTC, pre-deploy of `1cdac8c`) | 168 (live 168) | 2,475 | 2,475 | 14 | 1 s | ~10 s | **pass**; no leftover restore containers |
 
-The one-document difference is expected: the calendar reconnect notice was
+In the 09:08 run the one-document difference is expected: the calendar reconnect notice was
 written at 09:07:12, after the 09:05:40 backup.
+
+**Drill fix (`915a6f2`).** The drill compared the restored table count with the
+live database. Release `74aff6e` created the `project_selections` collection
+(2 tables) after its pre-deploy backup, so the drill of that backup failed
+although `pg_restore --exit-on-error` had restored every archived object. Like
+document counts, the live table count is now reported (`LIVE_TABLES_NOW`); the
+drill still fails on an empty restore or a backup with more tables than live.
 
 Earlier drills: 2026-11-15 (two runs, pass). Next scheduled: Sun 2026-11-22 03:40 UTC.
 
 ## 3. Recovery figures
 
-* **Latest recoverable point:** 2026-11-20 09:05:40 UTC (pre-deploy backup).
+* **Latest recoverable point:** 2026-11-20 13:26:45 UTC (pre-deploy backup of `1cdac8c`); the next daily backup runs 18:25 UTC.
 * **RPO:** up to 24 h between daily backups, shorter on release days.
 * **RTO (same host):** database restore 2 s at today's size; app rebuild about
   5 min. **RTO if the VPS is lost:** unbounded until an off-site copy exists.
