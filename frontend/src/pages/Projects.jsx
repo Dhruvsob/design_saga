@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../lib/api";
+import api, { optionalList } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import { Plus, ArrowRight, CaretRight, MagnifyingGlass, SquaresFour, ListBullets, PushPin, PencilSimple, Archive, X } from "@phosphor-icons/react";
 import RowActions from "../components/RowActions";
 import { confirmAction } from "../lib/confirm";
 import { toast } from "sonner";
+import { errText } from "../lib/errors";
 import PageHero from "../components/PageHero";
 import { formatINR, empName } from "../lib/format";
 import { feeCalc, projectFeeDisplay, FEE_LABELS } from "../lib/fees";
@@ -27,6 +28,8 @@ export default function Projects() {
   const defaultEng = businessMode === "consultancy" ? "consultancy"
                    : businessMode === "turnkey" ? "turnkey" : "consultancy";
   const [projects, setProjects] = useState([]);
+  // "loading" | "ready" | error text. "No projects yet" only once we know.
+  const [loadState, setLoadState] = useState("loading");
   const [clients, setClients] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -61,14 +64,19 @@ export default function Projects() {
   });
 
   const load = async () => {
-    const [p, c, e] = await Promise.all([
-      api.get("/projects"),
-      api.get("/clients"),
-      api.get("/employees").catch(() => ({ data: [] })),
-    ]);
-    setProjects(p.data);
-    setClients(c.data);
-    setEmployees((Array.isArray(e.data) ? e.data : e.data?.employees || []).filter((x) => x.employment_status !== "terminated"));
+    try {
+      const [p, c, e] = await Promise.all([
+        api.get("/projects"),
+        optionalList(hasPerm("clients.read"), "/clients"),
+        optionalList(hasPerm("employees.read"), "/employees"),
+      ]);
+      setProjects(p.data);
+      setClients(c.data);
+      setEmployees((Array.isArray(e.data) ? e.data : e.data?.employees || []).filter((x) => x.employment_status !== "terminated"));
+      setLoadState("ready");
+    } catch (ex) {
+      setLoadState(errText(ex, "Projects could not be loaded."));
+    }
   };
   useEffect(() => { load(); }, []);
   useEffect(() => { setForm((f) => ({ ...f, engagement_type: defaultEng })); }, [defaultEng]);
@@ -395,8 +403,20 @@ export default function Projects() {
             </div>
           );
         })}
-        {projects.length === 0 && (
+        {projects.length === 0 && loadState === "ready" && (
           <EmptyState />
+        )}
+        {projects.length === 0 && loadState === "loading" && (
+          <div className="border-r border-b border-[var(--line)] p-12 col-span-full text-center text-sm text-[var(--ink-2)]" role="status">
+            Loading projects…
+          </div>
+        )}
+        {projects.length === 0 && loadState !== "ready" && loadState !== "loading" && (
+          <div className="border-r border-b border-[var(--line)] p-12 col-span-full text-center" role="alert" data-testid="projects-load-error">
+            <div className="overline mb-2 text-[var(--danger)]">COULD NOT LOAD</div>
+            <p className="text-[var(--ink-2)] text-sm max-w-sm mx-auto mb-4">{loadState}</p>
+            <button type="button" className="btn-ghost" onClick={() => { setLoadState("loading"); load(); }}>Try again</button>
+          </div>
         )}
         {projects.length > 0 && shown.length === 0 && (
           <div className="border-r border-b border-[var(--line)] p-10 col-span-full text-center text-sm text-[var(--ink-2)]">

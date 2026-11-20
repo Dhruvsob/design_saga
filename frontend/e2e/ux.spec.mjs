@@ -393,3 +393,28 @@ test("New quotation from a client opens the form with that client chosen; projec
   await expect(page.getByTestId("stage-tracker")).toContainText("Stage 2 of", { timeout: 20000 });
   await expect(page.getByTestId("stage-Concept")).toHaveAttribute("aria-current", "step");
 });
+
+test("a role without client or employee access still sees projects and quotations", async ({ page }) => {
+  // Production 2026-11-20: the studio's Designers have no clients.read or
+  // employees.read, and one 403 inside the page's Promise.all left Projects
+  // and Quotations empty. The lookups are now optional.
+  const ctx = await api("admin");
+  const name = `Restricted lookup ${uid()}`;
+  await json(ctx.post("/api/projects", { data: { name, project_type: "Residential", engagement_type: "consultancy" } }));
+  const quotations = await json(ctx.get("/api/quotations-adv"));
+  await page.route(/\/api\/(clients|employees)(\?.*)?$/, (route) => route.fulfill({
+    status: 403, contentType: "application/json",
+    body: JSON.stringify({ detail: "Missing permission: clients.read" }),
+  }));
+
+  await page.goto("/projects");
+  await expect(page.getByTestId("projects-page")).toBeVisible();
+  await page.getByTestId("projects-search").fill(name);
+  await expect(page.getByText(name).first()).toBeVisible();
+  await expect(page.getByText("NO PROJECTS YET")).toHaveCount(0);
+
+  if (quotations.length) {
+    await page.goto("/quotations");
+    await expect(page.getByTestId(`q-row-${quotations[0].id}`)).toBeVisible();
+  }
+});

@@ -167,10 +167,13 @@ export default function NotificationBell() {
         )}
       </button>
 
+      {/* Phones: the panel spans the screen under the top bar. Anchored to the
+          bell (left of the lock button), a 380 px panel started off the left
+          edge on every phone width (-22 px at 435 px, -45 px at 390 px). */}
       {open && (
         <div
           data-testid="notif-panel"
-          className="absolute right-0 mt-2 w-[min(380px,calc(100vw-2rem))] max-h-[520px] bg-white border border-[var(--line)] shadow-xl z-50 flex flex-col rounded-lg overflow-hidden"
+          className="fixed inset-x-3 top-[3.75rem] sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[380px] max-h-[min(520px,calc(100dvh-5rem))] bg-white border border-[var(--line)] shadow-xl z-50 flex flex-col rounded-lg overflow-hidden"
         >
           {/* header */}
           <div className="p-4 border-b border-[var(--line)] flex items-center justify-between">

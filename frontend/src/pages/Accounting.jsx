@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../lib/api";
+import api, { optionalList } from "../lib/api";
 import PageHero from "../components/PageHero";
 import { Daybook } from "../components/Daybook";
 import { AccountLedgerPanel } from "../components/AccountLedgerPanel";
@@ -116,8 +116,8 @@ export default function Accounting() {
   const loadCommon = async () => {
     const [a, c, p, m, v, e, f] = await Promise.all([
       api.get("/accounts"),
-      api.get("/clients"),
-      api.get("/projects"),
+      optionalList(hasPerm("clients.read"), "/clients"),
+      optionalList(hasPerm("projects.read"), "/projects"),
       api.get("/accounting/meta"),
       api.get("/vendors").catch(() => ({ data: [] })),
       api.get("/employees").catch(() => ({ data: [] })),

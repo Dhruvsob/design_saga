@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { statusLabel } from "../lib/format";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import api from "../lib/api";
+import api, { optionalList } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Plus, ArrowRight, Trash, X } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
@@ -49,8 +49,8 @@ export default function QuotationsAdv() {
   const load = async () => {
     const [r, c, p, t] = await Promise.all([
       api.get("/quotations-adv"),
-      api.get("/clients"),
-      api.get("/projects"),
+      optionalList(hasPerm("clients.read"), "/clients"),
+      optionalList(hasPerm("projects.read"), "/projects"),
       api.get("/quotations-adv/templates").catch(() => ({ data: {} })),
     ]);
     setRows(r.data);

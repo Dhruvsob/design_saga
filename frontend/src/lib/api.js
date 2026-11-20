@@ -91,4 +91,13 @@ api.interceptors.response.use(
   }
 );
 
+// A lookup list (clients, employees, vendors) that only fills a picker or a
+// name column. Roles can lose access to one in Team & Roles (production: the
+// studio's Designers have no client or employee access), and a 403 inside
+// Promise.all used to reject the whole page load, leaving Projects and
+// Quotations empty. Skip the call when the permission is missing and treat a
+// failure as an empty list.
+export const optionalList = (allowed, url, config) =>
+  allowed ? api.get(url, config).catch(() => ({ data: [] })) : Promise.resolve({ data: [] });
+
 export default api;

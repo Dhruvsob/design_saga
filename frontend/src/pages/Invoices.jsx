@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import api, { API } from "../lib/api";
+import api, { API, optionalList } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate, roundPaise, statusLabel } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
@@ -96,8 +96,8 @@ export default function Invoices({ docType = "invoice" }) {
   const load = async () => {
     const [inv, cl, pr, acc] = await Promise.all([
       api.get(`/invoices?doc_type=${docType}`),
-      api.get("/clients"),
-      api.get("/projects"),
+      optionalList(hasPerm("clients.read"), "/clients"),
+      optionalList(hasPerm("projects.read"), "/projects"),
       canRecordPayment ? api.get("/accounts").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
     ]);
     if (docType === "invoice" && hasPerm("finance.read")) {
