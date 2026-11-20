@@ -123,8 +123,18 @@ if [ -n "$restored_union" ]; then
     "SELECT COALESCE(sum(n), 0) FROM ($restored_union) AS document_counts")
 fi
 
-[ "$source_tables" = "$restored_tables" ] || {
-  echo "Table-count mismatch: source=$source_tables restored=$restored_tables" >&2
+# A release can add collections (new tables) after the backup was taken, so
+# the live database may have more tables than a pre-release backup; that is
+# reported, not failed (2026-11-20: the selections release added 2 tables and
+# the drill of its own pre-deploy backup failed although the restore was
+# complete). pg_restore --exit-on-error above proves every archived object was
+# restored. Fail on an empty restore, or a backup with tables live no longer has.
+[ "${restored_tables:-0}" -gt 0 ] || {
+  echo "Restored database has no tables" >&2
+  exit 1
+}
+[ "$restored_tables" -le "$source_tables" ] || {
+  echo "Table-count mismatch: backup has $restored_tables tables, live has only $source_tables" >&2
   exit 1
 }
 # The source remains live while a historical backup is being tested, so new or
@@ -141,6 +151,7 @@ echo "RESTORE_DRILL_RESULT=pass"
 echo "BACKUP=$backup_name"
 echo "RESTORE_SECONDS=$duration"
 echo "NON_SYSTEM_TABLES=$restored_tables"
+echo "LIVE_TABLES_NOW=$source_tables"
 echo "DOCUMENT_ROWS=$restored_documents"
 echo "LIVE_DOCUMENT_ROWS_NOW=$source_documents"
 echo "FILE_MANIFEST=$(wc -l < "$backup_dir/file-storage.sha256" | tr -d ' ')"
