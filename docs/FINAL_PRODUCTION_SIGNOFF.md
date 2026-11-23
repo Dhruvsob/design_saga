@@ -8,7 +8,11 @@
 billing, 13:26), `6647768` (invoice form, privacy policy; frontend only).
 **Update 23 Nov:** `baa110e` is live (backend and web): still to receive now
 counts against the agreed fee (contract value for turnkey), per the owner;
-709 backend and 45 browser tests pass.
+709 backend and 45 browser tests pass. `cd95076` (cash deposit into a bank)
+and `30141d2` are live too: vendor incentives no longer reduce what a client
+owes (shown apart), and loan/advance repayments pick the person's existing
+ledger from a searchable list and post by account ID. 718 backend tests,
+86 accounting checks and 53 browser tests pass; no stored record changed.
 
 No open critical access-control, data-loss, accounting or payroll defect is
 known. Three P1 defects were found and fixed in this release (client PDF

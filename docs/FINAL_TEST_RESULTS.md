@@ -20,6 +20,7 @@ are read-only. The morning release (`504a2c3`) and earlier cycles:
 | Browser after `6647768` | `forms`, `money`, `a11y`, `navigation`, desktop and phone | 24 passed, 8 skipped (layout-specific) |
 | Frontend logic after `6647768` | `node --test src/lib/frontend-logic.test.mjs` | 12 passed |
 | Accounting acceptance | `python scripts/accounting_acceptance.py` (fresh local workspace) | **37/37** |
+| After `30141d2` (party picker; client fee vs vendor commission) | backend suite; `accounting_acceptance.py` (now 8 cases incl. party-ledger, fee-vs-commission, cash deposit); `frontend-logic.test.mjs`; eslint `src`; browser `money collections consistency forms ux smoke a11y phases selections` (desktop); picker checked by hand at 360 px | **718 passed**; **86/86**; 12 passed; clean; **53 passed**, 1 skipped |
 | Generated PDFs | `python scripts/pdf_inspection.py` | **37/37** (quotation, invoice, purchase order, payslip) |
 | Permissions | `python scripts/role_probe.py` (6 roles, 25 resource/actions, lifecycle) | **153/153** |
 | Static and dependency scans | `python -m bandit -q -ll -r . -x ./tests,./scripts`; `python -m pip_audit -r requirements.production.txt`; `npm audit --omit=dev` | 0 medium/high; no known vulnerabilities; 0 vulnerabilities |
