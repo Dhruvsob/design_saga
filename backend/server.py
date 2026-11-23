@@ -1750,7 +1750,7 @@ async def delete_project(project_id: str, request: Request,
 
 
 PROJECT_MONEY_IN_SOURCES = ("income", "invoice_payment", "milestone_payment",
-                            "other_receivable_income", "commission_income")
+                            "other_receivable_income", "commission_income", "client_refund")
 from core.receipts import (  # noqa: E402  one rule for who paid (owner, 2026-11-23)
     commission_account_ids as _commission_account_ids, split_project_receipts)
 
@@ -2217,6 +2217,20 @@ async def list_invoices(request: Request, doc_type: Optional[str] = None,
     return await sdb.invoices.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
 
 
+async def _refuse_gst_without_gstin(user: dict, doc_type: Optional[str], tax_rate) -> None:
+    """An unregistered business cannot charge GST (CA review 2026-11-24): the
+    invoice form defaulted to 18% and receipts then booked part of the fee as
+    GST owed to the government."""
+    if (doc_type or "invoice") != "invoice" or not float(tax_rate or 0):
+        return
+    org = await db.organizations.find_one({"org_id": user.get("org_id") or "org_default"},
+                                          {"_id": 0, "gstin": 1})
+    if not str((org or {}).get("gstin") or "").strip():
+        raise HTTPException(status_code=400, detail=(
+            "Your studio has no GSTIN, so this invoice cannot charge GST. Set Tax % to 0, "
+            "or add your GSTIN in Company settings > Company Profile first."))
+
+
 @api.post("/invoices")
 async def create_invoice(payload: InvoiceIn, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
@@ -2229,6 +2243,7 @@ async def create_invoice(payload: InvoiceIn, request: Request,
             and doc.get("doc_type", "invoice") == "invoice" \
             and not has_permission(user, "finance.create"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    await _refuse_gst_without_gstin(user, doc.get("doc_type"), doc.get("tax_rate"))
     requested_status = doc.get("status") or "draft"
     if requested_status == "paid" and doc.get("doc_type", "invoice") == "invoice":
         raise HTTPException(
@@ -2318,6 +2333,7 @@ async def update_invoice(invoice_id: str, payload: InvoiceUpdate, request: Reque
     if doc.get("_lock"):
         raise HTTPException(status_code=409, detail="Invoice status is being updated. Retry shortly.")
     upd = {k: v for k, v in payload.model_dump().items() if v is not None}
+    await _refuse_gst_without_gstin(user, doc.get("doc_type"), upd.get("tax_rate", doc.get("tax_rate")))
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
     if upd.get("milestone_id"):

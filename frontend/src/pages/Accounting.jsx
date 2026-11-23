@@ -105,6 +105,7 @@ export default function Accounting() {
   const [showForm, setShowForm] = useState(false);
   const [showWithdrawal, setShowWithdrawal] = useState(false);
   const [showTransfers, setShowTransfers] = useState(false);
+  const [showRefund, setShowRefund] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [meta, setMeta] = useState(null);
   const [ledgerAccount, setLedgerAccount] = useState(null);
@@ -233,6 +234,11 @@ export default function Accounting() {
                 data-testid="capital-transfers-btn" role="menuitem">
                 <ArrowsLeftRight size={14} className="text-[var(--ink-2)]" /> Cash deposit, transfers &amp; capital
               </button>
+              <button onClick={() => { setShowRefund(true); setShowMore(false); }}
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--surface-2)] transition"
+                data-testid="client-refund-btn" role="menuitem">
+                <ArrowUp size={14} className="text-[var(--ink-2)]" /> Refund money to a client
+              </button>
               </div>
             </>
           )}
@@ -246,6 +252,12 @@ export default function Accounting() {
           onClose={() => setShowWithdrawal(false)}
           onSaved={() => { setShowWithdrawal(false); loadDashboard(); }}
         />
+      )}
+
+      {showRefund && (
+        <ClientRefundForm banks={banks} clients={clients} projects={projects} incomeAccounts={incomeAccs}
+          onClose={() => setShowRefund(false)}
+          onSaved={() => { setShowRefund(false); loadDashboard(); }} />
       )}
 
       {showTransfers && (
@@ -553,26 +565,61 @@ function OwnerWithdrawalForm({ accounts, banks, onClose, onSaved }) {
   );
 }
 
-const TRANSFER_TYPES = [
-  ["own_transfer", "Deposit cash / move money between your accounts"],
-  ["owner_investment", "Owner adds capital"],
-  ["gold_purchase", "Buy gold investment"],
-  ["money_given", "Give money to a person"],
-  ["repayment_received", "Receive repayment from a person"],
-  ["money_received", "Receive money from a person"],
-  ["repayment_paid", "Repay money to a person"],
+// Grouped by what the user is doing (CA review 2026-11-24). None of these is
+// income or expense, except the interest and investment gain/loss parts.
+const TRANSFER_GROUPS = [
+  ["Your own money", [
+    ["own_transfer", "Deposit cash / move money between your accounts / pay credit card bill"],
+    ["owner_investment", "Owner adds capital"],
+  ]],
+  ["Loans and money with people", [
+    ["money_received", "Borrow money from a person (loan taken)"],
+    ["repayment_paid", "Repay a loan you took (with interest if any)"],
+    ["money_given", "Give / lend money to a person"],
+    ["repayment_received", "Receive back money you gave (with interest if any)"],
+  ]],
+  ["Deposits and money held", [
+    ["deposit_paid", "Pay a refundable deposit (rent, utility…)"],
+    ["deposit_refund_received", "Receive a deposit back"],
+    ["held_received", "Receive money to hold for someone (client funds)"],
+    ["held_paid_out", "Pay out of money held for someone"],
+  ]],
+  ["Investments and assets", [
+    ["gold_purchase", "Buy gold"],
+    ["investment_purchase", "Buy another investment (FD, mutual fund…)"],
+    ["investment_sale", "Sell or redeem an investment"],
+    ["asset_purchase", "Buy an asset for the studio (laptop, furniture…)"],
+  ]],
+  ["Taxes", [
+    ["tax_payment", "Pay GST / TDS / PF / ESI / Professional tax"],
+  ]],
 ];
+const TRANSFER_HELP = {
+  money_received: "Borrowed money is a liability you owe, never income.",
+  repayment_paid: "The principal reduces what you owe; interest is a separate expense.",
+  repayment_received: "The principal clears what they owe you; interest is income.",
+  deposit_paid: "A refundable deposit is still your money: it stays an asset until refunded.",
+  held_received: "Money held for a client or someone else is owed back to them, not income.",
+  held_paid_out: "Spending from money you hold for someone reduces what you owe them.",
+  investment_sale: "Profit or loss = sale amount minus what the sold part cost.",
+  asset_purchase: "An asset is not an expense of this month; it stays on the balance sheet.",
+  tax_payment: "Pays the tax you collected or withheld; it reduces the amount payable.",
+};
+const MUST_EXIST = new Set(["repayment_paid", "repayment_received", "deposit_refund_received", "held_paid_out", "investment_sale"]);
+const TAX_NAMES = ["GST Payable", "TDS Payable", "PF Payable", "ESI Payable", "Professional Tax Payable"];
 
 // Searchable picker for the person behind a loan or advance. Typing one letter
 // lists matching people with what is still outstanding; a repayment must pick
 // an existing ledger, so it reduces that balance instead of opening a new
 // account. Posts by account ID (owner, 2026-11-23).
-const PARTY_SIDE = { money_received: "loan", repayment_paid: "loan", money_given: "advance", repayment_received: "advance" };
+const PARTY_SIDE = { money_received: "loan", repayment_paid: "loan", money_given: "advance", repayment_received: "advance",
+  deposit_paid: "deposit", deposit_refund_received: "deposit", held_received: "held", held_paid_out: "held",
+  investment_sale: "investment" };
 const normName = (t) => String(t || "").trim().replace(/\s+/g, " ").toLowerCase();
 
 function PartyPicker({ kind, value, onChange }) {
   const side = PARTY_SIDE[kind];
-  const repay = kind === "repayment_paid" || kind === "repayment_received";
+  const repay = MUST_EXIST.has(kind);
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -646,12 +693,92 @@ function PartyPicker({ kind, value, onChange }) {
           {matches.length
             ? "Choose the person from the list."
             : `No one matches "${value.name.trim()}". ${kind === "repayment_paid"
-              ? "Record the original loan first with “Receive money from a person”."
-              : "Record the money first with “Give money to a person”."}`}
+              ? "Record the original loan first with “Borrow money from a person”."
+              : kind === "investment_sale" ? "Only investments you recorded can be sold."
+                : "Record the original money first."}`}
         </div>
       )}
       {!selected && !repay && q && <div className="text-xs text-[var(--ink-2)] mt-1">A new ledger will be opened for {value.name.trim()}.</div>}
     </div>
+  );
+}
+
+// Paying money back to a client (CA review 2026-11-24: there was no way).
+// Cash basis: reduces the fee income, the project's "received" and the
+// client's statement; cannot exceed what the client has paid.
+function ClientRefundForm({ banks, clients, projects, incomeAccounts, onClose, onSaved }) {
+  const fee = incomeAccounts.find((a) => /consult/i.test(a.name)) || incomeAccounts.find((a) => !/commission|incentive/i.test(a.name));
+  const [form, setForm] = useState({
+    date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+    client_id: "", project_id: "", amount: "", bank_account_id: banks[0]?.id || "",
+    income_account_id: fee?.id || "", reference: "", notes: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const clientProjects = projects.filter((p) => p.client_id === form.client_id);
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.client_id) return setError("Choose the client.");
+    if (!(Number(form.amount) > 0)) return setError("Enter the amount refunded.");
+    setBusy(true); setError("");
+    try {
+      const account = banks.find((b) => b.id === form.bank_account_id);
+      await api.post("/accounting/client-refund", {
+        ...form, amount: Number(form.amount), project_id: form.project_id || null,
+        payment_method: methodForAccount(account), reference: form.reference || null, notes: form.notes || null,
+      });
+      toast.success("Refund recorded");
+      onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Could not record the refund.");
+    } finally { setBusy(false); }
+  };
+  return (
+    <form onSubmit={submit} className="border-y border-[var(--line)] py-4 space-y-3" data-testid="client-refund-form">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="overline">REFUND MONEY TO A CLIENT</div>
+          <div className="text-xs text-[var(--ink-2)] mt-1">Reduces the fee received (cash basis) and shows on the client&apos;s statement. It cannot be more than the client paid.</div>
+        </div>
+        <button type="button" className="btn-icon" onClick={onClose} aria-label="Close refund form"><X size={14} /></button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Client</span>
+          <SearchSelect required className="input-flat w-full mt-1" value={form.client_id} data-testid="refund-client"
+            onChange={(e) => setForm({ ...form, client_id: e.target.value, project_id: "" })}>
+            <option value="">Choose client</option>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </SearchSelect></label>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Project (optional)</span>
+          <SearchSelect className="input-flat w-full mt-1" value={form.project_id} data-testid="refund-project"
+            onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
+            <option value="">Any of the client&apos;s payments</option>
+            {clientProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </SearchSelect></label>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Date</span>
+          <input required type="date" className="input-flat w-full mt-1" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Amount refunded</span>
+          <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount} data-testid="refund-amount"
+            onChange={(e) => setForm({ ...form, amount: e.target.value })} /></label>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Paid from</span>
+          <SearchSelect required className="input-flat w-full mt-1" value={form.bank_account_id} data-testid="refund-bank"
+            onChange={(e) => setForm({ ...form, bank_account_id: e.target.value })}>
+            {banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </SearchSelect></label>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">Fee income it was booked to</span>
+          <SearchSelect required className="input-flat w-full mt-1" value={form.income_account_id}
+            onChange={(e) => setForm({ ...form, income_account_id: e.target.value })}>
+            {incomeAccounts.filter((a) => !/commission|incentive/i.test(a.name)).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </SearchSelect></label>
+        <label className="block md:col-span-3"><span className="text-xs text-[var(--ink-2)]">Reason / notes</span>
+          <input className="input-flat w-full mt-1" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Advance returned, project cancelled" /></label>
+      </div>
+      {error && <div className="text-xs text-[var(--danger)]" role="alert">{error}</div>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="btn-primary" disabled={busy} data-testid="refund-submit">{busy ? "Recording..." : "Record refund"}</button>
+      </div>
+    </form>
   );
 }
 
@@ -667,16 +794,35 @@ function CapitalTransfersForm({ banks, cards = [], onClose, onSaved }) {
     party_name: "",
     reference: "",
     notes: "",
+    interest_amount: "",
+    item_name: "",
+    cost_amount: "",
+    liability_account_id: "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const needsParty = ["money_given", "repayment_received", "money_received", "repayment_paid"].includes(form.kind);
+  const [taxes, setTaxes] = useState([]);
+  const needsParty = Boolean(PARTY_SIDE[form.kind]);
+  const withInterest = form.kind === "repayment_paid" || form.kind === "repayment_received";
+  const needsItem = form.kind === "investment_purchase" || form.kind === "asset_purchase";
+  const isSale = form.kind === "investment_sale";
+  const isTax = form.kind === "tax_payment";
+  useEffect(() => {
+    if (!isTax) return undefined;
+    let alive = true;
+    api.get("/accounts", { params: { include_balances: "true" } }).then(({ data }) => {
+      if (alive) setTaxes((data || []).filter((a) => a.type === "liability" && TAX_NAMES.includes(a.name)));
+    }).catch(() => alive && setTaxes([]));
+    return () => { alive = false; };
+  }, [isTax]);
+  const saleGain = isSale && Number(form.amount) > 0 && Number(form.cost_amount) > 0
+    ? Number(form.amount) - Number(form.cost_amount) : null;
   // Moving the studio's own money (e.g. Rs 50,000 of cash into SBI): the
   // amount leaves "From" and arrives in "To"; profit does not change.
   const isOwnTransfer = form.kind === "own_transfer";
   // A studio credit card can pay for a person (paid back later) or for the
   // owner personally; its bill is paid by moving money from a bank to the card.
-  const cardCanPay = form.kind === "money_given" || form.kind === "owner_withdrawal";
+  const cardCanPay = ["money_given", "owner_withdrawal", "asset_purchase"].includes(form.kind);
   const fromAccounts = cardCanPay ? [...banks, ...cards] : banks;
   const toAccounts = [...banks, ...cards].filter((account) => account.id !== form.bank_account_id);
   const fromName = fromAccounts.find((b) => b.id === form.bank_account_id)?.name;
@@ -696,10 +842,14 @@ function CapitalTransfersForm({ banks, cards = [], onClose, onSaved }) {
     if (isOwnTransfer && !form.to_account_id) return setError("Select the account the money goes to.");
     if (isOwnTransfer && form.to_account_id === form.bank_account_id) return setError("Choose two different accounts.");
     if (!Number.isFinite(amount) || amount <= 0) return setError("Enter an amount greater than zero.");
-    const isRepay = form.kind === "repayment_paid" || form.kind === "repayment_received";
-    if (needsParty && isRepay && !form.party_account_id) return setError("Choose the person from the list, so the repayment reduces their balance.");
+    const isRepay = MUST_EXIST.has(form.kind);
+    if (needsItem && form.item_name.trim().length < 2) return setError("Name what you bought (e.g. FD - SBI, Laptop).");
+    if (isSale && !(Number(form.cost_amount) > 0)) return setError("Enter what the sold part originally cost.");
+    if (isTax && !form.liability_account_id) return setError("Choose the tax you are paying.");
+    if (needsParty && isRepay && !form.party_account_id) return setError("Choose from the list, so it reduces the existing balance.");
     if (needsParty && !form.party_account_id && form.party_name.trim().length < 2) return setError("Enter the person or party name.");
-    if (needsParty && isRepay && form.party_outstanding != null && amount > Number(form.party_outstanding) + 0.009) {
+    if (needsParty && isRepay && form.party_outstanding != null
+        && (isSale ? Number(form.cost_amount) : amount) > Number(form.party_outstanding) + 0.009) {
       return setError(`That is more than the ${formatINR(Number(form.party_outstanding))} still outstanding.`);
     }
     setBusy(true); setError("");
@@ -711,6 +861,10 @@ function CapitalTransfersForm({ banks, cards = [], onClose, onSaved }) {
         party_account_id: needsParty && form.party_account_id ? form.party_account_id : null,
         party_outstanding: undefined,
         to_account_id: isOwnTransfer ? form.to_account_id : null,
+        interest_amount: withInterest && Number(form.interest_amount) > 0 ? Number(form.interest_amount) : null,
+        item_name: needsItem ? form.item_name.trim() : null,
+        cost_amount: isSale ? Number(form.cost_amount) : null,
+        liability_account_id: isTax ? form.liability_account_id : null,
         reference: form.reference.trim() || null,
         notes: form.notes.trim() || null,
       });
@@ -733,13 +887,18 @@ function CapitalTransfersForm({ banks, cards = [], onClose, onSaved }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <label className="block"><span className="text-xs text-[var(--ink-2)]">Transaction</span>
           <select aria-label="Transaction type" className="input-flat w-full mt-1" value={form.kind}
-            onChange={(event) => setForm({ ...form, kind: event.target.value, party_account_id: "", party_name: "", party_outstanding: null })} data-testid="transfer-kind">
-            {TRANSFER_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            onChange={(event) => setForm({ ...form, kind: event.target.value, party_account_id: "", party_name: "", party_outstanding: null,
+              interest_amount: "", item_name: "", cost_amount: "", liability_account_id: "" })} data-testid="transfer-kind">
+            {TRANSFER_GROUPS.map(([group, types]) => (
+              <optgroup key={group} label={group}>
+                {types.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </optgroup>
+            ))}
           </select></label>
         <label className="block"><span className="text-xs text-[var(--ink-2)]">Date</span>
           <input required type="date" className="input-flat w-full mt-1" value={form.date}
             onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
-        <label className="block"><span className="text-xs text-[var(--ink-2)]">Amount</span>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">{withInterest ? "Principal amount" : isSale ? "Amount received from the sale" : "Amount"}</span>
           <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
             onChange={(event) => setForm({ ...form, amount: event.target.value })} data-testid="transfer-amount" /></label>
         <label className="block"><span className="text-xs text-[var(--ink-2)]">{isOwnTransfer ? "From (money leaves)" : "Cash / Bank"}</span>
@@ -757,6 +916,23 @@ function CapitalTransfersForm({ banks, cards = [], onClose, onSaved }) {
         {needsParty && <div className="block"><span className="text-xs text-[var(--ink-2)]">Person / party</span>
           <PartyPicker kind={form.kind} value={{ account_id: form.party_account_id, name: form.party_name }}
             onChange={(v) => setForm((f) => ({ ...f, party_account_id: v.account_id, party_name: v.name, party_outstanding: v.outstanding }))} /></div>}
+        {withInterest && <label className="block"><span className="text-xs text-[var(--ink-2)]">Interest (optional)</span>
+          <input type="number" min="0" step="0.01" className="input-flat w-full mt-1" value={form.interest_amount}
+            onChange={(event) => setForm({ ...form, interest_amount: event.target.value })} data-testid="transfer-interest"
+            placeholder="0" /></label>}
+        {needsItem && <label className="block"><span className="text-xs text-[var(--ink-2)]">{form.kind === "asset_purchase" ? "Asset" : "Investment"}</span>
+          <input className="input-flat w-full mt-1" value={form.item_name} data-testid="transfer-item"
+            onChange={(event) => setForm({ ...form, item_name: event.target.value })}
+            placeholder={form.kind === "asset_purchase" ? "e.g. Laptop - Dell" : "e.g. FD - SBI"} /></label>}
+        {isSale && <label className="block"><span className="text-xs text-[var(--ink-2)]">What the sold part cost</span>
+          <input type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.cost_amount}
+            onChange={(event) => setForm({ ...form, cost_amount: event.target.value })} data-testid="transfer-cost" /></label>}
+        {isTax && <label className="block"><span className="text-xs text-[var(--ink-2)]">Tax being paid</span>
+          <select className="input-flat w-full mt-1" value={form.liability_account_id} data-testid="transfer-tax"
+            onChange={(event) => setForm({ ...form, liability_account_id: event.target.value })}>
+            <option value="">{taxes.length ? "Choose" : "Nothing payable yet"}</option>
+            {taxes.map((t) => <option key={t.id} value={t.id}>{t.name} · {formatINR(Number(t.current_balance || 0))} payable</option>)}
+          </select></label>}
         <label className="block"><span className="text-xs text-[var(--ink-2)]">Reference</span>
           <input className="input-flat w-full mt-1" value={form.reference}
             onChange={(event) => setForm({ ...form, reference: event.target.value })} placeholder="Optional" /></label>
@@ -764,6 +940,14 @@ function CapitalTransfersForm({ banks, cards = [], onClose, onSaved }) {
           <input className="input-flat w-full mt-1" value={form.notes}
             onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Optional details" /></label>
       </div>
+      {TRANSFER_HELP[form.kind] && (
+        <p className="text-xs text-[var(--ink-2)]" data-testid="transfer-help">
+          {TRANSFER_HELP[form.kind]}
+          {withInterest && Number(form.interest_amount) > 0 && Number(form.amount) > 0
+            ? ` Total paid: ${formatINR(Number(form.amount) + Number(form.interest_amount))}.` : ""}
+          {saleGain != null ? ` ${saleGain >= 0 ? "Gain" : "Loss"} on this sale: ${formatINR(Math.abs(saleGain))}.` : ""}
+        </p>
+      )}
       {isOwnTransfer && (
         <p className="text-xs text-[var(--ink-2)]" data-testid="transfer-explain">
           {fromName && toName && Number(form.amount) > 0
@@ -1178,6 +1362,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
     bank_account_id: "", income_account_id: "", payment_method: "bank_transfer",
     reference: "", notes: "",
     request_key: "",
+    tds_amount: "",
   });
 
   const load = () => api.get("/accounting/receivables")
@@ -1190,8 +1375,11 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
     setReceipt((current) => ({
       ...current,
       bank_account_id: current.bank_account_id || banks[0]?.id || "",
+      // The method must match the account shown (Cash -> cash), or the save is refused.
+      payment_method: methodForAccount(banks.find((b) => b.id === (current.bank_account_id || banks[0]?.id))),
       income_account_id: row.income_account_id || current.income_account_id || incomeAccounts[0]?.id || "",
       amount: row.outstanding,
+      tds_amount: "",
       request_key: crypto.randomUUID(),
       notes: `Collection · ${row.name || row.project_name || row.vendor_name}`,
     }));
@@ -1203,8 +1391,14 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
     setSaving(true);
     try {
       const { request_key, ...receiptPayload } = receipt;
+      if (Number(receipt.amount) + Number(receipt.tds_amount || 0) > Number(collecting.outstanding) + 0.009) {
+        toast.error(`Cash + TDS is more than the ${CURRENCY(collecting.outstanding)} pending.`);
+        setSaving(false);
+        return;
+      }
       await api.post("/accounting/collections/receive", {
         ...receiptPayload, amount: Number(receipt.amount),
+        tds_amount: Number(receipt.tds_amount) > 0 ? Number(receipt.tds_amount) : null,
         source_type: collecting.source_type,
         source_id: collecting.id,
       }, { headers: { "Idempotency-Key": request_key } });
@@ -1491,7 +1685,7 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
                 </td>
                 <td className="p-3 text-right whitespace-nowrap">
                   {row.outstanding > 0 && <button type="button" className="btn-primary text-xs mr-2"
-                    onClick={() => openReceipt(row)} disabled={!banks.length || !incomeAccounts.length}>
+                    onClick={() => openReceipt(row)} disabled={!banks.length || !incomeAccounts.length} data-testid={`receive-${row.id}`}>
                     <Money size={12} /> Receive
                   </button>}
                   {row.outstanding > 0 && (
@@ -1541,6 +1735,16 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs">Receipt date<input required type="date" className="input-flat mt-1 w-full" value={receipt.date} onChange={(e) => setReceipt({ ...receipt, date: e.target.value })} /></label>
               <label className="text-xs">Amount received<input required min="0.01" max={collecting.outstanding} step="0.01" type="number" className="input-flat mt-1 w-full" value={receipt.amount} onChange={(e) => setReceipt({ ...receipt, amount: e.target.value })} /></label>
+              {collecting.source_type !== "vendor_commission" && (
+                <label className="text-xs">TDS deducted by the client (optional)
+                  <input min="0" step="0.01" type="number" className="input-flat mt-1 w-full" value={receipt.tds_amount} data-testid="receipt-tds"
+                    onChange={(e) => {
+                      // Client paid net of TDS: keep cash + TDS = what was due.
+                      const tds = e.target.value;
+                      const cash = Math.max(0, Number(collecting.outstanding) - Number(tds || 0));
+                      setReceipt({ ...receipt, tds_amount: tds, amount: Number(tds) > 0 ? cash.toFixed(2) : receipt.amount });
+                    }} placeholder="e.g. 10% under 194J" /></label>
+              )}
               <label className="text-xs">Payment method<select className="input-flat mt-1 w-full" value={receipt.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(banks, method); setReceipt({ ...receipt, payment_method: method, bank_account_id: compatible?.id || receipt.bank_account_id }); }}><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="cheque">Cheque</option><option value="online">Online</option><option value="other">Other</option></select></label>
               <label className="text-xs">Received into<SearchSelect required className="input-flat mt-1 w-full" value={receipt.bank_account_id} onChange={(e) => { const account = banks.find((a) => a.id === e.target.value); setReceipt({ ...receipt, bank_account_id: e.target.value, payment_method: methodForAccount(account) }); }}><option value="" disabled>Select cash / bank</option>{banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</SearchSelect></label>
               <label className="text-xs">Income account<SearchSelect required className="input-flat mt-1 w-full" value={receipt.income_account_id} onChange={(e) => setReceipt({ ...receipt, income_account_id: e.target.value })}><option value="" disabled>Select income account</option>{incomeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</SearchSelect></label>
@@ -1617,6 +1821,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, cards = [], txn
       return;
     }
     const payload = { ...form, amount: Number(form.amount) };
+    if (kind === "income") payload.tds_amount = Number(form.tds_amount) > 0 && !fromVendor ? Number(form.tds_amount) : "";
     if (kind === "expense" && form.gst) payload.gst = Number(form.gst);
     Object.keys(payload).forEach((k) => { if (payload[k] === "" || payload[k] === null) delete payload[k]; });
     await onSubmit(payload);
@@ -1674,6 +1879,10 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, cards = [], txn
                 <option value="">— Employee (optional) —</option>
                 {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{empName(emp)}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
               </SearchSelect>
+              {!fromVendor && (
+                <input type="number" min="0" step="0.01" className="input-flat" placeholder="TDS deducted by client (optional)"
+                  value={form.tds_amount || ""} onChange={(e) => setForm({ ...form, tds_amount: e.target.value })} data-testid="income-tds" />
+              )}
               <p className="md:col-span-3 text-xs text-[var(--ink-2)]" data-testid="income-payer-hint">
                 {fromVendor
                   ? "Vendor incentive: received from the vendor. It is kept apart from the client's fee and never appears on the client's statement."

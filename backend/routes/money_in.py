@@ -390,8 +390,10 @@ async def _payment_receipt_document(receipt_id: str) -> dict:
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0}) if vendor_id else None
     cash_lines = [line for line in journal.get("lines") or []
                   if line.get("account_type") == "asset"
-                  and line.get("account_name") != "Accounts Receivable"
+                  and line.get("account_name") not in ("Accounts Receivable", "TDS Receivable")
                   and float(line.get("debit") or 0) > 0]
+    tds_deducted = round(sum(float(line.get("debit") or 0) for line in journal.get("lines") or []
+                             if line.get("account_name") == "TDS Receivable"), 2)
     amount = round(sum(float(line.get("debit") or 0) for line in cash_lines), 2)
     if amount <= 0:
         raise HTTPException(status_code=409, detail="This entry is not an active money receipt")
@@ -417,6 +419,7 @@ async def _payment_receipt_document(receipt_id: str) -> dict:
             or (settlement or {}).get("reference") or journal.get("reference"),
         "notes": (collection_receipt or {}).get("notes") or (settlement or {}).get("notes"),
         "narration": journal.get("narration"),
+        "tds_deducted": tds_deducted or None,
     }
 
 
@@ -471,11 +474,22 @@ async def _client_statement(client_id: str, from_date: Optional[str], to_date: O
     async for journal in sdb.journal_entries.find(journal_query, {"_id": 0}).sort("date", 1):
         if is_commission_receipt(journal, commission_ids):
             continue
+        if journal.get("source") == "client_refund":
+            refunded = round(sum(float(line.get("credit") or 0) for line in journal.get("lines") or []
+                                 if line.get("account_type") == "asset"), 2)
+            if refunded > 0:
+                transactions.append({
+                    "date": journal.get("date"), "detail": "Refund paid to you",
+                    "reference": journal.get("reference"), "debit": refunded,
+                    "credit": 0.0, "order": 1,
+                })
+            continue
         amount = round(sum(float(line.get("debit") or 0) for line in journal.get("lines") or []
                            if line.get("account_type") == "asset"
                            and line.get("account_name") != "Accounts Receivable"), 2)
         if amount <= 0:
             continue
+        # TDS the client deducted settles the bill as much as cash does.
         transactions.append({
             "date": journal.get("date"), "detail": SOURCE_LABELS.get(journal.get("source"), "Payment received"),
             "reference": journal.get("reference"), "debit": 0.0,
@@ -562,8 +576,10 @@ async def received_payments(request: Request, from_date: Optional[str] = None,
             e.get("client_id") or (project_rows.get(e.get("project_id")) or {}).get("client_id"))
         cash_lines = [l for l in e.get("lines") or []
                       if l.get("account_type") == "asset" and float(l.get("debit") or 0) > 0
-                      and l.get("account_name") != "Accounts Receivable"]
+                      and l.get("account_name") not in ("Accounts Receivable", "TDS Receivable")]
         amount = round(sum(float(l["debit"]) for l in cash_lines), 2)
+        tds = round(sum(float(l.get("debit") or 0) for l in e.get("lines") or []
+                        if l.get("account_name") == "TDS Receivable"), 2)
         if amount <= 0:
             continue
         out.append({
@@ -574,6 +590,7 @@ async def received_payments(request: Request, from_date: Optional[str] = None,
             "narration": e.get("narration"),
             "party": vendors.get(e.get("vendor_id")) if from_vendor else clients.get(client_id),
             "payer": "vendor" if from_vendor else "client",
+            "tds_deducted": tds or None,
             "client_id": client_id, "vendor_id": e.get("vendor_id"),
             "project_id": e.get("project_id"), "project_name": projects.get(e.get("project_id")),
         })

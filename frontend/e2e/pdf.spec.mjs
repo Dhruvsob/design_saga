@@ -42,7 +42,7 @@ test("logo and company details appear on every PDF type", async () => {
 
   await json(ctx.patch("/api/org/current", { data: {
     address: { line1: "QA Test Address", city: "Ahmedabad", state: "Gujarat", pincode: "380001" },
-    phone: "+91 00000 00000", website: "example.com", gstin: "TESTGSTIN00000",
+    phone: "+91 00000 00000", website: "example.com", gstin: "24ABCDE1234F1Z5",
     bank_details: { bank: "QA Test Bank", account: "000000000000", ifsc: "TEST0000000" },
     branding: { tagline: "Architecture & Interior Design", logo_url: logoUrl },
   } }));

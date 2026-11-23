@@ -652,11 +652,173 @@ def case_audit_cleanup(c) -> None:
     check(case, "integrity still verifies", True, v["ok"])
 
 
+def _post_np(c, **body):
+    bank = accounts(c)["Bank - Primary"]["id"]
+    return c.post("/api/accounting/non-operating", json={"bank_account_id": bank, **body})
+
+
+def case_ca_review(c) -> None:
+    """CA review 2026-11-24: every transaction type that had no correct way in."""
+    case = "ca-review"
+    tag = uuid.uuid4().hex[:4]
+    acc = accounts(c)
+    bank = acc["Bank - Primary"]["id"]
+    fee = next(a for a in acc.values() if a["type"] == "income" and "consult" in a["name"].lower())
+    ok(_post_np(c, kind="owner_investment", date="2026-04-02", amount=1000000))
+    pl = lambda: pl_totals(c, from_date="2026-04-01", to_date="2027-03-31")   # noqa: E731
+
+    # -- TDS deducted by the client (194J): 90,000 cash + 10,000 TDS settles 1,00,000
+    pid, cid = _project(c, budget=500000, fee_structure_type="lump_sum", fee_lump_sum_amount=100000)
+    p0, b0 = pl(), balance(c, "Bank - Primary")
+    ok(c.post("/api/accounting/income", json={"date": "2026-06-01", "amount": 90000, "tds_amount": 10000,
+                                              "project_id": pid, "income_account_id": fee["id"],
+                                              "bank_account_id": bank}))
+    check(case, "TDS: bank up by the cash only", 90000, round(balance(c, "Bank - Primary") - b0, 2))
+    check(case, "TDS: claimable TDS recorded", 10000, balance(c, "TDS Receivable"))
+    check(case, "TDS: income is the full fee", 100000, round(pl()["income"] - p0["income"], 2))
+    check(case, "TDS: nothing left to receive on the fee", 0, _money(c, pid)["still_to_receive"])
+    reg = [r for r in ok(c.get("/api/accounting/received-payments"))["rows"] if r.get("project_id") == pid]
+    check(case, "TDS: Money In shows cash and TDS apart", [90000, 10000], [reg[0]["amount"], reg[0].get("tds_deducted")])
+    ms = ok(c.post(f"/api/projects/{pid}/milestones", json={"project_id": pid, "name": "Extra", "amount": 50000}))
+    mid = ms.get("id") or ms.get("milestone", {}).get("id")
+    ok(c.post("/api/accounting/collections/receive", headers={"Idempotency-Key": f"fx-{uuid.uuid4().hex}"}, json={
+        "source_type": "milestone", "source_id": mid, "amount": 45000, "tds_amount": 5000, "date": "2026-06-05",
+        "bank_account_id": bank, "payment_method": "bank_transfer"}))
+    row = next(r for r in ok(c.get("/api/accounting/receivables"))["rows"] if r["id"] == mid)
+    check(case, "TDS via Collections: milestone fully settled", [0, "received"], [row["outstanding"], row["status"]])
+
+    # -- Refund to the client
+    p1, b1 = pl(), balance(c, "Bank - Primary")
+    over = c.post("/api/accounting/client-refund", json={"date": "2026-06-10", "amount": 150000.01, "client_id": cid,
+                                                         "project_id": pid, "bank_account_id": bank})
+    check(case, "refund above what the client paid is refused", 409, over.status_code)
+    other_pid, _other_cid = _project(c, budget=100000, fee_structure_type="lump_sum", fee_lump_sum_amount=50000)
+    wrong = c.post("/api/accounting/client-refund", json={"date": "2026-06-10", "amount": 10, "client_id": cid,
+                                                          "project_id": other_pid, "bank_account_id": bank})
+    check(case, "refund on another client's project is refused", 400, wrong.status_code)
+    ok(c.post("/api/accounting/client-refund", json={"date": "2026-06-10", "amount": 20000, "client_id": cid,
+                                                     "project_id": pid, "bank_account_id": bank, "notes": "Scope reduced"}))
+    check(case, "refund: bank down 20,000", -20000, round(balance(c, "Bank - Primary") - b1, 2))
+    check(case, "refund: income down 20,000", -20000, round(pl()["income"] - p1["income"], 2))
+    check(case, "refund: project received 1,50,000 - 20,000", 130000, _money(c, pid)["received"])
+    led = ok(c.get(f"/api/accounting/ledger/client/{cid}"))
+    check(case, "refund: client ledger agrees with the project (1,50,000 settled incl. TDS - 20,000)", 130000,
+          round(led["inflow"] - led["outflow"], 2))
+    check(case, "refund: client statement renders", 200, c.get(f"/api/clients/{cid}/statement.pdf").status_code)
+
+    # -- Loan taken with interest
+    ok(_post_np(c, kind="money_received", date="2026-07-01", amount=100000, party_name=f"Lender {tag}"))
+    lender = next(r for r in _party_rows(c, "loan") if r["party_name"] == f"Lender {tag}")
+    p2, b2 = pl(), balance(c, "Bank - Primary")
+    ok(_post_np(c, kind="repayment_paid", date="2026-08-01", amount=40000, interest_amount=2000,
+                party_account_id=lender["id"]))
+    check(case, "loan: principal reduces the loan only", 60000, balance(c, f"Loan from - Lender {tag}"))
+    check(case, "loan: interest is an expense", 2000, round(pl()["expense"] - p2["expense"], 2))
+    check(case, "loan: bank pays principal + interest", -42000, round(balance(c, "Bank - Primary") - b2, 2))
+    bad_int = _post_np(c, kind="money_received", date="2026-08-01", amount=10, interest_amount=1, party_name=f"Lender {tag}")
+    check(case, "interest on a new loan is refused", 400, bad_int.status_code)
+
+    # -- Loan given with interest
+    ok(_post_np(c, kind="money_given", date="2026-07-01", amount=50000, party_name=f"Borrower {tag}"))
+    borrower = next(r for r in _party_rows(c, "advance") if r["party_name"] == f"Borrower {tag}")
+    p3 = pl()
+    ok(_post_np(c, kind="repayment_received", date="2026-08-01", amount=20000, interest_amount=1500,
+                party_account_id=borrower["id"]))
+    check(case, "loan given: principal back reduces what they owe", 30000, balance(c, f"Advance to - Borrower {tag}"))
+    check(case, "loan given: interest is income", 1500, round(pl()["income"] - p3["income"], 2))
+
+    # -- Investment bought and sold (gain and loss), legacy "Gold" in the picker
+    ok(_post_np(c, kind="investment_purchase", date="2026-07-05", amount=200000, item_name=f"FD - SBI {tag}"))
+    fd = next(r for r in _party_rows(c, "investment") if r["party_name"] == f"FD - SBI {tag}")
+    p4 = pl()
+    ok(_post_np(c, kind="investment_sale", date="2026-09-01", amount=108000, cost_amount=100000, party_account_id=fd["id"]))
+    ok(_post_np(c, kind="investment_sale", date="2026-09-02", amount=45000, cost_amount=50000, party_account_id=fd["id"]))
+    check(case, "investment: 50,000 of cost left", 50000, balance(c, f"Investments - FD - SBI {tag}"))
+    check(case, "investment: gain 8,000 in income", 8000, round(pl()["income"] - p4["income"], 2))
+    check(case, "investment: loss 5,000 in expenses", 5000, round(pl()["expense"] - p4["expense"], 2))
+    too_much = _post_np(c, kind="investment_sale", date="2026-09-03", amount=60000, cost_amount=50000.01, party_account_id=fd["id"])
+    check(case, "investment: selling more than held is refused", 409, too_much.status_code)
+    gold = acc.get("Gold") or ok(c.post("/api/accounts", json={"name": "Gold", "type": "asset"}))
+    check(case, "legacy 'Gold' ledger is offered as an investment", True,
+          any(r["id"] == gold["id"] for r in _party_rows(c, "investment")))
+
+    # -- Asset bought (not an expense)
+    p5 = pl()
+    ok(_post_np(c, kind="asset_purchase", date="2026-07-10", amount=80000, item_name=f"Laptop {tag}"))
+    check(case, "asset: on the balance sheet", 80000, balance(c, f"Fixed Asset - Laptop {tag}"))
+    check(case, "asset: not an expense", p5["expense"], pl()["expense"])
+
+    # -- Tax payable paid to the government
+    prof = next(a for a in acc.values() if a["type"] == "expense" and "professional" in a["name"].lower())
+    tds_pay = acc["TDS Payable"]["id"]
+    ok(c.post("/api/journal-entries", json={"date": "2026-07-15", "narration": f"Consultant fee with TDS {tag}", "lines": [
+        {"account_id": prof["id"], "debit": 10000, "credit": 0},
+        {"account_id": tds_pay, "debit": 0, "credit": 1000},
+        {"account_id": bank, "debit": 0, "credit": 9000}]}))
+    owed = balance(c, "TDS Payable")
+    overpay = _post_np(c, kind="tax_payment", date="2026-08-07", amount=owed + 0.01, liability_account_id=tds_pay)
+    check(case, "tax: paying more than payable is refused", 409, overpay.status_code)
+    ok(_post_np(c, kind="tax_payment", date="2026-08-07", amount=owed, liability_account_id=tds_pay))
+    check(case, "tax: TDS payable cleared", 0, balance(c, "TDS Payable"))
+    not_tax = _post_np(c, kind="tax_payment", date="2026-08-07", amount=1, liability_account_id=lender["id"])
+    check(case, "tax: a loan is not a tax", 400, not_tax.status_code)
+
+    # -- Refundable deposit, money held for a client
+    ok(_post_np(c, kind="deposit_paid", date="2026-07-01", amount=60000, party_name=f"Landlord {tag}"))
+    dep = next(r for r in _party_rows(c, "deposit") if r["party_name"] == f"Landlord {tag}")
+    over_dep = _post_np(c, kind="deposit_refund_received", date="2026-12-01", amount=60000.01, party_account_id=dep["id"])
+    check(case, "deposit: refund above the deposit is refused", 409, over_dep.status_code)
+    ok(_post_np(c, kind="deposit_refund_received", date="2026-12-01", amount=60000, party_account_id=dep["id"]))
+    check(case, "deposit: refunded in full", 0, balance(c, f"Deposit with - Landlord {tag}"))
+    p6 = pl()
+    ok(_post_np(c, kind="held_received", date="2026-07-02", amount=100000, party_name=f"Client funds {tag}"))
+    held = next(r for r in _party_rows(c, "held") if r["party_name"] == f"Client funds {tag}")
+    ok(_post_np(c, kind="held_paid_out", date="2026-07-20", amount=70000, party_account_id=held["id"]))
+    check(case, "held: 30,000 still owed back", 30000, balance(c, f"Held for - Client funds {tag}"))
+    check(case, "held: never income or expense", [p6["income"], p6["expense"]], [pl()["income"], pl()["expense"]])
+
+    # -- Concurrency: two full repayments at once, only one may pass
+    import concurrent.futures
+    ok(_post_np(c, kind="money_received", date="2026-10-01", amount=5000, party_name=f"Race {tag}"))
+    race = next(r for r in _party_rows(c, "loan") if r["party_name"] == f"Race {tag}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        codes = sorted(f.result().status_code for f in [pool.submit(
+            _post_np, c, kind="repayment_paid", date="2026-10-02", amount=5000, party_account_id=race["id"]) for _ in range(2)])
+    check(case, "concurrency: one repayment posts, the other is refused", 200, codes[0])
+    check(case, "concurrency: loan never below zero", 0, balance(c, f"Loan from - Race {tag}"))
+
+    # -- GST: an unregistered studio cannot charge or claim GST
+    gst_inv = c.post("/api/invoices", json={"client_id": cid, "project_id": pid, "doc_type": "invoice", "status": "draft",
+                                            "tax_rate": 18, "items": [{"description": "Fee", "quantity": 1, "rate": 1000}]})
+    check(case, "GST: no GSTIN, no GST invoice", 400, gst_inv.status_code)
+    bad_gstin = c.patch("/api/org/current", json={"gstin": "12345"})
+    check(case, "GSTIN format is checked", 422, bad_gstin.status_code)
+    misc = next(a for a in acc.values() if a["type"] == "expense" and "misc" in a["name"].lower())
+    p7 = pl()
+    ok(c.post("/api/accounting/expense", json={"date": "2026-08-10", "amount": 1000, "gst": 180,
+                                               "expense_account_id": misc["id"], "paid_from_account_id": bank}))
+    check(case, "GST: unregistered, GST paid is part of the cost", 1180, round(pl()["expense"] - p7["expense"], 2))
+    ok(c.patch("/api/org/current", json={"gstin": "24ABCDE1234F1Z5"}))
+    ok(c.post("/api/invoices", json={"client_id": cid, "project_id": pid, "doc_type": "invoice", "status": "draft",
+                                     "tax_rate": 18, "items": [{"description": "Fee", "quantity": 1, "rate": 1000}]}))
+    ok(c.patch("/api/org/current", json={"gstin": ""}))
+
+    # -- The books still agree with themselves
+    trial_balance_ok(c, case)
+    balance_sheet_ok(c, case)
+    cf = ok(c.get("/api/accounting/reports/cash-flow", params={"fy": "2026-27"}))
+    cf_open = cf.get("opening_cash", cf.get("opening_balance", cf.get("opening")))
+    cf_close = cf.get("closing_cash", cf.get("closing_balance", cf.get("closing")))
+    cf_net = cf.get("net_change", cf.get("net_cash_flow", cf.get("net")))
+    if None not in (cf_open, cf_close, cf_net):
+        check(case, "cash flow: opening + net = closing", round(float(cf_open) + float(cf_net), 2), round(float(cf_close), 2))
+
+
 def main() -> None:
     admin = new_workspace()
     for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end,
                case_cash_deposit, case_party_ledger, case_fee_vs_commission,
-               case_who_paid, case_credit_card, case_cash_guard, case_user_delete, case_audit_cleanup):
+               case_who_paid, case_credit_card, case_cash_guard, case_user_delete, case_audit_cleanup, case_ca_review):
         try:
             fn(admin)
         except Exception as exc:  # keep going so one gap does not hide the rest

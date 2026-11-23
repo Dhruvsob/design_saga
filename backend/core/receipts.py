@@ -19,7 +19,7 @@ from core.scoped_db import sdb
 
 COMMISSION_NAME = re.compile(r"commission|incentive", re.IGNORECASE)
 CLIENT_MONEY_IN_SOURCES = ("income", "invoice_payment", "milestone_payment",
-                           "other_receivable_income")
+                           "other_receivable_income", "client_refund")
 
 
 async def commission_account_ids(db=None) -> set:
@@ -67,7 +67,11 @@ async def project_client_id(project_id: Optional[str], db=None) -> Optional[str]
 def signed_cash_in(journal: dict) -> float:
     """Cash received by a money-in entry: debits to cash/bank lines, or minus
     the credits on its reversal."""
-    is_reversal = str(journal.get("source") or "").endswith("_reversal")
+    source = str(journal.get("source") or "")
+    # A reversal, or a refund paid back to the client, takes money out.
+    is_reversal = source.endswith("_reversal") or source == "client_refund"
+    if source == "client_refund_reversal":
+        is_reversal = False          # undoing a refund puts the money back
     side = "credit" if is_reversal else "debit"
     cash = sum(float(line.get(side) or 0) for line in journal.get("lines") or []
                if line.get("account_type") == "asset"

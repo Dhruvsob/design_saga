@@ -5,8 +5,13 @@ A single Design Saga deployment can host many independent companies
 Complete data isolation is enforced at the query layer via
 `core.tenancy.tenant_filter()`.
 """
-from pydantic import BaseModel, EmailStr, Field
+import re
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Literal
+
+_GSTIN = re.compile(r"^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
+_PAN = re.compile(r"^[A-Z]{5}\d{4}[A-Z]$")
 
 
 
@@ -137,6 +142,22 @@ class BrandingUpdateIn(BaseModel):
     accounting_basis: Optional[Literal["cash", "accrual"]] = None
     signature_url: Optional[str] = None
     stamp_url: Optional[str] = None
+
+    @field_validator("gstin", "pan")
+    @classmethod
+    def _tax_id_format(cls, value, info):
+        # Printed on tax invoices and checked by GST: a typo makes every
+        # invoice invalid (CA review 2026-11-24). Empty clears it.
+        text = str(value or "").strip().upper()
+        if not text:
+            return value if value is None else ""
+        if info.field_name == "gstin":
+            pattern, label = _GSTIN, "GSTIN (15 characters, e.g. 24ABCDE1234F1Z5)"
+        else:
+            pattern, label = _PAN, "PAN (10 characters, e.g. ABCDE1234F)"
+        if not pattern.match(text):
+            raise ValueError(f"Enter a valid {label}")
+        return text
 
 
 DEFAULT_FEATURES = {

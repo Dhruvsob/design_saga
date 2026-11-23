@@ -101,6 +101,42 @@ async def _assert_payroll_reviews_resolved(employee_id: str, year: int, month: i
         )
 
 
+STATUTORY_PAYABLES = (("tds", "TDS Payable"), ("pf", "PF Payable"),
+                      ("esi", "ESI Payable"), ("pt", "Professional Tax Payable"))
+
+
+async def _salary_lines(breakdown: dict, extras: dict, net: float, salary_acc_id: str,
+                        paid_from_id: str, emp_name: str) -> list:
+    """Journal lines for one salary (CA review 2026-11-24).
+
+    Salary cost = net paid + advance recovered + PF/ESI/PT/TDS withheld. The
+    withheld amounts are owed to the government (liabilities until paid);
+    before, they were left out, so salary cost was understated and the dues
+    never appeared. Loss-of-pay and other retained deductions are not a cost.
+    """
+    from routes.accounting import _ensure_named_account
+    from routes import employee_advances as _adv
+    recovered = round(float((extras or {}).get("advances_recovered") or 0), 2)
+    withheld = []
+    for key, name in STATUTORY_PAYABLES:
+        value = round(float((breakdown or {}).get(key) or 0), 2)
+        if value > 0:
+            account = await _ensure_named_account(name, "liability")
+            withheld.append({"account_id": account["id"], "debit": 0, "credit": value,
+                             "description": f"{name.replace(' Payable', '')} withheld - {emp_name}"})
+    cost = round(net + recovered + sum(line["credit"] for line in withheld), 2)
+    lines = [
+        {"account_id": salary_acc_id, "debit": cost, "credit": 0, "description": f"Payroll — {emp_name}"},
+        {"account_id": paid_from_id, "debit": 0, "credit": net, "description": "Paid"},
+    ]
+    if recovered > 0:
+        # The recovered part of salary settles the employee's advance, not cash.
+        adv_account = await _adv.advances_account()
+        lines.append({"account_id": adv_account["id"], "debit": 0, "credit": recovered,
+                      "description": f"Advance recovered — {emp_name}"})
+    return lines + withheld
+
+
 def _compute_net(salary: dict, extras: dict) -> dict:
     """Return {gross, deductions, additions, net}."""
     if not salary:
@@ -317,16 +353,8 @@ async def pay_salary(eid: str, payload: PaySalaryIn, request: Request,
 
     emp_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip() or emp.get("employee_id") or eid
     narration = f"Salary {payload.year}-{payload.month:02d} — {emp_name}"
-    lines = [
-        {"account_id": salary_acc_id, "debit": round(net + recovered, 2), "credit": 0,
-         "description": f"Payroll — {emp_name}"},
-        {"account_id": payload.paid_from_account_id, "debit": 0, "credit": net, "description": "Paid"},
-    ]
-    if recovered > 0:
-        # The recovered part of salary settles the employee's advance, not cash.
-        adv_account = await _adv.advances_account()
-        lines.append({"account_id": adv_account["id"], "debit": 0, "credit": recovered,
-                      "description": f"Advance recovered — {emp_name}"})
+    lines = await _salary_lines(breakdown, extras, net, salary_acc_id,
+                                payload.paid_from_account_id, emp_name)
     date_str = payment_date
     run_id = new_id("pr_")
     run = {
@@ -587,8 +615,7 @@ async def correct_salary_payment(run_id: str, payload: SalaryCorrectionIn, reque
         try:
             je = await _post_journal(
                 user, payload.payment_date, f"Salary {run['year']}-{run['month']:02d} — {emp_name}",
-                [{"account_id": salary_acc_id, "debit": net, "credit": 0, "description": f"Payroll — {emp_name}"},
-                 {"account_id": paid_from["id"], "debit": 0, "credit": net, "description": "Paid"}],
+                await _salary_lines(breakdown, extras, net, salary_acc_id, paid_from["id"], emp_name),
                 reference=payload.reference or f"PAYROLL-{run['year']}-{run['month']:02d}",
                 employee_id=run["employee_id"], source="payroll", source_id=new_run_id,
             )

@@ -67,6 +67,9 @@ export default async function globalSetup() {
 
   const admin = await session(adminEmail, password);
   await ensurePin(admin);
+  // GST invoices need a GSTIN (an unregistered studio cannot charge GST).
+  const gst = await admin.patch("/api/org/current", { data: { gstin: "24ABCDE1234F1Z5" } });
+  if (!gst.ok()) throw new Error(`setting the QA GSTIN failed: ${gst.status()} ${await gst.text()}`);
   const reg = await admin.post("/api/auth/register", { data: {
     email: employeeEmail, password, name: "QA Employee", role: "Employee",
     approve_immediately: true,

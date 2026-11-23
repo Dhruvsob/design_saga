@@ -299,6 +299,7 @@ test("cash deposit: Rs 50,000 cash into SBI moves money between accounts, profit
   await expect(form.getByTestId("transfer-kind")).toHaveValue("own_transfer");
   await form.getByTestId("transfer-from").click();
   await page.getByRole("option", { name: "Cash", exact: true }).click();
+  await expect(page.getByRole("listbox")).toHaveCount(0);   // the From list has closed
   await form.getByTestId("transfer-to").click();
   await page.getByRole("option", { name: sbiName, exact: true }).click();
   await form.getByTestId("transfer-amount").fill("50000");
@@ -443,5 +444,65 @@ test("credit card: created as a card, offered as 'paid from' for expenses, never
   await page.getByTestId("quick-income-btn").click();
   await page.getByTestId("income-form").getByTestId("income-bank").click();
   await expect(page.getByRole("option", { name: new RegExp(name) })).toHaveCount(0);
+  await ctx.dispose();
+});
+
+test("CA forms: repay a loan with interest, receive with TDS, refund a client", async ({ browser }) => {
+  // CA review 2026-11-24: none of these had a correct way in.
+  const ctx = await api("admin");
+  const { bank } = await accounts(ctx);
+  const person = `Lender ${uid()}`;
+  await json(ctx.post("/api/accounting/non-operating", { data: {
+    kind: "money_received", date: today(), amount: 100000, bank_account_id: bank.id, party_name: person } }));
+  const client = await json(ctx.post("/api/clients", { data: { name: `TDS Client ${uid()}` } }));
+  const project = await json(ctx.post("/api/projects", { data: {
+    name: `TDS Project ${uid()}`, client_id: client.id, project_type: "Residential", engagement_type: "consultancy",
+    budget: 500000, fee_structure_type: "lump_sum", fee_lump_sum_amount: 100000 } }));
+  const pid = project.id || project.project?.id;
+  const pname = project.name || project.project?.name;
+  const ms = await json(ctx.post(`/api/projects/${pid}/milestones`, { data: { project_id: pid, name: "Concept", amount: 100000, due_date: today() } }));
+  const mid = ms.id || ms.milestone?.id;
+
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/accounting");
+  // 1. Repay 40,000 + 2,000 interest
+  await page.getByTestId("more-actions-btn").click();
+  await page.getByTestId("capital-transfers-btn").click();
+  const form = page.getByTestId("capital-transfers-form");
+  await form.getByTestId("transfer-kind").selectOption("repayment_paid");
+  await form.getByTestId("transfer-party").fill(person.slice(0, 3));
+  await page.getByTestId("party-options").getByRole("option").filter({ hasText: person }).click();
+  await form.getByTestId("transfer-from").click();
+  await page.getByRole("option", { name: "Bank - Primary", exact: true }).click();
+  await form.getByTestId("transfer-amount").fill("40000");
+  await form.getByTestId("transfer-interest").fill("2000");
+  await expect(form.getByTestId("transfer-help")).toContainText("Total paid: ₹42,000");
+  await form.getByTestId("transfer-submit").click();
+  await expect(page.getByText("Transaction recorded in the correct ledgers")).toBeVisible();
+  const loans = async () => (await json(ctx.get("/api/accounting/party-accounts?side=loan"))).accounts.find((a) => a.party_name === person);
+  await expect.poll(async () => (await loans())?.outstanding).toBe(60000);
+
+  // 2. Collections Due: 90,000 cash + 10,000 TDS settles the milestone
+  await page.goto("/accounting?tab=receivables");
+  await page.getByTestId(`receive-${mid}`).click();
+  await page.getByTestId("receipt-tds").fill("10000");          // cash fills in as 90,000
+  await page.getByRole("button", { name: "Record receipt" }).click();
+  await expect(page.getByText("Collection receipt recorded")).toBeVisible();
+  await expect.poll(async () => (await json(ctx.get("/api/accounting/receivables"))).rows.find((r) => r.id === mid)?.status).toBe("received");
+
+  // 3. Refund 5,000 to the client
+  await page.goto("/accounting");
+  await page.getByTestId("more-actions-btn").click();
+  await page.getByTestId("client-refund-btn").click();
+  const refund = page.getByTestId("client-refund-form");
+  await refund.getByTestId("refund-client").click();
+  await page.getByRole("option", { name: client.name, exact: true }).click();
+  await refund.getByTestId("refund-project").click();
+  await page.getByRole("option", { name: pname, exact: true }).click();
+  await refund.getByTestId("refund-amount").fill("5000");
+  await refund.getByTestId("refund-submit").click();
+  await expect(page.getByText("Refund recorded")).toBeVisible();
+  const money = (await json(ctx.get(`/api/projects/${pid}`))).money;
+  expect(money.received).toBe(95000);
   await ctx.dispose();
 });

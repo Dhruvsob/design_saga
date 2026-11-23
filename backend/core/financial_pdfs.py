@@ -93,6 +93,8 @@ def generate_payment_receipt_pdf(receipt: dict, org: Optional[dict] = None) -> b
         ("For", receipt.get("collection_name") or receipt.get("source_label")),
         ("Payment method", receipt.get("payment_method_label") or receipt.get("payment_method")),
         ("Received into", receipt.get("account_name")),
+        # TDS the payer deducted: their payment also settled this much.
+        ("TDS deducted by you", inr(receipt["tds_deducted"]) if receipt.get("tds_deducted") else None),
         ("Reference", receipt.get("reference")),
         ("Notes", receipt.get("notes") or receipt.get("narration")),
     ])

@@ -205,6 +205,13 @@ def test_non_operating_workflows_post_expected_debit_and_credit(monkeypatch):
     async def plenty_of_cash(*_args, **_kwargs):   # the till holds enough (cash guard: own tests)
         return 10_000_000.0
     monkeypatch.setattr(accounting, "_cash_available_on", plenty_of_cash)
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def no_lock(*_args, **_kwargs):   # balance locks are covered by the live acceptance run
+        yield "lock"
+    monkeypatch.setattr(accounting, "doc_lock", no_lock)
     monkeypatch.setattr(accounting, "_post_journal", post)
     monkeypatch.setattr(accounting, "audit", noop)
 

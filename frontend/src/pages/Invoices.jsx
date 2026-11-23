@@ -83,7 +83,8 @@ export default function Invoices({ docType = "invoice" }) {
     return {
       client_id: "", project_id: "",
       items: [{ description: "", quantity: 1, rate: "", amount: 0 }],
-      tax_rate: 18, notes: "Payment due within 15 days.",
+      // No GSTIN, no GST: an unregistered studio cannot charge it.
+      tax_rate: currentOrg?.gstin ? 18 : 0, notes: "Payment due within 15 days.",
       due_date: "", status: "draft", doc_type: dt, milestone_id: "",
     };
   }

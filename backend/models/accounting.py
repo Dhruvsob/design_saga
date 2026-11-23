@@ -90,6 +90,9 @@ class NonOperatingTransactionIn(FiniteModel):
         "owner_investment", "owner_withdrawal", "gold_purchase",
         "money_given", "money_received", "repayment_received", "repayment_paid",
         "own_transfer",
+        # Added 2026-11-24 (CA review): each had no correct way in before.
+        "investment_purchase", "investment_sale", "asset_purchase", "tax_payment",
+        "deposit_paid", "deposit_refund_received", "held_received", "held_paid_out",
     ]
     date: str
     amount: float = Field(gt=0)
@@ -99,6 +102,30 @@ class NonOperatingTransactionIn(FiniteModel):
     # the list. Repayments must name one; new money may name one or a new person.
     party_account_id: Optional[str] = Field(default=None, max_length=60)
     party_name: Optional[str] = Field(default=None, max_length=120)
+    reference: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+    # Interest paid with a loan repayment, or received with money paid back to
+    # you: booked as an expense / income, never against the principal.
+    interest_amount: Optional[float] = Field(default=None, ge=0)
+    # investment_purchase / asset_purchase: what was bought ("FD - SBI", "Laptop").
+    item_name: Optional[str] = Field(default=None, max_length=120)
+    # investment_sale: the purchase cost of the part sold (gain/loss = amount - cost).
+    cost_amount: Optional[float] = Field(default=None, gt=0)
+    # tax_payment: GST / TDS / PF / ESI / Professional Tax payable being paid.
+    liability_account_id: Optional[str] = Field(default=None, max_length=60)
+
+
+class ClientRefundIn(FiniteModel):
+    """Money paid back to a client (part of a fee or an advance)."""
+    date: str
+    amount: float = Field(gt=0)
+    client_id: str
+    project_id: Optional[str] = None
+    bank_account_id: str
+    income_account_id: Optional[str] = None      # the income it was booked to (default: consultancy)
+    payment_method: Literal[
+        "cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"
+    ] = "bank_transfer"
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
 
@@ -120,6 +147,9 @@ class IncomeIn(FiniteModel):
     invoice_id: Optional[str] = None
     milestone_id: Optional[str] = None
     notes: Optional[str] = None
+    # TDS the client deducted (e.g. 10% u/s 194J): the client settled
+    # amount + tds; the tds is a credit claimable from the tax department.
+    tds_amount: Optional[float] = Field(default=None, ge=0)
 
     @field_validator("date")
     @classmethod
@@ -208,6 +238,7 @@ class CollectionReceiptIn(FiniteModel):
     ] = "bank_transfer"
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
+    tds_amount: Optional[float] = Field(default=None, ge=0)     # TDS deducted by the payer
 
     @field_validator("date")
     @classmethod

@@ -37,7 +37,7 @@ from core.finance import (
     resolve_period, current_fy_label, fy_choices, fy_range, require_asset_account, is_card_account,
 )
 from models.accounting import (
-    AccountIn, JournalIn, IncomeIn, ExpenseIn, NonOperatingTransactionIn,
+    AccountIn, JournalIn, IncomeIn, ExpenseIn, NonOperatingTransactionIn, ClientRefundIn,
     MilestoneIn, MilestoneUpdate, OtherReceivableIn, OtherReceivableUpdate,
     CollectionReceiptIn,
     ACCOUNT_TYPES, DEFAULT_COA, PAYMENT_METHODS,
@@ -809,14 +809,23 @@ PARTY_SIDES = {
     # side: (name prefix, account type, words for messages)
     "loan": ("Loan from", "liability", "money you borrowed from"),
     "advance": ("Advance to", "asset", "money you gave to"),
+    "deposit": ("Deposit with", "asset", "a refundable deposit you paid to"),
+    "held": ("Held for", "liability", "money you hold on behalf of"),
+    "investment": ("Investments", "asset", "an investment in"),
 }
+# Gold bought before investments were named "Investments - X" (the owner's
+# ledger is called "Gold") is still an investment.
+_LEGACY_INVESTMENT = re.compile(r"^(gold|silver)$", re.IGNORECASE)
+TAX_LIABILITIES = ("GST Payable", "TDS Payable", "PF Payable", "ESI Payable", "Professional Tax Payable")
 
 
 def _party_side_of(account: dict) -> Optional[str]:
-    name = str(account.get("name") or "")
+    name = str(account.get("name") or "").strip()
     for side, (prefix, acc_type, _words) in PARTY_SIDES.items():
         if account.get("type") == acc_type and name.lower().startswith(f"{prefix.lower()} -"):
             return side
+    if account.get("type") == "asset" and _LEGACY_INVESTMENT.match(name):
+        return "investment"
     return None
 
 
@@ -912,6 +921,16 @@ async def _ensure_named_account(
     return account
 
 
+async def _interest_account(kind: str) -> dict:
+    """Interest paid (expense) / received (income): reuse an existing interest
+    ledger of that type (e.g. "Interest Expense" from the loans module)."""
+    existing = await sdb.accounts.find_one(
+        {"type": kind, "active": {"$ne": False}, "name": {"$regex": "^interest", "$options": "i"}}, {"_id": 0})
+    if existing:
+        return existing
+    return await _ensure_named_account("Interest Paid" if kind == "expense" else "Interest Received", kind)
+
+
 async def _cash_available_on(account: dict, on_date: str) -> float:
     """What can leave a cash account on `on_date` without the till being
     below zero then, or on any later date already recorded."""
@@ -989,10 +1008,11 @@ async def create_non_operating_transaction(
     if is_card_account(source_account):
         # Spending on the studio's credit card for someone (to be paid back)
         # or for the owner personally: the card's dues go up, no bank moves.
-        if kind not in {"money_given", "owner_withdrawal"}:
+        if kind not in {"money_given", "owner_withdrawal", "asset_purchase"}:
             raise HTTPException(status_code=400, detail=(
-                "A credit card can only be used here to pay for a person (to be paid back) or for the owner "
-                "personally. Pay the card bill with Deposit cash / move money (From: bank, To: the card)."))
+                "A credit card can only be used here to pay for a person (to be paid back), for the owner "
+                "personally, or to buy an asset. Pay the card bill with Deposit cash / move money "
+                "(From: bank, To: the card)."))
         bank = source_account
     else:
         bank = source_account
@@ -1042,6 +1062,46 @@ async def create_non_operating_transaction(
         counter = await _ensure_named_account("Investments - Gold", "asset")
         debit_account, credit_account = counter, bank
         narration = "Gold investment purchased"
+    elif kind in {"investment_purchase", "asset_purchase"}:
+        item = " ".join(str(payload.item_name or "").split())
+        if len(item) < 2:
+            raise HTTPException(status_code=400, detail="Name what you bought (e.g. FD - SBI, Laptop)")
+        if kind == "investment_purchase":
+            counter = await _ensure_named_account(f"Investments - {item}", "asset")
+            narration = f"Investment purchased: {item}"
+        else:
+            # A laptop, furniture or a car is an asset of the studio, not an
+            # expense of the month it was bought in.
+            counter = await _ensure_named_account(f"Fixed Asset - {item}", "asset")
+            narration = f"Asset purchased: {item}"
+        debit_account, credit_account = counter, bank
+    elif kind == "investment_sale":
+        if not payload.party_account_id:
+            raise HTTPException(status_code=400, detail="Choose the investment you sold from the list")
+        counter, item = await _party_ledger(payload, "investment", create=False)
+        if not payload.cost_amount:
+            raise HTTPException(status_code=400, detail="Enter what the sold part originally cost")
+        debit_account, credit_account = bank, counter
+        narration = f"Investment sold: {item}"
+    elif kind == "tax_payment":
+        liability = await sdb.accounts.find_one(
+            {"id": payload.liability_account_id, "active": {"$ne": False}}, {"_id": 0}) \
+            if payload.liability_account_id else None
+        if not liability or liability.get("type") != "liability" or liability.get("name") not in TAX_LIABILITIES:
+            raise HTTPException(status_code=400, detail="Choose the tax you are paying: " + ", ".join(TAX_LIABILITIES))
+        counter = liability
+        debit_account, credit_account = counter, bank
+        narration = f"Paid to government: {liability['name']}"
+    elif kind in {"deposit_paid", "deposit_refund_received"}:
+        counter, person = await _party_ledger(payload, "deposit", create=kind == "deposit_paid")
+        debit_account, credit_account = (counter, bank) if kind == "deposit_paid" else (bank, counter)
+        narration = (f"Refundable deposit paid to {person}" if kind == "deposit_paid"
+                     else f"Deposit refunded by {person}")
+    elif kind in {"held_received", "held_paid_out"}:
+        counter, person = await _party_ledger(payload, "held", create=kind == "held_received")
+        debit_account, credit_account = (bank, counter) if kind == "held_received" else (counter, bank)
+        narration = (f"Money received to hold for {person}" if kind == "held_received"
+                     else f"Paid out of money held for {person}")
     elif kind in {"money_given", "repayment_received"}:
         counter, person = await _party_ledger(payload, "advance", create=kind == "money_given")
         debit_account, credit_account = (
@@ -1063,31 +1123,78 @@ async def create_non_operating_transaction(
             else f"Repayment paid to {person}"
         )
 
-    if kind in {"owner_withdrawal", "gold_purchase", "money_given", "repayment_paid"}:
-        await _refuse_cash_shortfall(bank, payload.date, amount)
-    if kind in {"repayment_received", "repayment_paid"}:
-        outstanding = await _current_account_balance(counter)
-        if amount > outstanding + 0.009:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Repayment exceeds the outstanding balance of {outstanding:.2f}",
-            )
-
+    interest = round(float(payload.interest_amount or 0), 2)
+    if interest and kind not in {"repayment_paid", "repayment_received"}:
+        raise HTTPException(status_code=400, detail="Interest goes with a loan repayment only")
     if payload.notes and payload.notes.strip():
         narration = f"{narration} - {payload.notes.strip()}"
-    journal = await _post_journal(
-        user,
-        payload.date,
-        narration,
-        [
-            {"account_id": debit_account["id"], "debit": amount, "credit": 0,
-             "description": narration},
-            {"account_id": credit_account["id"], "debit": 0, "credit": amount,
-             "description": narration},
-        ],
-        reference=payload.reference,
-        source="transfer" if kind == "own_transfer" else "non_operating",
-    )
+    lines = [
+        {"account_id": debit_account["id"], "debit": amount, "credit": 0, "description": narration},
+        {"account_id": credit_account["id"], "debit": 0, "credit": amount, "description": narration},
+    ]
+    if interest and kind == "repayment_paid":
+        # Principal reduces the loan; the interest is a cost of borrowing.
+        interest_acc = await _interest_account("expense")
+        lines = [
+            {"account_id": counter["id"], "debit": amount, "credit": 0, "description": "Principal repaid"},
+            {"account_id": interest_acc["id"], "debit": interest, "credit": 0, "description": "Interest paid"},
+            {"account_id": bank["id"], "debit": 0, "credit": round(amount + interest, 2), "description": narration},
+        ]
+    elif interest and kind == "repayment_received":
+        interest_acc = await _interest_account("income")
+        lines = [
+            {"account_id": bank["id"], "debit": round(amount + interest, 2), "credit": 0, "description": narration},
+            {"account_id": counter["id"], "debit": 0, "credit": amount, "description": "Principal received back"},
+            {"account_id": interest_acc["id"], "debit": 0, "credit": interest, "description": "Interest received"},
+        ]
+    elif kind == "investment_sale":
+        cost = round(float(payload.cost_amount), 2)
+        lines = [
+            {"account_id": bank["id"], "debit": amount, "credit": 0, "description": narration},
+            {"account_id": counter["id"], "debit": 0, "credit": cost, "description": "Cost of the part sold"},
+        ]
+        if amount > cost + 0.004:
+            gain = await _ensure_named_account("Gain on Sale of Investments", "income")
+            lines.append({"account_id": gain["id"], "debit": 0, "credit": round(amount - cost, 2),
+                          "description": "Gain on sale"})
+        elif cost > amount + 0.004:
+            loss = await _ensure_named_account("Loss on Sale of Investments", "expense")
+            lines.append({"account_id": loss["id"], "debit": round(cost - amount, 2), "credit": 0,
+                          "description": "Loss on sale"})
+
+    cash_out = round(amount + (interest if kind == "repayment_paid" else 0), 2)
+    balance_checked = {"repayment_received": "Repayment exceeds the outstanding balance",
+                       "repayment_paid": "Repayment exceeds the outstanding balance",
+                       "deposit_refund_received": "More than the deposit outstanding",
+                       "held_paid_out": "More than the money you hold for them",
+                       "tax_payment": "More than is payable",
+                       "investment_sale": "The cost sold is more than the investment's value"}
+    from contextlib import AsyncExitStack
+    async with AsyncExitStack() as locks:
+        # One posting at a time per balance being checked (two quick clicks
+        # or two users cannot both pass the check).
+        for lock_id in sorted({counter["id"], bank["id"]} if kind in balance_checked or _is_cash(bank)
+                              else set()):
+            await locks.enter_async_context(doc_lock(sdb.accounts, lock_id))
+        if kind in {"owner_withdrawal", "gold_purchase", "money_given", "repayment_paid",
+                    "investment_purchase", "asset_purchase", "tax_payment", "deposit_paid", "held_paid_out"}:
+            await _refuse_cash_shortfall(bank, payload.date, cash_out)
+        if kind in balance_checked:
+            outstanding = await _current_account_balance(counter)
+            checked = round(float(payload.cost_amount), 2) if kind == "investment_sale" else amount
+            if checked > outstanding + 0.009:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"{balance_checked[kind]} of {outstanding:.2f}",
+                )
+        journal = await _post_journal(
+            user,
+            payload.date,
+            narration,
+            lines,
+            reference=payload.reference,
+            source="transfer" if kind == "own_transfer" else "non_operating",
+        )
     await audit(
         user,
         "accounting.non_operating.create",
@@ -1100,7 +1207,7 @@ async def create_non_operating_transaction(
 
 
 @router.get("/accounting/party-accounts")
-async def list_party_accounts(request: Request, side: Literal["loan", "advance"],
+async def list_party_accounts(request: Request, side: Literal["loan", "advance", "deposit", "held", "investment"],
                               session_token: Optional[str] = Cookie(default=None),
                               authorization: Optional[str] = Header(default=None)):
     """People you borrowed from (side=loan) or gave money to (side=advance),
@@ -1722,6 +1829,9 @@ async def create_income(payload: IncomeIn, request: Request,
         raise HTTPException(status_code=400, detail="Amount must be > 0")
     if payload.invoice_id and payload.milestone_id:
         raise HTTPException(status_code=400, detail="Link either an invoice or a milestone, not both")
+    # TDS deducted by the payer: the payer settled gross = cash + TDS (CA review 2026-11-24).
+    tds = round(float(payload.tds_amount or 0), 2)
+    gross = round(float(payload.amount) + tds, 2)
 
     bank = await sdb.accounts.find_one(
         {"id": payload.bank_account_id},
@@ -1755,7 +1865,7 @@ async def create_income(payload: IncomeIn, request: Request,
                 "(invoice ⋮ menu) and record the payment there."))
         expected = round(max(0.0, float(linked.get("total") or 0)
                              - float(linked.get("paid_amount") or 0)), 2)
-        if payload.amount > expected + 0.01:
+        if gross > expected + 0.01:
             raise HTTPException(status_code=400,
                                 detail=f"Amount exceeds invoice balance ({expected:.2f})")
         source, source_id = "invoice_payment", payload.invoice_id
@@ -1779,7 +1889,7 @@ async def create_income(payload: IncomeIn, request: Request,
                 "Record the payment on that invoice so it is counted once."))
         expected = max(0.0, float(linked.get("amount") or 0)
                        - float(linked.get("paid_amount") or 0))
-        if payload.amount > expected + 0.01:
+        if gross > expected + 0.01:
             raise HTTPException(status_code=400,
                                 detail=f"Amount exceeds milestone balance ({expected:.2f})")
         source, source_id = "milestone_payment", payload.milestone_id
@@ -1819,7 +1929,7 @@ async def create_income(payload: IncomeIn, request: Request,
                               accounted_received)
         linked_total = float((linked.get("total") if payload.invoice_id
                               else linked.get("amount")) or 0)
-        if payload.amount > max(0.0, linked_total - received_before) + 0.01:
+        if gross > max(0.0, linked_total - received_before) + 0.01:
             raise HTTPException(
                 status_code=400,
                 detail=f"Amount exceeds outstanding balance ({max(0.0, linked_total - received_before):.2f})",
@@ -1885,12 +1995,12 @@ async def create_income(payload: IncomeIn, request: Request,
         # invoice's own proportion, so GST on money received is not booked as income.
         total = float(linked.get("total") or 0)
         tax = float(linked.get("tax") or 0)
-        gst_part = round(payload.amount * tax / total, 2) if total > 0 and tax > 0 else 0.0
+        gst_part = round(gross * tax / total, 2) if total > 0 and tax > 0 else 0.0
         lines = [
             {"account_id": payload.bank_account_id, "debit": payload.amount, "credit": 0,
              "description": "Received"},
             {"account_id": payload.income_account_id, "debit": 0,
-             "credit": round(payload.amount - gst_part, 2), "description": "Revenue (received)"},
+             "credit": round(gross - gst_part, 2), "description": "Revenue (received)"},
         ]
         if gst_part > 0:
             gst_payable = await sdb.accounts.find_one(
@@ -1904,9 +2014,15 @@ async def create_income(payload: IncomeIn, request: Request,
             {"account_id": payload.bank_account_id, "debit": payload.amount, "credit": 0,
              "description": "Received"},
             {"account_id": income["id"] if payload.invoice_id else payload.income_account_id,
-             "debit": 0, "credit": payload.amount,
+             "debit": 0, "credit": gross,
              "description": "Accounts receivable settled" if payload.invoice_id else "Revenue"},
         ]
+    if tds > 0:
+        tds_account = await _ensure_named_account("TDS Receivable", "asset")
+        lines.insert(1, {"account_id": tds_account["id"], "debit": tds, "credit": 0,
+                         "description": "TDS deducted by the payer (claim in your tax return)"})
+        if payload.notes is None:
+            narration = f"{narration} (TDS Rs. {tds:,.2f} deducted)"
     try:
         je = await _post_journal(
             user, payload.date, narration, lines,
@@ -1923,7 +2039,7 @@ async def create_income(payload: IncomeIn, request: Request,
 
     # If linked to a milestone, mark it paid
     if payload.milestone_id:
-        paid_total = round(received_before + payload.amount, 2)
+        paid_total = round(received_before + gross, 2)
         new_status = "paid" if paid_total + 0.01 >= float(linked.get("amount") or 0) else "invoiced"
         await sdb.payment_milestones.update_one(
             {"id": payload.milestone_id},
@@ -1933,7 +2049,7 @@ async def create_income(payload: IncomeIn, request: Request,
     # If linked to an invoice, mark it paid (closes the
     # Client → Invoice → Payment → Accounting loop)
     if payload.invoice_id:
-        paid_total = round(received_before + payload.amount, 2)
+        paid_total = round(received_before + gross, 2)
         new_status = "paid" if paid_total + 0.01 >= float(linked.get("total") or 0) else "partially_paid"
         await sdb.invoices.update_one(
             {"id": payload.invoice_id},
@@ -1959,6 +2075,68 @@ def _is_salary_expense_account(account: dict) -> bool:
 def _validate_paid_from_account(payment_method: str, account: dict) -> None:
     from core.finance import validate_method_account
     validate_method_account(payment_method, account, label="payments")
+
+
+@router.post("/accounting/client-refund")
+async def refund_client(payload: ClientRefundIn, request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    """Pay money back to a client (CA review 2026-11-24: there was no way).
+
+    Cash basis: the refund reduces the income it was booked to; the project's
+    "received" and the client's statement go down by the same amount. A
+    refund can never exceed what the client actually paid.
+    """
+    from core.receipts import (client_project_ids, client_receipt_query,
+                               is_commission_receipt, signed_cash_in)
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.create")
+    client = await sdb.clients.find_one({"id": payload.client_id}, {"_id": 0, "id": 1, "name": 1})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if payload.project_id and await project_client_id(payload.project_id, sdb) != payload.client_id:
+        raise HTTPException(status_code=400, detail="This project belongs to another client")
+    bank = await require_asset_account(payload.bank_account_id, "Paid-from account")
+    _validate_paid_from_account(payload.payment_method, bank)
+    income_id = payload.income_account_id
+    if not income_id:
+        _bank, default_income = await default_receipt_accounts()
+        income_id = (default_income or {}).get("id")
+    income = await sdb.accounts.find_one({"id": income_id, "type": "income", "active": {"$ne": False}}, {"_id": 0})
+    if not income or income["id"] in await commission_account_ids(sdb):
+        raise HTTPException(status_code=400, detail="Choose the fee income account the payment was booked to")
+    amount = round(float(payload.amount), 2)
+    async with doc_lock(sdb.clients, payload.client_id):
+        q = client_receipt_query(payload.client_id, await client_project_ids(payload.client_id, sdb),
+                                 sources=("income", "invoice_payment", "milestone_payment",
+                                          "other_receivable_income", "client_refund"))
+        q["source"]["$in"] += [f"{s}_reversal" for s in list(q["source"]["$in"])]
+        if payload.project_id:
+            q = {"$and": [q, {"project_id": payload.project_id}]}
+        commission_ids = await commission_account_ids(sdb)
+        paid = round(sum(signed_cash_in(j) for j in await sdb.journal_entries.find(
+            {**q, "voided_from_view": {"$ne": True}} if "$and" not in q else
+            {"$and": [*q["$and"], {"voided_from_view": {"$ne": True}}]},
+            {"_id": 0, "lines": 1, "source": 1, "vendor_id": 1}).to_list(MAX_LIST_ROWS)
+            if not is_commission_receipt(j, commission_ids)), 2)
+        if amount > paid + 0.009:
+            raise HTTPException(status_code=409, detail=(
+                f"{client['name']} has paid Rs. {max(paid, 0):,.2f}"
+                + (" on this project" if payload.project_id else "") + "; a refund cannot be more."))
+        await _refuse_cash_shortfall(bank, payload.date, amount)
+        narration = f"Refund to {client['name']}" + (f" - {payload.notes.strip()}" if payload.notes else "")
+        je = await _post_journal(
+            user, payload.date, narration,
+            [{"account_id": income["id"], "debit": amount, "credit": 0, "description": "Fee refunded"},
+             {"account_id": bank["id"], "debit": 0, "credit": amount, "description": "Paid back"}],
+            reference=payload.reference, project_id=payload.project_id, client_id=payload.client_id,
+            source="client_refund",
+        )
+    await audit(user, "accounting.client_refund", target=je["id"], target_type="journal_entry",
+                meta={"client_id": payload.client_id, "project_id": payload.project_id, "amount": amount},
+                org_id=user_org_id(user))
+    return je
 
 
 @router.post("/accounting/expense")
@@ -1993,6 +2171,13 @@ async def create_expense(payload: ExpenseIn, request: Request,
     base_amt = float(payload.amount)
     gst_amt = float(payload.gst or 0)
     total = round(base_amt + gst_amt, 2)
+    if gst_amt > 0:
+        org = await db.organizations.find_one({"org_id": user_org_id(user) or "org_default"},
+                                              {"_id": 0, "gstin": 1})
+        if not str((org or {}).get("gstin") or "").strip():
+            # Without GST registration the GST paid cannot be claimed back:
+            # it is part of the cost (CA review 2026-11-24).
+            base_amt, gst_amt = total, 0.0
 
     lines = [
         {"account_id": payload.expense_account_id, "debit": base_amt, "credit": 0,
@@ -2829,6 +3014,10 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
             raise HTTPException(status_code=404, detail="Vendor incentive not found")
         outstanding = round(max(0.0, float(row.get("amount") or 0)
                                 - float(row.get("received_amount") or 0)), 2)
+        if payload.tds_amount:
+            raise HTTPException(status_code=400, detail=(
+                "TDS on a vendor incentive is not supported here yet: record the cash received, "
+                "and the TDS as a separate journal to TDS Receivable."))
         if payload.amount > outstanding + 0.01:
             raise HTTPException(status_code=400, detail=f"Amount exceeds pending vendor incentive ({outstanding:.2f})")
         bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
@@ -2864,7 +3053,7 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
                 IncomeIn(date=payload.date, amount=payload.amount,
                          income_account_id=income_id, bank_account_id=payload.bank_account_id,
                          payment_method=payload.payment_method, reference=payload.reference,
-                         notes=payload.notes, **linked),
+                         notes=payload.notes, tds_amount=payload.tds_amount, **linked),
                 request, session_token, authorization,
             )
         return {"ok": True, "source_type": payload.source_type,
@@ -2878,7 +3067,9 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
             raise HTTPException(status_code=404, detail="Receivable not found")
         outstanding = round(max(0.0, float(row.get("amount") or 0)
                                 - float(row.get("received_amount") or 0)), 2)
-        if payload.amount > outstanding + 0.01:
+        tds = round(float(payload.tds_amount or 0), 2)
+        gross = round(float(payload.amount) + tds, 2)       # cash + TDS deducted by the payer
+        if gross > outstanding + 0.01:
             raise HTTPException(status_code=400, detail=f"Amount exceeds pending receivable ({outstanding:.2f})")
         bank = await require_asset_account(payload.bank_account_id, "Bank/cash account")
         _validate_received_into_account(payload.payment_method, bank)
@@ -2891,8 +3082,12 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
                       if request_key else new_id("cr_"))
         lines = [{"account_id": bank["id"], "debit": payload.amount, "credit": 0,
                   "description": "Received"},
-                 {"account_id": income["id"], "debit": 0, "credit": payload.amount,
+                 {"account_id": income["id"], "debit": 0, "credit": gross,
                   "description": income.get("name")}]
+        if tds > 0:
+            tds_account = await _ensure_named_account("TDS Receivable", "asset")
+            lines.insert(1, {"account_id": tds_account["id"], "debit": tds, "credit": 0,
+                             "description": "TDS deducted by the payer (claim in your tax return)"})
         if row.get("invoice_id"):
             # Money for a GST invoice: the GST share of each receipt is owed to
             # the government, not income (cash basis, in the invoice's proportion).
@@ -2901,9 +3096,10 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
             if total > 0 and tax > 0:
                 gst = await sdb.accounts.find_one(
                     {"name": "GST Payable", "type": "liability", "active": {"$ne": False}}, {"_id": 0, "id": 1})
-                gst_part = round(payload.amount * tax / total, 2)
+                gst_part = round(gross * tax / total, 2)
+                income_line = next(line for line in lines if line["account_id"] == income["id"])
                 if gst and gst_part > 0:
-                    lines[1]["credit"] = round(payload.amount - gst_part, 2)
+                    income_line["credit"] = round(gross - gst_part, 2)
                     lines.append({"account_id": gst["id"], "debit": 0, "credit": gst_part,
                                   "description": "Output GST on amount received"})
         row_client = row.get("client_id") or (
@@ -2916,11 +3112,12 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
             client_id=row_client, vendor_id=row.get("vendor_id"),
             source="other_receivable_income", source_id=receipt_id,
         )
-        received = round(float(row.get("received_amount") or 0) + payload.amount, 2)
+        received = round(float(row.get("received_amount") or 0) + gross, 2)
         status = "received" if received + 0.01 >= float(row.get("amount") or 0) else "partially_received"
         receipt = {
             "id": receipt_id, "source_type": payload.source_type,
             "source_id": payload.source_id, "amount": round(payload.amount, 2),
+            "tds_amount": tds or None,
             "date": payload.date, "payment_method": payload.payment_method,
             "bank_account_id": payload.bank_account_id,
             "income_account_id": income["id"], "reference": payload.reference,
