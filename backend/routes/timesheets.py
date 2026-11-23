@@ -410,7 +410,8 @@ async def project_profitability(project_id: str, request: Request,
         if e.get("cost") is None:
             unpriced += float(e.get("hours") or 0)
         labour += float(e.get("cost") or 0)
-    fee = float(project.get("budget") or 0)
+    from core.fees import collection_basis
+    fee = float(collection_basis(project)[0] or 0)   # agreed fee; contract value for turnkey
     cost = vendor + expenses + labour
 
     def pct(part: float, whole: float) -> Optional[float]:

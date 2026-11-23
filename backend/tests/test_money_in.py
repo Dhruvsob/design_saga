@@ -89,7 +89,9 @@ def test_project_money_keeps_value_billing_and_cash_apart():
         [{"amount": 60000}, {"amount": 540000}],
         received=10000,
     )
-    assert money == {"project_value": 600000, "scheduled": 600000, "invoiced": 600000,
+    # No fee type set: still to receive is counted against the project value.
+    assert money == {"project_value": 600000, "agreed_fee": None, "basis": 600000,
+                     "basis_kind": "project_value", "scheduled": 600000, "invoiced": 600000,
                      "billed_unpaid": 590000, "received": 10000, "still_to_receive": 590000}
 
 

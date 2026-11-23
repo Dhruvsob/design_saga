@@ -23,6 +23,18 @@ export function feeCalc(f) {
   return null;
 }
 
+/**
+ * What "still to receive" is counted against (mirrors backend core/fees.py):
+ * the agreed fee for lump sum / consultancy % / per sq ft, the contract value
+ * for turnkey, the project value when no fee type is set.
+ */
+export function collectionBasis(money = {}) {
+  const kind = money.basis_kind || "project_value";
+  const label = kind === "agreed_fee" ? "Agreed fee" : kind === "contract_value" ? "Contract value" : "Project value";
+  const amount = money.basis ?? money.project_value ?? 0;
+  return { kind, label, amount };
+}
+
 /** One-line fee summary for a project, or null when no fee type is set. */
 export function projectFeeDisplay(p) {
   const fst = p.fee_structure_type;

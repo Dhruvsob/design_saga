@@ -184,9 +184,10 @@ async def apply_template(project_id: str, payload: ApplyTemplateIn, request: Req
     docs = build_phase_docs(payload.template, project_id, start)
     milestones = []
     if payload.create_fee_milestones:
-        fee = float(project.get("budget") or 0)
+        from core.fees import collection_basis
+        fee = float(collection_basis(project)[0] or 0)
         if fee <= 0:
-            raise HTTPException(400, "Set the project fee/budget before creating fee milestones.")
+            raise HTTPException(400, "Set the project's fee type and fee before creating fee milestones.")
         if await sdb.payment_milestones.find_one({"project_id": project_id}, {"_id": 0, "id": 1}):
             raise HTTPException(409, "This project already has payment milestones; fee milestones were not created.")
         amounts = fee_milestone_amounts(fee, [d["fee_pct"] for d in docs])

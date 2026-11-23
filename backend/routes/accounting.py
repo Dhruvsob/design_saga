@@ -3868,11 +3868,14 @@ async def add_milestone(project_id: str, payload: MilestoneIn, request: Request,
 
     amount = payload.amount
     if amount is None and payload.percent is not None:
-        amount = round(float(proj.get("budget") or 0) * float(payload.percent) / 100.0, 2)
+        # A percentage of what the studio charges (agreed fee, or contract value
+        # for turnkey), not of the client's whole project cost.
+        from core.fees import collection_basis
+        amount = round(float(collection_basis(proj)[0] or 0) * float(payload.percent) / 100.0, 2)
     if not amount or amount <= 0:
         raise HTTPException(
             status_code=400,
-            detail="Milestone amount must be positive; set an amount or a project budget",
+            detail="Milestone amount must be positive; set an amount, or the project's fee first",
         )
 
     doc = {
@@ -3910,9 +3913,9 @@ async def update_milestone(ms_id: str, payload: MilestoneUpdate, request: Reques
     if existing_ms.get("status") == "paid" and {"amount", "percent"}.intersection(upd):
         raise HTTPException(status_code=409, detail="Reverse the payment before changing a paid milestone amount")
     if "percent" in upd and "amount" not in upd:
-        project = await sdb.projects.find_one(
-            {"id": existing_ms.get("project_id")}, {"_id": 0, "budget": 1})
-        amount = round(float((project or {}).get("budget") or 0) * float(upd["percent"]) / 100.0, 2)
+        project = await sdb.projects.find_one({"id": existing_ms.get("project_id")}, {"_id": 0})
+        from core.fees import collection_basis
+        amount = round(float(collection_basis(project or {})[0] or 0) * float(upd["percent"]) / 100.0, 2)
         if amount <= 0:
             raise HTTPException(
                 status_code=400,

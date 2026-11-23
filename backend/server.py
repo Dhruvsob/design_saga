@@ -1758,7 +1758,11 @@ async def delete_project(project_id: str, request: Request,
 
 
 async def _rescale_percent_milestones(project_id: str, budget: float) -> None:
-    """Percentage fees move with the project value until money is received or billed."""
+    """Percentage milestones move with the fee until money is received or billed.
+
+    `budget` here is the collection basis (core.fees): the agreed fee for lump
+    sum / consultancy % / per sq ft, the contract value for turnkey.
+    """
     if budget <= 0:
         return
     async for ms in sdb.payment_milestones.find(
@@ -1776,8 +1780,17 @@ async def _rescale_percent_milestones(project_id: str, budget: float) -> None:
 
 def _project_money(project: dict, invoices: list, milestones: list, received: float,
                    linked_invoice_receipts: Optional[dict[str, float]] = None) -> dict:
-    """Keep contract value, billing, receivable and cash received apart."""
+    """Keep project value, agreed fee, billing, receivable and cash received apart.
+
+    Still to receive is counted against what the studio charges (core.fees):
+    the agreed fee for lump sum, consultancy % and per sq ft, the contract
+    value for turnkey. It used to be the client's whole project value, so a
+    6% fee on a Rs 3 crore project showed Rs 2.86 crore still to receive.
+    """
+    from core.fees import agreed_fee, collection_basis
     value = round(float(project.get("budget") or 0), 2)
+    basis, basis_kind = collection_basis(project)
+    basis = round(float(basis or 0), 2)
     live = [i for i in invoices if i.get("doc_type", "invoice") == "invoice"
             and i.get("status") not in ("draft", "cancelled")]
     invoiced = round(sum(float(i.get("total") or 0) for i in live), 2)
@@ -1795,12 +1808,15 @@ def _project_money(project: dict, invoices: list, milestones: list, received: fl
     invoice_received = round(invoice_received, 2)
     return {
         "project_value": value,
+        "agreed_fee": agreed_fee(project),
+        "basis": basis,
+        "basis_kind": basis_kind,
         "scheduled": round(sum(float(m.get("amount") or 0) for m in milestones
                                if m.get("status") != "cancelled"), 2),
         "invoiced": invoiced,
         "billed_unpaid": round(max(0.0, invoiced - invoice_received), 2),
         "received": round(received, 2),
-        "still_to_receive": round(max(0.0, value - received), 2) if value else None,
+        "still_to_receive": round(max(0.0, basis - received), 2) if basis else None,
     }
 
 
@@ -1876,8 +1892,11 @@ async def update_project(project_id: str, payload: ProjectUpdate, request: Reque
     res = await sdb.projects.update_one({"id": project_id}, update_doc)
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
-    if "budget" in upd:
-        await _rescale_percent_milestones(project_id, float(upd.get("budget") or 0))
+    fee_inputs = {"budget", "fee_structure_type", "site_area_sqft"} | set(ALL_FEE_SUBFIELDS)
+    if fee_inputs & (set(upd) | set(unset)):
+        from core.fees import collection_basis
+        fresh = await sdb.projects.find_one({"id": project_id}, {"_id": 0})
+        await _rescale_percent_milestones(project_id, float(collection_basis(fresh or {})[0] or 0))
     await audit_log(user, "project.update", target=project_id, target_type="project",
                     meta={"fields": [k for k in upd if k != "updated_at"]})
     return await sdb.projects.find_one({"id": project_id}, {"_id": 0})

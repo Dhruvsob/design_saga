@@ -342,7 +342,7 @@ It was booked as ₹${Number(row.total || 0).toLocaleString("en-IN")} of income 
                   <option value="">Not for a specific milestone</option>
                   {milestones.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} · ₹{Number(m.amount || 0).toLocaleString("en-IN")}{m.percent ? ` (${m.percent}% of project value)` : ""}
+                      {m.name} · ₹{Number(m.amount || 0).toLocaleString("en-IN")}{m.percent ? ` (${m.percent}% of the fee)` : ""}
                     </option>
                   ))}
                 </select>

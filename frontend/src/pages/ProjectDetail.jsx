@@ -16,7 +16,7 @@ import ProjectApprovals from "../components/ProjectApprovals";
 import ProjectSelections from "../components/ProjectSelections";
 import ProjectAttention, { ProjectFacts } from "../components/ProjectHub";
 import { empName, formatDate, formatINR, statusLabel } from "../lib/format";
-import { feeCalc } from "../lib/fees";
+import { feeCalc, collectionBasis, projectFeeDisplay } from "../lib/fees";
 import { safeFileUrl } from "../lib/url";
 import {
   ArrowLeft, Copy, Plus, PencilSimple, Archive, ArrowCounterClockwise, ArrowsClockwise,
@@ -247,6 +247,11 @@ export default function ProjectDetail() {
   // through Collections Due; the older `financials` block only sees invoice payments.
   const money = p.money || {};
   const stillToReceive = money.still_to_receive ?? Math.max(0, Number(money.invoiced || 0) - Number(money.received || 0));
+  // Received money counts against the studio's fee (contract value for turnkey),
+  // not against the client's whole project value.
+  const basis = collectionBasis(money);
+  const showProjectValue = basis.kind === "agreed_fee" && Number(money.project_value || 0) > 0
+    && Number(money.project_value) !== Number(basis.amount);
   // Backend decides financial visibility (finance.read / invoices.read / Admin).
   // Fall back to client perms if the flag is absent.
   const canSeeFinancials = (p.can_view_financials !== undefined)
@@ -396,11 +401,13 @@ export default function ProjectDetail() {
                             onOpen={(t) => setTab(t)} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
-            <div className="grid grid-cols-2 md:grid-cols-5 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-financials">
-              <MiniStat label="Project value" value={inr(money.project_value ?? fin.budget)} />
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-financials">
+              <MiniStat label={basis.label} value={inr(money.basis ?? money.project_value ?? fin.budget)}
+                        sub={showProjectValue ? `Project value ${inr(money.project_value)}` : null} testid="money-basis" />
               <MiniStat label="Invoiced" value={inr(money.invoiced ?? fin.invoiced)} />
               <MiniStat label="Received" value={inr(money.received ?? fin.collected)} accent="#1D633E" />
-              <MiniStat label="Still to receive" value={inr(stillToReceive)} accent={stillToReceive > 0 ? "#B22B22" : undefined} />
+              <MiniStat label="Still to receive" value={inr(stillToReceive)} accent={stillToReceive > 0 ? "#B22B22" : undefined}
+                        sub={`${basis.label} − received`} testid="money-still-to-receive" />
               {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
             </div>
           ) : (
@@ -501,7 +508,7 @@ export default function ProjectDetail() {
               <div className="flex gap-2">
                 <select aria-label="Fee type" className="input-flat w-28" value={msForm.kind} onChange={(e) => setMsForm({ ...msForm, kind: e.target.value })} data-testid="ms-kind">
                   <option value="amount">₹ fixed</option>
-                  <option value="percent">% of value</option>
+                  <option value="percent">% of {basis.kind === "contract_value" ? "contract" : "fee"}</option>
                 </select>
                 <input className="input-flat flex-1" type="number" step="0.01" min="0.01" max={msForm.kind === "percent" ? 100 : undefined}
                   placeholder={msForm.kind === "percent" ? "e.g. 10 (%)" : "Amount (₹)"} required value={msForm.amount}
@@ -512,12 +519,15 @@ export default function ProjectDetail() {
             </form>
           )}
           {p.money && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2" data-testid="project-money">
-              {[["Project value", p.money.project_value, "Agreed fee / contract value"],
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2" data-testid="project-money">
+              {[[basis.label, basis.amount,
+                  basis.kind === "agreed_fee"
+                    ? `${projectFeeDisplay(p) || "Agreed fee"}${showProjectValue ? ` · project value ${inr(p.money.project_value)}` : ""}`
+                    : basis.kind === "contract_value" ? "Turnkey contract value" : "No fee type set: project value"],
                 ["Scheduled", p.money.scheduled, "Total of milestones"],
                 ["Invoiced", p.money.invoiced, "Invoices sent (documents)"],
                 ["Received", p.money.received, "Money actually in Cash/Bank"],
-                ["Still to receive", p.money.still_to_receive ?? p.money.billed_unpaid, p.money.project_value ? "Project value − received" : "Invoiced − received"],
+                ["Still to receive", p.money.still_to_receive ?? p.money.billed_unpaid, basis.amount ? `${basis.label} − received` : "Invoiced − received"],
               ].map(([label, value, hint]) => (
                 <div key={label} className="border border-[var(--line)] rounded-lg p-3">
                   <div className="overline">{label}</div>
@@ -532,7 +542,7 @@ export default function ProjectDetail() {
             <div key={m.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between" data-testid={`milestone-${m.id}`}>
               <div>
                 <div className="font-semibold text-sm">{m.name}</div>
-                <div className="text-xs text-[var(--ink-2)]">Due {formatDate(m.due_date)}{m.percent ? ` · ${m.percent}% of project value` : ""}{Number(m.paid_amount || 0) > 0 && m.status !== "paid" ? ` · ${inr(m.paid_amount)} received` : ""}</div>
+                <div className="text-xs text-[var(--ink-2)]">Due {formatDate(m.due_date)}{m.percent ? ` · ${m.percent}% of the ${basis.label.toLowerCase()}` : ""}{Number(m.paid_amount || 0) > 0 && m.status !== "paid" ? ` · ${inr(m.paid_amount)} received` : ""}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono font-semibold">{inr(m.amount)}</span>
@@ -787,11 +797,12 @@ export default function ProjectDetail() {
   );
 }
 
-function MiniStat({ label, value, accent }) {
+function MiniStat({ label, value, accent, sub, testid }) {
   return (
-    <div className="border-r border-b border-[var(--line)] p-5">
+    <div className="border-r border-b border-[var(--line)] p-5" data-testid={testid}>
       <div className="overline mb-2">{label}</div>
-      <div className="font-display font-bold tracking-tight text-2xl tabular-nums" style={accent ? { color: accent } : undefined}>{value}</div>
+      <div className="font-display font-bold tracking-tight text-xl 2xl:text-2xl tabular-nums whitespace-nowrap" style={accent ? { color: accent } : undefined}>{value}</div>
+      {sub && <div className="text-xs text-[var(--ink-3)] mt-1">{sub}</div>}
     </div>
   );
 }
