@@ -401,14 +401,22 @@ export default function ProjectDetail() {
                             onOpen={(t) => setTab(t)} />
           {/* financials — only for Admin / Finance / Accounting */}
           {canSeeFinancials ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-financials">
-              <MiniStat label={basis.label} value={inr(money.basis ?? money.project_value ?? fin.budget)}
-                        sub={showProjectValue ? `Project value ${inr(money.project_value)}` : null} testid="money-basis" />
-              <MiniStat label="Invoiced" value={inr(money.invoiced ?? fin.invoiced)} />
-              <MiniStat label="Received" value={inr(money.received ?? fin.collected)} accent="#1D633E" />
-              <MiniStat label="Still to receive" value={inr(stillToReceive)} accent={stillToReceive > 0 ? "#B22B22" : undefined}
-                        sub={`${basis.label} − received`} testid="money-still-to-receive" />
-              {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-financials">
+                <MiniStat label={basis.label} value={inr(money.basis ?? money.project_value ?? fin.budget)}
+                          sub={showProjectValue ? `Project value ${inr(money.project_value)}` : null} testid="money-basis" />
+                <MiniStat label="Invoiced" value={inr(money.invoiced ?? fin.invoiced)} />
+                <MiniStat label="Received" value={inr(money.received ?? fin.collected)} accent="#1D633E" />
+                <MiniStat label="Still to receive" value={inr(stillToReceive)} accent={stillToReceive > 0 ? "#B22B22" : undefined}
+                          sub={`${basis.label} − received`} testid="money-still-to-receive" />
+                {canSeeVendorCosts && <MiniStat label="Vendor cost" value={inr(fin.vendor_cost)} />}
+              </div>
+              {Number(money.commission_received || 0) > 0 && (
+                <p className="text-sm text-[var(--ink-2)]" data-testid="project-commission-received">
+                  Vendor incentives received on this project: <b className="text-[var(--ink)]">{inr(money.commission_received)}</b>.
+                  Kept separate: they are not part of the client&apos;s fee and do not reduce what the client still owes.
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 border-t border-l border-[var(--line)] kpi-grid" data-testid="project-operational-stats">
@@ -526,7 +534,7 @@ export default function ProjectDetail() {
                     : basis.kind === "contract_value" ? "Turnkey contract value" : "No fee type set: project value"],
                 ["Scheduled", p.money.scheduled, "Total of milestones"],
                 ["Invoiced", p.money.invoiced, "Invoices sent (documents)"],
-                ["Received", p.money.received, "Money actually in Cash/Bank"],
+                ["Received", p.money.received, "Client fee payments in Cash/Bank"],
                 ["Still to receive", p.money.still_to_receive ?? p.money.billed_unpaid, basis.amount ? `${basis.label} − received` : "Invoiced − received"],
               ].map(([label, value, hint]) => (
                 <div key={label} className="border border-[var(--line)] rounded-lg p-3">

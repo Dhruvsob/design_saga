@@ -133,12 +133,13 @@ def case_loan(c) -> None:
     ok(c.post("/api/accounting/non-operating", json={
         "kind": "money_received", "date": "2026-06-10", "amount": 500000,
         "bank_account_id": bank, "party_name": "Fixture Lender", "reference": "Loan agreement"}))
+    lender = next(r for r in _party_rows(c, "loan") if r["party_name"] == "Fixture Lender")
     ok(c.post("/api/accounting/non-operating", json={
         "kind": "repayment_paid", "date": "2026-07-10", "amount": 100000,
-        "bank_account_id": bank, "party_name": "Fixture Lender"}))
+        "bank_account_id": bank, "party_account_id": lender["id"]}))
     too_much = c.post("/api/accounting/non-operating", json={
         "kind": "repayment_paid", "date": "2026-07-11", "amount": 400000.01,
-        "bank_account_id": bank, "party_name": "Fixture Lender"})
+        "bank_account_id": bank, "party_account_id": lender["id"]})
     check(case, "repaying more than the balance is refused", 409, too_much.status_code)
     check(case, "net bank movement", 400000, round(balance(c, "Bank - Primary") - before, 2))
     check(case, "lender ledger (liability) outstanding", 400000, balance(c, "Loan from - Fixture Lender"))
@@ -341,10 +342,150 @@ def case_cash_deposit(c) -> None:
     balance_sheet_ok(c, case)
 
 
+def _party_rows(c, side: str) -> list:
+    return ok(c.get("/api/accounting/party-accounts", params={"side": side}))["accounts"]
+
+
+def case_party_ledger(c) -> None:
+    """Owner, 2026-11-23: typing "K" offers KPR with the outstanding balance;
+    repayments post to that same liability account by ID."""
+    case = "party-ledger"
+    bank = accounts(c)["Bank - Primary"]["id"]
+    post = lambda **body: c.post("/api/accounting/non-operating", json={"bank_account_id": bank, **body})
+    ok(post(kind="money_received", date="2026-08-01", amount=100000, party_name="KPR"))
+    ok(post(kind="money_received", date="2026-08-05", amount=50000, party_name="  kpr "))
+    kpr = [r for r in _party_rows(c, "loan") if r["party_name"].lower() == "kpr"]
+    check(case, "a second loan typed 'kpr' reuses KPR's ledger (no duplicate)", 1, len(kpr))
+    kpr = kpr[0]
+    check(case, "picker shows KPR's outstanding", 150000, kpr["outstanding"])
+    check(case, "picker shows the account name", "Loan from - KPR", kpr["name"])
+    no_id = post(kind="repayment_paid", date="2026-09-01", amount=10000, party_name="KPR")
+    check(case, "a repayment without choosing the ledger is refused", 400, no_id.status_code)
+    ok(post(kind="repayment_paid", date="2026-09-01", amount=40000, party_account_id=kpr["id"]))
+    check(case, "partial repayment reduces the same ledger", 110000, balance(c, "Loan from - KPR"))
+    ok(post(kind="money_received", date="2026-09-10", amount=10000, party_account_id=kpr["id"]))
+    check(case, "a further loan by ID adds to the same ledger", 120000, balance(c, "Loan from - KPR"))
+    over = post(kind="repayment_paid", date="2026-09-11", amount=120000.01, party_account_id=kpr["id"])
+    check(case, "repaying more than KPR is owed is refused", 409, over.status_code)
+    ok(post(kind="money_given", date="2026-09-12", amount=5000, party_name="KPR"))
+    adv = next(r for r in _party_rows(c, "advance") if r["party_name"] == "KPR")
+    wrong = post(kind="repayment_paid", date="2026-09-13", amount=1000, party_account_id=adv["id"])
+    check(case, "an advance ledger cannot take a loan repayment", 400, wrong.status_code)
+    not_party = post(kind="repayment_paid", date="2026-09-13", amount=1000, party_account_id=bank)
+    check(case, "a non-party account is refused", 400, not_party.status_code)
+    jes = ok(c.get("/api/journal-entries", params={"limit": 500}))
+    jes = jes.get("items", jes) if isinstance(jes, dict) else jes
+    on_kpr = [j for j in jes if any(l.get("account_id") == kpr["id"] for l in j.get("lines") or [])]
+    check(case, "all four KPR postings sit on the one ledger", 4, len(on_kpr))
+    check(case, "only one KPR loan ledger exists", 1,
+          len([a for a in ok(c.get("/api/accounts")) if a["name"].lower() == "loan from - kpr"]))
+    trial_balance_ok(c, case)
+    balance_sheet_ok(c, case)
+    # Another workspace cannot see or post to this KPR ledger.
+    other = new_workspace()
+    try:
+        check(case, "other workspace does not see KPR", [], [r for r in _party_rows(other, "loan") if r["id"] == kpr["id"]])
+        obank = accounts(other)["Bank - Primary"]["id"]
+        cross = other.post("/api/accounting/non-operating", json={
+            "kind": "repayment_paid", "date": "2026-09-14", "amount": 1000,
+            "bank_account_id": obank, "party_account_id": kpr["id"]})
+        check(case, "other workspace cannot repay against KPR's ledger", 400, cross.status_code)
+        check(case, "KPR unchanged after the cross-workspace attempt", 120000, balance(c, "Loan from - KPR"))
+    finally:
+        other.close()
+
+
+def _project(c, **fee) -> tuple[str, str]:
+    cl = ok(c.post("/api/clients", json={"name": f"Fee Client {uuid.uuid4().hex[:5]}"}))
+    project = ok(c.post("/api/projects", json={
+        "name": f"Fee Project {uuid.uuid4().hex[:5]}", "client_id": cl["id"],
+        "project_type": "Residential", "engagement_type": "consultancy", **fee}))
+    return (project.get("id") or project.get("project", {}).get("id")), cl["id"]
+
+
+def _money(c, pid: str) -> dict:
+    return ok(c.get(f"/api/projects/{pid}"))["money"]
+
+
+def _jid(out: dict) -> str:
+    return out.get("id") or (out.get("journal") or {}).get("id") or (out.get("journal_entry") or {}).get("id")
+
+
+def case_fee_vs_commission(c) -> None:
+    """Owner, 2026-11-23: Rs 3 crore x 6% = Rs 18,00,000 fee; Rs 2,00,000 from the
+    client leaves Rs 16,00,000; vendor commission never reduces it."""
+    case = "fee-vs-commission"
+    acc = accounts(c)
+    bank = acc["Bank - Primary"]["id"]
+    fee_income = next(a for a in acc.values() if a["type"] == "income" and "consult" in a["name"].lower())
+    incentive = next(a for a in acc.values() if a["type"] == "income"
+                     and (a.get("code") == "3010" or "incentive" in a["name"].lower() or "commission" in a["name"].lower()))
+    pid, cid = _project(c, budget=30000000, fee_structure_type="percentage_consultancy",
+                        fee_project_value=30000000, fee_percentage=6)
+    vendor = ok(c.post("/api/vendors", json={"name": f"Fee Tile Supplier {uuid.uuid4().hex[:5]}"}))
+    vid = vendor.get("id") or vendor.get("vendor", {}).get("id")
+    pl0 = pl_totals(c, from_date="2026-04-01", to_date="2026-11-30")
+    income = lambda **b: ok(c.post("/api/accounting/income", json={
+        "date": "2026-10-01", "bank_account_id": bank, "project_id": pid, **b}))
+    m = _money(c, pid)
+    check(case, "agreed fee = 6% of Rs 3 crore", 1800000, m["basis"])
+    check(case, "nothing received yet", 1800000, m["still_to_receive"])
+    income(amount=200000, client_id=cid, income_account_id=fee_income["id"], reference="Fee advance")
+    m = _money(c, pid)
+    check(case, "client payment received", 200000, m["received"])
+    check(case, "still to receive after Rs 2,00,000", 1600000, m["still_to_receive"])
+    inc = income(amount=352500, vendor_id=vid, income_account_id=incentive["id"], reference="Tile incentive")
+    m = _money(c, pid)
+    check(case, "vendor incentive does not count as client payment", 200000, m["received"])
+    check(case, "still to receive unchanged by the incentive", 1600000, m["still_to_receive"])
+    check(case, "incentive shown separately on the project", 352500, m.get("commission_received"))
+    planned = ok(c.post(f"/api/vendors/{vid}/commissions", json={
+        "amount": 20000, "due_date": "2026-10-30", "recognition": "planned", "project_id": pid,
+        "reference": "Sanitaryware incentive"}))
+    comm_id = planned.get("id") or planned.get("commission", {}).get("id")
+    ok(c.post("/api/accounting/collections/receive", headers={"Idempotency-Key": f"fx-{uuid.uuid4().hex}"}, json={
+        "source_type": "vendor_commission", "source_id": comm_id, "amount": 20000, "date": "2026-10-05",
+        "bank_account_id": bank, "payment_method": "bank_transfer"}))
+    m = _money(c, pid)
+    check(case, "incentive collected from the vendor ledger stays separate", 372500, m.get("commission_received"))
+    check(case, "client fee received still Rs 2,00,000", 200000, m["received"])
+    part = income(amount=300000, client_id=cid, income_account_id=fee_income["id"], reference="Second stage")
+    m = _money(c, pid)
+    check(case, "partial receipts add up", 500000, m["received"])
+    check(case, "remaining after Rs 5,00,000", 1300000, m["still_to_receive"])
+    ok(c.post(f"/api/journal-entries/{_jid(part)}/reverse"))
+    m = _money(c, pid)
+    check(case, "reversing a client receipt restores what is due", 1600000, m["still_to_receive"])
+    ok(c.post(f"/api/journal-entries/{_jid(inc)}/reverse"))
+    m = _money(c, pid)
+    check(case, "reversing an incentive changes only the incentive", 20000, m.get("commission_received"))
+    check(case, "client figures untouched by the incentive reversal", 1600000, m["still_to_receive"])
+    pl1 = pl_totals(c, from_date="2026-04-01", to_date="2026-11-30")
+    check(case, "P&L income = client 2,00,000 + incentives 20,000 (no double count)", 220000,
+          round(pl1["income"] - pl0["income"], 2))
+    vled = ok(c.get(f"/api/accounting/ledger/vendor/{vid}"))
+    check(case, "vendor ledger still carries the incentive", True, bool(vled))
+    # Other fee structures: the incentive never reduces any of them.
+    for label, fee, paid, still in (
+            ("lump sum", dict(budget=6000000, fee_structure_type="lump_sum", fee_lump_sum_amount=600000), 100000, 500000),
+            ("per sq ft", dict(budget=6000000, fee_structure_type="per_sqft", site_area_sqft=2400, fee_rate_per_sqft=250), 100000, 500000),
+            ("turnkey", dict(budget=6000000, fee_structure_type="turnkey", fee_contract_value=6000000), 1000000, 5000000)):
+        p2, c2 = _project(c, **fee)
+        ok(c.post("/api/accounting/income", json={"date": "2026-10-02", "bank_account_id": bank, "project_id": p2,
+                                                  "amount": paid, "client_id": c2, "income_account_id": fee_income["id"]}))
+        ok(c.post("/api/accounting/income", json={"date": "2026-10-02", "bank_account_id": bank, "project_id": p2,
+                                                  "amount": 75000, "vendor_id": vid, "income_account_id": incentive["id"]}))
+        m = _money(c, p2)
+        check(case, f"{label}: still to receive ignores the Rs 75,000 incentive", still, m["still_to_receive"])
+        check(case, f"{label}: incentive shown separately", 75000, m.get("commission_received"))
+    trial_balance_ok(c, case)
+    balance_sheet_ok(c, case)
+
+
 def main() -> None:
     admin = new_workspace()
     for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end,
-               case_cash_deposit):
+               case_cash_deposit, case_party_ledger, case_fee_vs_commission):
         try:
             fn(admin)
         except Exception as exc:  # keep going so one gap does not hide the rest

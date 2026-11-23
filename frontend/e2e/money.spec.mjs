@@ -313,3 +313,73 @@ test("cash deposit: Rs 50,000 cash into SBI moves money between accounts, profit
   expect(posted[0].narration).toContain(`Cash deposited into ${sbiName}`);
   await ctx.dispose();
 });
+
+test("loan repayment: typing K offers KPR with what is outstanding and repays that same ledger", async ({ browser }) => {
+  // Owner, 2026-11-23: repayments must reduce the original "Loan from - KPR", never open a new one.
+  const ctx = await api("admin");
+  const { bank } = await accounts(ctx);
+  const person = `KPR ${uid()}`;
+  for (const amount of [100000, 50000]) {
+    await json(ctx.post("/api/accounting/non-operating", { data: {
+      kind: "money_received", date: today(), amount, bank_account_id: bank.id, party_name: person } }));
+  }
+  const ledgers = async () => (await json(ctx.get("/api/accounting/party-accounts?side=loan"))).accounts
+    .filter((a) => a.party_name.toLowerCase() === person.toLowerCase());
+  expect(await ledgers(), "the second loan reused the first ledger").toHaveLength(1);
+
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/accounting");
+  await page.getByTestId("more-actions-btn").click();
+  await page.getByTestId("capital-transfers-btn").click();
+  const form = page.getByTestId("capital-transfers-form");
+  await form.getByTestId("transfer-kind").selectOption("repayment_paid");
+  await form.getByTestId("transfer-party").fill("K");
+  const option = page.getByTestId("party-options").getByRole("option").filter({ hasText: person });
+  await expect(option).toContainText(`Loan from - ${person}`);
+  await expect(option).toContainText("₹1,50,000 outstanding");
+  await expect(page.getByTestId("party-options")).not.toContainText("Add new person");
+  await option.click();
+  await expect(form.getByTestId("party-selected")).toContainText(`Posts to Loan from - ${person} · ₹1,50,000 outstanding`);
+  await form.getByTestId("transfer-from").click();
+  await page.getByRole("option", { name: "Bank - Primary", exact: true }).click();
+  await form.getByTestId("transfer-amount").fill("150001");
+  await form.getByTestId("transfer-submit").click();
+  await expect(form.getByRole("alert")).toContainText("more than the ₹1,50,000 still outstanding");
+  await form.getByTestId("transfer-amount").fill("40000");
+  await form.getByTestId("transfer-submit").click();
+  await expect(page.getByText("Transaction recorded in the correct ledgers")).toBeVisible();
+
+  await expect.poll(async () => (await ledgers()).map((a) => a.outstanding)).toEqual([110000]);
+  const [ledger] = await ledgers();
+  const posted = (await journals(ctx, { account_id: ledger.id })).filter((j) => j.source === "non_operating" || /Repayment paid/.test(j.narration || ""));
+  expect(posted.filter((j) => /Repayment paid/.test(j.narration || ""))).toHaveLength(1);
+  posted.forEach((j) => expect(balanced(j)).toBe(true));
+  await ctx.dispose();
+});
+
+test("project fee: vendor incentive is shown apart and never reduces what the client owes", async ({ browser }) => {
+  // Owner, 2026-11-23: Rs 3 crore x 6% = Rs 18,00,000; Rs 2,00,000 paid -> Rs 16,00,000 still to receive.
+  const ctx = await api("admin");
+  const { bank } = await accounts(ctx);
+  const all = await json(ctx.get("/api/accounts"));
+  const fee = all.find((a) => a.type === "income" && /consult/i.test(a.name) && a.active !== false);
+  const incentive = all.find((a) => a.type === "income" && a.active !== false && (a.code === "3010" || /incentive|commission/i.test(a.name)));
+  const client = await json(ctx.post("/api/clients", { data: { name: `Fee Client ${uid()}` } }));
+  const project = await json(ctx.post("/api/projects", { data: {
+    name: `Fee Project ${uid()}`, client_id: client.id, project_type: "Residential", engagement_type: "consultancy",
+    budget: 30000000, fee_structure_type: "percentage_consultancy", fee_project_value: 30000000, fee_percentage: 6 } }));
+  const pid = project.id || project.project?.id;
+  const vendor = await json(ctx.post("/api/vendors", { data: { name: `Fee Vendor ${uid()}` } }));
+  const vid = vendor.id || vendor.vendor?.id;
+  const income = (data) => json(ctx.post("/api/accounting/income", { data: {
+    date: today(), bank_account_id: bank.id, project_id: pid, ...data } }));
+  await income({ amount: 200000, client_id: client.id, income_account_id: fee.id });
+  await income({ amount: 352500, vendor_id: vid, income_account_id: incentive.id });
+
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto(`/projects/${pid}`);
+  await expect(page.getByTestId("money-basis")).toContainText("18,00,000");
+  await expect(page.getByTestId("money-still-to-receive")).toContainText("16,00,000");
+  await expect(page.getByTestId("project-commission-received")).toContainText("3,52,500");
+  await ctx.dispose();
+});

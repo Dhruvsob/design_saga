@@ -561,6 +561,98 @@ const TRANSFER_TYPES = [
   ["repayment_paid", "Repay money to a person"],
 ];
 
+// Searchable picker for the person behind a loan or advance. Typing one letter
+// lists matching people with what is still outstanding; a repayment must pick
+// an existing ledger, so it reduces that balance instead of opening a new
+// account. Posts by account ID (owner, 2026-11-23).
+const PARTY_SIDE = { money_received: "loan", repayment_paid: "loan", money_given: "advance", repayment_received: "advance" };
+const normName = (t) => String(t || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+function PartyPicker({ kind, value, onChange }) {
+  const side = PARTY_SIDE[kind];
+  const repay = kind === "repayment_paid" || kind === "repayment_received";
+  const [list, setList] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    api.get("/accounting/party-accounts", { params: { side } })
+      .then(({ data }) => { if (alive) setList(data.accounts || []); })
+      .catch(() => { if (alive) setList([]); });
+    return () => { alive = false; };
+  }, [side]);
+
+  const q = normName(value.name);
+  const matches = list
+    .filter((a) => !q || normName(a.party_name).includes(q))
+    .sort((a, b) => Number(normName(b.party_name).startsWith(q)) - Number(normName(a.party_name).startsWith(q)));
+  const exact = list.find((a) => normName(a.party_name) === q);
+  const options = [
+    ...matches.map((a) => ({ kind: "existing", account: a })),
+    ...(!repay && q && !exact ? [{ kind: "new", name: value.name.trim() }] : []),
+  ];
+  const choose = (opt) => {
+    if (!opt) return;
+    if (opt.kind === "existing") onChange({ account_id: opt.account.id, name: opt.account.party_name, outstanding: opt.account.outstanding });
+    else onChange({ account_id: "", name: opt.name, outstanding: null });
+    setOpen(false);
+  };
+  const type = (text) => {
+    // An exact match of an existing person is the same person: no duplicate ledger.
+    const same = list.find((a) => normName(a.party_name) === normName(text));
+    onChange(same ? { account_id: same.id, name: text, outstanding: same.outstanding } : { account_id: "", name: text, outstanding: null });
+    setOpen(true); setActive(0);
+  };
+  const onKey = (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setActive((i) => Math.min(i + 1, options.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && open && options[active]) { e.preventDefault(); choose(options[active]); }
+    else if (e.key === "Escape") setOpen(false);
+  };
+  const selected = value.account_id ? list.find((a) => a.id === value.account_id) : null;
+  const listId = `party-options-${side}`;
+  return (
+    <div className="relative">
+      <input required className="input-flat w-full mt-1" value={value.name} role="combobox" aria-expanded={open && options.length > 0}
+        aria-controls={listId} aria-autocomplete="list" aria-label="Person or party"
+        placeholder={repay ? "Type a name, then choose" : "Type a name: choose an existing person or add a new one"}
+        onChange={(e) => type(e.target.value)} onFocus={() => setOpen(true)} onKeyDown={onKey}
+        onBlur={() => setTimeout(() => setOpen(false), 150)} data-testid="transfer-party" autoComplete="off" />
+      {open && options.length > 0 && (
+        <ul id={listId} role="listbox" className="absolute z-30 left-0 right-0 mt-1 max-h-60 overflow-auto bg-white border border-[var(--line)] rounded-lg shadow-lg py-1" data-testid="party-options">
+          {options.map((opt, i) => (
+            <li key={opt.kind === "existing" ? opt.account.id : "new"} role="option" aria-selected={i === active}
+              onMouseDown={(e) => { e.preventDefault(); choose(opt); }}
+              className={`px-3 py-2 text-sm cursor-pointer flex justify-between gap-3 ${i === active ? "bg-[var(--surface-2)]" : ""}`}>
+              {opt.kind === "existing" ? (
+                <>
+                  <span className="min-w-0 truncate"><b>{opt.account.party_name}</b> <span className="text-[var(--ink-3)]">· {opt.account.name}</span></span>
+                  <span className="font-mono text-xs whitespace-nowrap">{opt.account.outstanding > 0.009 ? `${formatINR(opt.account.outstanding)} outstanding` : "settled"}</span>
+                </>
+              ) : <span>Add new person: <b>{opt.name}</b></span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {selected && (
+        <div className="text-xs text-[var(--ink-2)] mt-1" data-testid="party-selected">
+          Posts to {selected.name} · {formatINR(selected.outstanding || 0)} outstanding
+        </div>
+      )}
+      {!selected && repay && q && (
+        <div className="text-xs text-[var(--warning)] mt-1" data-testid="party-hint">
+          {matches.length
+            ? "Choose the person from the list."
+            : `No one matches "${value.name.trim()}". ${kind === "repayment_paid"
+              ? "Record the original loan first with “Receive money from a person”."
+              : "Record the money first with “Give money to a person”."}`}
+        </div>
+      )}
+      {!selected && !repay && q && <div className="text-xs text-[var(--ink-2)] mt-1">A new ledger will be opened for {value.name.trim()}.</div>}
+    </div>
+  );
+}
+
 function CapitalTransfersForm({ banks, onClose, onSaved }) {
   const [form, setForm] = useState({
     kind: "own_transfer",
@@ -568,6 +660,8 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
     amount: "",
     bank_account_id: banks[0]?.id || "",
     to_account_id: "",
+    party_account_id: "",
+    party_outstanding: null,
     party_name: "",
     reference: "",
     notes: "",
@@ -594,13 +688,20 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
     if (isOwnTransfer && !form.to_account_id) return setError("Select the account the money goes to.");
     if (isOwnTransfer && form.to_account_id === form.bank_account_id) return setError("Choose two different accounts.");
     if (!Number.isFinite(amount) || amount <= 0) return setError("Enter an amount greater than zero.");
-    if (needsParty && form.party_name.trim().length < 2) return setError("Enter the person or party name.");
+    const isRepay = form.kind === "repayment_paid" || form.kind === "repayment_received";
+    if (needsParty && isRepay && !form.party_account_id) return setError("Choose the person from the list, so the repayment reduces their balance.");
+    if (needsParty && !form.party_account_id && form.party_name.trim().length < 2) return setError("Enter the person or party name.");
+    if (needsParty && isRepay && form.party_outstanding != null && amount > Number(form.party_outstanding) + 0.009) {
+      return setError(`That is more than the ${formatINR(Number(form.party_outstanding))} still outstanding.`);
+    }
     setBusy(true); setError("");
     try {
       await api.post("/accounting/non-operating", {
         ...form,
         amount,
-        party_name: needsParty ? form.party_name.trim() : null,
+        party_name: needsParty && !form.party_account_id ? form.party_name.trim() : null,
+        party_account_id: needsParty && form.party_account_id ? form.party_account_id : null,
+        party_outstanding: undefined,
         to_account_id: isOwnTransfer ? form.to_account_id : null,
         reference: form.reference.trim() || null,
         notes: form.notes.trim() || null,
@@ -624,7 +725,7 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <label className="block"><span className="text-xs text-[var(--ink-2)]">Transaction</span>
           <select aria-label="Transaction type" className="input-flat w-full mt-1" value={form.kind}
-            onChange={(event) => setForm({ ...form, kind: event.target.value })} data-testid="transfer-kind">
+            onChange={(event) => setForm({ ...form, kind: event.target.value, party_account_id: "", party_name: "", party_outstanding: null })} data-testid="transfer-kind">
             {TRANSFER_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
         <label className="block"><span className="text-xs text-[var(--ink-2)]">Date</span>
@@ -646,10 +747,9 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
             {banks.filter((account) => account.id !== form.bank_account_id)
               .map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
           </SearchSelect></label>}
-        {needsParty && <label className="block"><span className="text-xs text-[var(--ink-2)]">Person / party</span>
-          <input required className="input-flat w-full mt-1" value={form.party_name}
-            onChange={(event) => setForm({ ...form, party_name: event.target.value })}
-            placeholder="e.g. Ritesh Soni" data-testid="transfer-party" /></label>}
+        {needsParty && <div className="block"><span className="text-xs text-[var(--ink-2)]">Person / party</span>
+          <PartyPicker kind={form.kind} value={{ account_id: form.party_account_id, name: form.party_name }}
+            onChange={(v) => setForm((f) => ({ ...f, party_account_id: v.account_id, party_name: v.name, party_outstanding: v.outstanding }))} /></div>}
         <label className="block"><span className="text-xs text-[var(--ink-2)]">Reference</span>
           <input className="input-flat w-full mt-1" value={form.reference}
             onChange={(event) => setForm({ ...form, reference: event.target.value })} placeholder="Optional" /></label>
@@ -2079,15 +2179,15 @@ function LedgersView({ clients, vendors, employees, projects, accounts = [], fy,
             Combined
           </button>
         </div>
-        {entityType !== "combined" && <select aria-label="Entity id"
+        {entityType !== "combined" && <SearchSelect aria-label={`Choose ${ENTITY_TYPES.find((e) => e.id === entityType)?.label || "entry"}`}
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
-          className="border border-[var(--line)] rounded-md px-3 py-1.5 text-sm bg-white min-w-[280px]"
+          className="input-flat text-sm min-w-[280px]"
           data-testid="ledger-entity-select"
         >
           <option value="">Select {ENTITY_TYPES.find((e) => e.id === entityType)?.label}…</option>
           {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>}
+        </SearchSelect>}
       </div>
       {entityType === "combined" && (
         <CombinedLedger clients={clients} vendors={vendors} projects={projects} accounts={accounts}

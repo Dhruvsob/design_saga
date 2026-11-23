@@ -92,6 +92,9 @@ class NonOperatingTransactionIn(FiniteModel):
     amount: float = Field(gt=0)
     bank_account_id: str                      # own_transfer: the account the money leaves
     to_account_id: Optional[str] = Field(default=None, max_length=60)   # own_transfer only
+    # The person's existing ledger (Loan from - X / Advance to - X), chosen from
+    # the list. Repayments must name one; new money may name one or a new person.
+    party_account_id: Optional[str] = Field(default=None, max_length=60)
     party_name: Optional[str] = Field(default=None, max_length=120)
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)

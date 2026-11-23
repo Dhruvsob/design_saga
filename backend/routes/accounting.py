@@ -13,7 +13,7 @@ Feeds the Finance Dashboard, Client/Project/Vendor ledgers, P&L, Trial Balance,
 GST/TDS aggregations.
 """
 from fastapi import APIRouter, HTTPException, Request, Cookie, Header, Depends
-from typing import Optional
+from typing import Literal, Optional
 from datetime import date as _date, timedelta
 import math
 import re
@@ -24,7 +24,7 @@ from core.scoped_db import current_org_id, sdb
 from core.helpers import business_today, now_utc, iso_now, new_id
 from core.deps import require_user
 from core.downloads import content_disposition
-from core.rbac import has_permission
+from core.rbac import has_any_permission, has_permission
 from core.tenancy import user_org_id
 from core.audit import audit
 from core.locks import doc_lock
@@ -779,6 +779,53 @@ def _party_ledger_name(prefix: str, party_name: Optional[str]) -> str:
     return f"{prefix} - {party}"
 
 
+PARTY_SIDES = {
+    # side: (name prefix, account type, words for messages)
+    "loan": ("Loan from", "liability", "money you borrowed from"),
+    "advance": ("Advance to", "asset", "money you gave to"),
+}
+
+
+def _party_side_of(account: dict) -> Optional[str]:
+    name = str(account.get("name") or "")
+    for side, (prefix, acc_type, _words) in PARTY_SIDES.items():
+        if account.get("type") == acc_type and name.lower().startswith(f"{prefix.lower()} -"):
+            return side
+    return None
+
+
+def _party_display(account: dict) -> str:
+    name = str(account.get("name") or "")
+    return name.split(" - ", 1)[1].strip() if " - " in name else name
+
+
+async def _party_ledger(payload, side: str, *, create: bool) -> tuple[dict, str]:
+    """The person's own ledger, by account ID when chosen from the list.
+
+    Repayments post against the existing ledger only (never a new account);
+    new money reuses the person's ledger when the name matches (ignoring case
+    and spaces) and creates one only for a genuinely new person.
+    """
+    prefix, acc_type, words = PARTY_SIDES[side]
+    if payload.party_account_id:
+        account = await sdb.accounts.find_one(
+            {"id": payload.party_account_id, "active": {"$ne": False}}, {"_id": 0})
+        if not account:
+            raise HTTPException(status_code=400, detail="Choose the person from the list")
+        if _party_side_of(account) != side:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{account.get('name')} is not a ledger for {words} someone; choose the right person")
+        return account, _party_display(account)
+    if not create:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose the person from the list, so the repayment reduces their existing balance")
+    name = _party_ledger_name(prefix, payload.party_name)
+    account = await _ensure_named_account(name, acc_type, create_if_missing=True)
+    return account, _party_display(account)
+
+
 def _is_cash(account: dict) -> bool:
     """Cash in hand (not a bank): it can never go below zero."""
     name = str(account.get("name") or "").strip().lower()
@@ -917,30 +964,24 @@ async def create_non_operating_transaction(
         debit_account, credit_account = counter, bank
         narration = "Gold investment purchased"
     elif kind in {"money_given", "repayment_received"}:
-        name = _party_ledger_name("Advance to", payload.party_name)
-        counter = await _ensure_named_account(
-            name, "asset", create_if_missing=kind == "money_given"
-        )
+        counter, person = await _party_ledger(payload, "advance", create=kind == "money_given")
         debit_account, credit_account = (
             (counter, bank) if kind == "money_given" else (bank, counter)
         )
         narration = (
-            f"Money given to {payload.party_name.strip()}"
+            f"Money given to {person}"
             if kind == "money_given"
-            else f"Repayment received from {payload.party_name.strip()}"
+            else f"Repayment received from {person}"
         )
     else:
-        name = _party_ledger_name("Loan from", payload.party_name)
-        counter = await _ensure_named_account(
-            name, "liability", create_if_missing=kind == "money_received"
-        )
+        counter, person = await _party_ledger(payload, "loan", create=kind == "money_received")
         debit_account, credit_account = (
             (bank, counter) if kind == "money_received" else (counter, bank)
         )
         narration = (
-            f"Money received from {payload.party_name.strip()}"
+            f"Money received from {person}"
             if kind == "money_received"
-            else f"Repayment paid to {payload.party_name.strip()}"
+            else f"Repayment paid to {person}"
         )
 
     if kind in {"repayment_received", "repayment_paid"}:
@@ -975,6 +1016,27 @@ async def create_non_operating_transaction(
         org_id=user_org_id(user),
     )
     return {"journal": journal, "counter_account": counter}
+
+
+@router.get("/accounting/party-accounts")
+async def list_party_accounts(request: Request, side: Literal["loan", "advance"],
+                              session_token: Optional[str] = Cookie(default=None),
+                              authorization: Optional[str] = Header(default=None)):
+    """People you borrowed from (side=loan) or gave money to (side=advance),
+    with what is still outstanding, for the searchable picker."""
+    user = await require_user(request, session_token, authorization)
+    if not has_any_permission(user, "finance.read", "finance.create"):
+        raise HTTPException(status_code=403, detail="Missing permission: finance.read")
+    prefix, acc_type, _words = PARTY_SIDES[side]
+    rows = []
+    async for account in sdb.accounts.find({"type": acc_type, "active": {"$ne": False}}, {"_id": 0}):
+        if _party_side_of(account) != side:
+            continue
+        rows.append({"id": account["id"], "name": account["name"], "code": account.get("code"),
+                     "party_name": _party_display(account),
+                     "outstanding": await _current_account_balance(account)})
+    rows.sort(key=lambda r: (-(r["outstanding"] > 0.009), r["party_name"].lower()))
+    return {"side": side, "accounts": rows}
 
 
 @router.get("/journal-entries")

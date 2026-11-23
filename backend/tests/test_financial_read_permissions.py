@@ -220,6 +220,7 @@ def test_project_detail_separates_invoice_procurement_and_vendor_cost_access(mon
         purchase_orders=_Collection([{"id": "po_1", "grand_total": 600}]),
         vendor_bills=_Collection([{"id": "bill_1", "total": 400, "status": "received"}]),
         journal_entries=_Collection(),
+        accounts=_Collection(),
     )
 
     async def visible_project(_user, _project_id):
