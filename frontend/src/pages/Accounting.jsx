@@ -11,7 +11,7 @@ import CollectionEntries from "../components/CollectionEntries";
 import { useAuth } from "../context/AuthContext";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
-import { dateForInput, empName, formatDate } from "../lib/format";
+import { dateForInput, empName, formatDate, formatINR } from "../lib/format";
 import { compatibleAccount, methodForAccount } from "../lib/cashbank";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
@@ -229,7 +229,7 @@ export default function Accounting() {
               <button onClick={() => { setShowTransfers(true); setShowMore(false); }}
                 className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--surface-2)] transition"
                 data-testid="capital-transfers-btn" role="menuitem">
-                <ArrowsLeftRight size={14} className="text-[var(--ink-2)]" /> Capital &amp; transfers
+                <ArrowsLeftRight size={14} className="text-[var(--ink-2)]" /> Cash deposit, transfers &amp; capital
               </button>
               </div>
             </>
@@ -552,6 +552,7 @@ function OwnerWithdrawalForm({ accounts, banks, onClose, onSaved }) {
 }
 
 const TRANSFER_TYPES = [
+  ["own_transfer", "Deposit cash / move money between your accounts"],
   ["owner_investment", "Owner adds capital"],
   ["gold_purchase", "Buy gold investment"],
   ["money_given", "Give money to a person"],
@@ -562,10 +563,11 @@ const TRANSFER_TYPES = [
 
 function CapitalTransfersForm({ banks, onClose, onSaved }) {
   const [form, setForm] = useState({
-    kind: "owner_investment",
+    kind: "own_transfer",
     date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
     amount: "",
     bank_account_id: banks[0]?.id || "",
+    to_account_id: "",
     party_name: "",
     reference: "",
     notes: "",
@@ -573,6 +575,11 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const needsParty = ["money_given", "repayment_received", "money_received", "repayment_paid"].includes(form.kind);
+  // Moving the studio's own money (e.g. Rs 50,000 of cash into SBI): the
+  // amount leaves "From" and arrives in "To"; profit does not change.
+  const isOwnTransfer = form.kind === "own_transfer";
+  const fromName = banks.find((b) => b.id === form.bank_account_id)?.name;
+  const toName = banks.find((b) => b.id === form.to_account_id)?.name;
 
   useEffect(() => {
     if (!form.bank_account_id && banks[0]?.id) {
@@ -583,7 +590,9 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
   const submit = async (event) => {
     event.preventDefault();
     const amount = Number(form.amount);
-    if (!form.bank_account_id) return setError("Select the cash or bank account used.");
+    if (!form.bank_account_id) return setError(isOwnTransfer ? "Select the account the money comes from." : "Select the cash or bank account used.");
+    if (isOwnTransfer && !form.to_account_id) return setError("Select the account the money goes to.");
+    if (isOwnTransfer && form.to_account_id === form.bank_account_id) return setError("Choose two different accounts.");
     if (!Number.isFinite(amount) || amount <= 0) return setError("Enter an amount greater than zero.");
     if (needsParty && form.party_name.trim().length < 2) return setError("Enter the person or party name.");
     setBusy(true); setError("");
@@ -592,10 +601,11 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
         ...form,
         amount,
         party_name: needsParty ? form.party_name.trim() : null,
+        to_account_id: isOwnTransfer ? form.to_account_id : null,
         reference: form.reference.trim() || null,
         notes: form.notes.trim() || null,
       });
-      toast.success("Transaction recorded in the correct ledgers");
+      toast.success(isOwnTransfer ? `Moved from ${fromName} to ${toName}` : "Transaction recorded in the correct ledgers");
       onSaved();
     } catch (err) {
       setError(err?.response?.data?.detail || "Could not record the transaction.");
@@ -606,7 +616,7 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
     <form onSubmit={submit} className="border-y border-[var(--line)] py-4 space-y-3" data-testid="capital-transfers-form">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="overline">CAPITAL, INVESTMENTS &amp; PARTY MONEY</div>
+          <div className="overline">TRANSFERS, CAPITAL, INVESTMENTS &amp; PARTY MONEY</div>
           <div className="text-xs text-[var(--ink-2)] mt-1">Balance-sheet transactions that should not be recorded as income or expense.</div>
         </div>
         <button type="button" className="btn-icon" onClick={onClose} aria-label="Close capital and transfers form"><X size={14} /></button>
@@ -623,12 +633,19 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
         <label className="block"><span className="text-xs text-[var(--ink-2)]">Amount</span>
           <input required type="number" min="0.01" step="0.01" className="input-flat w-full mt-1" value={form.amount}
             onChange={(event) => setForm({ ...form, amount: event.target.value })} data-testid="transfer-amount" /></label>
-        <label className="block"><span className="text-xs text-[var(--ink-2)]">Cash / Bank</span>
-          <SearchSelect required className="input-flat w-full mt-1" value={form.bank_account_id}
-            onChange={(event) => setForm({ ...form, bank_account_id: event.target.value })}>
+        <label className="block"><span className="text-xs text-[var(--ink-2)]">{isOwnTransfer ? "From (money leaves)" : "Cash / Bank"}</span>
+          <SearchSelect required className="input-flat w-full mt-1" value={form.bank_account_id} aria-label={isOwnTransfer ? "From account" : "Cash or bank account"}
+            onChange={(event) => setForm({ ...form, bank_account_id: event.target.value })} data-testid="transfer-from">
             <option value="">Select cash or bank</option>
             {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
           </SearchSelect></label>
+        {isOwnTransfer && <label className="block"><span className="text-xs text-[var(--ink-2)]">To (money arrives)</span>
+          <SearchSelect required className="input-flat w-full mt-1" value={form.to_account_id} aria-label="To account"
+            onChange={(event) => setForm({ ...form, to_account_id: event.target.value })} data-testid="transfer-to">
+            <option value="">Select cash or bank</option>
+            {banks.filter((account) => account.id !== form.bank_account_id)
+              .map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+          </SearchSelect></label>}
         {needsParty && <label className="block"><span className="text-xs text-[var(--ink-2)]">Person / party</span>
           <input required className="input-flat w-full mt-1" value={form.party_name}
             onChange={(event) => setForm({ ...form, party_name: event.target.value })}
@@ -640,6 +657,13 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
           <input className="input-flat w-full mt-1" value={form.notes}
             onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Optional details" /></label>
       </div>
+      {isOwnTransfer && (
+        <p className="text-xs text-[var(--ink-2)]" data-testid="transfer-explain">
+          {fromName && toName && Number(form.amount) > 0
+            ? `${fromName} goes down and ${toName} goes up by ${formatINR(Number(form.amount))}. Profit does not change.`
+            : "Example: depositing Rs 50,000 cash into SBI takes Rs 50,000 out of Cash and adds it to SBI. Profit does not change."}
+        </p>
+      )}
       {error && <div className="text-xs text-[var(--danger)]" role="alert">{error}</div>}
       <div className="flex justify-end gap-2">
         <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>

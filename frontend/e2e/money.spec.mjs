@@ -276,3 +276,40 @@ test("employee advance: give 5,000 cash, recover 2,000 + 3,000 through payroll, 
   await expect(page.getByTestId("advance-outstanding")).toContainText("3,000");
   await ctx.dispose();
 });
+
+test("cash deposit: Rs 50,000 cash into SBI moves money between accounts, profit unchanged", async ({ browser }) => {
+  // Owner, 2026-11-23: "Rs 2,00,000 cash, deposit Rs 50,000 in SBI: how do I enter it?"
+  const ctx = await api("admin");
+  const { cash } = await accounts(ctx);
+  const sbiName = `SBI Bank ${uid()}`;
+  const sbi = await json(ctx.post("/api/accounts", { data: { name: sbiName, type: "asset", is_bank: true } }));
+  await json(ctx.post("/api/accounting/non-operating", { data: {
+    kind: "owner_investment", date: today(), amount: 200000, bank_account_id: cash.id } }));
+  const bal = async (id) => {
+    const rows = await json(ctx.get("/api/accounts?include_balances=1"));
+    return Number((rows.find((a) => a.id === id) || {}).current_balance || 0);
+  };
+  const [cash0, sbi0] = [await bal(cash.id), await bal(sbi.id)];
+
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/accounting");
+  await page.getByTestId("more-actions-btn").click();
+  await page.getByTestId("capital-transfers-btn").click();
+  const form = page.getByTestId("capital-transfers-form");
+  await expect(form.getByTestId("transfer-kind")).toHaveValue("own_transfer");
+  await form.getByTestId("transfer-from").click();
+  await page.getByRole("option", { name: "Cash", exact: true }).click();
+  await form.getByTestId("transfer-to").click();
+  await page.getByRole("option", { name: sbiName, exact: true }).click();
+  await form.getByTestId("transfer-amount").fill("50000");
+  await expect(form.getByTestId("transfer-explain")).toContainText(`Cash goes down and ${sbiName} goes up by ₹50,000`);
+  await form.getByTestId("transfer-submit").click();
+  await expect(page.getByText(`Moved from Cash to ${sbiName}`)).toBeVisible();
+
+  await expect.poll(async () => [await bal(cash.id) - cash0, await bal(sbi.id) - sbi0]).toEqual([-50000, 50000]);
+  const posted = (await journals(ctx, { account_id: sbi.id })).filter((j) => j.source === "transfer");
+  expect(posted).toHaveLength(1);
+  expect(balanced(posted[0])).toBe(true);
+  expect(posted[0].narration).toContain(`Cash deposited into ${sbiName}`);
+  await ctx.dispose();
+});

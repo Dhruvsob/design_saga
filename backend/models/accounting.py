@@ -86,10 +86,12 @@ class NonOperatingTransactionIn(FiniteModel):
     kind: Literal[
         "owner_investment", "owner_withdrawal", "gold_purchase",
         "money_given", "money_received", "repayment_received", "repayment_paid",
+        "own_transfer",
     ]
     date: str
     amount: float = Field(gt=0)
-    bank_account_id: str
+    bank_account_id: str                      # own_transfer: the account the money leaves
+    to_account_id: Optional[str] = Field(default=None, max_length=60)   # own_transfer only
     party_name: Optional[str] = Field(default=None, max_length=120)
     reference: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)

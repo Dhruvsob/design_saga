@@ -779,6 +779,12 @@ def _party_ledger_name(prefix: str, party_name: Optional[str]) -> str:
     return f"{prefix} - {party}"
 
 
+def _is_cash(account: dict) -> bool:
+    """Cash in hand (not a bank): it can never go below zero."""
+    name = str(account.get("name") or "").strip().lower()
+    return name in {"cash", "petty cash"} or (name.startswith("cash") and "bank" not in name)
+
+
 async def _ensure_named_account(
     name: str, account_type: str, *, create_if_missing: bool = True
 ) -> dict:
@@ -874,7 +880,31 @@ async def create_non_operating_transaction(
 
     amount = round(float(payload.amount), 2)
     kind = payload.kind
-    if kind == "owner_investment":
+    if kind == "own_transfer":
+        # Moving the studio's own money, e.g. depositing cash into SBI:
+        # cash down, bank up by the same amount. Not income, not capital,
+        # no effect on profit. (Owner, 2026-11-23: there was no way to record it.)
+        if not payload.to_account_id:
+            raise HTTPException(status_code=400, detail="Choose the account the money goes to")
+        counter = await require_asset_account(payload.to_account_id, "To account")
+        if not counter.get("is_bank") and counter.get("name") not in {"Cash", "Petty Cash"}:
+            raise HTTPException(status_code=400, detail="Choose an actual cash or bank account to move the money to")
+        if counter["id"] == bank["id"]:
+            raise HTTPException(status_code=400, detail="Choose two different accounts")
+        if _is_cash(bank):
+            available = await _current_account_balance(bank)
+            if amount > available + 0.009:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"{bank['name']} has only Rs. {available:,.2f}. Check the amount, or record the cash you received first.")
+        debit_account, credit_account = counter, bank
+        if _is_cash(bank) and not _is_cash(counter):
+            narration = f"Cash deposited into {counter['name']}"
+        elif _is_cash(counter) and not _is_cash(bank):
+            narration = f"Cash withdrawn from {bank['name']}"
+        else:
+            narration = f"Moved from {bank['name']} to {counter['name']}"
+    elif kind == "owner_investment":
         counter = await _ensure_named_account("Owner Capital", "equity")
         debit_account, credit_account = bank, counter
         narration = "Capital introduced by owner"
@@ -934,7 +964,7 @@ async def create_non_operating_transaction(
              "description": narration},
         ],
         reference=payload.reference,
-        source="non_operating",
+        source="transfer" if kind == "own_transfer" else "non_operating",
     )
     await audit(
         user,

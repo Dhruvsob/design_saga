@@ -305,9 +305,46 @@ def case_year_end(c) -> None:
     balance_sheet_ok(c, case, fy="2026-27")
 
 
+def case_cash_deposit(c) -> None:
+    """Owner, 2026-11-23: Rs 2,00,000 cash in hand, Rs 50,000 deposited into SBI."""
+    case = "cash-deposit"
+    acc = accounts(c)
+    cash = acc["Cash"]["id"]
+    sbi = acc.get("SBI Bank") or ok(c.post("/api/accounts", json={
+        "name": "SBI Bank", "type": "asset", "is_bank": True}))
+    ok(c.post("/api/accounting/non-operating", json={
+        "kind": "owner_investment", "date": "2026-11-01", "amount": 200000,
+        "bank_account_id": cash, "notes": "Cash in hand brought in"}))
+    cash0, sbi0 = balance(c, "Cash"), balance(c, "SBI Bank")
+    pl0 = pl_totals(c, from_date="2026-04-01", to_date="2026-11-30")
+    out = ok(c.post("/api/accounting/non-operating", json={
+        "kind": "own_transfer", "date": "2026-11-23", "amount": 50000,
+        "bank_account_id": cash, "to_account_id": sbi["id"], "reference": "Deposit slip 1123"}))
+    check(case, "narration names the deposit", "Cash deposited into SBI Bank",
+          out["journal"]["narration"].split(" - ")[0])
+    check(case, "cash down by 50,000", -50000, round(balance(c, "Cash") - cash0, 2))
+    check(case, "SBI up by 50,000", 50000, round(balance(c, "SBI Bank") - sbi0, 2))
+    check(case, "profit unchanged", pl0["net"], pl_totals(c, from_date="2026-04-01", to_date="2026-11-30")["net"])
+    over = c.post("/api/accounting/non-operating", json={
+        "kind": "own_transfer", "date": "2026-11-23", "amount": round(balance(c, "Cash") + 0.01, 2),
+        "bank_account_id": cash, "to_account_id": sbi["id"]})
+    check(case, "depositing more cash than in hand is refused", 409, over.status_code)
+    same = c.post("/api/accounting/non-operating", json={
+        "kind": "own_transfer", "date": "2026-11-23", "amount": 10,
+        "bank_account_id": cash, "to_account_id": cash})
+    check(case, "same account on both sides is refused", 400, same.status_code)
+    ok(c.post("/api/accounting/non-operating", json={
+        "kind": "own_transfer", "date": "2026-11-23", "amount": 5000,
+        "bank_account_id": sbi["id"], "to_account_id": cash}))
+    check(case, "cash withdrawn from SBI comes back to cash", -5000 + 50000, round(balance(c, "SBI Bank") - sbi0, 2))
+    trial_balance_ok(c, case)
+    balance_sheet_ok(c, case)
+
+
 def main() -> None:
     admin = new_workspace()
-    for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end):
+    for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end,
+               case_cash_deposit):
         try:
             fn(admin)
         except Exception as exc:  # keep going so one gap does not hide the rest
