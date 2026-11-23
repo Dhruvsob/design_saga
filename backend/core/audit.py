@@ -108,8 +108,11 @@ async def purge_routine(chain_key: str, before_iso: str, actor: dict) -> dict:
                                          "action": 1, "at": 1, "chain": 1}):
         stubs.append({**r, "org_id": None if chain_key == "platform" else chain_key,
                       "pruned_at": iso_now(), "pruned_by": (actor or {}).get("user_id")})
+    for stub in stubs:
+        # Upsert by (chain, seq): two clean-ups at once never duplicate a link.
+        await db.audit_pruned.update_one({"chain": stub["chain"], "seq": stub["seq"]},
+                                         {"$setOnInsert": dict(stub)}, upsert=True)
     if stubs:
-        await db.audit_pruned.insert_many([dict(s) for s in stubs])
         await db.audit_log.delete_many(q)
     return {"deleted": len(stubs)}
 

@@ -457,8 +457,9 @@ async def get_vendor(vendor_id: str, request: Request,
                       for b in bills if b.get("status") in ("received", "partially_paid", "overdue"))
     total_billed = sum(float(b.get("total") or 0) for b in bills
                        if b.get("status") not in ("draft", "cancelled"))
+    # A set-off of an advance moves no money: the advance was already paid.
     total_paid = sum(float(p.get("amount") or 0) for p in payments
-                     if p.get("status") != "reversed")
+                     if p.get("status") != "reversed" and p.get("kind") != "advance_applied")
 
     # Assigned tasks / projects (backward compat: some tasks store vendor_id, others vendor_contact.vendor_name)
     task_query = await _vendor_task_query(v)
@@ -1420,7 +1421,8 @@ async def vendor_full_ledger(vendor_id: str, request: Request,
             "credit": float(b.get("total") or 0),
             "id": b.get("id"),
         })
-    async for p in sdb.vendor_payments.find({"vendor_id": vendor_id}, {"_id": 0}):
+    async for p in sdb.vendor_payments.find(
+            {"vendor_id": vendor_id, "kind": {"$ne": "advance_applied"}}, {"_id": 0}):
         events.append({
             "type": "payment",
             "date": p.get("payment_date"),

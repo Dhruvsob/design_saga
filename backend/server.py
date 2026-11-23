@@ -2406,6 +2406,9 @@ async def _update_invoice_status_locked(user: dict, invoice_id: str, payload):
         raise HTTPException(status_code=404, detail="Not found")
     if inv.get("status") == payload.status:
         return {k: v for k, v in inv.items() if k not in ("_lock", "_lock_at")}
+    if inv.get("status") == "draft" and payload.status not in ("draft", "cancelled"):
+        # A draft made while a GSTIN existed cannot be issued with GST after it is removed.
+        await _refuse_gst_without_gstin(user, inv.get("doc_type"), inv.get("tax_rate"))
     if payload.status == "paid" and inv.get("doc_type", "invoice") == "invoice":
         raise HTTPException(
             status_code=409,

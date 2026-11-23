@@ -692,7 +692,7 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
                         client_id: str = None, vendor_id: str = None,
                         employee_id: str = None,
                         source: str = "manual", source_id: str = None,
-                        idempotency_suffix: str = None) -> dict:
+                        idempotency_suffix: str = None, cash_released: Optional[dict] = None) -> dict:
     """Persist a balanced journal entry. `lines` = [{account_id, debit, credit, description}, ...]"""
     try:
         _date.fromisoformat(date)
@@ -749,13 +749,16 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
 
     # Cash in hand can never go below zero, whichever module pays from it
     # (vendor payments, salaries, claims, EMIs...). Undoing an entry is exempt.
-    if not str(source or "").endswith("_reversal"):
+    # cash_released: cash the caller frees in the same operation (a correction
+    # that posts the new entry before reversing the old one).
+    if not str(source or "").endswith(("_reversal", "_reinstatement")):
         cash_out: dict = {}
         for line in resolved_lines:
             acc = accs[line["account_id"]]
             if acc.get("type") == "asset" and _is_cash(acc):
                 cash_out[acc["id"]] = cash_out.get(acc["id"], 0.0) + line["credit"] - line["debit"]
         for acc_id, amount in cash_out.items():
+            amount -= float((cash_released or {}).get(acc_id) or 0)
             if amount > 0.004:
                 await _refuse_cash_shortfall(accs[acc_id], date, round(amount, 2))
 
@@ -1047,11 +1050,6 @@ async def create_non_operating_transaction(
                 raise HTTPException(status_code=400, detail="Choose an actual cash or bank account to move the money to")
         if counter["id"] == bank["id"]:
             raise HTTPException(status_code=400, detail="Choose two different accounts")
-        if is_card_account(counter):
-            owed = await _current_account_balance(counter)
-            if amount > owed + 0.009:
-                raise HTTPException(status_code=409, detail=(
-                    f"{counter['name']} has Rs. {max(owed, 0):,.2f} to pay. Record the card spending first."))
         await _refuse_cash_shortfall(bank, payload.date, amount)
         debit_account, credit_account = counter, bank
         if is_card_account(counter):
@@ -1175,6 +1173,10 @@ async def create_non_operating_transaction(
                           "description": "Loss on sale"})
 
     cash_out = round(amount + (interest if kind == "repayment_paid" else 0), 2)
+    if kind == "own_transfer" and is_card_account(counter):
+        balance_checked_card = True
+    else:
+        balance_checked_card = False
     balance_checked = {"repayment_received": "Repayment exceeds the outstanding balance",
                        "repayment_paid": "Repayment exceeds the outstanding balance",
                        "deposit_refund_received": "More than the deposit outstanding",
@@ -1185,9 +1187,16 @@ async def create_non_operating_transaction(
     async with AsyncExitStack() as locks:
         # One posting at a time per balance being checked (two quick clicks
         # or two users cannot both pass the check).
-        for lock_id in sorted({counter["id"], bank["id"]} if kind in balance_checked or _is_cash(bank)
+        for lock_id in sorted({counter["id"], bank["id"]}
+                              if kind in balance_checked or _is_cash(bank) or balance_checked_card
                               else set()):
             await locks.enter_async_context(doc_lock(sdb.accounts, lock_id))
+        if balance_checked_card:
+            # Paying the card bill: never more than the card's dues (checked under the lock).
+            owed = await _current_account_balance(counter)
+            if amount > owed + 0.009:
+                raise HTTPException(status_code=409, detail=(
+                    f"{counter['name']} has Rs. {max(owed, 0):,.2f} to pay. Record the card spending first."))
         if kind in {"owner_withdrawal", "gold_purchase", "money_given", "repayment_paid",
                     "investment_purchase", "asset_purchase", "tax_payment", "deposit_paid", "held_paid_out"}:
             await _refuse_cash_shortfall(bank, payload.date, cash_out)
@@ -1359,9 +1368,11 @@ async def _sync_other_receivable_after_reversal(journal_entry_id: str) -> None:
     active = await sdb.collection_receipts.find(
         {"source_id": source_id, "source_type": "other_receivable",
          "status": "received"},
-        {"_id": 0, "amount": 1, "date": 1},
+        {"_id": 0, "amount": 1, "tds_amount": 1, "date": 1},
     ).to_list(None)
-    received = round(sum(float(row.get("amount") or 0) for row in active), 2)
+    # Cash + TDS the payer deducted: both settle the receivable.
+    received = round(sum(float(row.get("amount") or 0) + float(row.get("tds_amount") or 0)
+                         for row in active), 2)
     source = await sdb.collection_receivables.find_one(
         {"id": source_id}, {"_id": 0, "amount": 1})
     if not source:

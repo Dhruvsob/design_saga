@@ -866,11 +866,77 @@ def case_modules_review(c) -> None:
     balance_sheet_ok(c, case)
 
 
+def case_review_fixes(c) -> None:
+    """Second audit (code review) findings, 2026-11-24."""
+    case = "review-fixes"
+    import concurrent.futures
+    tag = uuid.uuid4().hex[:4]
+    acc = accounts(c)
+    bank, petty = acc["Bank - Primary"]["id"], acc["Petty Cash"]["id"]
+    fee = next(a for a in acc.values() if a["type"] == "income" and "consult" in a["name"].lower())
+    # 1. A vendor advance set-off is not a second payment
+    vendor = ok(c.post("/api/vendors", json={"name": f"Setoff Vendor {tag}"}))
+    vid = vendor.get("id") or vendor.get("vendor", {}).get("id")
+    ok(c.post("/api/vendor-payments", headers={"Idempotency-Key": f"so-{uuid.uuid4().hex}"}, json={
+        "vendor_id": vid, "amount": 30000, "payment_date": "2026-09-01", "paid_from_account_id": bank,
+        "payment_method": "bank_transfer"}))
+    ok(c.post("/api/vendor-bills", json={"vendor_id": vid, "bill_number": f"SO-{tag}", "bill_date": "2026-09-10",
+                                         "items": [{"description": "Paint", "quantity": 1, "rate": 50000}]}))
+    ok(c.post(f"/api/vendors/{vid}/apply-advance", json={}))
+    detail = ok(c.get(f"/api/vendors/{vid}"))
+    paid = detail.get("total_paid", (detail.get("financials") or detail.get("summary") or {}).get("total_paid"))
+    if paid is not None:
+        check(case, "vendor total paid = cash paid (no double count)", 30000, paid)
+    led = ok(c.get(f"/api/vendors/{vid}/ledger"))
+    rows = led.get("events") or led.get("rows") or led.get("entries") or []
+    check(case, "vendor ledger: one payment line of 30,000", 30000,
+          round(sum(float(r.get("debit") or 0) for r in rows if r.get("type") == "payment"), 2))
+    # 2. Receivable keeps the TDS of other receipts when one is reversed
+    rcv = ok(c.post("/api/accounting/receivables", json={"name": f"Fee {tag}", "amount": 100000,
+                                                         "due_date": "2026-10-30", "income_account_id": fee["id"]}))
+    recv = lambda amt, tds: ok(c.post("/api/accounting/collections/receive",  # noqa: E731
+        headers={"Idempotency-Key": f"rv-{uuid.uuid4().hex}"}, json={
+            "source_type": "other_receivable", "source_id": rcv["id"], "amount": amt, "tds_amount": tds,
+            "date": "2026-10-05", "bank_account_id": bank, "payment_method": "bank_transfer"}))
+    recv(45000, 5000)
+    b = recv(50000, None)
+    ok(c.post(f"/api/journal-entries/{b['journal_entry_id']}/reverse"))
+    row = next(r for r in ok(c.get("/api/accounting/receivables"))["rows"] if r["id"] == rcv["id"])
+    check(case, "after reversing one receipt, 50,000 (45,000 + 5,000 TDS) still counts", 50000, row["outstanding"])
+    # 3. Correcting a salary paid from a tight till
+    ok(c.post("/api/accounting/non-operating", json={"kind": "own_transfer", "date": "2026-10-01", "amount": 12000,
+                                                     "bank_account_id": bank, "to_account_id": petty}))
+    emp = ok(c.post("/api/employees", json={"first_name": "Tight", "last_name": f"Till{tag}", "salary": {"basic": 12000}}))
+    run = ok(c.post(f"/api/employees/{emp['id']}/pay-salary", json={
+        "year": 2026, "month": 10, "apply_attendance_deductions": False, "payment_date": "2026-10-28",
+        "paid_from_account_id": petty, "payment_method": "cash"}))["run"]
+    ok(c.post("/api/accounting/non-operating", json={"kind": "own_transfer", "date": "2026-10-29", "amount": 500,
+                                                     "bank_account_id": bank, "to_account_id": petty}))
+    fixed = c.post(f"/api/payroll/runs/{run['id']}/correct", json={"net": 12500, "payment_date": "2026-10-31",
+                                                                   "paid_from_account_id": petty, "payment_method": "cash"})
+    check(case, "salary correction needs only the extra 500 of cash", 200, fixed.status_code)
+    check(case, "petty cash empty, never negative", 0, balance(c, "Petty Cash"))
+    # 4. Two card-bill payments at once
+    card = ok(c.post("/api/accounts", json={"name": f"Race Card {tag}", "type": "liability", "is_card": True}))
+    misc = next(a for a in acc.values() if a["type"] == "expense" and "misc" in a["name"].lower())
+    ok(c.post("/api/accounting/expense", json={"date": "2026-11-01", "amount": 1000, "expense_account_id": misc["id"],
+                                               "paid_from_account_id": card["id"], "payment_method": "credit_card"}))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        codes = sorted(f.result().status_code for f in [pool.submit(
+            c.post, "/api/accounting/non-operating", json={"kind": "own_transfer", "date": "2026-11-02", "amount": 1000,
+                                                          "bank_account_id": bank, "to_account_id": card["id"]})
+            for _ in range(2)])
+    check(case, "card bill paid once only", [200, 409], codes)
+    check(case, "card dues not below zero", 0, balance(c, card["name"]))
+    trial_balance_ok(c, case)
+    balance_sheet_ok(c, case)
+
+
 def main() -> None:
     admin = new_workspace()
     for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end,
                case_cash_deposit, case_party_ledger, case_fee_vs_commission,
-               case_who_paid, case_credit_card, case_cash_guard, case_user_delete, case_audit_cleanup, case_ca_review, case_modules_review):
+               case_who_paid, case_credit_card, case_cash_guard, case_user_delete, case_audit_cleanup, case_ca_review, case_modules_review, case_review_fixes):
         try:
             fn(admin)
         except Exception as exc:  # keep going so one gap does not hide the rest

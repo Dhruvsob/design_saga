@@ -616,6 +616,9 @@ async def correct_salary_payment(run_id: str, payload: SalaryCorrectionIn, reque
             je = await _post_journal(
                 user, payload.payment_date, f"Salary {run['year']}-{run['month']:02d} — {emp_name}",
                 await _salary_lines(breakdown, extras, net, salary_acc_id, paid_from["id"], emp_name),
+                cash_released={line["account_id"]: float(line.get("credit") or 0) - float(line.get("debit") or 0)
+                               for line in (journal or {}).get("lines") or []
+                               if line.get("account_type") == "asset"},
                 reference=payload.reference or f"PAYROLL-{run['year']}-{run['month']:02d}",
                 employee_id=run["employee_id"], source="payroll", source_id=new_run_id,
             )
