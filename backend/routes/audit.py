@@ -16,7 +16,10 @@ from core.scoped_db import sdb
 from core.deps import require_user
 from core.rbac import has_permission, has_any_permission
 from core.tenancy import is_super_admin, user_org_id
-from core.audit import audit, verify_chain
+from core.audit import MIN_KEEP_DAYS, PURGEABLE_ACTIONS, audit, purge_routine, verify_chain
+from core.helpers import business_today
+from datetime import timedelta
+from pydantic import BaseModel
 from core.csv_safe import SafeWriter
 from core.access_control import get_visible_project, get_visible_purchase_order, get_visible_task
 
@@ -96,6 +99,52 @@ async def list_audit(request: Request, limit: int = 200,
     limit = max(1, min(limit, 1000))
     rows = await cursor.sort("at", -1).limit(limit).to_list(limit)
     return rows
+
+
+class AuditPurgeIn(BaseModel):
+    months: int
+    confirm: bool = False
+
+
+def _purge_scope(user: dict, months: int) -> tuple[str, str]:
+    if not has_permission(user, "*.*") or is_super_admin(user):
+        raise HTTPException(403, "Studio admin only")
+    if months not in (1, 3, 6, 12):
+        raise HTTPException(400, "Choose 1, 3, 6 or 12 months")
+    cutoff = business_today() - timedelta(days=max(MIN_KEEP_DAYS, months * 30))
+    return user_org_id(user) or "org_default", cutoff.isoformat()
+
+
+@router.get("/audit-log/cleanup-preview")
+async def audit_cleanup_preview(request: Request, months: int = 3,
+                                session_token: Optional[str] = Cookie(default=None),
+                                authorization: Optional[str] = Header(default=None)):
+    """How many routine rows (sign-ins, PIN unlocks, check-ins) a clean-up would remove."""
+    user = await require_user(request, session_token, authorization)
+    chain, cutoff = _purge_scope(user, months)
+    count = await db.audit_log.count_documents(
+        {"chain": chain, "action": {"$in": list(PURGEABLE_ACTIONS)}, "at": {"$lt": cutoff}})
+    kept = await db.audit_log.count_documents({"chain": chain}) - count
+    return {"before": cutoff, "removable": count, "kept": kept,
+            "routine_actions": list(PURGEABLE_ACTIONS)}
+
+
+@router.post("/audit-log/cleanup")
+async def audit_cleanup(payload: AuditPurgeIn, request: Request,
+                        session_token: Optional[str] = Cookie(default=None),
+                        authorization: Optional[str] = Header(default=None)):
+    """Clear routine rows older than the chosen months. Money, payroll,
+    permission, deletion and export records are always kept."""
+    user = await require_user(request, session_token, authorization)
+    if not has_permission(user, "*.*"):
+        raise HTTPException(403, "Studio admin only")
+    chain, cutoff = _purge_scope(user, payload.months)
+    if not payload.confirm:
+        raise HTTPException(400, "Confirm the clean-up")
+    result = await purge_routine(chain, cutoff, user)
+    await audit(user, "audit.cleanup", target=chain, target_type="org",
+                meta={"before": cutoff, "deleted": result["deleted"]}, org_id=chain)
+    return {"before": cutoff, **result}
 
 
 @router.get("/audit-log/verify")

@@ -16,8 +16,17 @@ function fmtErr(d, fb = "Failed") {
 
 export default function MasterDataManager() {
   const [kinds, setKinds] = useState({});
+  const [modules, setModules] = useState([]);
+  const [usedIn, setUsedIn] = useState({});
   const [systemKinds, setSystemKinds] = useState([]);
   const [data, setData] = useState({});
+  // Lists grouped by module; any list not in a group still shows under "Other".
+  const moduleGroups = (() => {
+    const grouped = new Set(modules.flatMap((m) => m.kinds));
+    const rest = Object.keys(kinds).filter((k) => !grouped.has(k));
+    return [...(modules.length ? modules : [{ name: "Lists", kinds: Object.keys(kinds) }]),
+      ...(rest.length && modules.length ? [{ name: "Other", kinds: rest }] : [])];
+  })();
   const [selected, setSelected] = useState("project_type");
   const [newLabel, setNewLabel] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -29,6 +38,8 @@ export default function MasterDataManager() {
   const load = async () => {
     const { data: res } = await api.get("/master-data", { params: { include_inactive: true } });
     setKinds(res.kinds || {});
+    setModules(res.modules || []);
+    setUsedIn(res.used_in || {});
     setSystemKinds(res.system_kinds || []);
     setData(res.data || {});
   };
@@ -108,17 +119,22 @@ export default function MasterDataManager() {
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" data-testid="master-data-manager">
       {/* kind list */}
       <div className="border border-[var(--line)] rounded-lg overflow-hidden">
-        <div className="overline p-3 border-b border-[var(--line)] bg-[var(--surface-2)]">CONFIGURATION KINDS</div>
-        {Object.entries(kinds).map(([k, label]) => (
-          <button key={k} onClick={() => { setSelected(k); setEditingId(null); }}
-            className={`w-full text-left px-3 py-2.5 text-sm border-b border-[var(--line-soft)] transition flex items-center justify-between ${
-              selected === k ? "bg-[var(--hover)] text-[#5F5A4B] font-semibold" : "hover:bg-[var(--surface-2)]"
-            }`}
-            data-testid={`md-kind-${k}`}
-          >
-            <span>{label}</span>
-            <span className="font-mono text-[10px] text-[var(--ink-3)]">{(data[k] || []).length}</span>
-          </button>
+        <div className="overline p-3 border-b border-[var(--line)] bg-[var(--surface-2)]">LISTS BY MODULE</div>
+        {moduleGroups.map((group) => (
+          <div key={group.name} data-testid={`md-module-${group.name}`}>
+            <div className="px-3 pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-[var(--ink-3)]">{group.name}</div>
+            {group.kinds.filter((k) => kinds[k]).map((k) => (
+              <button key={k} onClick={() => { setSelected(k); setEditingId(null); }}
+                className={`w-full text-left px-3 py-2.5 text-sm border-b border-[var(--line-soft)] transition flex items-center justify-between ${
+                  selected === k ? "bg-[var(--hover)] text-[#5F5A4B] font-semibold" : "hover:bg-[var(--surface-2)]"
+                }`}
+                data-testid={`md-kind-${k}`}
+              >
+                <span>{kinds[k]}</span>
+                <span className="font-mono text-[10px] text-[var(--ink-3)]">{(data[k] || []).length}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </div>
 
@@ -140,6 +156,11 @@ export default function MasterDataManager() {
           </div>
         )}
 
+        {usedIn[selected] && (
+          <div className="text-xs text-[var(--ink-2)]" data-testid="md-used-in">
+            <b>Used in:</b> {usedIn[selected]}. Changes apply there right away.
+          </div>
+        )}
         <form onSubmit={add} className="flex gap-2">
           <input className="input-flat flex-1" placeholder={`Add new ${kinds[selected] || "value"}…`}
             value={newLabel} onChange={(e) => setNewLabel(e.target.value)} data-testid="md-add-input" />

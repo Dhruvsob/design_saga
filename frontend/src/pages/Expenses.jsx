@@ -11,6 +11,7 @@ import {
 import { confirmAction } from "../lib/confirm";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
 import { isMoneyAccount } from "../lib/cashbank";
+import useMasterData from "../hooks/useMasterData";
 
 const fmtMoney = (n) => formatINR(n);
 function fmtErr(d, fb = "Failed") {
@@ -227,6 +228,8 @@ const isTouchDevice = () => {
 };
 
 function CreateExpense({ onClose, onCreated, initial = null, expenseId = null }) {
+  const { values } = useMasterData();
+  const expenseCategories = values("expense_category", CATEGORIES);   // Master Data → Expense Categories
   const [f, setF] = useState({
     title: initial?.title || "", payment_mode: initial?.payment_mode || "personal",
     notes: initial?.notes || "", project_id: initial?.project_id || null,
@@ -347,7 +350,7 @@ function CreateExpense({ onClose, onCreated, initial = null, expenseId = null })
               return (
                 <div key={l._key} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center rounded-lg md:rounded-none border md:border-0 border-[var(--line)] p-2 md:p-0" data-testid={`exp-line-${i}`}>
                   <select aria-label="Category" className="input-flat col-span-1 md:col-span-2" value={l.category} onChange={(e) => setLine({ category: e.target.value })}>
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>)}
+                    {expenseCategories.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>)}
                   </select>
                   <input type="number" step="0.01" min="0" inputMode="decimal" aria-label="Amount" placeholder="0.00"
                     className="input-flat col-span-1 md:col-span-2 md:order-3 text-right tabular-nums" value={l.amount}

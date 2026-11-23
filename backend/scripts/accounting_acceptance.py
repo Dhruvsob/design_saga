@@ -616,11 +616,47 @@ def case_cash_guard(c) -> None:
     trial_balance_ok(c, case)
 
 
+def case_user_delete(c) -> None:
+    """Owner, 2026-11-23: a former team member could be deactivated but never deleted."""
+    case = "user-delete"
+    tag = uuid.uuid4().hex[:6]
+    u = ok(c.post("/api/auth/register", json={"email": f"leaver-{tag}@qa.example.com", "password": PASSWORD,
+                                              "name": f"Leaver {tag}", "role": "Employee", "approve_immediately": True}))
+    uid = u.get("user_id") or u.get("user", {}).get("user_id")
+    active = c.delete(f"/api/rbac/users/{uid}")
+    check(case, "an active user must be deactivated first", 409, active.status_code)
+    ok(c.post(f"/api/rbac/users/{uid}/approve", json={"decision": "reject", "reason": "Left the studio"}))
+    gone = c.delete(f"/api/rbac/users/{uid}")
+    check(case, "a deactivated user is deleted", 200, gone.status_code)
+    users = ok(c.get("/api/rbac/users"))
+    check(case, "deleted user no longer listed", False, any(x.get("user_id") == uid for x in users))
+    me = ok(c.get("/api/auth/me"))
+    self_del = c.delete(f"/api/rbac/users/{me.get('user_id') or me.get('user', {}).get('user_id')}")
+    check(case, "you cannot delete yourself", 400, self_del.status_code)
+    trail = ok(c.get("/api/audit-log", params={"action": "user.delete"}))
+    check(case, "the deletion is in the audit trail", True, any(r.get("target") == uid for r in trail))
+
+
+def case_audit_cleanup(c) -> None:
+    case = "audit-cleanup"
+    pv = ok(c.get("/api/audit-log/cleanup-preview", params={"months": 1}))
+    check(case, "preview lists only routine actions", True,
+          "journal.create" not in pv["routine_actions"] and "auth.login" in pv["routine_actions"])
+    bad = c.post("/api/audit-log/cleanup", json={"months": 2, "confirm": True})
+    check(case, "only 1, 3, 6 or 12 months", 400, bad.status_code)
+    unconfirmed = c.post("/api/audit-log/cleanup", json={"months": 1})
+    check(case, "needs confirmation", 400, unconfirmed.status_code)
+    done = ok(c.post("/api/audit-log/cleanup", json={"months": 1, "confirm": True}))
+    check(case, "clean-up runs (fresh studio: nothing old)", 0, done["deleted"])
+    v = ok(c.get("/api/audit-log/verify"))
+    check(case, "integrity still verifies", True, v["ok"])
+
+
 def main() -> None:
     admin = new_workspace()
     for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end,
                case_cash_deposit, case_party_ledger, case_fee_vs_commission,
-               case_who_paid, case_credit_card, case_cash_guard):
+               case_who_paid, case_credit_card, case_cash_guard, case_user_delete, case_audit_cleanup):
         try:
             fn(admin)
         except Exception as exc:  # keep going so one gap does not hide the rest

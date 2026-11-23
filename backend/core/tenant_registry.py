@@ -29,7 +29,7 @@ TENANT_COLLECTIONS = (
     "bank_statement_rows", "bank_statement_batches",
     "expenses", "expense_policies", "expense_receipts", "recurring_expenses", "loans",
     # Settings, notifications and integrations
-    "master_data", "counters", "notifications", "audit_log",
+    "master_data", "counters", "notifications", "audit_log", "audit_pruned",
     "google_calendar_connections", "google_oauth_states",
     "google_calendar_sync_queue", "google_calendar_synced_events",
 )

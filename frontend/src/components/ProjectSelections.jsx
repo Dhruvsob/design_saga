@@ -8,6 +8,7 @@ import { errText } from "../lib/errors";
 import { formatDate } from "../lib/format";
 import RowActions from "./RowActions";
 import SearchSelect from "./SearchSelect";
+import useMasterData from "../hooks/useMasterData";
 
 // Room-wise selections (P2.3): what the client approved per room before buying.
 export const SELECTION_STATUS = {
@@ -23,6 +24,8 @@ const EMPTY = { room: "", product_id: "", item: "", specification: "", vendor_id
 
 function SelectionForm({ initial, products, vendors, onCancel, onSave }) {
   const [f, setF] = useState(initial);
+  const { values } = useMasterData();
+  const rooms = values("task_area", ROOMS);   // Master Data → Areas / Rooms
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e?.target ? e.target.value : e });
   const submit = async (e) => {
@@ -35,7 +38,7 @@ function SelectionForm({ initial, products, vendors, onCancel, onSave }) {
       <label className="text-xs text-[var(--ink-2)]">Room or area
         <input className="input-flat w-full mt-1" list="selection-rooms" required value={f.room} onChange={set("room")}
                placeholder="Kitchen" data-testid="selection-room" />
-        <datalist id="selection-rooms">{ROOMS.map((r) => <option key={r} value={r} />)}</datalist>
+        <datalist id="selection-rooms">{rooms.map((r) => <option key={r} value={r} />)}</datalist>
       </label>
       <label className="text-xs text-[var(--ink-2)]">From the library (optional)
         <SearchSelect value={f.product_id} onChange={(e) => setF({ ...f, product_id: e.target.value })} aria-label="Library product"

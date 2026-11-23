@@ -518,6 +518,7 @@ class FileIn(BaseModel):
     name: str
     url: str
     stage: Optional[str] = None
+    doc_type: Optional[str] = Field(default=None, max_length=80)   # Master Data → Document Types
     version: Optional[int] = 1
     client_visible: bool = False
 
@@ -2007,6 +2008,7 @@ async def create_file(payload: FileIn, request: Request,
 async def upload_project_file(
         request: Request, project_id: str = Form(...), name: Optional[str] = Form(None),
         stage: Optional[str] = Form(None), client_visible: bool = Form(False),
+        doc_type: Optional[str] = Form(None),
         upload: UploadFile = File(...),
         session_token: Optional[str] = Cookie(default=None),
         authorization: Optional[str] = Header(default=None)):
@@ -2027,6 +2029,7 @@ async def upload_project_file(
         "name": (name or stored["original_name"]).strip()[:180],
         "url": f"/api/files/{file_id}/content",
         "stage": (stage or "").strip()[:120] or None, "version": 1,
+        "doc_type": (doc_type or "").strip()[:80] or None,
         "client_visible": client_visible, "created_at": iso(now_utc()),
         "created_by": user["user_id"], "uploader_name": user["name"],
         **stored,

@@ -304,6 +304,11 @@ code, .font-mono {
   font-family: var(--font-sans);
 }
 textarea.input-flat { height: auto; padding: 9px 12px; line-height: 1.5; }
+/* Inputs with a leading icon: the padding above outranks Tailwind utilities,
+   so the icon sat on top of the placeholder (login, search boxes). */
+.input-flat.pl-8 { padding-left: 2rem; }
+.input-flat.pl-9 { padding-left: 2.25rem; }
+.input-flat.pl-10 { padding-left: 2.5rem; }
 select.input-flat { padding-right: 32px; }
 .input-flat::placeholder { color: var(--ink-3); opacity: 0.85; }
 .input-flat:hover:not(:focus):not(:disabled) { border-color: var(--line-strong); }

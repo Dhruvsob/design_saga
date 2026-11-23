@@ -142,7 +142,8 @@ export default function Employees() {
             <input name="last_name" className="input-flat w-full mt-1" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
           </label>
           <label className={FIELD}>Designation
-            <input name="designation" className="input-flat w-full mt-1" placeholder="Interior designer" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
+            <datalist id="designation-options">{(meta.designations || []).map((d) => <option key={d} value={d} />)}</datalist>
+            <input name="designation" list="designation-options" className="input-flat w-full mt-1" placeholder="Interior designer" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
           </label>
           <label className={FIELD}>Work email
             <input name="email" className="input-flat w-full mt-1" type="email" autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />

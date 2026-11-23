@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowClockwise, CheckCircle, DownloadSimple, MagnifyingGlass, ShieldCheck, Warning } from "@phosphor-icons/react";
+import { ArrowClockwise, Broom, CheckCircle, DownloadSimple, MagnifyingGlass, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../lib/api";
-import { dateForInput, formatDateTime } from "../lib/format";
+import { dateForInput, formatDate, formatDateTime } from "../lib/format";
 import PageHero from "../components/PageHero";
 
 const humanize = (value) => (value || "Activity").replace(/[._-]+/g, " ")
@@ -40,6 +40,25 @@ export default function AuditLog() {
     } finally { setVerifying(false); }
   };
 
+  const [cleanup, setCleanup] = useState(null);   // { months, preview }
+  const openCleanup = async (months) => {
+    try {
+      const { data } = await api.get("/audit-log/cleanup-preview", { params: { months } });
+      setCleanup({ months, preview: data });
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not check what can be cleared");
+    }
+  };
+  const runCleanup = async () => {
+    try {
+      const { data } = await api.post("/audit-log/cleanup", { months: cleanup.months, confirm: true });
+      toast.success(`Cleared ${data.deleted} routine entries`);
+      setCleanup(null); setVerification(null); load();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not clear the entries");
+    }
+  };
+
   const download = async () => {
     setExporting(true);
     try {
@@ -74,11 +93,41 @@ export default function AuditLog() {
           <button className="btn-secondary" onClick={download} disabled={exporting} data-testid="audit-export">
             <DownloadSimple size={15} /> {exporting ? "Exporting…" : "Export CSV"}
           </button>
+          <button className="btn-secondary" onClick={() => openCleanup(3)} data-testid="audit-cleanup">
+            <Broom size={15} /> Clean up
+          </button>
           <button className="btn-primary" onClick={verify} disabled={verifying} data-testid="audit-verify">
             <ShieldCheck size={15} /> Verify integrity
           </button>
         </div>
       </PageHero></div>
+
+      {cleanup && (
+        <div className="mb-4 card-flat p-4 space-y-3" data-testid="audit-cleanup-panel">
+          <div className="text-sm font-semibold">Clear routine entries</div>
+          <p className="text-xs text-[var(--ink-2)]">
+            Removes only sign-ins, PIN unlocks, check-ins/outs and calendar syncs older than the period you choose.
+            Money, payroll, permission, deletion and export records are always kept: the law requires the audit
+            trail of your books to be preserved for 8 years. Download the CSV first if you want a copy.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs">Older than</span>
+            {[1, 3, 6, 12].map((m) => (
+              <button key={m} className={m === cleanup.months ? "btn-primary text-xs" : "btn-ghost text-xs"}
+                onClick={() => openCleanup(m)} data-testid={`audit-cleanup-${m}`}>{m === 12 ? "1 year" : `${m} month${m > 1 ? "s" : ""}`}</button>
+            ))}
+          </div>
+          <div className="text-sm" data-testid="audit-cleanup-preview">
+            {cleanup.preview.removable} routine entries before {formatDate(cleanup.preview.before)} can be cleared;
+            {" "}{cleanup.preview.kept} entries stay.
+          </div>
+          <div className="flex justify-end gap-2">
+            <button className="btn-ghost" onClick={() => setCleanup(null)}>Cancel</button>
+            <button className="btn-primary bg-[var(--danger)]" disabled={!cleanup.preview.removable}
+              onClick={runCleanup} data-testid="audit-cleanup-confirm">Clear {cleanup.preview.removable} entries</button>
+          </div>
+        </div>
+      )}
 
       {verification && (
         <div className={`mb-4 px-4 py-3 border flex items-center gap-3 ${verification.ok

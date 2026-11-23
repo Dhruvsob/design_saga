@@ -798,6 +798,51 @@ async def unlock_user(user_id: str, request: Request,
 
 
 # ==================================================
+# DELETE (Admin removes a deactivated user's login)
+# ==================================================
+@router.delete("/rbac/users/{user_id}")
+async def delete_user(user_id: str, request: Request,
+                      session_token: Optional[str] = Cookie(default=None),
+                      authorization: Optional[str] = Header(default=None)):
+    """Remove a deactivated user's login for good (owner, 2026-11-23: a former
+    team member could only be deactivated, never removed).
+
+    Deletes the login and personal access data (sessions, PIN, notifications,
+    preferences, calendar connection). Kept: the audit trail, and any employee
+    record with its attendance and payroll history (unlinked from the login),
+    because the books and statutory records depend on them.
+    """
+    admin = await require_user(request, session_token, authorization)
+    if not has_permission(admin, "*.*"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    _ensure_target_in_actor_tenant(admin, target)
+    if target["user_id"] == admin["user_id"]:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    if target.get("role") == "SuperAdmin" or target.get("is_super_admin"):
+        raise HTTPException(status_code=403, detail="Platform accounts are managed by platform staff")
+    if target.get("is_active") is not False and target.get("approval_status") != "rejected":
+        raise HTTPException(status_code=409, detail="Deactivate this user first, then delete")
+    org_id = target.get("org_id")
+    for coll in ("user_sessions", "user_app_locks", "notifications", "notification_preferences",
+                 "user_favorite_accounts", "google_calendar_connections", "google_calendar_sync_queue",
+                 "google_calendar_synced_events", "ai_messages"):
+        await db[coll].delete_many({"user_id": user_id})
+    kept = await db.employees.update_many(
+        {"org_id": org_id, "user_id": user_id},
+        {"$unset": {"user_id": ""}, "$set": {"login_deleted_at": iso_now(),
+                                             "login_deleted_by": admin["user_id"]}})
+    await db.users.delete_one({"user_id": user_id})
+    await audit(admin, "user.delete", target=user_id, target_type="user",
+                meta={"email": target.get("email"), "name": target.get("name"),
+                      "employee_records_kept": kept.modified_count},
+                org_id=org_id)
+    return {"ok": True, "deleted": user_id, "employee_records_kept": kept.modified_count}
+
+
+# ==================================================
 # APPROVAL WORKFLOW
 # ==================================================
 @router.get("/rbac/pending")

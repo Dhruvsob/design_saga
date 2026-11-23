@@ -51,7 +51,7 @@ export default function ProjectDetail() {
   const [p, setP] = useState(null);
   const [tab, setTab] = useState(() => (TABS.includes(searchParams.get("tab")) ? searchParams.get("tab") : "Overview"));
   const [loading, setLoading] = useState(true);
-  const [fileForm, setFileForm] = useState({ name: "", url: "", stage: "", client_visible: false, file: null });
+  const [fileForm, setFileForm] = useState({ name: "", url: "", stage: "", doc_type: "", client_visible: false, file: null });
   const [showFileForm, setShowFileForm] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
@@ -109,13 +109,14 @@ export default function ProjectDetail() {
         body.append("project_id", id);
         body.append("name", fileForm.name || fileForm.file.name);
         body.append("stage", fileForm.stage);
+        if (fileForm.doc_type) body.append("doc_type", fileForm.doc_type);
         body.append("client_visible", String(fileForm.client_visible));
         body.append("upload", fileForm.file);
         await api.post("/files/upload", body);
       } else {
         await api.post("/files", { ...fileForm, file: undefined, project_id: id });
       }
-      setFileForm({ name: "", url: "", stage: "", client_visible: false, file: null });
+      setFileForm({ name: "", url: "", stage: "", doc_type: "", client_visible: false, file: null });
       setShowFileForm(false);
       toast.success("File added");
       load();
@@ -616,7 +617,12 @@ export default function ProjectDetail() {
               <input className="input-flat" placeholder="Display name" value={fileForm.name} onChange={(e) => setFileForm({ ...fileForm, name: e.target.value })} />
               <input className="input-flat" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.csv,.txt" onChange={(e) => setFileForm({ ...fileForm, file: e.target.files?.[0] || null })} />
               <input className="input-flat" placeholder="Or paste an external URL" required={!fileForm.file} value={fileForm.url} onChange={(e) => setFileForm({ ...fileForm, url: e.target.value })} />
-              <input className="input-flat" placeholder="Stage (e.g. Concept)" value={fileForm.stage} onChange={(e) => setFileForm({ ...fileForm, stage: e.target.value })} />
+              <input className="input-flat" placeholder="Stage (e.g. Concept)" list="file-stages" value={fileForm.stage} onChange={(e) => setFileForm({ ...fileForm, stage: e.target.value })} />
+              <datalist id="file-stages">{values("project_stage").map((s) => <option key={s} value={s} />)}</datalist>
+              <select aria-label="Document type" className="input-flat" value={fileForm.doc_type} onChange={(e) => setFileForm({ ...fileForm, doc_type: e.target.value })} data-testid="file-doc-type">
+                <option value="">Document type</option>
+                {values("document_type").map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
               <label className="md:col-span-3 flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={fileForm.client_visible} onChange={(e) => setFileForm({ ...fileForm, client_visible: e.target.checked })} />
                 Share this file in the client portal
@@ -629,7 +635,7 @@ export default function ProjectDetail() {
             <div key={f.id} className="border border-[var(--line)] rounded-md p-3 flex items-center justify-between hover:border-[var(--ink)] transition group">
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm">{f.name}</div>
-                <div className="text-xs text-[var(--ink-2)]">{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
+                <div className="text-xs text-[var(--ink-2)]">{f.doc_type ? `${f.doc_type} · ` : ""}{f.stage || "—"} · v{f.version || 1} · {f.uploader_name}</div>
               </div>
               <div className="flex items-center gap-2">
                 {(f.created_by === user?.user_id || hasPerm("files.update")) && (

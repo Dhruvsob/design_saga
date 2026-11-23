@@ -80,6 +80,30 @@ KIND_LABELS = {
     "document_type": "Document Types",
 }
 
+# Section-wise view (owner, 2026-11-23): each module's dropdowns together,
+# with where every list appears, so a change is made in one place.
+MODULES = [
+    ("Projects", ["project_type", "project_stage", "document_type"]),
+    ("Tasks & Selections", ["task_category", "task_area"]),
+    ("Sales & Clients", ["lead_source", "lead_stage", "client_type"]),
+    ("People", ["designation", "department"]),
+    ("Money", ["expense_category", "payment_method"]),
+]
+USED_IN = {
+    "project_type": "New project form, project filters, leads",
+    "project_stage": "Project lifecycle bar, project filters, project file stage",
+    "document_type": "Project files (upload form and file list)",
+    "task_category": "Task form, task board filters and grouping",
+    "task_area": "Task form and filters; room list in project selections",
+    "lead_source": "Lead form and lead filters",
+    "lead_stage": "Lead pipeline columns",
+    "client_type": "Client form and client details",
+    "designation": "Employee form (suggestions)",
+    "department": "Employee form and employee filters",
+    "expense_category": "Expense claims (category of each line)",
+    "payment_method": "Record income / expense method list (fixed set: hide what you do not use)",
+}
+
 # kind → (collection, field) used to protect referenced values from deletion
 REFERENCE_MAP = {
     "project_type": ("projects", "project_type"),
@@ -165,7 +189,9 @@ async def list_all(request: Request,
     grouped = {}
     for r in rows:
         grouped.setdefault(r["kind"], []).append(r)
-    return {"kinds": KIND_LABELS, "system_kinds": sorted(SYSTEM_KINDS), "data": grouped}
+    return {"kinds": KIND_LABELS, "system_kinds": sorted(SYSTEM_KINDS), "data": grouped,
+            "modules": [{"name": name, "kinds": kinds} for name, kinds in MODULES],
+            "used_in": USED_IN}
 
 
 @router.get("/master-data/{kind}")
@@ -196,6 +222,15 @@ async def add_item(kind: str, payload: ItemIn, request: Request,
     label = payload.label.strip()
     if not label:
         raise HTTPException(status_code=400, detail="Label is required")
+    if kind == "payment_method":
+        # Accounting checks each method against the account it uses (cash ->
+        # Cash, credit card -> a card...), so only supported methods exist;
+        # hide the ones you do not use instead (owner, 2026-11-23).
+        from core.finance import PAYMENT_METHODS
+        if label not in PAYMENT_METHODS:
+            raise HTTPException(status_code=400, detail=(
+                "Payment methods are fixed by the accounting rules: "
+                + ", ".join(PAYMENT_METHODS) + ". Hide the ones you do not use."))
     dup = await db.master_data.find_one(
         {"org_id": org_id, "kind": kind, "label": {"$regex": f"^{__import__('re').escape(label)}$", "$options": "i"}})
     if dup:

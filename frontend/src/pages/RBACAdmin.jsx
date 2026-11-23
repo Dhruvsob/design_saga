@@ -7,8 +7,9 @@ import PageHero from "../components/PageHero";
 import { formatDate } from "../lib/format";
 import {
   ShieldCheck, CaretDown, Info, UserPlus, Key, Check, X, Warning,
-  LockKeyOpen, FloppyDisk, ArrowCounterClockwise, Sliders, Copy, LinkSimple,
+  LockKeyOpen, FloppyDisk, ArrowCounterClockwise, Sliders, Copy, LinkSimple, Trash,
 } from "@phosphor-icons/react";
+import { confirmAction } from "../lib/confirm";
 
 const ROLE_DESCRIPTIONS = {
   Admin:          "Full system access. Can manage users and settings.",
@@ -82,6 +83,21 @@ export default function RBACAdmin() {
       await load();
     } catch (e) {
       setError(fmtErr(e?.response?.data?.detail, "Failed"));
+    } finally { setSavingId(null); }
+  };
+
+  const deleteUser = async (u) => {
+    const ok = await confirmAction(
+      `Delete ${u.name || u.email} permanently? Their login is removed and cannot be restored. `
+      + "The audit trail and any employee, attendance and payroll history stay for your records.");
+    if (!ok) return;
+    setSavingId(u.user_id);
+    try {
+      await api.delete(`/rbac/users/${u.user_id}`);
+      toast.success(`${u.name || u.email} deleted`);
+      await load();
+    } catch (e) {
+      toast.error(fmtErr(e?.response?.data?.detail, "Could not delete"));
     } finally { setSavingId(null); }
   };
 
@@ -226,6 +242,11 @@ export default function RBACAdmin() {
                         onClick={() => setShowReset(u.user_id)}
                         className="btn-ghost text-xs" data-testid={`reset-pwd-${u.user_id}`}
                       ><Key size={12} /> Reset password</button>
+                      {(u.is_active === false || u.approval_status === "rejected") && u.user_id !== me?.user_id && (
+                        <button onClick={() => deleteUser(u)} disabled={isSaving}
+                          className="btn-ghost text-xs text-[var(--danger)]" data-testid={`delete-user-${u.user_id}`}
+                          title="Delete this deactivated user"><Trash size={12} /> Delete</button>
+                      )}
                     </div>
                     )}
                   </Td>

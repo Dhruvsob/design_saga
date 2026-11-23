@@ -12,6 +12,7 @@ import { useAuth } from "../context/AuthContext";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
 import { dateForInput, empName, formatDate, formatINR } from "../lib/format";
+import useMasterData from "../hooks/useMasterData";
 import { compatibleAccount, methodForAccount, isMoneyAccount, isCardAccount } from "../lib/cashbank";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
@@ -1556,8 +1557,12 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 // ================================================================
 const isIncentiveName = (name) => /commission|incentive/i.test(String(name || ""));
 
+const PAYMENT_METHOD_CODES = ["cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"];
+
 function TxnList({ kind, showForm, setShowForm, accounts, banks, cards = [], txnAccs, clients, projects, vendors, employees, journal, page, onPage, onSubmit }) {
   const [detail, setDetail] = useState(null);
+  const { values: mdValues } = useMasterData();
+  const activeMethods = mdValues("payment_method", PAYMENT_METHOD_CODES);   // Master Data → Payment Methods
   const [openMilestones, setOpenMilestones] = useState([]);
   const [form, setForm] = useState(() => ({
     date: dateForInput(new Date()), amount: "",
@@ -1725,7 +1730,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, cards = [], txn
           )}
 
           <select aria-label="Payment method" className="input-flat" value={form.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(payAccounts, method); setForm({ ...form, payment_method: method, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: compatible?.id || (kind === "income" ? form.bank_account_id : form.paid_from_account_id) }); }}>
-            {["cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"].map((m) => <option key={m}>{m}</option>)}
+            {PAYMENT_METHOD_CODES.filter((m) => activeMethods.includes(m) || m === form.payment_method).map((m) => <option key={m}>{m}</option>)}
           </select>
           <input className="input-flat" placeholder="Reference no." value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
           <input className="input-flat md:col-span-3" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

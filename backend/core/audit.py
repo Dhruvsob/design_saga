@@ -87,10 +87,46 @@ async def audit(actor: Optional[dict], action: str, target: str = "",
         _log.warning("audit write failed for %s: %s", action, type(exc).__name__)
 
 
+# Routine, high-volume events an admin may clear after a while (owner,
+# 2026-11-23: the log filled with PIN unlocks and sign-ins). Everything else
+# (money, payroll, permissions, deletions, exports) is kept: the audit trail
+# of the books must be preserved for 8 years (Companies (Accounts) Rules, 2014).
+PURGEABLE_ACTIONS = (
+    "auth.app_pin.unlock", "auth.app_pin.lock", "auth.login", "auth.logout",
+    "auth.login_failed", "auth.refresh", "attendance.check_in", "attendance.check_out",
+    "google_calendar.sync", "notification.read",
+)
+MIN_KEEP_DAYS = 30
+
+
+async def purge_routine(chain_key: str, before_iso: str, actor: dict) -> dict:
+    """Delete routine rows older than `before_iso`, keeping a tiny stub of each
+    (seq, hash, prev_hash) so the hash chain still verifies end to end."""
+    q = {"chain": chain_key, "action": {"$in": list(PURGEABLE_ACTIONS)}, "at": {"$lt": before_iso}}
+    stubs = []
+    async for r in db.audit_log.find(q, {"_id": 0, "seq": 1, "hash": 1, "prev_hash": 1,
+                                         "action": 1, "at": 1, "chain": 1}):
+        stubs.append({**r, "org_id": None if chain_key == "platform" else chain_key,
+                      "pruned_at": iso_now(), "pruned_by": (actor or {}).get("user_id")})
+    if stubs:
+        await db.audit_pruned.insert_many([dict(s) for s in stubs])
+        await db.audit_log.delete_many(q)
+    return {"deleted": len(stubs)}
+
+
 async def verify_chain(chain_key: str, limit: int = 20000) -> dict:
     rows = await db.audit_log.find(
         {"chain": chain_key, "seq": {"$ne": None}}, {"_id": 0}
     ).sort("seq", 1).to_list(limit)
+    pruned_rows = getattr(db, "audit_pruned", None)
+    pruned = await pruned_rows.find(
+        {"chain": chain_key, "seq": {"$ne": None}}, {"_id": 0}).to_list(None) if pruned_rows is not None else []
+    if pruned:
+        # A cleared routine row leaves its link (seq, hashes): the chain is
+        # still checked across it; only that row's content is gone.
+        for stub in pruned:
+            stub["_pruned"] = True
+        rows = sorted([*rows, *pruned], key=lambda r: r["seq"])
     problems = []
     prev = "genesis"
     expected = None
@@ -99,12 +135,12 @@ async def verify_chain(chain_key: str, limit: int = 20000) -> dict:
             problems.append({"seq": r["seq"], "issue": f"gap: expected seq {expected}"})
         if r.get("prev_hash") != prev:
             problems.append({"seq": r["seq"], "issue": "prev_hash mismatch"})
-        if audit_digest(r) != r.get("hash"):
+        if not r.get("_pruned") and audit_digest(r) != r.get("hash"):
             problems.append({"seq": r["seq"], "issue": "content hash mismatch (row altered)"})
         prev = r.get("hash")
         expected = r["seq"] + 1
     total_chained = await db.audit_log.count_documents(
-        {"chain": chain_key, "seq": {"$ne": None}})
+        {"chain": chain_key, "seq": {"$ne": None}}) + len(pruned)
     unchained = await db.audit_log.count_documents(
         {"chain": chain_key, "seq": None})
     head = await db.audit_chain.find_one({"chain": chain_key}, {"_id": 0})
@@ -124,5 +160,6 @@ async def verify_chain(chain_key: str, limit: int = 20000) -> dict:
         "seq": {"$exists": False},
     })
     return {"chain": chain_key, "rows_checked": len(rows), "ok": not problems,
+            "cleared_routine_rows": len(pruned),
             "problems": problems[:100], "legacy_unchained_rows": legacy,
             "unchained_rows": unchained}
