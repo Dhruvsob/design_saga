@@ -132,6 +132,9 @@ test("payroll: bank salary posts once to the chosen bank, with name, and can be 
 test("payroll: a paid salary is edited in place (bonus included) and the old entry leaves the books", async ({ browser }) => {
   const ctx = await api("admin");
   const { cash } = await accounts(ctx);
+  // Cash can never go below zero: put cash in the till before paying from it.
+  await json(ctx.post("/api/accounting/non-operating", { data: {
+    kind: "owner_investment", date: "2026-10-01", amount: 50000, bank_account_id: cash.id } }));
   const emp = await json(ctx.post("/api/employees", { data: {
     first_name: "Meet", last_name: `QA${uid()}`, salary: { basic: 12000 },
   } }));

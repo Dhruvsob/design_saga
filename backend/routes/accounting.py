@@ -747,6 +747,18 @@ async def _post_journal(user: dict, date: str, narration: str, lines: list,
             "description": l.get("description") or "",
         })
 
+    # Cash in hand can never go below zero, whichever module pays from it
+    # (vendor payments, salaries, claims, EMIs...). Undoing an entry is exempt.
+    if not str(source or "").endswith("_reversal"):
+        cash_out: dict = {}
+        for line in resolved_lines:
+            acc = accs[line["account_id"]]
+            if acc.get("type") == "asset" and _is_cash(acc):
+                cash_out[acc["id"]] = cash_out.get(acc["id"], 0.0) + line["credit"] - line["debit"]
+        for acc_id, amount in cash_out.items():
+            if amount > 0.004:
+                await _refuse_cash_shortfall(accs[acc_id], date, round(amount, 2))
+
     doc = {
         "id": new_id("je_"),
         "date": date,
@@ -2165,6 +2177,10 @@ async def create_expense(payload: ExpenseIn, request: Request,
     _validate_paid_from_account(payload.payment_method, paid_from)
     if expense_account["id"] == paid_from["id"]:
         raise HTTPException(status_code=400, detail="Expense and paid-from accounts must be different")
+    owner_of_project = await project_client_id(payload.project_id, sdb)
+    if payload.client_id and owner_of_project and payload.client_id != owner_of_project:
+        raise HTTPException(status_code=400, detail=(
+            "This project belongs to another client. Choose the project's client or another project."))
     await _refuse_cash_shortfall(paid_from, payload.date, round(float(payload.amount) + float(payload.gst or 0), 2))
 
     narration = payload.notes or f"Expense — {payload.payment_method}"

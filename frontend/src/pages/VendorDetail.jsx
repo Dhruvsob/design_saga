@@ -36,6 +36,35 @@ const SUB_LABELS = { overview: "Details", performance: "Performance", ledger: "L
 const CONSULTANCY_TABS = ["overview", "commercial", "commissions", "projects", "documents", "performance"];
 const TURNKEY_TABS     = ["overview", "commercial", "ledger", "bills", "payments", "commissions", "projects", "documents", "performance"];
 
+// Money paid to a vendor in advance (or overpaid) can be used against their
+// open bills (CA review 2026-11-24: it never could, so bills stayed "unpaid").
+function VendorAdvanceBar({ vendorId, onApplied }) {
+  const [available, setAvailable] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const refresh = useCallback(() => {
+    api.get(`/vendors/${vendorId}/advance`).then(({ data }) => setAvailable(Number(data.available || 0))).catch(() => setAvailable(0));
+  }, [vendorId]);
+  useEffect(() => { refresh(); }, [refresh]);
+  if (available <= 0.004) return null;
+  const apply = async () => {
+    if (!await confirmAction(`Use the ${formatINR(available)} advance against this vendor's open bills (oldest first)? No money moves; the bills are marked paid by that much.`)) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/vendors/${vendorId}/apply-advance`, {});
+      toast.success(`${formatINR(data.applied)} of advance used against bills`);
+      refresh(); onApplied?.();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Could not use the advance");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="card-flat flex flex-wrap items-center justify-between gap-3 mb-4" data-testid="vendor-advance-bar">
+      <div className="text-sm"><b>{formatINR(available)}</b> paid to this vendor in advance is not yet used against a bill.</div>
+      <button className="btn-primary text-xs" disabled={busy} onClick={apply} data-testid="vendor-apply-advance">Use against open bills</button>
+    </div>
+  );
+}
+
 export default function VendorDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -394,6 +423,9 @@ export default function VendorDetail() {
           onSave={saveCommercial} busy={busy} />
       )}
       {tab === "ledger" && <Ledger data={ledger} />}
+      {(tab === "bills" || tab === "payments") && canBill && (
+        <VendorAdvanceBar vendorId={id} onApplied={load} />
+      )}
       {tab === "bills" && (
         <Bills v={v} accounts={accounts} purchaseOrders={purchaseOrders} initialPoId={billForPo}
           canBill={canBill} canEdit={hasPerm("finance.update")}

@@ -52,6 +52,7 @@ from core.access_control import (
 )
 import re as _re_mod
 from models.accounting import VendorIn
+from models.base import FiniteModel
 from models.vendor import (
     VendorUpdate, VendorBillIn, VendorBillUpdate, VendorPaymentIn,
     FinancialRecordMetadataUpdate,
@@ -1151,6 +1152,107 @@ async def _create_vendor_payment_locked(user: dict, payload: VendorPaymentIn, ba
     return await sdb.vendor_payments.find_one({"id": pmt["id"]}, {"_id": 0})
 
 
+async def _vendor_advance_available(vendor_id: str) -> list:
+    """Payments with advance still unused, oldest first."""
+    rows = await sdb.vendor_payments.find(
+        {"vendor_id": vendor_id, "status": {"$ne": "reversed"}, "kind": {"$ne": "advance_applied"}},
+        {"_id": 0}).sort("payment_date", 1).to_list(None)
+    return [r for r in rows if float(r.get("unallocated") or 0) > 0.004]
+
+
+@router.get("/vendors/{vendor_id}/advance")
+async def vendor_advance(vendor_id: str, request: Request,
+                         session_token: Optional[str] = Cookie(default=None),
+                         authorization: Optional[str] = Header(default=None)):
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.read")
+    rows = await _vendor_advance_available(vendor_id)
+    return {"vendor_id": vendor_id, "available": round(sum(float(r["unallocated"]) for r in rows), 2)}
+
+
+class AdvanceApplyIn(FiniteModel):
+    bill_id: Optional[str] = None          # default: oldest open bills first
+    date: Optional[str] = None
+
+
+@router.post("/vendors/{vendor_id}/apply-advance")
+async def apply_vendor_advance(vendor_id: str, payload: AdvanceApplyIn, request: Request,
+                               session_token: Optional[str] = Cookie(default=None),
+                               authorization: Optional[str] = Header(default=None)):
+    """Use money already paid in advance to a vendor against their bills
+    (CA review 2026-11-24: an advance could never be set off, so the bill
+    stayed "unpaid" and could be paid twice). Dr Accounts Payable, Cr Vendor
+    Advances; no cash moves."""
+    user = await require_user(request, session_token, authorization)
+    _require(user, "finance.create")
+    from routes.accounting import _post_journal
+    async with doc_lock(sdb.vendors_acc, vendor_id):
+        vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0})
+        if not vendor:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        sources = await _vendor_advance_available(vendor_id)
+        available = round(sum(float(r["unallocated"]) for r in sources), 2)
+        if available <= 0.004:
+            raise HTTPException(status_code=409, detail="No unused advance for this vendor")
+        q = {"vendor_id": vendor_id, "status": {"$in": ["received", "partially_paid", "overdue"]}}
+        if payload.bill_id:
+            q["id"] = payload.bill_id
+        bills = await sdb.vendor_bills.find(q, {"_id": 0}).sort("bill_date", 1).to_list(None)
+        if not bills:
+            raise HTTPException(status_code=409, detail="No open bill to set the advance against")
+        remaining, splits = available, {}
+        for bill in bills:
+            if remaining <= 0.004:
+                break
+            if not bill.get("journal_entry_id"):
+                continue
+            outstanding = round(float(bill.get("total") or 0) - await _paid_against_bill(bill["id"]), 2)
+            if outstanding <= 0.004:
+                continue
+            use = round(min(outstanding, remaining), 2)
+            splits[bill["id"]] = use
+            remaining = round(remaining - use, 2)
+        applied = round(available - remaining, 2)
+        if applied <= 0.004:
+            raise HTTPException(status_code=409, detail="No open posted bill to set the advance against")
+        ap_acc = await sdb.accounts.find_one({"name": "Accounts Payable", "active": {"$ne": False}}, {"_id": 0})
+        adv_acc = await sdb.accounts.find_one({"name": "Vendor Advances", "type": "asset",
+                                              "active": {"$ne": False}}, {"_id": 0})
+        if not ap_acc or not adv_acc:
+            raise HTTPException(status_code=500, detail="Accounts Payable / Vendor Advances account missing")
+        date = payload.date or business_today().isoformat()
+        record_id = new_id("vpay_")
+        je = await _post_journal(
+            user, date, f"Advance used against bills · {vendor.get('name')}",
+            [{"account_id": ap_acc["id"], "debit": applied, "credit": 0, "description": "Bills settled from advance"},
+             {"account_id": adv_acc["id"], "debit": 0, "credit": applied, "description": "Advance used"}],
+            vendor_id=vendor_id, source="vendor_advance_applied", source_id=record_id)
+        # Take the amount from the oldest advances first.
+        left, taken = applied, {}
+        for src in sources:
+            if left <= 0.004:
+                break
+            use = round(min(float(src["unallocated"]), left), 2)
+            taken[src["id"]] = use
+            left = round(left - use, 2)
+            await sdb.vendor_payments.update_one(
+                {"id": src["id"]},
+                {"$set": {"unallocated": round(float(src["unallocated"]) - use, 2)},
+                 "$inc": {"advance_applied": use}})
+        await sdb.vendor_payments.insert_one({
+            "id": record_id, "kind": "advance_applied", "vendor_id": vendor_id,
+            "vendor_name": vendor.get("name"), "amount": applied, "payment_date": date,
+            "payment_method": "advance", "bill_ids": list(splits), "bill_splits": splits,
+            "unallocated": 0.0, "advance_sources": taken, "journal_entry_id": je["id"],
+            "created_at": iso_now(), "created_by": user["user_id"],
+        })
+        for bill_id in splits:
+            await _refresh_bill_status(bill_id)
+    await audit(user, "vendor_advance.apply", target=record_id, target_type="vendor_payment",
+                meta={"vendor_id": vendor_id, "applied": applied, "bills": splits})
+    return {"ok": True, "applied": applied, "bills": splits, "advance_left": remaining, "journal_entry_id": je["id"]}
+
+
 @router.get("/vendor-payments")
 async def list_vendor_payments(request: Request,
                                vendor_id: Optional[str] = None,
@@ -1218,6 +1320,10 @@ async def _reverse_vendor_payment_locked(user: dict, pmt_id: str):
     if pmt.get("status") == "reversed":
         return {"ok": True, "already_reversed": True,
                 "reversal_je_id": pmt.get("reversal_je_id")}
+    if float(pmt.get("advance_applied") or 0) > 0.004:
+        raise HTTPException(status_code=409, detail=(
+            "Part of this payment's advance has been used against bills. Undo that use first "
+            "(reverse the 'Advance used' entry), then reverse this payment."))
 
     original_je_id = pmt.get("journal_entry_id")
     if not original_je_id:
@@ -1271,6 +1377,11 @@ async def _reverse_vendor_payment_locked(user: dict, pmt_id: str):
     if result.matched_count == 0:
         return {"ok": True, "already_reversed": True,
                 "reversal_je_id": rev["id"]}
+    if pmt.get("kind") == "advance_applied":
+        # Undoing a use of advance gives the advance back to its payments.
+        for src_id, amount in (pmt.get("advance_sources") or {}).items():
+            await sdb.vendor_payments.update_one(
+                {"id": src_id}, {"$inc": {"unallocated": float(amount), "advance_applied": -float(amount)}})
     for bid in (pmt.get("bill_ids") or []):
         await _refresh_bill_status(bid)
     return {"ok": True, "reversed": True,

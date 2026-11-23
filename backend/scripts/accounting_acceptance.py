@@ -814,11 +814,63 @@ def case_ca_review(c) -> None:
         check(case, "cash flow: opening + net = closing", round(float(cf_open) + float(cf_net), 2), round(float(cf_close), 2))
 
 
+def case_modules_review(c) -> None:
+    """Module review 2026-11-24: vendor advance set-off, wrong-client tags, cash in other modules."""
+    case = "modules-review"
+    tag = uuid.uuid4().hex[:4]
+    acc = accounts(c)
+    bank, cash = acc["Bank - Primary"]["id"], acc["Cash"]["id"]
+    vendor = ok(c.post("/api/vendors", json={"name": f"Advance Vendor {tag}"}))
+    vid = vendor.get("id") or vendor.get("vendor", {}).get("id")
+    pay = lambda amt, k: c.post("/api/vendor-payments", headers={"Idempotency-Key": k}, json={  # noqa: E731
+        "vendor_id": vid, "amount": amt, "payment_date": "2026-09-01", "paid_from_account_id": bank,
+        "payment_method": "bank_transfer"})
+    advance_pmt = ok(pay(30000, f"adv-{uuid.uuid4().hex}"))
+    check(case, "advance paid before any bill", 30000, ok(c.get(f"/api/vendors/{vid}/advance"))["available"])
+    bill = ok(c.post("/api/vendor-bills", json={"vendor_id": vid, "bill_number": f"VB-{tag}", "bill_date": "2026-09-10",
+                                                "items": [{"description": "Tiles", "quantity": 1, "rate": 50000}]}))
+    bill_id = bill.get("id") or bill.get("bill", {}).get("id")
+    ap0, adv0 = balance(c, "Accounts Payable"), balance(c, "Vendor Advances")
+    applied = ok(c.post(f"/api/vendors/{vid}/apply-advance", json={"date": "2026-09-11"}))
+    check(case, "advance used against the bill", 30000, applied["applied"])
+    b = next(x for x in ok(c.get("/api/vendor-bills", params={"vendor_id": vid})) if x["id"] == bill_id)
+    check(case, "bill: 20,000 left to pay", [20000, "partially_paid"], [b["outstanding"], b["status"]])
+    check(case, "payable down 30,000", round(ap0 - 30000, 2), balance(c, "Accounts Payable"))
+    check(case, "vendor advance used up", round(adv0 - 30000, 2), balance(c, "Vendor Advances"))
+    blocked = c.delete(f"/api/vendor-payments/{advance_pmt['id']}")
+    check(case, "the advance payment cannot be reversed while used", 409, blocked.status_code)
+    ok(c.delete(f"/api/vendor-payments/{next(x['id'] for x in ok(c.get('/api/vendor-payments', params={'vendor_id': vid})) if x.get('kind') == 'advance_applied')}"))
+    check(case, "undoing the use gives the advance back", 30000, ok(c.get(f"/api/vendors/{vid}/advance"))["available"])
+    b = next(x for x in ok(c.get("/api/vendor-bills", params={"vendor_id": vid})) if x["id"] == bill_id)
+    check(case, "bill is unpaid again", 50000, b["outstanding"])
+    again = c.post(f"/api/vendors/{vid}/apply-advance", json={})
+    check(case, "advance can be used again", 200, again.status_code)
+
+    # Wrong client on a project's invoice / expense
+    pid, cid = _project(c, budget=100000, fee_structure_type="lump_sum", fee_lump_sum_amount=50000)
+    _p2, other_cid = _project(c, budget=100000, fee_structure_type="lump_sum", fee_lump_sum_amount=50000)
+    inv = c.post("/api/invoices", json={"client_id": other_cid, "project_id": pid, "doc_type": "invoice", "status": "draft",
+                                        "tax_rate": 0, "items": [{"description": "Fee", "quantity": 1, "rate": 1000}]})
+    check(case, "invoice for another client's project refused", 400, inv.status_code)
+    misc = next(a for a in acc.values() if a["type"] == "expense" and "misc" in a["name"].lower())
+    exp = c.post("/api/accounting/expense", json={"date": "2026-09-12", "amount": 100, "expense_account_id": misc["id"],
+                                                  "paid_from_account_id": bank, "project_id": pid, "client_id": other_cid})
+    check(case, "expense tagged to another client's project refused", 400, exp.status_code)
+
+    # Cash guard applies outside the Accounting forms too (vendor payment from Cash)
+    big = round(balance(c, "Cash") + 1000, 2)
+    from_cash = c.post("/api/vendor-payments", headers={"Idempotency-Key": f"cash-{uuid.uuid4().hex}"}, json={
+        "vendor_id": vid, "amount": big, "payment_date": "2027-03-31", "paid_from_account_id": cash, "payment_method": "cash"})
+    check(case, "vendor payment beyond cash in hand refused", 409, from_cash.status_code)
+    trial_balance_ok(c, case)
+    balance_sheet_ok(c, case)
+
+
 def main() -> None:
     admin = new_workspace()
     for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end,
                case_cash_deposit, case_party_ledger, case_fee_vs_commission,
-               case_who_paid, case_credit_card, case_cash_guard, case_user_delete, case_audit_cleanup, case_ca_review):
+               case_who_paid, case_credit_card, case_cash_guard, case_user_delete, case_audit_cleanup, case_ca_review, case_modules_review):
         try:
             fn(admin)
         except Exception as exc:  # keep going so one gap does not hide the rest

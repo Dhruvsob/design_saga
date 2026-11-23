@@ -2217,6 +2217,13 @@ async def list_invoices(request: Request, doc_type: Optional[str] = None,
     return await sdb.invoices.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_LIST_ROWS)
 
 
+def _refuse_other_clients_project(project: dict, client_id: Optional[str]) -> None:
+    """An invoice for one client's project must not be billed to another client."""
+    if client_id and project.get("client_id") and project["client_id"] != client_id:
+        raise HTTPException(status_code=400, detail=(
+            "This project belongs to another client. Choose the project's client or another project."))
+
+
 async def _refuse_gst_without_gstin(user: dict, doc_type: Optional[str], tax_rate) -> None:
     """An unregistered business cannot charge GST (CA review 2026-11-24): the
     invoice form defaulted to 18% and receipts then booked part of the fee as
@@ -2270,6 +2277,7 @@ async def create_invoice(payload: InvoiceIn, request: Request,
         p = await sdb.projects.find_one({"id": doc["project_id"]}, {"_id": 0})
         if not p:
             raise HTTPException(status_code=400, detail="Project not found")
+        _refuse_other_clients_project(p, doc.get("client_id"))
         doc["project_name"] = doc.get("project_name") or p.get("name")
 
     doc["id"] = new_id("inv_")
@@ -2352,6 +2360,10 @@ async def update_invoice(invoice_id: str, payload: InvoiceUpdate, request: Reque
         p = await sdb.projects.find_one({"id": upd["project_id"]}, {"_id": 0})
         if p:
             upd["project_name"] = p.get("name")
+    if upd.get("project_id") or upd.get("client_id"):
+        project = await sdb.projects.find_one({"id": upd.get("project_id") or doc.get("project_id")},
+                                              {"_id": 0, "client_id": 1}) or {}
+        _refuse_other_clients_project(project, upd.get("client_id") or doc.get("client_id"))
     merged = {**doc, **upd}
     merged = compute_invoice_totals(merged)
     merged["updated_at"] = iso(now_utc())
