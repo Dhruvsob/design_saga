@@ -6,6 +6,9 @@
 **It is already live** and verified. The day's releases: `504a2c3` (09:06 UTC),
 `74aff6e` (11:18), `915a6f2` (drill script only), `1cdac8c` (variation
 billing, 13:26), `6647768` (invoice form, privacy policy; frontend only).
+**Update 23 Nov:** `baa110e` is live (backend and web): still to receive now
+counts against the agreed fee (contract value for turnkey), per the owner;
+709 backend and 45 browser tests pass.
 
 No open critical access-control, data-loss, accounting or payroll defect is
 known. Three P1 defects were found and fixed in this release (client PDF

@@ -94,6 +94,7 @@ BLOCKED, REQUIRES OWNER APPROVAL, NOT YET VERIFIED. Revision `74aff6e` unless no
 | 18 | P2 (branding) | The invoice preview said "DESIGN SAGA · Studio OS" in every firm's workspace | Hard-coded text from before multi-tenancy | Signed-in firm's name | `6647768` |
 | 19 | P2 (compliance) | The public privacy policy named "Design Saga ERP" and described a tenant-admin Google connection; Google's OAuth review reads this page | Not updated with the Gamaa rebrand (12 Nov) or per-user calendar sync (10 Nov) | Names Gamaa; describes per-user connections; nothing else changed | `6647768` |
 | 20 | P3 | Invoice form fields had no labels; a refused save showed only a toast | Placeholder-only inputs | Labels, field names, error summary with line numbers | `6647768` |
+| 21 | **P1** (owner report, 23 Nov) | "Still to receive" was the client's whole project value minus receipts: a 6% fee on Rs 3 crore showed Rs 2,85,57,500 instead of Rs 3,57,500. Percentage milestones, phase fee milestones and profitability also used the project value | Every money figure read `budget` whatever the fee type | One rule (`core/fees.py`): agreed fee for lump sum / consultancy % / per sq ft, contract value for turnkey; project value shown separately. 7 of 9 live projects corrected on screen; no stored amount changed | `baa110e` |
 
 Production impact of #9 (read-only): one employee joined on 23 Oct; the only
 October payroll run was reversed, so no wrong payment stands. Nothing in
