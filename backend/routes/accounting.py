@@ -25,6 +25,7 @@ from core.helpers import business_today, now_utc, iso_now, new_id
 from core.deps import require_user
 from core.downloads import content_disposition
 from core.rbac import has_any_permission, has_permission
+from core.receipts import commission_account_ids, project_client_id
 from core.tenancy import user_org_id
 from core.audit import audit
 from core.locks import doc_lock
@@ -33,7 +34,7 @@ from pymongo.errors import DuplicateKeyError
 from core.limits import MAX_LIST_ROWS
 from core.period_lock import assert_period_open
 from core.finance import (
-    resolve_period, current_fy_label, fy_choices, fy_range, require_asset_account,
+    resolve_period, current_fy_label, fy_choices, fy_range, require_asset_account, is_card_account,
 )
 from models.accounting import (
     AccountIn, JournalIn, IncomeIn, ExpenseIn, NonOperatingTransactionIn,
@@ -222,6 +223,29 @@ async def list_accounts(request: Request,
     return rows
 
 
+_NOT_CASH = re.compile(
+    r"^(investments?\b|gold\b|advance to -|loan from -|accounts (receivable|payable)|input gst|"
+    r"fixed assets|inventory|security deposits?|vendor advances|gst payable|tds)", re.IGNORECASE)
+
+
+def _check_account_flags(doc: dict) -> None:
+    """Only real cash or bank accounts may be used to receive or pay money
+    (owner data, 2026-11-23: an equity "drawings" account and Gold were marked
+    as banks, and income was received "into" Gold)."""
+    if doc.get("is_bank"):
+        if doc.get("type") != "asset":
+            raise HTTPException(status_code=400, detail=(
+                "Only an asset account (cash in hand or a bank) can be a cash/bank account. "
+                "For a credit card choose type Liability and tick credit card."))
+        if _NOT_CASH.search(doc.get("name") or ""):
+            raise HTTPException(status_code=400, detail=(
+                f"{doc.get('name')} holds value but is not cash or a bank, so money cannot be received into or paid from it."))
+    if doc.get("is_card") and doc.get("type") != "liability":
+        raise HTTPException(status_code=400, detail="A credit card is a liability: what you owe the card company")
+    if doc.get("is_card") and doc.get("is_bank"):
+        raise HTTPException(status_code=400, detail="An account is either a bank or a credit card, not both")
+
+
 @router.post("/accounts")
 async def create_account(payload: AccountIn, request: Request,
                          session_token: Optional[str] = Cookie(default=None),
@@ -235,6 +259,7 @@ async def create_account(payload: AccountIn, request: Request,
     doc["name"] = doc["name"].strip()
     if not doc["name"]:
         raise HTTPException(status_code=400, detail="Account name is required")
+    _check_account_flags(doc)
     duplicate = await sdb.accounts.find_one(
         {"name": {"$regex": f"^{re.escape(doc['name'])}$", "$options": "i"}},
         {"_id": 0, "id": 1},
@@ -279,6 +304,7 @@ async def update_account(acc_id: str, payload: AccountIn, request: Request,
     upd["name"] = upd["name"].strip()
     if not upd["name"]:
         raise HTTPException(status_code=400, detail="Account name is required")
+    _check_account_flags(upd)
     duplicate = await sdb.accounts.find_one(
         {"id": {"$ne": acc_id},
          "name": {"$regex": f"^{re.escape(upd['name'])}$", "$options": "i"}},
@@ -886,6 +912,37 @@ async def _ensure_named_account(
     return account
 
 
+async def _cash_available_on(account: dict, on_date: str) -> float:
+    """What can leave a cash account on `on_date` without the till being
+    below zero then, or on any later date already recorded."""
+    days = await sdb.journal_entries.aggregate([
+        {"$match": {"lines.account_id": account["id"], "voided_from_view": {"$ne": True}}},
+        {"$unwind": "$lines"},
+        {"$match": {"lines.account_id": account["id"]}},
+        {"$group": {"_id": "$date", "debit": {"$sum": "$lines.debit"},
+                    "credit": {"$sum": "$lines.credit"}}},
+    ]).to_list(None)
+    running = float(account.get("opening_balance") or 0)
+    at_date, lowest_after = running, None
+    for day in sorted(days, key=lambda d: str(d.get("_id") or "")):
+        running += float(day.get("debit") or 0) - float(day.get("credit") or 0)
+        if str(day.get("_id") or "") <= on_date:
+            at_date = running
+        else:
+            lowest_after = running if lowest_after is None else min(lowest_after, running)
+    return round(at_date if lowest_after is None else min(at_date, lowest_after), 2)
+
+
+async def _refuse_cash_shortfall(account: dict, on_date: str, amount: float) -> None:
+    if not _is_cash(account):
+        return
+    available = await _cash_available_on(account, on_date)
+    if amount > available + 0.009:
+        raise HTTPException(status_code=409, detail=(
+            f"{account['name']} would go below zero: on {on_date} it holds only Rs. {max(available, 0):,.2f} "
+            "(counting later payments). Record the cash that came in first, or the opening cash balance."))
+
+
 async def _current_account_balance(account: dict) -> float:
     movement = await sdb.journal_entries.aggregate([
         {"$unwind": "$lines"},
@@ -920,32 +977,54 @@ async def create_non_operating_transaction(
     if not has_permission(user, "finance.create"):
         raise HTTPException(status_code=403, detail="Missing permission: finance.create")
 
-    bank = await require_asset_account(payload.bank_account_id, "Cash/bank account")
-    if not bank.get("is_bank") and bank.get("name") not in {"Cash", "Petty Cash"}:
-        raise HTTPException(status_code=400, detail="Select an actual cash or bank account")
-    await _seed_coa_if_empty()
-
     amount = round(float(payload.amount), 2)
     kind = payload.kind
+    try:
+        source_account = await require_asset_account(payload.bank_account_id, "Cash/bank account")
+    except HTTPException:
+        source_account = await sdb.accounts.find_one(
+            {"id": payload.bank_account_id, "active": {"$ne": False}}, {"_id": 0}) if payload.bank_account_id else None
+        if not is_card_account(source_account):
+            raise
+    if is_card_account(source_account):
+        # Spending on the studio's credit card for someone (to be paid back)
+        # or for the owner personally: the card's dues go up, no bank moves.
+        if kind not in {"money_given", "owner_withdrawal"}:
+            raise HTTPException(status_code=400, detail=(
+                "A credit card can only be used here to pay for a person (to be paid back) or for the owner "
+                "personally. Pay the card bill with Deposit cash / move money (From: bank, To: the card)."))
+        bank = source_account
+    else:
+        bank = source_account
+        if not bank.get("is_bank") and bank.get("name") not in {"Cash", "Petty Cash"}:
+            raise HTTPException(status_code=400, detail="Select an actual cash or bank account")
+    await _seed_coa_if_empty()
     if kind == "own_transfer":
         # Moving the studio's own money, e.g. depositing cash into SBI:
         # cash down, bank up by the same amount. Not income, not capital,
         # no effect on profit. (Owner, 2026-11-23: there was no way to record it.)
         if not payload.to_account_id:
             raise HTTPException(status_code=400, detail="Choose the account the money goes to")
-        counter = await require_asset_account(payload.to_account_id, "To account")
-        if not counter.get("is_bank") and counter.get("name") not in {"Cash", "Petty Cash"}:
-            raise HTTPException(status_code=400, detail="Choose an actual cash or bank account to move the money to")
+        target = await sdb.accounts.find_one(
+            {"id": payload.to_account_id, "active": {"$ne": False}}, {"_id": 0})
+        if is_card_account(target):
+            counter = target          # paying the credit card bill
+        else:
+            counter = await require_asset_account(payload.to_account_id, "To account")
+            if not counter.get("is_bank") and counter.get("name") not in {"Cash", "Petty Cash"}:
+                raise HTTPException(status_code=400, detail="Choose an actual cash or bank account to move the money to")
         if counter["id"] == bank["id"]:
             raise HTTPException(status_code=400, detail="Choose two different accounts")
-        if _is_cash(bank):
-            available = await _current_account_balance(bank)
-            if amount > available + 0.009:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"{bank['name']} has only Rs. {available:,.2f}. Check the amount, or record the cash you received first.")
+        if is_card_account(counter):
+            owed = await _current_account_balance(counter)
+            if amount > owed + 0.009:
+                raise HTTPException(status_code=409, detail=(
+                    f"{counter['name']} has Rs. {max(owed, 0):,.2f} to pay. Record the card spending first."))
+        await _refuse_cash_shortfall(bank, payload.date, amount)
         debit_account, credit_account = counter, bank
-        if _is_cash(bank) and not _is_cash(counter):
+        if is_card_account(counter):
+            narration = f"Credit card bill paid: {counter['name']} from {bank['name']}"
+        elif _is_cash(bank) and not _is_cash(counter):
             narration = f"Cash deposited into {counter['name']}"
         elif _is_cash(counter) and not _is_cash(bank):
             narration = f"Cash withdrawn from {bank['name']}"
@@ -984,6 +1063,8 @@ async def create_non_operating_transaction(
             else f"Repayment paid to {person}"
         )
 
+    if kind in {"owner_withdrawal", "gold_purchase", "money_given", "repayment_paid"}:
+        await _refuse_cash_shortfall(bank, payload.date, amount)
     if kind in {"repayment_received", "repayment_paid"}:
         outstanding = await _current_account_balance(counter)
         if amount > outstanding + 0.009:
@@ -1703,6 +1784,29 @@ async def create_income(payload: IncomeIn, request: Request,
                                 detail=f"Amount exceeds milestone balance ({expected:.2f})")
         source, source_id = "milestone_payment", payload.milestone_id
         project_id = linked.get("project_id")
+        # The milestone's money comes from the project's client (it was saved
+        # without one before, so the client statement missed it).
+        client_id = linked.get("client_id") or await project_client_id(project_id, sdb)
+
+    # Who paid (owner, 2026-11-23): one payer per receipt. A vendor incentive
+    # comes from the vendor and never counts as the client's payment; a fee
+    # receipt on a project belongs to that project's client.
+    if not payload.invoice_id and not payload.milestone_id:
+        incentive_account = income["id"] in await commission_account_ids(sdb)
+        if payload.vendor_id and client_id:
+            raise HTTPException(status_code=400, detail=(
+                "Choose who paid you: the client or the vendor. A vendor incentive "
+                "comes from the vendor, so leave the client empty."))
+        if incentive_account and client_id:
+            raise HTTPException(status_code=400, detail=(
+                "Vendor incentives come from a vendor: choose the vendor, not the client."))
+        owner_of_project = await project_client_id(project_id, sdb)
+        if client_id and owner_of_project and client_id != owner_of_project:
+            raise HTTPException(status_code=400, detail=(
+                "This project belongs to another client. Choose the project's client or another project."))
+        if (project_id and not client_id and owner_of_project and not payload.vendor_id
+                and not payload.employee_id and not incentive_account):
+            client_id = owner_of_project
 
     if source_id:
         active_receipts = await sdb.journal_entries.find(
@@ -1870,7 +1974,7 @@ async def create_expense(payload: ExpenseIn, request: Request,
         {"id": payload.expense_account_id}, {"_id": 0, "id": 1, "type": 1, "name": 1})
     paid_from = await sdb.accounts.find_one(
         {"id": payload.paid_from_account_id},
-        {"_id": 0, "id": 1, "type": 1, "name": 1, "is_bank": 1})
+        {"_id": 0, "id": 1, "type": 1, "name": 1, "is_bank": 1, "is_card": 1, "opening_balance": 1})
     if not expense_account or expense_account.get("type") != "expense":
         raise HTTPException(status_code=400, detail="Expense account must be an expense account")
     if _is_salary_expense_account(expense_account):
@@ -1878,11 +1982,12 @@ async def create_expense(payload: ExpenseIn, request: Request,
             status_code=409,
             detail="Use Employee → Salary & Bank → Run Payroll so employee history, attendance and accounting stay connected",
         )
-    if not paid_from or paid_from.get("type") != "asset":
-        raise HTTPException(status_code=400, detail="Paid-from account must be a cash/bank asset account")
+    if not paid_from or not (paid_from.get("type") == "asset" or is_card_account(paid_from)):
+        raise HTTPException(status_code=400, detail="Paid-from account must be cash, a bank or a credit card")
     _validate_paid_from_account(payload.payment_method, paid_from)
     if expense_account["id"] == paid_from["id"]:
         raise HTTPException(status_code=400, detail="Expense and paid-from accounts must be different")
+    await _refuse_cash_shortfall(paid_from, payload.date, round(float(payload.amount) + float(payload.gst or 0), 2))
 
     narration = payload.notes or f"Expense — {payload.payment_method}"
     base_amt = float(payload.amount)
@@ -2250,23 +2355,46 @@ async def _entity_ledger(entity_type: str, entity_id: str, entity: Optional[dict
         "project": "project_id",
     }[entity_type]
 
+    base: dict = {field: entity_id}
+    keep = lambda e: True  # noqa: E731
+    if entity_type == "client":
+        # Owner, 2026-11-23: a vendor incentive tagged with the client is not
+        # the client's money; a project receipt saved without a client is.
+        from core.receipts import (CLIENT_MONEY_IN_SOURCES, client_project_ids,
+                                   commission_account_ids, is_commission_receipt)
+        projects = await client_project_ids(entity_id, sdb)
+        either = [{"client_id": entity_id}]
+        if projects:
+            either.append({"project_id": {"$in": projects}, "client_id": {"$in": [None, ""]},
+                           "source": {"$in": [*CLIENT_MONEY_IN_SOURCES,
+                                              *(f"{s}_reversal" for s in CLIENT_MONEY_IN_SOURCES)]}})
+        base = {"$or": either}
+        commission_ids = await commission_account_ids(sdb)
+        money_in = {*CLIENT_MONEY_IN_SOURCES, "commission_income"}
+
+        def keep(e):  # noqa: F811
+            src = str(e.get("source") or "").removesuffix("_reversal")
+            return not (src in money_in and is_commission_receipt(e, commission_ids))
+
     # Opening balance = net movement BEFORE from_date
     opening = 0.0
     if from_date:
         async for e in sdb.journal_entries.find(
-            {field: entity_id, "date": {"$lt": from_date},
+            {**base, "date": {"$lt": from_date},
              "voided_from_view": {"$ne": True}}, {"_id": 0}
         ):
-            opening += _entity_net(e)
+            if keep(e):
+                opening += _entity_net(e)
 
     # Period entries
-    q: dict = {field: entity_id, "voided_from_view": {"$ne": True}}
+    q: dict = {**base, "voided_from_view": {"$ne": True}}
     if from_date or to_date:
         d = {}
         if from_date: d["$gte"] = from_date
         if to_date: d["$lte"] = to_date
         q["date"] = d
-    entries_raw = await sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1).to_list(None)
+    entries_raw = [e for e in await sdb.journal_entries.find(q, {"_id": 0}).sort("date", 1).to_list(None)
+                   if keep(e)]
 
     inflow = 0.0
     outflow = 0.0
@@ -2778,11 +2906,14 @@ async def receive_collection(payload: CollectionReceiptIn, request: Request,
                     lines[1]["credit"] = round(payload.amount - gst_part, 2)
                     lines.append({"account_id": gst["id"], "debit": 0, "credit": gst_part,
                                   "description": "Output GST on amount received"})
+        row_client = row.get("client_id") or (
+            None if row.get("vendor_id") or income["id"] in await commission_account_ids(sdb)
+            else await project_client_id(row.get("project_id"), sdb))
         je = await _post_journal(
             user, payload.date, payload.notes or f"Collection received - {row.get('name')}",
             lines,
             reference=payload.reference, project_id=row.get("project_id"),
-            client_id=row.get("client_id"), vendor_id=row.get("vendor_id"),
+            client_id=row_client, vendor_id=row.get("vendor_id"),
             source="other_receivable_income", source_id=receipt_id,
         )
         received = round(float(row.get("received_amount") or 0) + payload.amount, 2)

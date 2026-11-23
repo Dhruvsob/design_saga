@@ -9,6 +9,7 @@ import {
 import SearchSelect from "./SearchSelect";
 import { confirmAction } from "../lib/confirm";
 import RowActions from "./RowActions";
+import { isMoneyAccount } from "../lib/cashbank";
 
 const CURRENCY = (n) => formatINR(n);
 const FREQ = [
@@ -26,7 +27,7 @@ export const RecurringExpenses = ({ accounts = [], vendors = [], projects = [], 
   const [editing, setEditing] = useState(null);
 
   const expenseAccs = useMemo(() => accounts.filter((a) => a.type === "expense" && a.active !== false), [accounts]);
-  const banks = useMemo(() => accounts.filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name)), [accounts]);
+  const banks = useMemo(() => accounts.filter(isMoneyAccount), [accounts]);
 
   const load = async () => {
     setLoading(true);
@@ -279,7 +280,7 @@ const RuleForm = ({ initial, expenseAccs, banks, vendors, projects, clients, onC
 
 // Bank Reconciliation tab
 export const BankReconciliation = ({ accounts = [] }) => {
-  const banks = useMemo(() => accounts.filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name)), [accounts]);
+  const banks = useMemo(() => accounts.filter(isMoneyAccount), [accounts]);
   const [selectedBank, setSelectedBank] = useState("");
   const [rows, setRows] = useState([]);
   const [counts, setCounts] = useState({});

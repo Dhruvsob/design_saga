@@ -201,6 +201,10 @@ def test_non_operating_workflows_post_expected_debit_and_credit(monkeypatch):
     monkeypatch.setattr(accounting, "require_asset_account", bank)
     monkeypatch.setattr(accounting, "_ensure_named_account", account)
     monkeypatch.setattr(accounting, "_seed_coa_if_empty", noop)
+
+    async def plenty_of_cash(*_args, **_kwargs):   # the till holds enough (cash guard: own tests)
+        return 10_000_000.0
+    monkeypatch.setattr(accounting, "_cash_available_on", plenty_of_cash)
     monkeypatch.setattr(accounting, "_post_journal", post)
     monkeypatch.setattr(accounting, "audit", noop)
 

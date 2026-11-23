@@ -130,10 +130,18 @@ def is_bank_account(account: Optional[dict]) -> bool:
     return bool((account or {}).get("is_bank")) and not is_cash_account(account)
 
 
+def is_card_account(account: Optional[dict]) -> bool:
+    return bool((account or {}).get("is_card")) and (account or {}).get("type") == "liability"
+
+
 def validate_method_account(payment_method: str, account: dict, *, label: str = "payments") -> None:
     from fastapi import HTTPException
     if payment_method not in PAYMENT_METHODS:
         raise HTTPException(status_code=400, detail="Unknown payment method")
+    if is_card_account(account):
+        if payment_method != "credit_card":
+            raise HTTPException(status_code=400, detail=f"{account.get('name')} is a credit card: choose the credit card method")
+        return
     if payment_method == "cash":
         if not is_cash_account(account):
             raise HTTPException(status_code=400, detail=f"Cash {label} must use Cash or Petty Cash")

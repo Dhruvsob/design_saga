@@ -10,6 +10,7 @@ import {
   X, MagnifyingGlass, Bank, ArrowSquareOut, DownloadSimple, Printer, Plus,
 } from "@phosphor-icons/react";
 import SearchSelect from "./SearchSelect";
+import { isMoneyAccount } from "../lib/cashbank";
 
 const CURRENCY = (n) =>
   formatINR(n);
@@ -31,7 +32,7 @@ export const AccountLedgerPanel = ({ account, accounts = [], onClose, clients = 
   const [showAdd, setShowAdd] = useState(false);
 
   const banks = useMemo(
-    () => (accounts || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name)),
+    () => (accounts || []).filter(isMoneyAccount),
     [accounts]
   );
   const [addForm, setAddForm] = useState({

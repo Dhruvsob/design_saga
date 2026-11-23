@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { HandCoins, Plus, X } from "@phosphor-icons/react";
 import api from "../lib/api";
 import { dateForInput, formatDate, formatINR } from "../lib/format";
-import { methodForAccount } from "../lib/cashbank";
+import { methodForAccount, isMoneyAccount } from "../lib/cashbank";
 import { confirmAction } from "../lib/confirm";
 
 /** Employee advances: give, see outstanding and recoveries, cancel a mistake. */
@@ -30,7 +30,7 @@ export default function EmployeeAdvances({ employeeId, canWrite, onChanged }) {
     setOpen(true);
     if (!banks.length) {
       const { data: accs } = await api.get("/accounts?type=asset");
-      const list = (accs || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
+      const list = (accs || []).filter(isMoneyAccount);
       setBanks(list);
       if (list[0]) setForm((f) => ({ ...f, bank_account_id: list[0].id, payment_method: methodForAccount(list[0]) }));
     }

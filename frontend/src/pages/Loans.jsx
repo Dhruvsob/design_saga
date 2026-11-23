@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import SearchSelect from "../components/SearchSelect";
 import { confirmAction } from "../lib/confirm";
+import { isMoneyAccount } from "../lib/cashbank";
 
 function fmtErr(d, fb = "Failed") {
   if (!d) return fb;
@@ -39,7 +40,7 @@ export default function Loans() {
       ]);
       setLoans(l.data);
       setSummary(s.data);
-      setAccounts(a.data.filter((x) => x.is_bank || ["Cash", "Bank - Primary", "Petty Cash"].includes(x.name)));
+      setAccounts(a.data.filter(isMoneyAccount));
     } catch (e) {
       setErr(fmtErr(e?.response?.data?.detail, "Failed to load"));
     } finally { setLoading(false); }

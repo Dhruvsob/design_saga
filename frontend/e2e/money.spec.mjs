@@ -383,3 +383,65 @@ test("project fee: vendor incentive is shown apart and never reduces what the cl
   await expect(page.getByTestId("project-commission-received")).toContainText("3,52,500");
   await ctx.dispose();
 });
+
+test("record income: the project's client is filled, a vendor replaces the client, an open milestone can be paid", async ({ browser }) => {
+  // Owner data, 2026-11-23: incentives were saved with the client; milestones stayed open after direct receipts.
+  const ctx = await api("admin");
+  const all = await json(ctx.get("/api/accounts"));
+  const fee = all.find((a) => a.type === "income" && /consult/i.test(a.name) && a.active !== false);
+  const client = await json(ctx.post("/api/clients", { data: { name: `Payer Client ${uid()}` } }));
+  const project = await json(ctx.post("/api/projects", { data: {
+    name: `Payer Project ${uid()}`, client_id: client.id, project_type: "Residential", engagement_type: "consultancy",
+    budget: 1000000, fee_structure_type: "lump_sum", fee_lump_sum_amount: 300000 } }));
+  const pid = project.id || project.project?.id;
+  const ms = await json(ctx.post(`/api/projects/${pid}/milestones`, { data: { project_id: pid, name: "Stage A", amount: 50000, due_date: today() } }));
+  const mid = ms.id || ms.milestone?.id;
+  const vendor = await json(ctx.post("/api/vendors", { data: { name: `Payer Vendor ${uid()}` } }));
+
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/accounting");
+  await page.getByTestId("quick-income-btn").click();
+  const form = page.getByTestId("income-form");
+  await form.getByTestId("income-acc").click();
+  await page.getByRole("option", { name: fee.name, exact: true }).click();
+  await form.getByTestId("income-project-select").click();
+  await page.getByRole("option", { name: project.name || project.project?.name, exact: true }).click();
+  await expect(form.getByTestId("income-client-select")).toContainText(client.name);
+  await expect(form.getByTestId("income-payer-hint")).toContainText("Client payment");
+  await form.getByTestId("income-milestone-select").selectOption(mid);
+  await form.getByTestId("income-amount").fill("50000");
+  await form.getByTestId("income-submit").click();
+  await expect.poll(async () => (await json(ctx.get("/api/accounting/receivables"))).rows
+    .find((r) => r.id === mid)?.status).toBe("received");
+  const posted = (await journals(ctx, { project_id: pid })).filter((j) => j.source === "milestone_payment");
+  expect(posted).toHaveLength(1);
+  expect(posted[0].client_id).toBe(client.id);
+
+  // A vendor as payer clears the client: an incentive is never the client's money.
+  await page.getByTestId("quick-income-btn").click();
+  await page.getByTestId("quick-income-btn").click();
+  const again = page.getByTestId("income-form");
+  await again.getByTestId("income-project-select").click();
+  await page.getByRole("option", { name: project.name || project.project?.name, exact: true }).click();
+  await again.getByTestId("income-vendor-select").click();
+  await page.getByRole("option", { name: vendor.name || vendor.vendor?.name, exact: true }).click();
+  await expect(again.getByTestId("income-client-select")).toHaveCount(0);
+  await expect(again.getByTestId("income-payer-hint")).toContainText("Vendor incentive");
+  await ctx.dispose();
+});
+
+test("credit card: created as a card, offered as 'paid from' for expenses, never as a bank to receive into", async ({ browser }) => {
+  const ctx = await api("admin");
+  const name = `HDFC Card ${uid()}`;
+  await json(ctx.post("/api/accounts", { data: { name, type: "liability", is_card: true } }));
+  const page = await (await browser.newContext({ baseURL, storageState: authFile("admin") })).newPage();
+  await page.goto("/accounting");
+  await page.getByTestId("quick-expense-btn").click();
+  await page.getByTestId("expense-form").getByTestId("expense-bank").click();
+  await expect(page.getByRole("option", { name: `${name} (credit card)` })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByTestId("quick-income-btn").click();
+  await page.getByTestId("income-form").getByTestId("income-bank").click();
+  await expect(page.getByRole("option", { name: new RegExp(name) })).toHaveCount(0);
+  await ctx.dispose();
+});

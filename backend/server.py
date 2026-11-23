@@ -1625,7 +1625,7 @@ async def get_project(project_id: str, request: Request,
                                 *(f"{s}_reversal" for s in PROJECT_MONEY_IN_SOURCES)]}},
             {"_id": 0, "lines": 1, "source": 1, "vendor_id": 1}).to_list(MAX_LIST_ROWS)
         received, commission_received = split_project_receipts(
-            money_in, await _commission_account_ids())
+            money_in, await _commission_account_ids(sdb))
         p["money"] = _project_money(
             p, p["invoices"], p["milestones"], received, linked_invoice_receipts)
         # Shown apart for profitability; never reduces the client's fee.
@@ -1750,47 +1750,8 @@ async def delete_project(project_id: str, request: Request,
 
 PROJECT_MONEY_IN_SOURCES = ("income", "invoice_payment", "milestone_payment",
                             "other_receivable_income", "commission_income")
-_COMMISSION_NAME = re.compile(r"commission|incentive", re.IGNORECASE)
-
-
-async def _commission_account_ids() -> set:
-    """Vendor commission / incentive accounts in this workspace (code 3010 or
-    named so, including renamed defaults and the advances account)."""
-    rows = await sdb.accounts.find(
-        {"$or": [{"code": "3010"}, {"name": {"$regex": "commission|incentive", "$options": "i"}}]},
-        {"_id": 0, "id": 1, "name": 1, "code": 1}).to_list(MAX_LIST_ROWS)
-    return {a["id"] for a in rows
-            if a.get("code") == "3010" or _COMMISSION_NAME.search(str(a.get("name") or ""))}
-
-
-def split_project_receipts(journals: list, commission_ids: set) -> tuple[float, float]:
-    """(client fee received, vendor commission received) for one project.
-
-    Cash in = debits to cash/bank lines (credits on a reversal). An entry is a
-    vendor commission when it comes from a vendor or touches a commission /
-    incentive account; a reversal copies the original's accounts, so it is
-    classified the same way and only undoes its own kind. Owner, 2026-11-23:
-    commission must never reduce the client's outstanding fee.
-    """
-    client = commission = 0.0
-    for je in journals or []:
-        source = str(je.get("source") or "")
-        is_reversal = source.endswith("_reversal")
-        side = "credit" if is_reversal else "debit"
-        cash = sum(float(l.get(side) or 0) for l in je.get("lines") or []
-                   if l.get("account_type") == "asset"
-                   and l.get("account_name") != "Accounts Receivable")
-        signed = -cash if is_reversal else cash
-        is_commission = (
-            source.startswith("commission_income")
-            or bool(je.get("vendor_id"))
-            or any(l.get("account_id") in commission_ids for l in je.get("lines") or [])
-        )
-        if is_commission:
-            commission += signed
-        else:
-            client += signed
-    return round(client, 2), round(commission, 2)
+from core.receipts import (  # noqa: E402  one rule for who paid (owner, 2026-11-23)
+    commission_account_ids as _commission_account_ids, split_project_receipts)
 
 
 async def _rescale_percent_milestones(project_id: str, budget: float) -> None:

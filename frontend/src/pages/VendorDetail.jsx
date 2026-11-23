@@ -5,7 +5,7 @@ import { dateForInput, formatDate, roundPaise, formatINR } from "../lib/format";
 import { safeFileUrl } from "../lib/url";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { compatibleAccount, methodForAccount } from "../lib/cashbank";
+import { compatibleAccount, methodForAccount, isMoneyAccount } from "../lib/cashbank";
 import {
   ArrowLeft, Star, Buildings, Phone, Envelope, MapPin, Bank as BankIcon,
   IdentificationCard, CurrencyInr, Plus, Trash, FileText, Gauge, Receipt,
@@ -765,7 +765,7 @@ function Payments({ v, accounts, canBill, canEdit, canDelete, onCreate, onUpdate
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ reference: "", notes: "" });
-  const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
+  const bankAccounts = accounts.filter(isMoneyAccount);
   const [f, setF] = useState({
     amount: 0, payment_date: today(), paid_from_account_id: "",
     payment_method: "bank_transfer", reference: "", notes: "", bill_ids: [],
@@ -1208,7 +1208,7 @@ function Commercial({ ledger, vendor, canEdit, onSave, busy }) {
 function Commissions({ ledger, accounts, projects, canReceive, canPlan, canEdit, canDelete,
   onReceive, onUpdateReceipt, onDeleteReceipt, onSavePlan, onDeletePlan, busy }) {
   const { id } = useParams();
-  const bankAccounts = accounts.filter((a) => a.is_bank || a.name?.toLowerCase().includes("cash"));
+  const bankAccounts = accounts.filter(isMoneyAccount);
   const [open, setOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);

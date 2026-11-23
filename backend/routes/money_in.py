@@ -27,6 +27,8 @@ from core.downloads import content_disposition
 from core.helpers import business_today, iso_now, new_id, next_sequence
 from core.financial_pdfs import generate_client_statement_pdf, generate_payment_receipt_pdf
 from core.rbac import has_permission
+from core.receipts import (client_project_ids, client_receipt_query, commission_account_ids,
+                           is_commission_receipt)
 from core.scoped_db import current_org_id, sdb
 from core.tenancy import user_org_id
 
@@ -379,9 +381,13 @@ async def _payment_receipt_document(receipt_id: str) -> dict:
     vendor_id = journal.get("vendor_id") or source_record.get("vendor_id") \
         or (settlement or {}).get("vendor_id")
     project_id = journal.get("project_id") or source_record.get("project_id")
+    project = await sdb.projects.find_one({"id": project_id}, {"_id": 0}) if project_id else None
+    if is_commission_receipt(journal, await commission_account_ids(sdb)):
+        client_id = None          # an incentive is received from the vendor, never the client
+    elif not client_id:
+        client_id = (project or {}).get("client_id")
     client = await sdb.clients.find_one({"id": client_id}, {"_id": 0}) if client_id else None
     vendor = await sdb.vendors_acc.find_one({"id": vendor_id}, {"_id": 0}) if vendor_id else None
-    project = await sdb.projects.find_one({"id": project_id}, {"_id": 0}) if project_id else None
     cash_lines = [line for line in journal.get("lines") or []
                   if line.get("account_type") == "asset"
                   and line.get("account_name") != "Accounts Receivable"
@@ -452,13 +458,19 @@ async def _client_statement(client_id: str, from_date: Optional[str], to_date: O
             "reference": invoice.get("number"), "debit": float(invoice.get("total") or 0),
             "credit": 0.0, "order": 0,
         })
+    # The client's own payments only: vendor incentives tagged with this client
+    # are not theirs (and must not appear on a document sent to them); older
+    # project receipts saved without a client belong to the project's client.
     journal_query: dict = {
-        "client_id": client_id, "source": {"$in": list(MONEY_IN_SOURCES)},
+        **client_receipt_query(client_id, await client_project_ids(client_id, sdb)),
         "reversed": {"$ne": True}, "voided_from_view": {"$ne": True},
     }
     if to_date:
         journal_query["date"] = {"$lte": to_date}
+    commission_ids = await commission_account_ids(sdb)
     async for journal in sdb.journal_entries.find(journal_query, {"_id": 0}).sort("date", 1):
+        if is_commission_receipt(journal, commission_ids):
+            continue
         amount = round(sum(float(line.get("debit") or 0) for line in journal.get("lines") or []
                            if line.get("account_type") == "asset"
                            and line.get("account_name") != "Accounts Receivable"), 2)
@@ -535,10 +547,19 @@ async def received_payments(request: Request, from_date: Optional[str] = None,
         {"id": {"$in": list(client_ids)}}, {"_id": 0, "id": 1, "name": 1})} if client_ids else {}
     vendors = {v["id"]: v.get("name") async for v in sdb.vendors_acc.find(
         {"id": {"$in": list(vendor_ids)}}, {"_id": 0, "id": 1, "name": 1})} if vendor_ids else {}
-    projects = {p["id"]: p.get("name") async for p in sdb.projects.find(
-        {"id": {"$in": list(project_ids)}}, {"_id": 0, "id": 1, "name": 1})} if project_ids else {}
+    project_rows = {p["id"]: p async for p in sdb.projects.find(
+        {"id": {"$in": list(project_ids)}}, {"_id": 0, "id": 1, "name": 1, "client_id": 1})} if project_ids else {}
+    projects = {pid: p.get("name") for pid, p in project_rows.items()}
+    missing = {p.get("client_id") for p in project_rows.values() if p.get("client_id")} - set(clients)
+    if missing:
+        clients.update({c["id"]: c.get("name") async for c in sdb.clients.find(
+            {"id": {"$in": list(missing)}}, {"_id": 0, "id": 1, "name": 1})})
+    commission_ids = await commission_account_ids(sdb)
     out = []
     for e in entries:
+        from_vendor = is_commission_receipt(e, commission_ids)
+        client_id = None if from_vendor else (
+            e.get("client_id") or (project_rows.get(e.get("project_id")) or {}).get("client_id"))
         cash_lines = [l for l in e.get("lines") or []
                       if l.get("account_type") == "asset" and float(l.get("debit") or 0) > 0
                       and l.get("account_name") != "Accounts Receivable"]
@@ -551,8 +572,9 @@ async def received_payments(request: Request, from_date: Optional[str] = None,
             "source": e.get("source"), "source_label": SOURCE_LABELS.get(e.get("source"), "Money in"),
             "source_id": e.get("source_id"), "reference": e.get("reference"),
             "narration": e.get("narration"),
-            "party": clients.get(e.get("client_id")) or vendors.get(e.get("vendor_id")),
-            "client_id": e.get("client_id"), "vendor_id": e.get("vendor_id"),
+            "party": vendors.get(e.get("vendor_id")) if from_vendor else clients.get(client_id),
+            "payer": "vendor" if from_vendor else "client",
+            "client_id": client_id, "vendor_id": e.get("vendor_id"),
             "project_id": e.get("project_id"), "project_name": projects.get(e.get("project_id")),
         })
     return {"rows": out, "total": round(sum(r["amount"] for r in out), 2), "count": len(out)}

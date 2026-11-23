@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { confirmAction } from "../lib/confirm";
 import { SkeletonRows, EmptyRow } from "../components/TableState";
+import { isMoneyAccount } from "../lib/cashbank";
 
 const fmtMoney = (n) => formatINR(n);
 function fmtErr(d, fb = "Failed") {
@@ -63,7 +64,7 @@ export default function Expenses() {
           (isAdmin || x.pending_approver_role === user?.role));
       }
       setExpenses(rows); setSummary(s.data);
-      setAccounts(a.data.filter((x) => x.is_bank || ["Cash", "Bank - Primary", "Petty Cash"].includes(x.name)));
+      setAccounts(a.data.filter(isMoneyAccount));
     } catch (ex) { setErr(fmtErr(ex?.response?.data?.detail)); }
     finally { setLoading(false); }
   };

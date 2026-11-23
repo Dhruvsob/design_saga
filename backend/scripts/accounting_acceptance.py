@@ -482,10 +482,145 @@ def case_fee_vs_commission(c) -> None:
     balance_sheet_ok(c, case)
 
 
+def case_who_paid(c) -> None:
+    """Owner data, 2026-11-23: D_1101's vendor incentives were saved with KPR as
+    the client (so KPR's statement showed them as KPR's payments) and a
+    milestone receipt was saved with no client (so the statement missed it)."""
+    case = "who-paid"
+    acc = accounts(c)
+    bank = acc["Bank - Primary"]["id"]
+    fee = next(a for a in acc.values() if a["type"] == "income" and "consult" in a["name"].lower())
+    incentive = next(a for a in acc.values() if a["type"] == "income"
+                     and (a.get("code") == "3010" or "incentive" in a["name"].lower() or "commission" in a["name"].lower()))
+    pid, cid = _project(c, budget=1000000, fee_structure_type="lump_sum", fee_lump_sum_amount=500000)
+    other_pid, other_cid = _project(c, budget=1000000, fee_structure_type="lump_sum", fee_lump_sum_amount=100000)
+    vendor = ok(c.post("/api/vendors", json={"name": f"Payer Vendor {uuid.uuid4().hex[:5]}"}))
+    vid = vendor.get("id") or vendor.get("vendor", {}).get("id")
+    base = {"date": "2026-10-10", "bank_account_id": bank, "payment_method": "bank_transfer"}
+    both = c.post("/api/accounting/income", json={**base, "amount": 1000, "project_id": pid, "client_id": cid,
+                                                  "vendor_id": vid, "income_account_id": incentive["id"]})
+    check(case, "one payer: client and vendor together is refused", 400, both.status_code)
+    inc_client = c.post("/api/accounting/income", json={**base, "amount": 1000, "project_id": pid, "client_id": cid,
+                                                        "income_account_id": incentive["id"]})
+    check(case, "an incentive cannot be booked as the client's money", 400, inc_client.status_code)
+    wrong = c.post("/api/accounting/income", json={**base, "amount": 1000, "project_id": pid, "client_id": other_cid,
+                                                   "income_account_id": fee["id"]})
+    check(case, "a project's money cannot be booked to another client", 400, wrong.status_code)
+    paid = ok(c.post("/api/accounting/income", json={**base, "amount": 40000, "project_id": pid,
+                                                     "income_account_id": fee["id"]}))
+    check(case, "fee received on a project carries the project's client", cid, paid.get("client_id"))
+    ok(c.post("/api/accounting/income", json={**base, "amount": 7000, "project_id": pid, "vendor_id": vid,
+                                              "income_account_id": incentive["id"]}))
+    ms = ok(c.post(f"/api/projects/{pid}/milestones", json={"project_id": pid, "name": "Stage 2", "amount": 60000,
+                                                           "due_date": "2026-11-15"}))
+    mid = ms.get("id") or ms.get("milestone", {}).get("id")
+    ok(c.post("/api/accounting/collections/receive", headers={"Idempotency-Key": f"fx-{uuid.uuid4().hex}"}, json={
+        "source_type": "milestone", "source_id": mid, "amount": 25000, "date": "2026-11-01",
+        "bank_account_id": bank, "payment_method": "bank_transfer"}))
+    jes = ok(c.get("/api/journal-entries", params={"limit": 500}))
+    jes = jes.get("items", jes) if isinstance(jes, dict) else jes
+    ms_je = next(j for j in jes if j.get("source") == "milestone_payment" and j.get("source_id") == mid)
+    check(case, "milestone receipt carries the project's client", cid, ms_je.get("client_id"))
+    led = ok(c.get(f"/api/accounting/ledger/client/{cid}"))
+    check(case, "client ledger: client's money only (40,000 + 25,000)", 65000, led["inflow"])
+    check(case, "client ledger has no incentive line", False,
+          any(e.get("vendor_id") for e in led["entries"]))
+    reg = ok(c.get("/api/accounting/received-payments"))
+    rows = [r for r in reg["rows"] if r.get("project_id") == pid]
+    inc_row = next(r for r in rows if r.get("vendor_id") == vid)
+    check(case, "Money In names the vendor as payer of the incentive", "vendor", inc_row.get("payer"))
+    check(case, "Money In names the client for the fee", {"client"},
+          {r.get("payer") for r in rows if not r.get("vendor_id")})
+    pdf = c.get(f"/api/clients/{cid}/statement.pdf")
+    check(case, "client statement PDF renders", 200, pdf.status_code)
+    m = _money(c, pid)
+    check(case, "project: client received 65,000; incentive apart", [65000, 7000],
+          [m["received"], m.get("commission_received")])
+    trial_balance_ok(c, case)
+
+
+def case_credit_card(c) -> None:
+    """Owner data, 2026-11-23: "Credit Card HDFC" was created as an expense and a
+    friend's repayment for a mattress bought on the card was booked as income."""
+    case = "credit-card"
+    acc = accounts(c)
+    bank = acc["Bank - Primary"]["id"]
+    food = next(a for a in acc.values() if a["type"] == "expense" and "food" in a["name"].lower())
+    tag = uuid.uuid4().hex[:4]
+    card = ok(c.post("/api/accounts", json={"name": f"HDFC Credit Card {tag}", "type": "liability", "is_card": True}))
+    bad = [
+        c.post("/api/accounts", json={"name": f"yash drawings {tag}", "type": "equity", "is_bank": True}),
+        c.post("/api/accounts", json={"name": f"Gold {tag}", "type": "asset", "is_bank": True}),
+        c.post("/api/accounts", json={"name": f"Card on asset {tag}", "type": "asset", "is_card": True}),
+    ]
+    check(case, "equity/gold as bank and a card on an asset are refused", [400, 400, 400], [r.status_code for r in bad])
+    ok(c.post("/api/accounting/non-operating", json={"kind": "owner_investment", "date": "2026-11-01",
+                                                     "amount": 100000, "bank_account_id": bank}))
+    pl0 = pl_totals(c, from_date="2026-04-01", to_date="2026-11-30")
+    bank0 = balance(c, "Bank - Primary")
+    ok(c.post("/api/accounting/expense", json={"date": "2026-11-10", "amount": 8400, "expense_account_id": food["id"],
+                                               "paid_from_account_id": card["id"], "payment_method": "credit_card",
+                                               "notes": "Team lunch on card"}))
+    ok(c.post("/api/accounting/non-operating", json={"kind": "money_given", "date": "2026-11-12", "amount": 15000,
+                                                     "bank_account_id": card["id"], "party_name": f"Viren {tag}",
+                                                     "notes": "Mattress bought for him on the card"}))
+    check(case, "card dues = lunch + mattress", 23400, balance(c, card["name"]))
+    check(case, "bank untouched by card spending", bank0, balance(c, "Bank - Primary"))
+    viren = next(r for r in _party_rows(c, "advance") if r["party_name"] == f"Viren {tag}")
+    ok(c.post("/api/accounting/non-operating", json={"kind": "repayment_received", "date": "2026-11-13", "amount": 15000,
+                                                     "bank_account_id": bank, "party_account_id": viren["id"]}))
+    check(case, "Viren's repayment clears his ledger", 0, balance(c, f"Advance to - Viren {tag}"))
+    pl1 = pl_totals(c, from_date="2026-04-01", to_date="2026-11-30")
+    check(case, "income unchanged by the repayment (not income)", pl0["income"], pl1["income"])
+    check(case, "expenses up only by the lunch", 8400, round(pl1["expense"] - pl0["expense"], 2))
+    over = c.post("/api/accounting/non-operating", json={"kind": "own_transfer", "date": "2026-11-18", "amount": 23400.01,
+                                                         "bank_account_id": bank, "to_account_id": card["id"]})
+    check(case, "paying more than the card dues is refused", 409, over.status_code)
+    out = ok(c.post("/api/accounting/non-operating", json={"kind": "own_transfer", "date": "2026-11-18", "amount": 23400,
+                                                           "bank_account_id": bank, "to_account_id": card["id"]}))
+    check(case, "card bill narration", True, out["journal"]["narration"].startswith("Credit card bill paid"))
+    check(case, "card settled", 0, balance(c, card["name"]))
+    check(case, "bank: +15,000 repayment -23,400 bill", round(bank0 + 15000 - 23400, 2), balance(c, "Bank - Primary"))
+    into_card = c.post("/api/accounting/income", json={"date": "2026-11-19", "amount": 10, "bank_account_id": card["id"],
+                                                       "income_account_id": next(a for a in acc.values() if a["type"] == "income")["id"],
+                                                       "payment_method": "credit_card"})
+    check(case, "income cannot be received into a credit card", 400, into_card.status_code)
+    from_card = c.post("/api/accounting/non-operating", json={"kind": "own_transfer", "date": "2026-11-19", "amount": 10,
+                                                              "bank_account_id": card["id"], "to_account_id": bank})
+    check(case, "money cannot be moved out of a credit card", 400, from_card.status_code)
+    trial_balance_ok(c, case)
+    balance_sheet_ok(c, case)
+
+
+def case_cash_guard(c) -> None:
+    """Owner data, 2026-11-23: gold bought from Cash in 2024 before any cash was
+    recorded left the till at -Rs 89,440 for over a year."""
+    case = "cash-guard"
+    acc = accounts(c)
+    cash = acc["Cash"]["id"]
+    misc = next(a for a in acc.values() if a["type"] == "expense" and "misc" in a["name"].lower())
+    early = c.post("/api/accounting/non-operating", json={"kind": "gold_purchase", "date": "2024-07-22",
+                                                          "amount": 52000, "bank_account_id": cash})
+    check(case, "gold from an empty till (2024) is refused", 409, early.status_code)
+    ok(c.post("/api/accounting/non-operating", json={"kind": "owner_investment", "date": "2025-01-01",
+                                                     "amount": 10000, "bank_account_id": cash}))
+    ok(c.post("/api/accounting/expense", json={"date": "2025-01-10", "amount": 9000, "expense_account_id": misc["id"],
+                                               "paid_from_account_id": cash, "payment_method": "cash"}))
+    back = c.post("/api/accounting/expense", json={"date": "2025-01-05", "amount": 2000, "expense_account_id": misc["id"],
+                                                   "paid_from_account_id": cash, "payment_method": "cash"})
+    check(case, "a backdated cash payment that would empty a later day is refused", 409, back.status_code)
+    fits = c.post("/api/accounting/expense", json={"date": "2025-01-05", "amount": 1000, "expense_account_id": misc["id"],
+                                                   "paid_from_account_id": cash, "payment_method": "cash"})
+    check(case, "a cash payment that fits is accepted", 200, fits.status_code)
+    check(case, "till never below zero", True, balance(c, "Cash", as_of="2025-01-10") >= -0.005)
+    trial_balance_ok(c, case)
+
+
 def main() -> None:
     admin = new_workspace()
     for fn in (case_loan, case_invoice, case_commission, case_gold_and_personal, case_year_end,
-               case_cash_deposit, case_party_ledger, case_fee_vs_commission):
+               case_cash_deposit, case_party_ledger, case_fee_vs_commission,
+               case_who_paid, case_credit_card, case_cash_guard):
         try:
             fn(admin)
         except Exception as exc:  # keep going so one gap does not hide the rest

@@ -12,7 +12,7 @@ import { useAuth } from "../context/AuthContext";
 import { RecurringExpenses, BankReconciliation, FavoriteAccountsStrip } from "../components/FinanceExtras";
 import { toast } from "sonner";
 import { dateForInput, empName, formatDate, formatINR } from "../lib/format";
-import { compatibleAccount, methodForAccount } from "../lib/cashbank";
+import { compatibleAccount, methodForAccount, isMoneyAccount, isCardAccount } from "../lib/cashbank";
 import {
   Bank, TrendUp, TrendDown, Wallet, ChartLine, ArrowsClockwise,
   Plus, X, ArrowDown, ArrowUp, Coins, ListDashes, Money, Receipt,
@@ -190,7 +190,8 @@ export default function Accounting() {
     URL.revokeObjectURL(a.href);
   };
 
-  const banks = accounts.filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
+  const banks = accounts.filter(isMoneyAccount);
+  const cards = accounts.filter(isCardAccount);
   const incomeAccs = accounts.filter((a) => a.type === "income");
   const expenseAccs = accounts.filter((a) => a.type === "expense");
 
@@ -248,7 +249,7 @@ export default function Accounting() {
 
       {showTransfers && (
         <CapitalTransfersForm
-          banks={banks}
+          banks={banks} cards={cards}
           onClose={() => setShowTransfers(false)}
           onSaved={() => {
             setShowTransfers(false);
@@ -383,7 +384,7 @@ export default function Accounting() {
       {tab === "expense" && (
         <TxnList
           kind="expense" showForm={showForm} setShowForm={setShowForm}
-          accounts={accounts} banks={banks} txnAccs={expenseAccs}
+          accounts={accounts} banks={banks} cards={cards} txnAccs={expenseAccs}
           clients={clients} projects={projects} vendors={vendors} employees={employees}
           journal={journal} page={journalPage}
           onPage={(offset) => loadJournal("expense", offset)}
@@ -653,7 +654,7 @@ function PartyPicker({ kind, value, onChange }) {
   );
 }
 
-function CapitalTransfersForm({ banks, onClose, onSaved }) {
+function CapitalTransfersForm({ banks, cards = [], onClose, onSaved }) {
   const [form, setForm] = useState({
     kind: "own_transfer",
     date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
@@ -672,8 +673,14 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
   // Moving the studio's own money (e.g. Rs 50,000 of cash into SBI): the
   // amount leaves "From" and arrives in "To"; profit does not change.
   const isOwnTransfer = form.kind === "own_transfer";
-  const fromName = banks.find((b) => b.id === form.bank_account_id)?.name;
-  const toName = banks.find((b) => b.id === form.to_account_id)?.name;
+  // A studio credit card can pay for a person (paid back later) or for the
+  // owner personally; its bill is paid by moving money from a bank to the card.
+  const cardCanPay = form.kind === "money_given" || form.kind === "owner_withdrawal";
+  const fromAccounts = cardCanPay ? [...banks, ...cards] : banks;
+  const toAccounts = [...banks, ...cards].filter((account) => account.id !== form.bank_account_id);
+  const fromName = fromAccounts.find((b) => b.id === form.bank_account_id)?.name;
+  const toName = toAccounts.find((b) => b.id === form.to_account_id)?.name;
+  const payingCard = isOwnTransfer && isCardAccount(cards.find((c) => c.id === form.to_account_id));
 
   useEffect(() => {
     if (!form.bank_account_id && banks[0]?.id) {
@@ -738,14 +745,13 @@ function CapitalTransfersForm({ banks, onClose, onSaved }) {
           <SearchSelect required className="input-flat w-full mt-1" value={form.bank_account_id} aria-label={isOwnTransfer ? "From account" : "Cash or bank account"}
             onChange={(event) => setForm({ ...form, bank_account_id: event.target.value })} data-testid="transfer-from">
             <option value="">Select cash or bank</option>
-            {banks.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            {fromAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}{isCardAccount(account) ? " (credit card)" : ""}</option>)}
           </SearchSelect></label>
         {isOwnTransfer && <label className="block"><span className="text-xs text-[var(--ink-2)]">To (money arrives)</span>
           <SearchSelect required className="input-flat w-full mt-1" value={form.to_account_id} aria-label="To account"
             onChange={(event) => setForm({ ...form, to_account_id: event.target.value })} data-testid="transfer-to">
             <option value="">Select cash or bank</option>
-            {banks.filter((account) => account.id !== form.bank_account_id)
-              .map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            {toAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}{isCardAccount(account) ? " (pay credit card bill)" : ""}</option>)}
           </SearchSelect></label>}
         {needsParty && <div className="block"><span className="text-xs text-[var(--ink-2)]">Person / party</span>
           <PartyPicker kind={form.kind} value={{ account_id: form.party_account_id, name: form.party_name }}
@@ -1548,8 +1554,11 @@ function CollectionsDue({ banks, incomeAccounts, clients, projects, vendors, onS
 }
 
 // ================================================================
-function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, clients, projects, vendors, employees, journal, page, onPage, onSubmit }) {
+const isIncentiveName = (name) => /commission|incentive/i.test(String(name || ""));
+
+function TxnList({ kind, showForm, setShowForm, accounts, banks, cards = [], txnAccs, clients, projects, vendors, employees, journal, page, onPage, onSubmit }) {
   const [detail, setDetail] = useState(null);
+  const [openMilestones, setOpenMilestones] = useState([]);
   const [form, setForm] = useState(() => ({
     date: dateForInput(new Date()), amount: "",
     ...(kind === "income" ? { income_account_id: "", bank_account_id: "", client_id: "", project_id: "", vendor_id: "", employee_id: "" }
@@ -1569,8 +1578,39 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
     }
   }, [banks, txnAccs]);
 
+  // Expenses can be paid from a studio credit card too (owner, 2026-11-23).
+  const payAccounts = kind === "expense" ? [...banks, ...cards] : banks;
+  const incomeAccountName = txnAccs.find((a) => a.id === form.income_account_id)?.name;
+  const fromVendor = kind === "income" && (Boolean(form.vendor_id) || isIncentiveName(incomeAccountName));
+  useEffect(() => {
+    // Money for a project with open fee milestones: ask which one it pays, so
+    // Collections Due does not keep showing (and reminding about) paid money.
+    if (kind !== "income" || !form.project_id || fromVendor) { setOpenMilestones([]); return undefined; }
+    let alive = true;
+    api.get("/accounting/receivables").then(({ data }) => {
+      if (!alive) return;
+      setOpenMilestones((data.rows || []).filter((r) => r.source_type === "milestone"
+        && r.project_id === form.project_id && r.status !== "received" && Number(r.outstanding) > 0));
+    }).catch(() => alive && setOpenMilestones([]));
+    return () => { alive = false; };
+  }, [kind, form.project_id, fromVendor]);
+  const chooseProject = (projectId) => {
+    const project = projects.find((p) => p.id === projectId);
+    setForm((f) => ({ ...f, project_id: projectId, milestone_id: "",
+      client_id: !fromVendor && project?.client_id ? project.client_id : (fromVendor ? "" : f.client_id) }));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
+    if (kind === "income" && form.client_id && form.vendor_id) {
+      toast.error("Choose who paid you: the client or the vendor.");
+      return;
+    }
+    const milestone = openMilestones.find((m) => m.id === form.milestone_id);
+    if (milestone && Number(form.amount) > Number(milestone.outstanding) + 0.009) {
+      toast.error(`${milestone.name} has ${CURRENCY(milestone.outstanding)} left. Record the rest without a milestone.`);
+      return;
+    }
     const payload = { ...form, amount: Number(form.amount) };
     if (kind === "expense" && form.gst) payload.gst = Number(form.gst);
     Object.keys(payload).forEach((k) => { if (payload[k] === "" || payload[k] === null) delete payload[k]; });
@@ -1592,30 +1632,36 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
           <input type="number" min="0" required step="0.01" className="input-flat" placeholder="Amount"
             value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid={`${kind}-amount`} />
           <SearchSelect className="input-flat" value={kind === "income" ? form.income_account_id : form.expense_account_id}
-            onChange={(e) => setForm({ ...form, [kind === "income" ? "income_account_id" : "expense_account_id"]: e.target.value })}
+            onChange={(e) => {
+              const next = { ...form, [kind === "income" ? "income_account_id" : "expense_account_id"]: e.target.value };
+              if (kind === "income" && isIncentiveName(txnAccs.find((a) => a.id === e.target.value)?.name)) next.client_id = "";
+              setForm(next);
+            }}
             data-testid={`${kind}-acc`}>
             <option value="" disabled>Select {kind} account</option>
             {txnAccs.filter((a) => kind !== "expense" || a.name?.trim().toLowerCase() !== "employee salary")
               .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </SearchSelect>
           <SearchSelect className="input-flat" value={kind === "income" ? form.bank_account_id : form.paid_from_account_id}
-            onChange={(e) => { const account = banks.find((a) => a.id === e.target.value); setForm({ ...form, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: e.target.value, payment_method: methodForAccount(account) }); }}
+            onChange={(e) => { const account = payAccounts.find((a) => a.id === e.target.value); setForm({ ...form, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: e.target.value, payment_method: methodForAccount(account) }); }}
             data-testid={`${kind}-bank`}>
-            <option value="" disabled>Cash / Bank</option>
-            {banks.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            <option value="" disabled>{kind === "expense" && cards.length ? "Cash / Bank / Credit card" : "Cash / Bank"}</option>
+            {payAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}{isCardAccount(a) ? " (credit card)" : ""}</option>)}
           </SearchSelect>
 
           {kind === "income" && (
             <>
-              <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
-                <option value="">— Client (optional) —</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </SearchSelect>
-              <SearchSelect className="input-flat" value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
+              {!fromVendor && (
+                <SearchSelect className="input-flat" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value, vendor_id: e.target.value ? "" : form.vendor_id })} data-testid="income-client-select">
+                  <option value="">— Client (optional) —</option>
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </SearchSelect>
+              )}
+              <SearchSelect className="input-flat" value={form.project_id} onChange={(e) => chooseProject(e.target.value)} data-testid="income-project-select">
                 <option value="">— Project (optional) —</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </SearchSelect>
-              <SearchSelect className="input-flat" value={form.vendor_id || ""} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })} data-testid="income-vendor-select">
+              <SearchSelect className="input-flat" value={form.vendor_id || ""} onChange={(e) => setForm({ ...form, vendor_id: e.target.value, client_id: e.target.value ? "" : form.client_id, milestone_id: "" })} data-testid="income-vendor-select">
                 <option value="">— Vendor (optional) —</option>
                 {(vendors || []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </SearchSelect>
@@ -1623,6 +1669,24 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
                 <option value="">— Employee (optional) —</option>
                 {(employees || []).map((emp) => <option key={emp.id} value={emp.id}>{empName(emp)}{emp.employee_id ? ` · ${emp.employee_id}` : ""}</option>)}
               </SearchSelect>
+              <p className="md:col-span-3 text-xs text-[var(--ink-2)]" data-testid="income-payer-hint">
+                {fromVendor
+                  ? "Vendor incentive: received from the vendor. It is kept apart from the client's fee and never appears on the client's statement."
+                  : "Client payment: counts against the project's fee and appears on the client's statement."}
+              </p>
+              {openMilestones.length > 0 && (
+                <label className="md:col-span-3 text-xs">This payment is for
+                  <select className="input-flat mt-1 w-full" value={form.milestone_id || ""} data-testid="income-milestone-select"
+                    onChange={(e) => setForm({ ...form, milestone_id: e.target.value })}>
+                    <option value="">Not one of the open milestones</option>
+                    {openMilestones.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} · {CURRENCY(m.outstanding)} left{m.due_date ? ` · due ${formatDate(m.due_date)}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </>
           )}
 
@@ -1660,7 +1724,7 @@ function TxnList({ kind, showForm, setShowForm, accounts, banks, txnAccs, client
             </>
           )}
 
-          <select aria-label="Payment method" className="input-flat" value={form.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(banks, method); setForm({ ...form, payment_method: method, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: compatible?.id || (kind === "income" ? form.bank_account_id : form.paid_from_account_id) }); }}>
+          <select aria-label="Payment method" className="input-flat" value={form.payment_method} onChange={(e) => { const method = e.target.value; const compatible = compatibleAccount(payAccounts, method); setForm({ ...form, payment_method: method, [kind === "income" ? "bank_account_id" : "paid_from_account_id"]: compatible?.id || (kind === "income" ? form.bank_account_id : form.paid_from_account_id) }); }}>
             {["cash", "bank_transfer", "upi", "cheque", "credit_card", "online", "other"].map((m) => <option key={m}>{m}</option>)}
           </select>
           <input className="input-flat" placeholder="Reference no." value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
@@ -1772,7 +1836,7 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
     setEditing(account);
     setForm({
       name: account.name || "", type: account.type || "asset", code: account.code || "",
-      is_bank: Boolean(account.is_bank), opening_balance: account.opening_balance || "",
+      is_bank: Boolean(account.is_bank), is_card: Boolean(account.is_card), opening_balance: account.opening_balance || "",
     });
     setShowForm(true);
   };
@@ -1866,10 +1930,18 @@ function ChartOfAccounts({ accounts: baseAccounts, onReload, meta, onOpenAccount
           <input className="input-flat" placeholder="Code (auto if blank)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
           <input type="number" className="input-flat" placeholder="Opening balance" value={form.opening_balance}
             onChange={(e) => setForm({ ...form, opening_balance: e.target.value })} />
-          <label className="text-xs col-span-full flex items-center gap-2">
-            <input type="checkbox" checked={form.is_bank} onChange={(e) => setForm({ ...form, is_bank: e.target.checked })} />
-            Mark as bank / cash account
-          </label>
+          {form.type === "asset" && (
+            <label className="text-xs col-span-full flex items-center gap-2">
+              <input type="checkbox" checked={form.is_bank} onChange={(e) => setForm({ ...form, is_bank: e.target.checked, is_card: false })} />
+              Cash in hand or a bank account (money is received into / paid from it)
+            </label>
+          )}
+          {form.type === "liability" && (
+            <label className="text-xs col-span-full flex items-center gap-2">
+              <input type="checkbox" checked={Boolean(form.is_card)} onChange={(e) => setForm({ ...form, is_card: e.target.checked, is_bank: false })} data-testid="account-is-card" />
+              This is a credit card (pay expenses from it; pay its bill from a bank)
+            </label>
+          )}
           <button className="btn-primary md:col-span-5" data-testid="account-submit">{editing ? "Save account" : "Create account"}</button>
         </form>
       )}

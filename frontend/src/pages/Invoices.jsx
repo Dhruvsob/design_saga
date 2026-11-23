@@ -4,7 +4,7 @@ import api, { API, optionalList } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { dateForInput, formatDate, roundPaise, statusLabel } from "../lib/format";
 import { Plus, FilePdf, Trash, Eye, PencilSimple, Money, X, ArrowCounterClockwise } from "@phosphor-icons/react";
-import { compatibleAccount, methodForAccount } from "../lib/cashbank";
+import { compatibleAccount, methodForAccount, isMoneyAccount } from "../lib/cashbank";
 import SearchSelect from "../components/SearchSelect";
 import { askForm, confirmAction } from "../lib/confirm";
 import PdfPreviewModal from "../components/PdfPreview";
@@ -130,7 +130,7 @@ export default function Invoices({ docType = "invoice" }) {
     setLoaded(true);
     setClients(cl.data);
     setProjects(pr.data);
-    setAccounts((acc.data || []).filter((row) => row.is_bank || ["Cash", "Petty Cash"].includes(row.name)));
+    setAccounts((acc.data || []).filter(isMoneyAccount));
     setIncomeAccounts((acc.data || []).filter((row) => row.type === "income" && row.active !== false));
   };
 

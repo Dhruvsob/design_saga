@@ -55,6 +55,9 @@ class AccountIn(FiniteModel):
     code: Optional[str] = None
     parent_id: Optional[str] = None
     is_bank: Optional[bool] = False
+    # A credit card: a liability you can pay expenses from; paying its bill
+    # moves money from a bank to the card (owner, 2026-11-23).
+    is_card: Optional[bool] = False
     opening_balance: Optional[float] = 0.0
     active: Optional[bool] = True
     notes: Optional[str] = None

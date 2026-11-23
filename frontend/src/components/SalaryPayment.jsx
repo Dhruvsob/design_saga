@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { dateForInput, formatDate, formatINR } from "../lib/format";
-import { compatibleAccount, methodForAccount } from "../lib/cashbank";
+import { compatibleAccount, methodForAccount, isMoneyAccount } from "../lib/cashbank";
 import { askForm, confirmAction } from "../lib/confirm";
 import SearchSelect from "./SearchSelect";
 
@@ -20,7 +20,7 @@ export const salarySlipPath = (run) => `/payroll/runs/${run.id}/slip.pdf`;
 
 async function cashAndBankAccounts() {
   const { data } = await api.get("/accounts?type=asset");
-  return (data || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
+  return (data || []).filter(isMoneyAccount);
 }
 
 /** Cancel a paid salary (balanced reversal). Resolves true when it was cancelled. */
@@ -111,7 +111,7 @@ export function PaySalaryBlock({
       ]);
       setPreview(p);
       api.get(`/employees/${employeeId}/advances`).then(({ data: a }) => setAdvance(a)).catch(() => {});
-      const cash = (accs || []).filter((a) => a.is_bank || ["Cash", "Petty Cash"].includes(a.name));
+      const cash = (accs || []).filter(isMoneyAccount);
       setBanks(cash);
       if (!bankAccountId && cash.length) {
         setBankAccountId(cash[0].id);
